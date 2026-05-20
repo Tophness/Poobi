@@ -15,7 +15,7 @@ None of them grab subtitles from the page, so if the mp4 stream doesn't have emb
 ## Key Features
 
 * **Smart Popup Blocking:** No more stupid "Do you want to open this popup" questions. Popups are literally blocked by default.
-* * **Intuitive interface:** Hold the ok button to close tabs, Press the menu button to bring down the navigation bar.
+* **Intuitive interface:** Hold the ok button to close tabs, Press the menu button to bring down the navigation bar.
 * **Smart Virtual Cursor:** The cursor accelerates smoothly, detects clickable links, and intelligently scrolls the page when reaching the screen edges.
 * **Native Video Extractor (ExoPlayer):** Automatically detects web videos (HLS/m3u8, MP4, MKV) and extracts them into a hardware-accelerated, full-screen ExoPlayer native view. Say goodbye to clunky web video players.
 * **Subtitle Interception:** Automatically grabs `.srt`, `.vtt`, and `.ass` subtitle files from websites and feeds them directly into the native ExoPlayer.
