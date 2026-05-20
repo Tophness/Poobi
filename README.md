@@ -47,7 +47,7 @@ None of them grab subtitles from the page, so if the mp4 stream doesn't have emb
 ## Installation
 
 1. Go to the [Releases](https://github.com/Tophness/Poobi/releases) page.
-2. Download the latest `app-release.apk`.
+2. Download the latest `app-debug.apk`.
 3. Transfer the APK to your Android TV (via USB, Send Files to TV, etc.).
 4. Open a File Manager on your TV and install the APK.
 
