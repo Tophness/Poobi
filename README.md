@@ -32,6 +32,8 @@ None of them grab subtitles from the page, so if the mp4 stream doesn't have emb
 
 # Screenshots
 <img width="1920" height="1080" alt="Screenshot_20260521_020559" src="https://github.com/user-attachments/assets/fb735f1e-6f9d-4561-ac55-381ab4ac10bc" />
+<img width="1920" height="1080" alt="Screenshot_20260521_144703" src="https://github.com/user-attachments/assets/9314e50a-f399-4d71-99fa-1913e2544261" />
+<img width="1920" height="1080" alt="Screenshot_20260521_144559" src="https://github.com/user-attachments/assets/a8a7b430-4639-4c9a-817b-e9fbc4ec544c" />
 <img width="1920" height="1080" alt="Screenshot_20260521_020856" src="https://github.com/user-attachments/assets/ec8a8b5b-25d6-4112-a831-e06b5172c3fa" />
 <img width="1920" height="1080" alt="Screenshot_20260521_021149" src="https://github.com/user-attachments/assets/4033d42b-96d0-4ea7-8832-35b802878749" />
 <img width="1920" height="1080" alt="Screenshot_20260521_021245" src="https://github.com/user-attachments/assets/b51a91a8-eca6-4cde-9950-e6d124f6fee7" />
