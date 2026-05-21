@@ -112,7 +112,7 @@ class SettingsActivity : AppCompatActivity() {
                 2 -> "Native Player Hijack: Never"
                 else -> "Native Player Hijack: Ask"
             }
-            videoTriggerBtn.text = if (videoTriggerPref == 0) "Trigger on: Streams Detected (Sometimes Buggy)" else "Trigger on: Fullscreen Button"
+            videoTriggerBtn.text = if (videoTriggerPref == 0) "Trigger on: Streams Detected (Sometimes Buggy)" else "Trigger on: Fullscreen"
             restoreBtn.text = when (restorePref) {
                 1 -> "Restore Tabs: Always"
                 2 -> "Restore Tabs: Never"
