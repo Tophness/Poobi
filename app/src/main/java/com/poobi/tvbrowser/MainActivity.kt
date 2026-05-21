@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var homeUrlInput: EditText
     private lateinit var topUrlInput: EditText
     private lateinit var topFavBtn: ImageButton
+    private lateinit var topAutoPlayBtn: ImageButton
     private lateinit var topForwardBtn: ImageButton
 
     private lateinit var openTabsContainer: LinearLayout
@@ -196,6 +197,7 @@ class MainActivity : AppCompatActivity() {
         homeUrlInput = findViewById(R.id.home_url_input)
         topUrlInput = findViewById(R.id.top_url_input)
         topFavBtn = findViewById(R.id.top_fav_btn)
+        topAutoPlayBtn = findViewById(R.id.top_auto_play_btn)
         topForwardBtn = findViewById(R.id.top_forward_btn)
 
         historyContainer = findViewById(R.id.history_container)
@@ -253,6 +255,7 @@ class MainActivity : AppCompatActivity() {
         bookmarkIconPref = prefs.getInt("bookmark_icon_pref", 0)
         clickjackPref = prefs.getBoolean("clickjack_prevention", true)
 
+        updateAutoPlayIcon()
         applyTheme()
         if (!isBrowsing) refreshLists()
     }
@@ -418,6 +421,15 @@ class MainActivity : AppCompatActivity() {
         val url = currentWebView?.url ?: return
         if (isFavorited(url)) topFavBtn.setImageResource(R.drawable.ic_heart_filled)
         else topFavBtn.setImageResource(R.drawable.ic_heart_empty)
+    }
+
+    private fun updateAutoPlayIcon() {
+        if (videoTriggerPref == 0) {
+            topAutoPlayBtn.imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#00BCD4"))
+        } else {
+            val color = if (isLightTheme) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+            topAutoPlayBtn.imageTintList = android.content.res.ColorStateList.valueOf(color)
+        }
     }
 
     private fun refreshLists(focusKey: String? = null, focusUIIndex: Int = -1) {
@@ -814,6 +826,14 @@ class MainActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.top_go_btn).setOnClickListener { loadUrlAndBrowse(topUrlInput.text.toString()) }
         findViewById<ImageButton>(R.id.top_refresh_btn).setOnClickListener { currentWebView?.reload() }
         findViewById<ImageButton>(R.id.btn_new_tab).setOnClickListener { createNewTab() }
+
+        topAutoPlayBtn.setOnClickListener {
+            videoTriggerPref = if (videoTriggerPref == 0) 1 else 0
+            prefs.edit().putInt("video_trigger_pref", videoTriggerPref).apply()
+            updateAutoPlayIcon()
+            val status = if (videoTriggerPref == 0) "Enabled" else "Disabled"
+            Toast.makeText(this, "Auto-play Video: $status", Toast.LENGTH_SHORT).show()
+        }
 
         topFavBtn.setOnClickListener {
             val wv = currentWebView ?: return@setOnClickListener
@@ -1328,6 +1348,11 @@ class MainActivity : AppCompatActivity() {
                 interceptedMediaUrls.clear()
                 interceptedSubtitleUrls.clear()
             }
+
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                // Silencing console messages stops them from hitting Logcat and causing lag
+                return true
+            }
         }
 
         wv.webViewClient = object : WebViewClient() {
@@ -1360,12 +1385,115 @@ class MainActivity : AppCompatActivity() {
 
                 injectClickjackPrevention(view)
                 saveTabs()
+                if (videoTriggerPref == 0) {
+                    triggerAutoPlayClicks(view)
+                }
                 view.postDelayed({ saveSnapshot(url, view.title ?: "Website") }, 2500)
+            }
+
+            private fun triggerAutoPlayClicks(wv: WebView) {
+                val script = """
+                    (function() {
+                        if (window.autoPlayInjected) return;
+                        window.autoPlayInjected = true;
+
+                        const clickPlayButtons = () => {
+                            let clicked = false;
+                            // Search for elements with 'play' in class or ID, or common play icons
+                            const selectors = [
+                                'button', 'div', 'i', 'span', 'a', 
+                                '[class*="play"]', '[id*="play"]', 
+                                '[class*="Player"]', '[class*="control"]',
+                                '.ytp-large-play-button', '.vjs-big-play-button'
+                            ];
+                            
+                            const elements = document.querySelectorAll(selectors.join(','));
+                            elements.forEach(el => {
+                                const cls = (el.className || "").toString().toLowerCase();
+                                const id = (el.id || "").toLowerCase();
+                                const text = (el.innerText || "").toLowerCase();
+                                
+                                // Target "play" but strictly avoid anything looking like an "ad"
+                                const isPlay = cls.includes('play') || id.includes('play') || text.trim() === 'play';
+                                const isAd = cls.includes('ad') || id.includes('ad') || id.includes('google') || cls.includes('banner');
+                                
+                                if (isPlay && !isAd) {
+                                    const rect = el.getBoundingClientRect();
+                                    if (rect.width > 5 && rect.height > 5) {
+                                        const style = window.getComputedStyle(el);
+                                        if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
+                                            // Dispatch multiple events to satisfy different framework listeners
+                                            ['mousedown', 'mouseup', 'click'].forEach(name => {
+                                                el.dispatchEvent(new MouseEvent(name, {
+                                                    bubbles: true,
+                                                    cancelable: true,
+                                                    view: window,
+                                                    buttons: 1
+                                                }));
+                                            });
+                                            clicked = true;
+                                        }
+                                    }
+                                }
+                            });
+                            return clicked;
+                        };
+
+                        // 1. Initial attempt
+                        clickPlayButtons();
+
+                        // 2. Use MutationObserver to catch dynamically added play buttons (React/SPAs)
+                        const observer = new MutationObserver((mutations) => {
+                            for (const mutation of mutations) {
+                                if (mutation.addedNodes.length > 0) {
+                                    clickPlayButtons();
+                                    break;
+                                }
+                            }
+                        });
+                        observer.observe(document.body || document.documentElement, { 
+                            childList: true, 
+                            subtree: true 
+                        });
+
+                        // 3. Periodically try to kick-start any video elements that are stuck
+                        setInterval(() => {
+                            const videos = document.querySelectorAll('video');
+                            videos.forEach(v => {
+                                if (v.paused && (v.src || v.currentSrc)) {
+                                    v.play().catch(() => {});
+                                }
+                            });
+                        }, 2000);
+                    })();
+                """.trimIndent()
+                wv.evaluateJavascript(script, null)
+
+                // Android-side: Periodically attempt extraction for the next 15 seconds
+                val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                var attempts = 0
+                val maxAttempts = 8 // 8 * 2s = 16s total monitoring
+                
+                val extractionTask = object : Runnable {
+                    override fun run() {
+                        if (videoTriggerPref != 0 || !isBrowsing || nativeVideoView.visibility == View.VISIBLE || attempts >= maxAttempts) {
+                            return
+                        }
+                        attemptVideoExtraction(null, null)
+                        attempts++
+                        handler.postDelayed(this, 2000)
+                    }
+                }
+                handler.post(extractionTask)
             }
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                 val requestedUrl = request?.url?.toString()
                 if (requestedUrl != null) {
+                    // Block aggressive anti-debug/spam scripts that lag the browser
+                    if (requestedUrl.contains("disable-devtool") || requestedUrl.contains("devtools-detector")) {
+                        return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream("".toByteArray()))
+                    }
 
                     if (requestedUrl.contains(".m3u8") || requestedUrl.contains(".mp4") || requestedUrl.contains(".mkv")) {
                         val wasEmpty = interceptedMediaUrls.isEmpty()
