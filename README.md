@@ -31,9 +31,9 @@ None of them grab subtitles from the page, so if the mp4 stream doesn't have emb
 * **Context Menu:** Long-press the OK button on links to open a custom context menu (Open in New Tab, Block Element, etc.).
 
 # Screenshots
-<img width="1920" height="1080" alt="Screenshot_20260521_020559" src="https://github.com/user-attachments/assets/fb735f1e-6f9d-4561-ac55-381ab4ac10bc" />
+<img width="1920" height="1080" alt="Screenshot_20260521_145049" src="https://github.com/user-attachments/assets/aeb84fc0-b707-491e-9239-922c97ee947c" />
+<img width="1920" height="1080" alt="Screenshot_20260521_145132" src="https://github.com/user-attachments/assets/4aa60ae1-4091-4f3d-a67c-3eb77f1781ac" />
 <img width="1920" height="1080" alt="Screenshot_20260521_144703" src="https://github.com/user-attachments/assets/9314e50a-f399-4d71-99fa-1913e2544261" />
-<img width="1920" height="1080" alt="Screenshot_20260521_144825" src="https://github.com/user-attachments/assets/dc6505bc-0eaf-41c1-877e-59ca3bab2d89" />
 <img width="1920" height="1080" alt="Screenshot_20260521_020856" src="https://github.com/user-attachments/assets/ec8a8b5b-25d6-4112-a831-e06b5172c3fa" />
 <img width="1920" height="1080" alt="Screenshot_20260521_021149" src="https://github.com/user-attachments/assets/4033d42b-96d0-4ea7-8832-35b802878749" />
 <img width="1920" height="1080" alt="Screenshot_20260521_021245" src="https://github.com/user-attachments/assets/b51a91a8-eca6-4cde-9950-e6d124f6fee7" />
