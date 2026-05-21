@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#1A1A1D"
+    android:orientation="horizontal">
+
+    <!-- SIDEBAR -->
+    <LinearLayout
+        android:id="@+id/settings_sidebar"
+        android:layout_width="250dp"
+        android:layout_height="match_parent"
+        android:background="#222225"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Settings"
+            android:textColor="#00BCD4"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="30dp"/>
+
+        <Button android:id="@+id/cat_general" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="General" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
+        <Button android:id="@+id/cat_web" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Web" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
+        <Button android:id="@+id/cat_player" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Player" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
+        <Button android:id="@+id/cat_interface" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Interface" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
+
+        <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
+
+        <Button
+            android:id="@+id/save_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Save &amp; Exit"
+            android:background="@drawable/bg_green_focusable"
+            android:textColor="#FFFFFF"
+            android:padding="16dp"/>
+    </LinearLayout>
+
+    <!-- CONTENT AREA -->
+    <ScrollView
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="40dp">
+
+            <!-- GENERAL CATEGORY -->
+            <LinearLayout android:id="@+id/panel_general" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="visible">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="General Settings" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Appearance" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/theme_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Theme: Dark" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_general"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Session &amp; Storage" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/restore_pref_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Restore Tabs: Ask" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_general"/>
+                <Button android:id="@+id/history_limit_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="History Limit: 20" android:gravity="start" android:nextFocusLeft="@+id/cat_general"/>
+            </LinearLayout>
+
+            <!-- WEB CATEGORY -->
+            <LinearLayout android:id="@+id/panel_web" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Web &amp; Content" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Popups" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/popup_pref_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Popups: Block Silently" android:layout_marginBottom="20dp" android:gravity="start" android:nextFocusLeft="@+id/cat_web"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="AdBlock List URL (EasyList format):" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="8dp"/>
+                <EditText android:id="@+id/adblock_url_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="16dp" android:inputType="textUri" android:maxLines="1" android:nextFocusLeft="@+id/cat_web"/>
+            </LinearLayout>
+
+            <!-- PLAYER CATEGORY -->
+            <LinearLayout android:id="@+id/panel_player" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Video Player" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Extraction" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/video_pref_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Fullscreen Video Player: Ask" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Subtitles" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/embedded_subs_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Embedded Subtitles: Enabled" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
+            </LinearLayout>
+
+            <!-- INTERFACE CATEGORY -->
+            <LinearLayout android:id="@+id/panel_interface" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Interface &amp; Navigation" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Navigation Bar" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/scroll_topbar_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Scroll Up for Top Bar: Enabled" android:gravity="start" android:nextFocusLeft="@+id/cat_interface"/>
+            </LinearLayout>
+
+        </FrameLayout>
+    </ScrollView>
+</LinearLayout>
