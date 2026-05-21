@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.os.Message
 import android.os.SystemClock
 import android.util.Log
+import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -104,6 +105,14 @@ class MainActivity : AppCompatActivity() {
     private val LONG_PRESS_THRESHOLD = 600L
     private var isLongPressing = false
 
+    private var lastSeekTime = 0L
+    private var seekIncrement = 5000L
+    private var lastSeekDirection = 0
+    private var seekRunnable: Runnable? = null
+    private val SEEK_INTERVAL = 200L
+
+    private var clickjackPref = true
+
     private var bookmarkPage = 0
     private val ITEMS_PER_PAGE = 10
 
@@ -115,10 +124,11 @@ class MainActivity : AppCompatActivity() {
     private var cursorVelocityY = 0f
     private var scrollVelocityY = 0f
 
-    private val MIN_VELOCITY = 1f
+    private val MIN_VELOCITY = 0.5f
     private val MAX_CURSOR_VELOCITY = 40f
-    private val MAX_SCROLL_VELOCITY = 80f
+    private val MAX_SCROLL_VELOCITY = 100f
     private val ACCELERATION = 1.15f
+    private val SCROLL_ACCELERATION = 1.08f
 
     private val keyStates = mutableMapOf<Int, Boolean>()
     private val movementHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -241,6 +251,7 @@ class MainActivity : AppCompatActivity() {
         scrollTopbarEnabled = prefs.getBoolean("scroll_topbar_enabled", true)
         historyIconPref = prefs.getInt("history_icon_pref", 0)
         bookmarkIconPref = prefs.getInt("bookmark_icon_pref", 0)
+        clickjackPref = prefs.getBoolean("clickjack_prevention", true)
 
         applyTheme()
         if (!isBrowsing) refreshLists()
@@ -290,6 +301,62 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun injectClickjackPrevention(wv: WebView) {
+        if (!clickjackPref) return
+        val script = """
+            (function() {
+                if (window.clickjackPrevented) return;
+                window.clickjackPrevented = true;
+                
+                // Block window.open popups at the JS level
+                window.open = function() { 
+                    return { focus: function(){}, close: function(){}, blur: function(){} }; 
+                };
+
+                // Aggressively neutralize overlays that cover the screen
+                var neutralize = function() {
+                    var all = document.querySelectorAll('div, section, ins, iframe');
+                    for (var i = 0; i < all.length; i++) {
+                        var el = all[i];
+                        var s = window.getComputedStyle(el);
+                        if (s.position === 'fixed' || s.position === 'absolute') {
+                            var rect = el.getBoundingClientRect();
+                            if (rect.width >= window.innerWidth * 0.9 && rect.height >= window.innerHeight * 0.9) {
+                                if (s.zIndex > 10 && (s.opacity < 0.1 || s.backgroundColor === 'transparent' || s.backgroundColor === 'rgba(0, 0, 0, 0)')) {
+                                    el.style.pointerEvents = 'none';
+                                    el.style.display = 'none'; // Some sites check for pointer-events, display:none is safer
+                                }
+                            }
+                        }
+                    }
+                };
+
+                // Run immediately and then periodically
+                neutralize();
+                setInterval(neutralize, 1500);
+
+                // Prevent event hijacking by sites that try to capture all inputs
+                var originalStop = Event.prototype.stopPropagation;
+                var originalStopImmediate = Event.prototype.stopImmediatePropagation;
+
+                Event.prototype.stopPropagation = function() {
+                    if (['click', 'mousedown', 'mouseup'].indexOf(this.type) !== -1) return; 
+                    originalStop.apply(this, arguments);
+                };
+                Event.prototype.stopImmediatePropagation = function() {
+                    if (['click', 'mousedown', 'mouseup'].indexOf(this.type) !== -1) return; 
+                    originalStopImmediate.apply(this, arguments);
+                };
+
+                // Ensure video elements and players are always interactable
+                var style = document.createElement('style');
+                style.innerHTML = 'video, .video-player, [class*="player"] { pointer-events: auto !important; z-index: 2147483647 !important; }';
+                document.head.appendChild(style);
+            })();
+        """.trimIndent()
+        wv.evaluateJavascript(script, null)
+    }
+
     private fun saveSnapshot(url: String, title: String) {
         val wv = currentWebView ?: return
         if (wv.width == 0 || wv.height == 0 || !isBrowsing) return
@@ -327,7 +394,7 @@ class MainActivity : AppCompatActivity() {
         updateFavIcon()
     }
 
-    private fun removeFromList(key: String, url: String) {
+    private fun removeFromList(key: String, url: String, focusUIIndex: Int = -1) {
         val array = JSONArray(prefs.getString(key, "[]"))
         val newArray = JSONArray()
         for (i in 0 until array.length()) {
@@ -335,7 +402,7 @@ class MainActivity : AppCompatActivity() {
             if (obj.getString("url") != url) newArray.put(obj)
         }
         prefs.edit().putString(key, newArray.toString()).apply()
-        if (!isBrowsing) refreshLists()
+        if (!isBrowsing) refreshLists(key, focusUIIndex)
         updateFavIcon()
     }
 
@@ -353,7 +420,7 @@ class MainActivity : AppCompatActivity() {
         else topFavBtn.setImageResource(R.drawable.ic_heart_empty)
     }
 
-    private fun refreshLists() {
+    private fun refreshLists(focusKey: String? = null, focusUIIndex: Int = -1) {
         historyContainer.removeAllViews()
         favContainer.removeAllViews()
         downloadsContainer.removeAllViews()
@@ -423,6 +490,46 @@ class MainActivity : AppCompatActivity() {
             visibility = if (endIdx < favCount) View.VISIBLE else View.GONE
             setOnClickListener { bookmarkPage++; refreshLists() }
         }
+
+        if (focusKey != null && focusUIIndex != -1) {
+            val container = when (focusKey) {
+                "history" -> historyContainer
+                "favorites" -> favContainer
+                "downloads" -> downloadsContainer
+                else -> null
+            }
+            container?.let {
+                val nextToFocus = if (focusUIIndex > 0) focusUIIndex - 1 else 0
+                if (it.childCount > 0) {
+                    it.getChildAt(nextToFocus.coerceAtMost(it.childCount - 1)).requestFocus()
+                }
+            }
+        }
+    }
+
+    private fun fetchFavicon(url: String, file: File, onDone: () -> Unit) {
+        val host = Uri.parse(url).host ?: return
+        val faviconUrl = "https://www.google.com/s2/favicons?sz=64&domain_url=$host"
+        
+        @Suppress("OPT_IN_USAGE")
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val connection = java.net.URL(faviconUrl).openConnection()
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                connection.getInputStream().use { input ->
+                    val bitmap = BitmapFactory.decodeStream(input)
+                    if (bitmap != null) {
+                        FileOutputStream(file).use { out ->
+                            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                        }
+                        withContext(Dispatchers.Main) { onDone() }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "Favicon fetch failed: ${e.message}")
+            }
+        }
     }
 
     private fun createCard(inflater: LayoutInflater, obj: JSONObject, listKey: String): View {
@@ -441,12 +548,17 @@ class MainActivity : AppCompatActivity() {
             if (file.exists()) thumbView.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
             else thumbView.setImageResource(if (listKey == "history") R.drawable.ic_history else R.drawable.ic_heart_empty)
         } else {
-            if (listKey == "history") {
-                thumbView.setImageResource(R.drawable.ic_history)
-                // In a real app we might load favicon here, but for now we use a consistent icon
-                // as requested for "favicons or icons"
+            val host = Uri.parse(url).host ?: ""
+            val faviconFile = File(filesDir, "fav_${host.hashCode()}.png")
+            if (faviconFile.exists()) {
+                thumbView.setImageBitmap(BitmapFactory.decodeFile(faviconFile.absolutePath))
             } else {
-                thumbView.setImageResource(R.drawable.ic_heart_empty)
+                thumbView.setImageResource(if (listKey == "history") R.drawable.ic_history else R.drawable.ic_heart_empty)
+                fetchFavicon(url, faviconFile) {
+                    // Update only this view if it's still visible
+                    val bitmap = BitmapFactory.decodeFile(faviconFile.absolutePath)
+                    if (bitmap != null) thumbView.setImageBitmap(bitmap)
+                }
             }
             thumbView.setPadding(30, 30, 30, 30)
         }
@@ -460,10 +572,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         view.setOnLongClickListener {
+            val parent = view.parent as? ViewGroup
+            val index = parent?.indexOfChild(view) ?: -1
             AlertDialog.Builder(this)
                 .setTitle("Remove?")
                 .setMessage("Remove this from $listKey?")
-                .setPositiveButton("Remove") { _, _ -> removeFromList(listKey, url) }
+                .setPositiveButton("Remove") { _, _ -> removeFromList(listKey, url, index) }
                 .setNegativeButton("Cancel", null).show()
             true
         }
@@ -798,7 +912,7 @@ class MainActivity : AppCompatActivity() {
         for (wv in webViews) wv.visibility = View.GONE
 
         refreshLists()
-        homeUrlInput.requestFocus()
+        findViewById<ImageButton>(R.id.home_settings_btn).requestFocus()
     }
 
     private fun loadUrlAndBrowse(inputUrl: String, newTab: Boolean = false) {
@@ -975,6 +1089,50 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun getLanguageInfo(url: String): Pair<String, String> {
+        val uri = Uri.parse(url)
+        val fileName = uri.lastPathSegment?.lowercase() ?: ""
+        val langMap = mapOf(
+            "en" to "English", "es" to "Spanish", "fr" to "French", "de" to "German",
+            "it" to "Italian", "pt" to "Portuguese", "ru" to "Russian", "zh" to "Chinese",
+            "ja" to "Japanese", "ko" to "Korean", "ar" to "Arabic", "hi" to "Hindi",
+            "tr" to "Turkish", "vi" to "Vietnamese", "th" to "Thai", "id" to "Indonesian"
+        )
+
+        var code = "und"
+        var label = "Unknown"
+
+        // 1. Try to find full language names first
+        for ((c, name) in langMap) {
+            if (fileName.contains(name.lowercase())) {
+                code = c
+                label = name
+                if (fileName.contains("sdh")) label += " (SDH)"
+                if (fileName.contains("forced")) label += " (Forced)"
+                return Pair(code, label)
+            }
+        }
+
+        // 2. Try language codes with delimiters
+        for ((c, name) in langMap) {
+            if (fileName.contains("-$c.") || fileName.contains("_$c.") || fileName.contains(".$c.") || fileName.startsWith("$c.")) {
+                code = c
+                label = name
+                if (fileName.contains("sdh")) label += " (SDH)"
+                if (fileName.contains("forced")) label += " (Forced)"
+                return Pair(code, label)
+            }
+        }
+
+        // 3. Fallback to filename if it looks descriptive
+        val cleanName = fileName.substringBeforeLast(".").replace(Regex("[-_]"), " ").trim()
+        if (cleanName.length > 2 && !cleanName.all { it.isDigit() || it == ' ' }) {
+            return Pair("und", cleanName.split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } })
+        }
+
+        return Pair(code, label)
+    }
+
     @SuppressLint("UnsafeOptInUsageError")
     private fun launchNativeVideoPlayer(videoUrl: String, callback: WebChromeClient.CustomViewCallback?) {
         // Halt the WebView entirely
@@ -996,6 +1154,7 @@ class MainActivity : AppCompatActivity() {
         customViewCallback = callback
         customViewContainer.visibility = View.VISIBLE
         nativeVideoView.visibility = View.VISIBLE
+        nativeVideoView.keepScreenOn = true
         webContainer.visibility = View.GONE
         cursor.visibility = View.GONE
 
@@ -1028,14 +1187,27 @@ class MainActivity : AppCompatActivity() {
             val mimeType = if (subUrl.contains(".vtt")) MimeTypes.TEXT_VTT
             else if (subUrl.contains(".ass")) MimeTypes.TEXT_SSA
             else MimeTypes.APPLICATION_SUBRIP
+            
+            val info = getLanguageInfo(subUrl)
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
                 .setMimeType(mimeType)
+                .setLanguage(info.first)
+                .setLabel(info.second)
                 .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .setRoleFlags(C.ROLE_FLAG_SUBTITLE)
                 .build()
         }
         mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
 
         exoPlayer?.setMediaItem(mediaItemBuilder.build())
+
+        val pageUrl = currentWebView?.url ?: ""
+        if (pageUrl.isNotEmpty()) {
+            val savedPos = prefs.getLong("resume_$pageUrl", 0L)
+            if (savedPos > 5000L) { // Only resume if more than 5 seconds in
+                exoPlayer?.seekTo(savedPos)
+            }
+        }
 
         if (!embeddedSubsEnabled) {
             exoPlayer?.trackSelectionParameters = exoPlayer?.trackSelectionParameters?.buildUpon()
@@ -1058,20 +1230,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hideFullscreenVideo() {
+        if (nativeVideoView.visibility == View.VISIBLE) {
+            val pageUrl = currentWebView?.url ?: ""
+            if (pageUrl.isNotEmpty() && exoPlayer != null) {
+                val pos = exoPlayer!!.currentPosition
+                val dur = exoPlayer!!.duration
+                if (dur > 0 && pos < dur - 10000) { // Don't save if near the end
+                    prefs.edit().putLong("resume_$pageUrl", pos).apply()
+                } else {
+                    prefs.edit().remove("resume_$pageUrl").apply()
+                }
+            }
+            
+            nativeVideoView.visibility = View.GONE
+            nativeVideoView.keepScreenOn = false
+            exoPlayer?.stop()
+            exoPlayer?.release()
+            exoPlayer = null
+            nativeVideoView.player = null
+        }
+
         customViewContainer.visibility = View.GONE
         isExtractionActive = false
         
         currentWebView?.apply {
             onResume()
             resumeTimers()
-        }
-
-        if (nativeVideoView.visibility == View.VISIBLE) {
-            nativeVideoView.visibility = View.GONE
-            exoPlayer?.stop()
-            exoPlayer?.release()
-            exoPlayer = null
-            nativeVideoView.player = null
         }
 
         if (mCustomView != null) {
@@ -1174,6 +1358,7 @@ class MainActivity : AppCompatActivity() {
                     updateFavIcon()
                 }
 
+                injectClickjackPrevention(view)
                 saveTabs()
                 view.postDelayed({ saveSnapshot(url, view.title ?: "Website") }, 2500)
             }
@@ -1211,6 +1396,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun seekVideo(direction: Int, repeatCount: Int) {
+        val player = exoPlayer ?: return
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastSeekTime < 150) return // Throttle seeking
+        
+        lastSeekTime = currentTime
+        // Starts at 5s, grows quadratically to allow skipping long durations
+        seekIncrement = (5000L + (repeatCount * repeatCount) * 100L).coerceAtMost(300000L) 
+        
+        val newPos = player.currentPosition + (direction * seekIncrement)
+        player.seekTo(newPos.coerceIn(0, player.duration))
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_MENU) {
             if (contextMenu.visibility == View.VISIBLE) {
@@ -1231,7 +1429,18 @@ class MainActivity : AppCompatActivity() {
 
         if (handleMovementKey(event)) return true
 
-        if (!isBrowsing || topBarLayout.visibility == View.VISIBLE || isNativeVideoPlaying()) {
+        if (isNativeVideoPlaying()) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> { seekVideo(-1, event.repeatCount); return true }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> { seekVideo(1, event.repeatCount); return true }
+                    KeyEvent.KEYCODE_BACK -> { hideFullscreenVideo(); return true }
+                }
+            }
+            return super.dispatchKeyEvent(event)
+        }
+
+        if (!isBrowsing || topBarLayout.visibility == View.VISIBLE) {
             if (topBarLayout.visibility == View.VISIBLE && event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
                 topBarLayout.visibility = View.GONE
                 wakeCursor()
@@ -1349,10 +1558,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (keyStates[KeyEvent.KEYCODE_PAGE_UP] == true) {
-            scrollVelocityY = if (scrollVelocityY >= 0) -MIN_VELOCITY else (scrollVelocityY * accel).coerceIn(-MAX_SCROLL_VELOCITY, -MIN_VELOCITY)
+            scrollVelocityY = if (scrollVelocityY >= 0) -MIN_VELOCITY * 5f else (scrollVelocityY * 1.1f).coerceIn(-MAX_SCROLL_VELOCITY, -MIN_VELOCITY)
             moved = true
         } else if (keyStates[KeyEvent.KEYCODE_PAGE_DOWN] == true) {
-            scrollVelocityY = if (scrollVelocityY <= 0) MIN_VELOCITY else (scrollVelocityY * accel).coerceIn(MIN_VELOCITY, MAX_SCROLL_VELOCITY)
+            scrollVelocityY = if (scrollVelocityY <= 0) MIN_VELOCITY * 5f else (scrollVelocityY * 1.1f).coerceIn(MIN_VELOCITY, MAX_SCROLL_VELOCITY)
             moved = true
         } else {
             scrollVelocityY = 0f
@@ -1363,11 +1572,33 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (scrollVelocityY != 0f) {
-            currentWebView?.scrollBy(0, (scrollVelocityY * dt).toInt())
+            simulateScroll(scrollVelocityY * dt)
         }
 
         if (!moved) lastMovementTime = 0L
         return moved
+    }
+
+    private fun simulateScroll(dy: Float) {
+        val wv = currentWebView ?: return
+        val downTime = SystemClock.uptimeMillis()
+        val eventTime = SystemClock.uptimeMillis()
+
+        // Coordinate conversion is crucial for dispatchGenericMotionEvent to work correctly on elements
+        val location = IntArray(2)
+        wv.getLocationOnScreen(location)
+        val relativeX = cursorX - location[0]
+        val relativeY = cursorY - location[1]
+
+        val properties = arrayOf(MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_MOUSE })
+        val coords = arrayOf(MotionEvent.PointerCoords().apply { 
+            x = relativeX; y = relativeY; pressure = 1f; size = 1f 
+            setAxisValue(MotionEvent.AXIS_VSCROLL, -dy / 20f) 
+        })
+
+        val event = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_SCROLL, 1, properties, coords, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_MOUSE, 0)
+        wv.dispatchGenericMotionEvent(event)
+        event.recycle()
     }
 
     private fun checkHover() {
@@ -1409,18 +1640,28 @@ class MainActivity : AppCompatActivity() {
 
         cursorX = (cursorX + dx).coerceIn(0f, maxX)
         cursorY = (cursorY + dy).coerceIn(0f, maxY)
-        cursor.x = cursorX
-        cursor.y = cursorY
+        
+        // Tip of the arrow in ic_cursor.xml is at (4,4) in a 24x24 viewport.
+        // The ImageView is 32dp x 32dp. Tip offset is (4/24) * 32 = 5.33dp.
+        val density = resources.displayMetrics.density
+        val tipOffset = (4f / 24f) * 32f * density
+        cursor.x = cursorX - tipOffset
+        cursor.y = cursorY - tipOffset
 
         if (isBrowsing && customViewContainer.visibility != View.VISIBLE) {
             val wv = currentWebView
-            if (scrollTopbarEnabled && cursorY < 50 && (wv?.scrollY ?: 0) == 0) {
+            if (scrollTopbarEnabled && cursorY < 1 && (wv?.scrollY ?: 0) == 0 && dy < 0) {
                 topBarLayout.visibility = View.VISIBLE
                 cursor.visibility = View.GONE
                 topUrlInput.requestFocus()
             }
-            if (cursorY > maxY - 50) wv?.scrollBy(0, 20)
-            else if (cursorY < 50 && (wv?.scrollY ?: 0) > 0) wv?.scrollBy(0, -20)
+            
+            // Only scroll if pushing against the extreme edge AND moving in that direction
+            if (cursorY >= maxY - 1f && dy > 0) {
+                wv?.scrollBy(0, 15)
+            } else if (cursorY <= 0f && (wv?.scrollY ?: 0) > 0 && dy < 0) {
+                wv?.scrollBy(0, -15)
+            }
         }
     }
 

@@ -20,14 +20,16 @@ None of them grab subtitles from the page, so if the mp4 stream doesn't have emb
 
 ## Key Features
 
-* **Smart Popup Blocking:** No more stupid "Do you want to open this popup" questions. Popups are literally blocked by default.
+* **Smart Popup & Clickjack Blocking:** No more stupid "Do you want to open this popup" questions. Popups and transparent click-hijacking overlays are neutralized automatically.
+* **Auto-Resume Support:** Remembers where you left off. If you close a video and come back later, Poobi will offer to resume from your last position.
 * **Intuitive interface:** Hold the ok button to close tabs, Press the menu button to bring down the navigation bar.
 * **Smart Virtual Cursor:** The cursor accelerates smoothly, detects clickable links, and intelligently scrolls the page when reaching the screen edges.
-* **Native Video Extractor (ExoPlayer):** Automatically detects web videos (HLS/m3u8, MP4, MKV) and extracts them into a hardware-accelerated, full-screen ExoPlayer native view. Say goodbye to clunky web video players.
-* **Subtitle Interception:** Automatically grabs `.srt`, `.vtt`, and `.ass` subtitle files from websites and feeds them directly into the native ExoPlayer.
-* **Built-in Ad & Popup Blocker:** Powered by a native Rust port of Brave's AdBlock engine. Supports EasyList and AdGuard DNS rules to keep your browsing lightning fast and ad-free.
+* **Native Video Extractor (ExoPlayer):** Automatically detects web videos (HLS/m3u8, MP4, MKV) and extracts them into a hardware-accelerated, full-screen ExoPlayer native view.
+* **Advanced Subtitle Support:** Automatically grabs `.srt`, `.vtt`, and `.ass` subtitle files from websites. Intelligently identifies languages (e.g. "English (SDH)") from filenames and feeds them to the player.
+* **Smooth Navigation:** Quadrants-based seeking in the player (gets faster the longer you hold it) and smooth remote-button scrolling for long pages.
+* **Built-in Ad & Popup Blocker:** Powered by a native Rust port of Brave's AdBlock engine. Supports EasyList and AdGuard DNS rules.
 * **Tab Management:** Fully featured tabbed browsing. Suspend tabs in the background, restore previous sessions on launch, and navigate them effortlessly from the home screen.
-* **Download Manager:** Built-in download manager with a dedicated UI. Safely download files, track progress, and easily install `.apk` files directly from the browser.
+* **Download Manager:** Built-in download manager with a dedicated UI. Safely download files, track progress, and easily install `.apk` files.
 * **Context Menu:** Long-press the OK button on links to open a custom context menu (Open in New Tab, Block Element, etc.).
 
 # Screenshots
@@ -150,8 +152,8 @@ If prompted on your TV, allow the ADB connection.
 ## Settings & Configuration
 
 Poobi is highly customizable. From the home screen, click the **Settings** tab to access:
-* **Appearance:** Toggle Dark/Light themes.
-* **Web & Content:** Configure silent popup blocking and set custom EasyList AdBlock URLs.
+* **Appearance:** Toggle Dark/Light themes. Toggle thumbnail vs favicon styles for bookmarks.
+* **Web & Content:** Configure silent popup blocking and Clickjack prevention.
 * **Player:** Choose whether to always use the Native Player or ask on a per-video basis. Toggle embedded subtitles.
 * **Session Storage:** Configure tab restoration preferences and history limits.
 

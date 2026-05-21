@@ -22,6 +22,7 @@ class SettingsActivity : AppCompatActivity() {
     private var scrollTopbarEnabled = true
     private var historyIconPref = 0
     private var bookmarkIconPref = 0
+    private var clickjackPref = true
 
     private var activeCategory: Button? = null
 
@@ -90,6 +91,7 @@ class SettingsActivity : AppCompatActivity() {
         val scrollTopbarBtn = findViewById<Button>(R.id.scroll_topbar_btn)
         val historyIconBtn = findViewById<Button>(R.id.history_icon_btn)
         val bookmarkIconBtn = findViewById<Button>(R.id.bookmark_icon_btn)
+        val clickjackBtn = findViewById<Button>(R.id.clickjack_btn)
         val saveBtn = findViewById<Button>(R.id.save_button)
 
         // Load Prefs
@@ -104,6 +106,7 @@ class SettingsActivity : AppCompatActivity() {
         scrollTopbarEnabled = prefs.getBoolean("scroll_topbar_enabled", true)
         historyIconPref = prefs.getInt("history_icon_pref", 0)
         bookmarkIconPref = prefs.getInt("bookmark_icon_pref", 0)
+        clickjackPref = prefs.getBoolean("clickjack_prevention", true)
 
         fun updateUI() {
             popupBtn.text = if (silentPopupBlock) "Popups: Block Silently" else "Popups: Ask to Allow"
@@ -124,6 +127,7 @@ class SettingsActivity : AppCompatActivity() {
             scrollTopbarBtn.text = if (scrollTopbarEnabled) "Scroll Up for Top Bar: Enabled" else "Scroll Up for Top Bar: Disabled"
             historyIconBtn.text = if (historyIconPref == 0) "History Icons: Thumbnail" else "History Icons: Favicon"
             bookmarkIconBtn.text = if (bookmarkIconPref == 0) "Bookmark Icons: Thumbnail" else "Bookmark Icons: Favicon"
+            clickjackBtn.text = if (clickjackPref) "Clickjack Prevention: Enabled" else "Clickjack Prevention: Disabled"
         }
         updateUI()
 
@@ -142,6 +146,7 @@ class SettingsActivity : AppCompatActivity() {
         scrollTopbarBtn.setOnClickListener { scrollTopbarEnabled = !scrollTopbarEnabled; updateUI() }
         historyIconBtn.setOnClickListener { historyIconPref = (historyIconPref + 1) % 2; updateUI() }
         bookmarkIconBtn.setOnClickListener { bookmarkIconPref = (bookmarkIconPref + 1) % 2; updateUI() }
+        clickjackBtn.setOnClickListener { clickjackPref = !clickjackPref; updateUI() }
 
         saveBtn.setOnClickListener {
             val newUrl = urlInput.text.toString()
@@ -157,6 +162,7 @@ class SettingsActivity : AppCompatActivity() {
                 .putBoolean("scroll_topbar_enabled", scrollTopbarEnabled)
                 .putInt("history_icon_pref", historyIconPref)
                 .putInt("bookmark_icon_pref", bookmarkIconPref)
+                .putBoolean("clickjack_prevention", clickjackPref)
                 .apply()
 
             val appContext = applicationContext
