@@ -94,7 +94,7 @@
 
             <LinearLayout android:id="@+id/home_panel_history" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="end" android:layout_marginBottom="10dp">
-                    <Button android:id="@+id/btn_clear_history" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:text="Clear History"/>
+                    <Button android:id="@+id/btn_clear_history" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:text="Clear History" android:paddingHorizontal="25dp"/>
                 </LinearLayout>
                 <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:scrollbars="none">
                     <LinearLayout android:id="@+id/history_container" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal"/>
@@ -103,7 +103,7 @@
 
             <LinearLayout android:id="@+id/home_panel_downloads" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="end" android:layout_marginBottom="10dp">
-                    <Button android:id="@+id/btn_view_all_downloads" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:text="Manage Downloads"/>
+                    <Button android:id="@+id/btn_view_all_downloads" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:text="Manage Downloads" android:paddingHorizontal="25dp"/>
                 </LinearLayout>
                 <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:scrollbars="none">
                     <LinearLayout android:id="@+id/downloads_container" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal"/>
@@ -151,8 +151,9 @@
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:paddingHorizontal="20dp">
-            <ImageButton android:id="@+id/top_back_btn" android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/bg_focusable" android:src="@drawable/ic_back" app:tint="#FFF" android:contentDescription="Back" />
-            <ImageButton android:id="@+id/top_home_btn" android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/bg_focusable" android:src="@drawable/ic_home" app:tint="#FFF" android:layout_marginStart="10dp" android:contentDescription="Home" />
+            <ImageButton android:id="@+id/top_home_btn" android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/bg_focusable" android:src="@drawable/ic_home" app:tint="#FFF" android:contentDescription="Home" />
+            <ImageButton android:id="@+id/top_back_btn" android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/bg_focusable" android:src="@drawable/ic_back" app:tint="#FFF" android:layout_marginStart="10dp" android:contentDescription="Back" />
+            <ImageButton android:id="@+id/top_forward_btn" android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/bg_focusable" android:src="@drawable/ic_forward" app:tint="#FFF" android:layout_marginStart="10dp" android:contentDescription="Forward" />
             <EditText android:id="@+id/top_url_input" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp" android:layout_marginHorizontal="10dp" android:background="@drawable/bg_focusable" android:textColor="#FFFFFF" android:paddingHorizontal="10dp" android:inputType="textUri" android:imeOptions="actionGo" android:maxLines="1"/>
             <ImageButton android:id="@+id/top_go_btn" android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/bg_focusable" android:src="@drawable/ic_go" app:tint="#FFF" android:layout_marginEnd="5dp" android:contentDescription="Go"/>
             <ImageButton android:id="@+id/top_refresh_btn" android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/bg_focusable" android:src="@drawable/ic_refresh" app:tint="#FFF" android:layout_marginEnd="5dp" android:contentDescription="Refresh"/>

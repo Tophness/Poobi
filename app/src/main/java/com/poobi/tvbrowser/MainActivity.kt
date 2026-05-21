@@ -68,6 +68,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var homeUrlInput: EditText
     private lateinit var topUrlInput: EditText
     private lateinit var topFavBtn: ImageButton
+    private lateinit var topForwardBtn: ImageButton
 
     private lateinit var openTabsContainer: LinearLayout
     private lateinit var btnRestoreTabs: Button
@@ -79,10 +80,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var prefs: SharedPreferences
     private var silentPopupBlock = true
     private var extractVideoPref = 0
+    private var videoTriggerPref = 1 // 0: Auto, 1: Fullscreen
     private var historyLimit = 20
     private var isLightTheme = false
     private var currentHost = ""
     private var isBrowsing = false
+
+    private var isExtractionActive = false
+    private var lastExtractedUrl = ""
+
+    private var historyIconPref = 0
+    private var bookmarkIconPref = 0
 
     private lateinit var downloadsContainer: LinearLayout
     private lateinit var topDownloadsBtn: ImageButton
@@ -178,6 +186,7 @@ class MainActivity : AppCompatActivity() {
         homeUrlInput = findViewById(R.id.home_url_input)
         topUrlInput = findViewById(R.id.top_url_input)
         topFavBtn = findViewById(R.id.top_fav_btn)
+        topForwardBtn = findViewById(R.id.top_forward_btn)
 
         historyContainer = findViewById(R.id.history_container)
         favContainer = findViewById(R.id.favorites_container)
@@ -225,10 +234,13 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         silentPopupBlock = prefs.getBoolean("silent_popup_block", true)
         extractVideoPref = prefs.getInt("extract_video_pref", 0)
+        videoTriggerPref = prefs.getInt("video_trigger_pref", 1)
         historyLimit = prefs.getInt("history_limit", 20)
         isLightTheme = prefs.getBoolean("light_theme", false)
         embeddedSubsEnabled = prefs.getBoolean("embedded_subs_enabled", true)
         scrollTopbarEnabled = prefs.getBoolean("scroll_topbar_enabled", true)
+        historyIconPref = prefs.getInt("history_icon_pref", 0)
+        bookmarkIconPref = prefs.getInt("bookmark_icon_pref", 0)
 
         applyTheme()
         if (!isBrowsing) refreshLists()
@@ -422,8 +434,22 @@ class MainActivity : AppCompatActivity() {
         val title = obj.getString("title")
         titleView.text = title
 
-        val file = File(filesDir, obj.getString("thumb"))
-        if (file.exists()) thumbView.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
+        val iconPref = if (listKey == "history") historyIconPref else bookmarkIconPref
+
+        if (iconPref == 0) {
+            val file = File(filesDir, obj.getString("thumb"))
+            if (file.exists()) thumbView.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
+            else thumbView.setImageResource(if (listKey == "history") R.drawable.ic_history else R.drawable.ic_heart_empty)
+        } else {
+            if (listKey == "history") {
+                thumbView.setImageResource(R.drawable.ic_history)
+                // In a real app we might load favicon here, but for now we use a consistent icon
+                // as requested for "favicons or icons"
+            } else {
+                thumbView.setImageResource(R.drawable.ic_heart_empty)
+            }
+            thumbView.setPadding(30, 30, 30, 30)
+        }
 
         view.setOnClickListener {
             if (listKey == "downloads") {
@@ -670,6 +696,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        topForwardBtn.setOnClickListener { currentWebView?.goForward() }
         findViewById<ImageButton>(R.id.top_go_btn).setOnClickListener { loadUrlAndBrowse(topUrlInput.text.toString()) }
         findViewById<ImageButton>(R.id.top_refresh_btn).setOnClickListener { currentWebView?.reload() }
         findViewById<ImageButton>(R.id.btn_new_tab).setOnClickListener { createNewTab() }
@@ -801,7 +828,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun attemptVideoExtraction(view: View?, callback: WebChromeClient.CustomViewCallback?) {
+        if (isExtractionActive || nativeVideoView.visibility == View.VISIBLE) return
         val wv = currentWebView ?: return
+
+        isExtractionActive = true
         wv.evaluateJavascript("(function() { var v = document.querySelector('video'); return v ? (v.currentSrc || v.src) : ''; })();") { result ->
             val jsUrl = result?.replace("\"", "") ?: ""
             val candidates = mutableListOf<String>()
@@ -811,17 +841,24 @@ class MainActivity : AppCompatActivity() {
             }
             candidates.addAll(interceptedMediaUrls)
 
-            if (candidates.isNotEmpty()) {
-                if (extractVideoPref == 1 && candidates.size == 1) {
-                    launchNativeVideoPlayer(candidates[0], callback)
+            val finalCandidates = candidates.distinct()
+
+            if (finalCandidates.isNotEmpty()) {
+                if (extractVideoPref == 1 && finalCandidates.size == 1) {
+                    launchNativeVideoPlayer(finalCandidates[0], callback)
+                    // keep isExtractionActive true until player is hidden or stream changes
                 } else if (extractVideoPref == 2) {
                     showWebsiteFullscreen(view, callback)
+                    isExtractionActive = false
                 } else {
-                    showStreamPicker(candidates, view, callback)
+                    showStreamPicker(finalCandidates, view, callback)
                 }
             } else {
-                Toast.makeText(this, "Playing via Website Player", Toast.LENGTH_SHORT).show()
-                showWebsiteFullscreen(view, callback)
+                isExtractionActive = false
+                if (view != null) {
+                    Toast.makeText(this, "Playing via Website Player", Toast.LENGTH_SHORT).show()
+                    showWebsiteFullscreen(view, callback)
+                }
             }
         }
     }
@@ -832,15 +869,17 @@ class MainActivity : AppCompatActivity() {
 
         @Suppress("OPT_IN_USAGE")
         kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-            for (url in streams.distinct()) {
+            for (url in streams) {
                 if (url.contains(".m3u8")) {
                     try {
                         val content = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                             java.net.URL(url).readText()
                         }
                         if (content.contains("#EXT-X-STREAM-INF")) {
-                            streamInfos.add("Auto (Adaptive Quality)")
-                            streamUrls.add(url)
+                            if (!streamUrls.contains(url)) {
+                                streamInfos.add("Auto (Adaptive Quality)")
+                                streamUrls.add(url)
+                            }
 
                             val lines = content.lines()
                             for (i in lines.indices) {
@@ -894,6 +933,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             if (streamInfos.isEmpty()) {
+                isExtractionActive = false
                 Toast.makeText(this@MainActivity, "No playable streams found", Toast.LENGTH_SHORT).show()
                 showWebsiteFullscreen(view, callback)
                 return@launch
@@ -916,7 +956,10 @@ class MainActivity : AppCompatActivity() {
                 .setTitle("Select Video Stream")
                 .setView(layout)
                 .setNegativeButton("Use Website Player") { d, _ -> d.cancel() }
-                .setOnCancelListener { showWebsiteFullscreen(view, callback) }
+                .setOnCancelListener { 
+                    isExtractionActive = false
+                    showWebsiteFullscreen(view, callback) 
+                }
                 .create()
 
             listView.setOnItemClickListener { _, _, position, _ ->
@@ -925,6 +968,7 @@ class MainActivity : AppCompatActivity() {
                     prefs.edit().putInt("extract_video_pref", 1).apply()
                 }
                 dialog.dismiss()
+                // isExtractionActive stays true while player is open to prevent re-triggering
                 launchNativeVideoPlayer(streamUrls[position], callback)
             }
             dialog.show()
@@ -933,9 +977,23 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("UnsafeOptInUsageError")
     private fun launchNativeVideoPlayer(videoUrl: String, callback: WebChromeClient.CustomViewCallback?) {
-        currentWebView?.evaluateJavascript("document.getElementsByTagName('video')[0].pause();", null)
-        customViewCallback = callback
+        // Halt the WebView entirely
+        currentWebView?.apply {
+            onPause()
+            pauseTimers()
+            evaluateJavascript("""
+                (function() {
+                    var videos = document.getElementsByTagName('video');
+                    for (var i = 0; i < videos.length; i++) {
+                        videos[i].pause();
+                        videos[i].src = "";
+                        videos[i].load();
+                    }
+                })();
+            """.trimIndent(), null)
+        }
 
+        customViewCallback = callback
         customViewContainer.visibility = View.VISIBLE
         nativeVideoView.visibility = View.VISIBLE
         webContainer.visibility = View.GONE
@@ -959,13 +1017,12 @@ class MainActivity : AppCompatActivity() {
         exoPlayer?.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 val cause = error.cause?.message ?: "Unknown"
-                Toast.makeText(this@MainActivity, "ExoPlayer Error: ${error.errorCodeName}\n$cause", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, "ExoPlayer Error: ${error.errorCodeName}\n${cause}", Toast.LENGTH_LONG).show()
                 Log.e("ExoPlayerDebug", "Playback failed: ", error)
             }
         })
 
-        val mediaItemBuilder = MediaItem.Builder()
-            .setUri(videoUrl)
+        val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
 
         val subtitleConfigs = interceptedSubtitleUrls.map { subUrl ->
             val mimeType = if (subUrl.contains(".vtt")) MimeTypes.TEXT_VTT
@@ -1002,6 +1059,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun hideFullscreenVideo() {
         customViewContainer.visibility = View.GONE
+        isExtractionActive = false
+        
+        currentWebView?.apply {
+            onResume()
+            resumeTimers()
+        }
 
         if (nativeVideoView.visibility == View.VISIBLE) {
             nativeVideoView.visibility = View.GONE
@@ -1074,6 +1137,13 @@ class MainActivity : AppCompatActivity() {
             override fun onHideCustomView() {
                 hideFullscreenVideo()
             }
+
+            override fun onReceivedTitle(view: WebView?, title: String?) {
+                super.onReceivedTitle(view, title)
+                // Clear intercepted URLs on title change, often happens on SPA navigation
+                interceptedMediaUrls.clear()
+                interceptedSubtitleUrls.clear()
+            }
         }
 
         wv.webViewClient = object : WebViewClient() {
@@ -1113,7 +1183,11 @@ class MainActivity : AppCompatActivity() {
                 if (requestedUrl != null) {
 
                     if (requestedUrl.contains(".m3u8") || requestedUrl.contains(".mp4") || requestedUrl.contains(".mkv")) {
+                        val wasEmpty = interceptedMediaUrls.isEmpty()
                         interceptedMediaUrls.add(requestedUrl)
+                        if (videoTriggerPref == 0 && isBrowsing && wasEmpty) {
+                            view?.post { attemptVideoExtraction(null, null) }
+                        }
                     }
                     if (requestedUrl.contains(".srt") || requestedUrl.contains(".vtt") || requestedUrl.contains(".ass")) {
                         interceptedSubtitleUrls.add(requestedUrl)

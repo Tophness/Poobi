@@ -80,7 +80,10 @@
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Video Player" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Extraction" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
-                <Button android:id="@+id/video_pref_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Fullscreen Video Player: Ask" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
+                <Button android:id="@+id/video_pref_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Native Player Hijack: Ask" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Trigger" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/video_trigger_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Trigger on: Fullscreen Button" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Subtitles" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
                 <Button android:id="@+id/embedded_subs_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Embedded Subtitles: Enabled" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
@@ -91,7 +94,11 @@
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Interface &amp; Navigation" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Navigation Bar" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
-                <Button android:id="@+id/scroll_topbar_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Scroll Up for Top Bar: Enabled" android:gravity="start" android:nextFocusLeft="@+id/cat_interface"/>
+                <Button android:id="@+id/scroll_topbar_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Scroll Up for Top Bar: Enabled" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_interface"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Icons Style" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/history_icon_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="History Icons: Thumbnail" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_interface"/>
+                <Button android:id="@+id/bookmark_icon_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Bookmark Icons: Thumbnail" android:gravity="start" android:nextFocusLeft="@+id/cat_interface"/>
             </LinearLayout>
 
         </FrameLayout>
