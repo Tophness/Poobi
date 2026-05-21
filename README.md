@@ -53,7 +53,7 @@ None of them grab subtitles from the page, so if the mp4 stream doesn't have emb
 Download the Android Platform Tools for your system:
 
 * **Windows:**
-  [Platform Tools (Windows)](https://dl.google.com/android/repository/platform-tools-latest-windows.zip
+  [Platform Tools (Windows)](https://dl.google.com/android/repository/platform-tools-latest-windows.zip)
 
 * **Linux:**
   [Platform Tools (Linux)](https://dl.google.com/android/repository/platform-tools-latest-linux.zip)
