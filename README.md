@@ -3,9 +3,7 @@
 **Poobi** is a fast, modern, and highly optimized web browser designed specifically for Android TV, Google TV, and Android set-top boxes.
 
 ## Why use Poobi?
-Sick and tired of every Android TV Browser having the exact same flaws?
-
-Me too. So I did something about it.
+Sick and tired of every Android TV Browser having the exact same flaws? Me too. So I did something about it.
 
 The popup blocker on TV Bro and others doesn't work half the time.
 
