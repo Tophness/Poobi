@@ -11,9 +11,7 @@ Browsehere's works great, but it asks you if you want to open the popup every ti
 
 Why in the fuck would I want to open it? Even if I did, streaming video sites will often hit you with 10 popups in a row, and you just have to say no 10 times to fullscreen the video.
 
-It was closed source, so I made my own.
-
-Eventually I found out there was a lot of things to improve.
+It was closed source, so I made my own.. Eventually I found out there was a lot of things to improve.
 
 Most of these browser's native video players don't work half the time. I did it properly.
 
