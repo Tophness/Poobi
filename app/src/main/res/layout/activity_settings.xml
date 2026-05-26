@@ -28,6 +28,7 @@
     <Button android:id="@+id/cat_player" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Player" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/video_pref_btn"/>
     <Button android:id="@+id/cat_interface" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Interface" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/scroll_topbar_btn"/>
     <Button android:id="@+id/cat_autoplay" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Autoplay" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/video_trigger_btn"/>
+    <Button android:id="@+id/cat_blocked" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Blocked Elements" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
 
         <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
 
@@ -109,6 +110,14 @@
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Custom Profiles" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="8dp"/>
                 <LinearLayout android:id="@+id/autoplay_profiles_container" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
+            </LinearLayout>
+
+            <!-- BLOCKED ELEMENTS CATEGORY -->
+            <LinearLayout android:id="@+id/panel_blocked" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Blocked Page Elements" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Custom Rules" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="8dp"/>
+                <LinearLayout android:id="@+id/blocked_elements_container" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
             </LinearLayout>
 
         </FrameLayout>

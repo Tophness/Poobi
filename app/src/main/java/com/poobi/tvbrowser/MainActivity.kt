@@ -49,7 +49,9 @@ data class AutoplayProfile(
     val id: String = java.util.UUID.randomUUID().toString(),
     val name: String,
     val urlPatterns: List<String>,
-    val script: String
+    val script: String,
+    val useScript: Boolean = true,
+    val selectors: List<String> = emptyList()
 )
 
 @SuppressLint("SetTextI18n")
@@ -1374,6 +1376,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 injectClickjackPrevention(view)
+                applyBlockedElements(view)
                 saveTabs()
                 if (videoTriggerPref == 0) {
                     triggerAutoPlayClicks(view)
@@ -1404,7 +1407,17 @@ class MainActivity : AppCompatActivity() {
                         matchedAny = true
                         if (obj.optBoolean("enabled", true)) {
                             executedAny = true
-                            wv.evaluateJavascript(obj.getString("script"), null)
+                            val scriptToRun = if (obj.optBoolean("use_script", true)) {
+                                obj.getString("script")
+                            } else {
+                                val selectors = obj.optJSONArray("selectors")
+                                if (selectors != null && selectors.length() > 0) {
+                                    SettingsActivity.generateSelectorScript(selectors)
+                                } else {
+                                    obj.getString("script")
+                                }
+                            }
+                            wv.evaluateJavascript(scriptToRun, null)
                         }
                     }
                 }
@@ -1915,16 +1928,400 @@ class MainActivity : AppCompatActivity() {
         val x = (cursorX / density).toInt()
         val y = (cursorY / density).toInt()
 
-        wv.evaluateJavascript("""
+        val setupScript = """
             (function() {
-                var el = document.elementFromPoint($x, $y);
-                if (el) {
-                    el.style.display = 'none';
-                    return 'blocked';
+                if (!window.blockerHelper) {
+                    window.blockerHelper = {
+                        currentEl: null,
+                        candidateEls: [],
+                        candidateIndex: 0,
+                        highlightStyle: null,
+                        init: function() {
+                            // Handled in setHighlight
+                        },
+                        setHighlight: function(selector) {
+                            this.clearHighlight();
+                            const styleText = selector + ' { outline: 4px solid #00BCD4 !important; outline-offset: -4px !important; box-shadow: 0 0 20px rgba(0, 188, 212, 0.8) !important; position: relative !important; z-index: 2147483646 !important; }';
+                            const apply = (win) => {
+                                try {
+                                    let style = win.document.getElementById('poobi-blocker-highlight');
+                                    if (!style) {
+                                        style = win.document.createElement('style');
+                                        style.id = 'poobi-blocker-highlight';
+                                        win.document.head.appendChild(style);
+                                    }
+                                    style.innerHTML = styleText;
+                                    Array.from(win.frames).forEach(f => { try { apply(f); } catch(e) {} });
+                                } catch(e) {}
+                            };
+                            apply(window);
+                        },
+                        clearHighlight: function() {
+                            const clear = (win) => {
+                                try {
+                                    let style = win.document.getElementById('poobi-blocker-highlight');
+                                    if (style) style.innerHTML = '';
+                                    Array.from(win.frames).forEach(f => { try { clear(f); } catch(e) {} });
+                                } catch(e) {}
+                            };
+                            clear(window);
+                        },
+                        selectAt: function(x, y) {
+                            var candidates = [];
+                            function collect(win, rx, ry) {
+                                try {
+                                    var els = win.document.elementsFromPoint(rx, ry);
+                                    for (var el of Array.from(els)) {
+                                        if (el.tagName === 'HTML' || el.tagName === 'BODY') continue;
+                                        if (el.tagName === 'IFRAME') {
+                                            try {
+                                                var rect = el.getBoundingClientRect();
+                                                collect(el.contentWindow, rx - rect.left, ry - rect.top);
+                                            } catch(e) {}
+                                        }
+                                        candidates.push(el);
+                                    }
+                                } catch(e) {}
+                            }
+                            collect(window, x, y);
+                            this.candidateEls = candidates.filter((el, idx) => candidates.indexOf(el) === idx);
+                            this.candidateIndex = 0;
+                            this.currentEl = this.candidateEls[0];
+                            return this.getOptions();
+                        },
+                        nextCandidate: function() {
+                            if (this.candidateEls.length > 1) {
+                                this.candidateIndex = (this.candidateIndex + 1) % this.candidateEls.length;
+                                this.currentEl = this.candidateEls[this.candidateIndex];
+                            }
+                            return this.getOptions();
+                        },
+                        selectParent: function() {
+                            if (this.currentEl && this.currentEl.parentElement && this.currentEl.parentElement !== document.documentElement) {
+                                this.currentEl = this.currentEl.parentElement;
+                            }
+                            return this.getOptions();
+                        },
+                        getOptions: function() {
+                            if (!this.currentEl) return JSON.stringify({error: 'No element'});
+                            var options = [];
+                            var el = this.currentEl;
+                            var tag = el.tagName.toLowerCase();
+                            
+                            if (el.id) options.push({type: 'ID', value: '#' + el.id});
+                            
+                            var classes = Array.from(el.classList);
+                            classes.forEach(c => options.push({type: 'Class', value: '.' + c}));
+                            
+                            options.push({type: 'Tag', value: tag});
+
+                            if (classes.length > 0) {
+                                options.push({type: 'Tag+Class', value: tag + '.' + classes.join('.')});
+                            }
+
+                            var parent = el.parentElement;
+                            if (parent) {
+                                var idx = Array.from(parent.children).indexOf(el) + 1;
+                                options.push({type: 'Position', value: tag + ':nth-child(' + idx + ')'});
+                            }
+
+                            var path = [];
+                            var curr = el;
+                            while (curr && curr.tagName !== 'HTML' && curr.tagName !== 'BODY') {
+                                var segment = curr.tagName.toLowerCase();
+                                if (curr.id) {
+                                    segment += '#' + curr.id;
+                                    path.unshift(segment);
+                                    break;
+                                }
+                                var p = curr.parentElement;
+                                if (p) {
+                                    var i = Array.from(p.children).indexOf(curr) + 1;
+                                    segment += ':nth-child(' + i + ')';
+                                }
+                                path.unshift(segment);
+                                curr = curr.parentElement;
+                            }
+                            if (path.length > 1) {
+                                options.push({type: 'Path', value: path.join(' > ')});
+                            }
+
+                            if (tag === 'iframe' && el.src) {
+                                try {
+                                    var url = new URL(el.src);
+                                    options.push({type: 'Source', value: 'iframe[src*="' + url.host + '"]'});
+                                } catch(e) {}
+                            }
+                            
+                            return JSON.stringify({
+                                tagName: el.tagName,
+                                id: el.id,
+                                className: el.className,
+                                candidatesCount: this.candidateEls.length,
+                                candidateIndex: this.candidateIndex,
+                                options: options
+                            });
+                        }
+                    };
                 }
-                return '';
-            })()
-        """.trimIndent(), null)
+                return window.blockerHelper.selectAt($x, $y);
+            })();
+        """.trimIndent()
+
+        wv.evaluateJavascript(setupScript) { result ->
+            val res = result?.trim('"')?.replace("\\\"", "\"") ?: "{}"
+            try {
+                val json = JSONObject(res)
+                if (json.has("options")) {
+                    showAdvancedBlockDialog(json)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun showAdvancedBlockDialog(data: JSONObject) {
+        val wv = currentWebView ?: return
+        val tagName = data.optString("tagName", "unknown")
+        val candCount = data.optInt("candidatesCount", 1)
+        val candIndex = data.optInt("candidateIndex", 0)
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 20, 40, 20)
+        }
+
+        val headerText = TextView(this).apply {
+            text = "Block Element ($tagName) [${candIndex + 1}/$candCount]"
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 18f
+            setPadding(0, 0, 0, 20)
+        }
+        layout.addView(headerText)
+
+        val optionsContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
+        fun populateOptions(json: JSONObject) {
+            val opts = json.getJSONArray("options")
+            val tName = json.getString("tagName")
+            val cIdx = json.optInt("candidateIndex", 0)
+            val cCnt = json.optInt("candidatesCount", 1)
+            
+            headerText.text = "Block Element ($tName) [${cIdx + 1}/$cCnt]"
+            optionsContainer.removeAllViews()
+            
+            for (i in 0 until opts.length()) {
+                val opt = opts.getJSONObject(i)
+                val type = opt.getString("type")
+                val value = opt.getString("value")
+                
+                val btn = Button(this).apply {
+                    text = "$type: $value"
+                    isAllCaps = false
+                    background = getDrawable(R.drawable.bg_focusable)
+                    setTextColor(android.graphics.Color.WHITE)
+                    gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                    setPadding(30, 0, 30, 0)
+                    val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 90)
+                    params.setMargins(0, 0, 0, 10)
+                    layoutParams = params
+                    
+                    onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+                        if (hasFocus) {
+                            wv.evaluateJavascript("window.blockerHelper.setHighlight('$value')", null)
+                        }
+                    }
+                    
+                    setOnClickListener {
+                        wv.evaluateJavascript("window.blockerHelper.clearHighlight()", null)
+                        currentDialog?.dismiss()
+                        showSaveBlockedElementDialog(value)
+                    }
+                }
+                optionsContainer.addView(btn)
+            }
+        }
+
+        populateOptions(data)
+        layout.addView(optionsContainer)
+
+        val actionRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            params.setMargins(0, 10, 0, 0)
+            layoutParams = params
+        }
+
+        val nextBtn = Button(this).apply {
+            text = "↓ Select Underneath"
+            background = getDrawable(R.drawable.bg_focusable)
+            setTextColor(android.graphics.Color.YELLOW)
+            setPadding(20, 0, 20, 0)
+            val params = LinearLayout.LayoutParams(0, 90, 1f)
+            params.marginEnd = 10
+            layoutParams = params
+            visibility = if (candCount > 1) View.VISIBLE else View.GONE
+            
+            setOnClickListener {
+                wv.evaluateJavascript("window.blockerHelper.nextCandidate()") { result ->
+                    val res = result?.trim('"')?.replace("\\\"", "\"") ?: "{}"
+                    try {
+                        val json = JSONObject(res)
+                        if (json.has("options")) {
+                            populateOptions(json)
+                            if (optionsContainer.childCount > 0) optionsContainer.getChildAt(0).requestFocus()
+                        }
+                    } catch (e: Exception) { e.printStackTrace() }
+                }
+            }
+        }
+
+        val parentBtn = Button(this).apply {
+            text = "↑ Select Parent"
+            background = getDrawable(R.drawable.bg_focusable)
+            setTextColor(android.graphics.Color.CYAN)
+            setPadding(20, 0, 20, 0)
+            val params = LinearLayout.LayoutParams(0, 90, 1f)
+            layoutParams = params
+            
+            setOnClickListener {
+                wv.evaluateJavascript("window.blockerHelper.selectParent()") { result ->
+                    val res = result?.trim('"')?.replace("\\\"", "\"") ?: "{}"
+                    try {
+                        val json = JSONObject(res)
+                        if (json.has("options")) {
+                            populateOptions(json)
+                            if (optionsContainer.childCount > 0) optionsContainer.getChildAt(0).requestFocus()
+                        }
+                    } catch (e: Exception) { e.printStackTrace() }
+                }
+            }
+        }
+
+        actionRow.addView(nextBtn)
+        actionRow.addView(parentBtn)
+        layout.addView(actionRow)
+
+        currentDialog = AlertDialog.Builder(this)
+            .setView(layout)
+            .setOnDismissListener {
+                wv.evaluateJavascript("window.blockerHelper.clearHighlight()", null)
+            }
+            .create()
+
+        currentDialog?.show()
+    }
+    
+    private var currentDialog: AlertDialog? = null
+
+    private fun showSaveBlockedElementDialog(selector: String) {
+        val url = currentWebView?.url ?: ""
+        val host = Uri.parse(url).host ?: "Unknown Site"
+        val editText = EditText(this).apply { 
+            setText(host)
+            ViewUtils.applySmartDpadFocus(this)
+        }
+        
+        AlertDialog.Builder(this)
+            .setTitle("Save Blocked Element")
+            .setMessage("Rule name for this site:")
+            .setView(editText)
+            .setPositiveButton("Save") { _, _ ->
+                val name = editText.text.toString()
+                saveBlockedElement(name, url, selector)
+            }
+            .setNegativeButton("Just for now", null)
+            .show()
+    }
+
+    private fun saveBlockedElement(name: String, url: String, selector: String) {
+        val host = Uri.parse(url).host ?: "*"
+        val blockedJson = prefs.getString("blocked_elements", "[]") ?: "[]"
+        val array = JSONArray(blockedJson)
+        
+        var existingIndex = -1
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            if (obj.getString("name") == name) {
+                existingIndex = i; break
+            }
+        }
+
+        if (existingIndex != -1) {
+            val obj = array.getJSONObject(existingIndex)
+            val selectors = obj.getJSONArray("selectors")
+            var found = false
+            for (j in 0 until selectors.length()) {
+                if (selectors.getString(j) == selector) { found = true; break }
+            }
+            if (!found) selectors.put(selector)
+        } else {
+            val newRule = JSONObject().apply {
+                put("id", java.util.UUID.randomUUID().toString())
+                put("name", name)
+                put("enabled", true)
+                put("urlPatterns", JSONArray().put("*$host*"))
+                put("selectors", JSONArray().put(selector))
+            }
+            array.put(newRule)
+        }
+        
+        prefs.edit().putString("blocked_elements", array.toString()).apply()
+        Toast.makeText(this, "Element rule saved!", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun applyBlockedElements(wv: WebView) {
+        val url = wv.url ?: return
+        val blockedJson = prefs.getString("blocked_elements", "[]") ?: "[]"
+        val array = JSONArray(blockedJson)
+        
+        val allSelectors = mutableListOf<String>()
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            if (!obj.optBoolean("enabled", true)) continue
+            
+            val patterns = obj.getJSONArray("urlPatterns")
+            var matches = false
+            for (j in 0 until patterns.length()) {
+                if (matchUrlPattern(patterns.getString(j), url)) {
+                    matches = true; break
+                }
+            }
+            
+            if (matches) {
+                val selectors = obj.getJSONArray("selectors")
+                for (j in 0 until selectors.length()) {
+                    allSelectors.add(selectors.getString(j))
+                }
+            }
+        }
+
+        if (allSelectors.isNotEmpty()) {
+            val selectorsJson = JSONArray(allSelectors).toString()
+            val script = """
+                (function() {
+                    const selectors = $selectorsJson;
+                    const styleText = selectors.join(', ') + ' { display: none !important; }';
+                    const inject = (win) => {
+                        try {
+                            let style = win.document.getElementById('poobi-blocker-style');
+                            if (!style) {
+                                style = win.document.createElement('style');
+                                style.id = 'poobi-blocker-style';
+                                win.document.head.appendChild(style);
+                            }
+                            style.innerHTML = styleText;
+                            Array.from(win.frames).forEach(f => { try { inject(f); } catch(e) {} });
+                        } catch(e) {}
+                    };
+                    inject(window);
+                })();
+            """.trimIndent()
+            wv.evaluateJavascript(script, null)
+        }
     }
 
     private fun simulateClick() {
@@ -2020,32 +2417,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveAutoplayProfile(name: String, url: String, selectors: List<String>) {
         val host = Uri.parse(url).host ?: "*"
-        val selectorsJson = JSONArray(selectors).toString()
-        val script = """
-            (function() {
-                const selectors = $selectorsJson;
-                const clicked = new Set();
-                const run = () => {
-                    selectors.forEach(sel => {
-                        try {
-                            const el = document.querySelector(sel);
-                            if (el && !clicked.has(el)) {
-                                clicked.add(el);
-                                ['mousedown', 'mouseup', 'click'].forEach(n => {
-                                    el.dispatchEvent(new MouseEvent(n, {bubbles:true, cancelable:true, buttons:1, view:window}));
-                                });
-                            }
-                        } catch(e) {}
-                    });
-                };
-                run();
-                const obs = new MutationObserver(run);
-                obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
-                setTimeout(() => obs.disconnect(), 15000);
-            })();
-        """.trimIndent()
+        val selectorsJson = JSONArray(selectors)
+        val script = SettingsActivity.generateSelectorScript(selectorsJson)
         
-        val profile = AutoplayProfile(name = name, urlPatterns = listOf("*$host*"), script = script)
+        val profile = AutoplayProfile(
+            name = name, 
+            urlPatterns = listOf("*$host*"), 
+            script = script,
+            useScript = false,
+            selectors = selectors
+        )
         
         val profilesJson = prefs.getString("autoplay_profiles", "[]") ?: "[]"
         val array = JSONArray(profilesJson)
@@ -2055,6 +2436,8 @@ class MainActivity : AppCompatActivity() {
             put("enabled", true)
             put("urlPatterns", JSONArray(profile.urlPatterns))
             put("script", profile.script)
+            put("use_script", profile.useScript)
+            put("selectors", JSONArray(profile.selectors))
         })
         prefs.edit().putString("autoplay_profiles", array.toString()).apply()
         Toast.makeText(this, "Profile '$name' saved!", Toast.LENGTH_SHORT).show()
