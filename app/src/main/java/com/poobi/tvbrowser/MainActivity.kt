@@ -45,6 +45,13 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileOutputStream
 
+data class AutoplayProfile(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String,
+    val urlPatterns: List<String>,
+    val script: String
+)
+
 @SuppressLint("SetTextI18n")
 class MainActivity : AppCompatActivity() {
 
@@ -70,6 +77,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var topUrlInput: EditText
     private lateinit var topFavBtn: ImageButton
     private lateinit var topAutoPlayBtn: ImageButton
+    private lateinit var topRecordBtn: ImageButton
     private lateinit var topForwardBtn: ImageButton
 
     private lateinit var openTabsContainer: LinearLayout
@@ -116,6 +124,9 @@ class MainActivity : AppCompatActivity() {
 
     private var bookmarkPage = 0
     private val ITEMS_PER_PAGE = 10
+
+    private var isRecordingAutoplay = false
+    private val recordedSelectors = mutableListOf<String>()
 
     private val interceptedMediaUrls = mutableSetOf<String>()
 
@@ -198,6 +209,7 @@ class MainActivity : AppCompatActivity() {
         topUrlInput = findViewById(R.id.top_url_input)
         topFavBtn = findViewById(R.id.top_fav_btn)
         topAutoPlayBtn = findViewById(R.id.top_auto_play_btn)
+        topRecordBtn = findViewById(R.id.top_record_btn)
         topForwardBtn = findViewById(R.id.top_forward_btn)
 
         historyContainer = findViewById(R.id.history_container)
@@ -426,9 +438,12 @@ class MainActivity : AppCompatActivity() {
     private fun updateAutoPlayIcon() {
         if (videoTriggerPref == 0) {
             topAutoPlayBtn.imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#00BCD4"))
+            topRecordBtn.visibility = View.VISIBLE
         } else {
             val color = if (isLightTheme) android.graphics.Color.BLACK else android.graphics.Color.WHITE
             topAutoPlayBtn.imageTintList = android.content.res.ColorStateList.valueOf(color)
+            topRecordBtn.visibility = View.GONE
+            if (isRecordingAutoplay) stopRecording()
         }
     }
 
@@ -522,7 +537,7 @@ class MainActivity : AppCompatActivity() {
     private fun fetchFavicon(url: String, file: File, onDone: () -> Unit) {
         val host = Uri.parse(url).host ?: return
         val faviconUrl = "https://www.google.com/s2/favicons?sz=64&domain_url=$host"
-        
+
         @Suppress("OPT_IN_USAGE")
         GlobalScope.launch(Dispatchers.IO) {
             try {
@@ -835,6 +850,10 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Auto-play Video: $status", Toast.LENGTH_SHORT).show()
         }
 
+        topRecordBtn.setOnClickListener {
+            if (isRecordingAutoplay) stopRecording() else startRecording()
+        }
+
         topFavBtn.setOnClickListener {
             val wv = currentWebView ?: return@setOnClickListener
             val url = wv.url ?: return@setOnClickListener
@@ -872,39 +891,8 @@ class MainActivity : AppCompatActivity() {
         homeUrlInput.setOnEditorActionListener(editorListener)
         topUrlInput.setOnEditorActionListener(editorListener)
 
-        val smartDpadFocusFix = View.OnKeyListener { v, keyCode, event ->
-            if (v is EditText && event.action == KeyEvent.ACTION_DOWN) {
-                if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-
-                    var isKeyboardOpen = false
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                        isKeyboardOpen = v.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
-                    }
-                    if (event.deviceId <= 0) {
-                        isKeyboardOpen = true
-                    }
-
-                    if (isKeyboardOpen) {
-                        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && v.selectionEnd == v.text.length) {
-                            v.focusSearch(View.FOCUS_RIGHT)?.requestFocus()
-                            return@OnKeyListener true
-                        }
-                        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && v.selectionStart == 0) {
-                            v.focusSearch(View.FOCUS_LEFT)?.requestFocus()
-                            return@OnKeyListener true
-                        }
-                        return@OnKeyListener false
-                    } else {
-                        val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) View.FOCUS_RIGHT else View.FOCUS_LEFT
-                        v.focusSearch(direction)?.requestFocus()
-                        return@OnKeyListener true
-                    }
-                }
-            }
-            false
-        }
-        homeUrlInput.setOnKeyListener(smartDpadFocusFix)
-        topUrlInput.setOnKeyListener(smartDpadFocusFix)
+        ViewUtils.applySmartDpadFocus(homeUrlInput)
+        ViewUtils.applySmartDpadFocus(topUrlInput)
     }
 
     private fun startDownload(url: String, fileName: String) {
@@ -1090,9 +1078,9 @@ class MainActivity : AppCompatActivity() {
                 .setTitle("Select Video Stream")
                 .setView(layout)
                 .setNegativeButton("Use Website Player") { d, _ -> d.cancel() }
-                .setOnCancelListener { 
+                .setOnCancelListener {
                     isExtractionActive = false
-                    showWebsiteFullscreen(view, callback) 
+                    showWebsiteFullscreen(view, callback)
                 }
                 .create()
 
@@ -1207,7 +1195,7 @@ class MainActivity : AppCompatActivity() {
             val mimeType = if (subUrl.contains(".vtt")) MimeTypes.TEXT_VTT
             else if (subUrl.contains(".ass")) MimeTypes.TEXT_SSA
             else MimeTypes.APPLICATION_SUBRIP
-            
+
             val info = getLanguageInfo(subUrl)
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
                 .setMimeType(mimeType)
@@ -1261,7 +1249,7 @@ class MainActivity : AppCompatActivity() {
                     prefs.edit().remove("resume_$pageUrl").apply()
                 }
             }
-            
+
             nativeVideoView.visibility = View.GONE
             nativeVideoView.keepScreenOn = false
             exoPlayer?.stop()
@@ -1272,7 +1260,7 @@ class MainActivity : AppCompatActivity() {
 
         customViewContainer.visibility = View.GONE
         isExtractionActive = false
-        
+
         currentWebView?.apply {
             onResume()
             resumeTimers()
@@ -1302,6 +1290,8 @@ class MainActivity : AppCompatActivity() {
                 isAlgorithmicDarkeningAllowed = !isLightTheme
             }
         }
+
+        wv.addJavascriptInterface(WebAppInterface(), "AndroidAutoplay")
 
         wv.setDownloadListener { url, userAgent, contentDisposition, mimetype, contentLength ->
             val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
@@ -1392,82 +1382,38 @@ class MainActivity : AppCompatActivity() {
             }
 
             private fun triggerAutoPlayClicks(wv: WebView) {
-                val script = """
-                    (function() {
-                        if (window.autoPlayInjected) return;
-                        window.autoPlayInjected = true;
+                val url = wv.url ?: return
+                val profilesJson = prefs.getString("autoplay_profiles", "[]") ?: "[]"
+                val profiles = JSONArray(profilesJson)
+                
+                var matchedAny = false
+                var executedAny = false
+                // Apply all matching and enabled profiles
+                for (i in 0 until profiles.length()) {
+                    val obj = profiles.getJSONObject(i)
+                    val patterns = obj.getJSONArray("urlPatterns")
+                    var matchesPattern = false
+                    for (j in 0 until patterns.length()) {
+                        if (matchUrlPattern(patterns.getString(j), url)) {
+                            matchesPattern = true
+                            break
+                        }
+                    }
+                    
+                    if (matchesPattern) {
+                        matchedAny = true
+                        if (obj.optBoolean("enabled", true)) {
+                            executedAny = true
+                            wv.evaluateJavascript(obj.getString("script"), null)
+                        }
+                    }
+                }
 
-                        const clickPlayButtons = () => {
-                            let clicked = false;
-                            // Search for elements with 'play' in class or ID, or common play icons
-                            const selectors = [
-                                'button', 'div', 'i', 'span', 'a', 
-                                '[class*="play"]', '[id*="play"]', 
-                                '[class*="Player"]', '[class*="control"]',
-                                '.ytp-large-play-button', '.vjs-big-play-button'
-                            ];
-                            
-                            const elements = document.querySelectorAll(selectors.join(','));
-                            elements.forEach(el => {
-                                const cls = (el.className || "").toString().toLowerCase();
-                                const id = (el.id || "").toLowerCase();
-                                const text = (el.innerText || "").toLowerCase();
-                                
-                                // Target "play" but strictly avoid anything looking like an "ad"
-                                const isPlay = cls.includes('play') || id.includes('play') || text.trim() === 'play';
-                                const isAd = cls.includes('ad') || id.includes('ad') || id.includes('google') || cls.includes('banner');
-                                
-                                if (isPlay && !isAd) {
-                                    const rect = el.getBoundingClientRect();
-                                    if (rect.width > 5 && rect.height > 5) {
-                                        const style = window.getComputedStyle(el);
-                                        if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
-                                            // Dispatch multiple events to satisfy different framework listeners
-                                            ['mousedown', 'mouseup', 'click'].forEach(name => {
-                                                el.dispatchEvent(new MouseEvent(name, {
-                                                    bubbles: true,
-                                                    cancelable: true,
-                                                    view: window,
-                                                    buttons: 1
-                                                }));
-                                            });
-                                            clicked = true;
-                                        }
-                                    }
-                                }
-                            });
-                            return clicked;
-                        };
-
-                        // 1. Initial attempt
-                        clickPlayButtons();
-
-                        // 2. Use MutationObserver to catch dynamically added play buttons (React/SPAs)
-                        const observer = new MutationObserver((mutations) => {
-                            for (const mutation of mutations) {
-                                if (mutation.addedNodes.length > 0) {
-                                    clickPlayButtons();
-                                    break;
-                                }
-                            }
-                        });
-                        observer.observe(document.body || document.documentElement, { 
-                            childList: true, 
-                            subtree: true 
-                        });
-
-                        // 3. Periodically try to kick-start any video elements that are stuck
-                        setInterval(() => {
-                            const videos = document.querySelectorAll('video');
-                            videos.forEach(v => {
-                                if (v.paused && (v.src || v.currentSrc)) {
-                                    v.play().catch(() => {});
-                                }
-                            });
-                        }, 2000);
-                    })();
-                """.trimIndent()
-                wv.evaluateJavascript(script, null)
+                if (!executedAny && !matchedAny) {
+                    // Fallback for fresh installs where profiles list is empty
+                    // OR when no user-defined profile (including the 'Default' one in the list) matches the URL.
+                    wv.evaluateJavascript(SettingsActivity.DEFAULT_AUTOPLAY_SCRIPT.trimIndent(), null)
+                }
 
                 // Android-side: Periodically attempt extraction for the next 15 seconds
                 val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -1528,11 +1474,11 @@ class MainActivity : AppCompatActivity() {
         val player = exoPlayer ?: return
         val currentTime = System.currentTimeMillis()
         if (currentTime - lastSeekTime < 150) return // Throttle seeking
-        
+
         lastSeekTime = currentTime
         // Starts at 5s, grows quadratically to allow skipping long durations
-        seekIncrement = (5000L + (repeatCount * repeatCount) * 100L).coerceAtMost(300000L) 
-        
+        seekIncrement = (5000L + (repeatCount * repeatCount) * 100L).coerceAtMost(300000L)
+
         val newPos = player.currentPosition + (direction * seekIncrement)
         player.seekTo(newPos.coerceIn(0, player.duration))
     }
@@ -1997,5 +1943,141 @@ class MainActivity : AppCompatActivity() {
 
         downEvent.recycle()
         upEvent.recycle()
+    }
+
+    private fun startRecording() {
+        val wv = currentWebView ?: return
+        isRecordingAutoplay = true
+        recordedSelectors.clear()
+        topRecordBtn.setImageResource(R.drawable.ic_stop)
+        topRecordBtn.imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.RED)
+        Toast.makeText(this, "Recording Autoplay Sequence...", Toast.LENGTH_SHORT).show()
+
+        val script = """
+            (function() {
+                function getSelector(el) {
+                    if (el.id) return '#' + el.id;
+                    let names = [];
+                    while (el.parentElement) {
+                        if (el.id) {
+                            names.unshift('#' + el.id);
+                            break;
+                        } else {
+                            if (el == el.ownerDocument.documentElement) names.unshift(el.tagName);
+                            else {
+                                for (var c = 1, e = el; e.previousElementSibling; e = e.previousElementSibling, c++);
+                                names.unshift(el.tagName + ":nth-child(" + c + ")");
+                            }
+                            el = el.parentElement;
+                        }
+                    }
+                    return names.join(" > ");
+                }
+                window.recordedClickCallback = function(e) {
+                    const selector = getSelector(e.target);
+                    AndroidAutoplay.onElementClicked(selector);
+                };
+                document.addEventListener('click', window.recordedClickCallback, true);
+            })();
+        """.trimIndent()
+        wv.evaluateJavascript(script, null)
+    }
+
+    private fun stopRecording() {
+        isRecordingAutoplay = false
+        topRecordBtn.setImageResource(R.drawable.ic_record)
+        topRecordBtn.imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE)
+        
+        val wv = currentWebView
+        wv?.evaluateJavascript("document.removeEventListener('click', window.recordedClickCallback, true);", null)
+
+        if (recordedSelectors.isNotEmpty()) {
+            showSaveProfileDialog()
+        } else {
+            Toast.makeText(this, "No clicks recorded", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showSaveProfileDialog() {
+        val url = currentWebView?.url ?: ""
+        val host = Uri.parse(url).host ?: "Unknown Site"
+        val editText = EditText(this).apply { 
+            setText(host)
+            ViewUtils.applySmartDpadFocus(this)
+        }
+        
+        AlertDialog.Builder(this)
+            .setTitle("Save Autoplay Profile")
+            .setMessage("Enter a name for this profile:")
+            .setView(editText)
+            .setPositiveButton("Save") { _, _ ->
+                val name = editText.text.toString()
+                saveAutoplayProfile(name, url, recordedSelectors.toList())
+            }
+            .setNegativeButton("Discard", null)
+            .show()
+    }
+
+    private fun saveAutoplayProfile(name: String, url: String, selectors: List<String>) {
+        val host = Uri.parse(url).host ?: "*"
+        val selectorsJson = JSONArray(selectors).toString()
+        val script = """
+            (function() {
+                const selectors = $selectorsJson;
+                const clicked = new Set();
+                const run = () => {
+                    selectors.forEach(sel => {
+                        try {
+                            const el = document.querySelector(sel);
+                            if (el && !clicked.has(el)) {
+                                clicked.add(el);
+                                ['mousedown', 'mouseup', 'click'].forEach(n => {
+                                    el.dispatchEvent(new MouseEvent(n, {bubbles:true, cancelable:true, buttons:1, view:window}));
+                                });
+                            }
+                        } catch(e) {}
+                    });
+                };
+                run();
+                const obs = new MutationObserver(run);
+                obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
+                setTimeout(() => obs.disconnect(), 15000);
+            })();
+        """.trimIndent()
+        
+        val profile = AutoplayProfile(name = name, urlPatterns = listOf("*$host*"), script = script)
+        
+        val profilesJson = prefs.getString("autoplay_profiles", "[]") ?: "[]"
+        val array = JSONArray(profilesJson)
+        array.put(JSONObject().apply {
+            put("id", profile.id)
+            put("name", profile.name)
+            put("enabled", true)
+            put("urlPatterns", JSONArray(profile.urlPatterns))
+            put("script", profile.script)
+        })
+        prefs.edit().putString("autoplay_profiles", array.toString()).apply()
+        Toast.makeText(this, "Profile '$name' saved!", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun matchUrlPattern(pattern: String, url: String): Boolean {
+        if (pattern == "*") return true
+        val regex = pattern.replace(".", "\\.")
+                           .replace("*", ".*")
+                           .replace("?", ".")
+        return try {
+            java.util.regex.Pattern.compile(regex, java.util.regex.Pattern.CASE_INSENSITIVE).matcher(url).find()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    inner class WebAppInterface {
+        @JavascriptInterface
+        fun onElementClicked(selector: String) {
+            if (isRecordingAutoplay) {
+                recordedSelectors.add(selector)
+            }
+        }
     }
 }
