@@ -873,14 +873,17 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.ctx_new_tab).setOnClickListener {
             lastClickedUrl?.let { loadUrlAndBrowse(it, true) }
             contextMenu.visibility = View.GONE
+            rootLayout.requestFocus()
         }
         findViewById<Button>(R.id.ctx_refresh).setOnClickListener {
             currentWebView?.reload()
             contextMenu.visibility = View.GONE
+            rootLayout.requestFocus()
         }
         findViewById<Button>(R.id.ctx_block).setOnClickListener {
             blockElementAtCursor()
             contextMenu.visibility = View.GONE
+            rootLayout.requestFocus()
         }
 
         val editorListener = TextView.OnEditorActionListener { v, actionId, event ->
@@ -1282,6 +1285,10 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView(wv: WebView) {
+        wv.isFocusable = false
+        wv.isFocusableInTouchMode = false
+        wv.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+
         wv.settings.apply {
             javaScriptEnabled = true; domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false; setSupportMultipleWindows(true)
@@ -1551,11 +1558,11 @@ class MainActivity : AppCompatActivity() {
                 if (event.repeatCount == 0) {
                     okDownTime = System.currentTimeMillis()
                     isLongPressing = false
-                } else if (!isLongPressing && System.currentTimeMillis() - okDownTime > LONG_PRESS_THRESHOLD) {
+                } else if (!isLongPressing && okDownTime > 0 && System.currentTimeMillis() - okDownTime > LONG_PRESS_THRESHOLD) {
                     isLongPressing = true
                     showContextMenu()
-                    return true
                 }
+                return true
             } else if (event.action == KeyEvent.ACTION_UP) {
                 if (!isLongPressing) {
                     simulateClick()
@@ -1581,7 +1588,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleMovementKey(event: KeyEvent): Boolean {
-        if (!isBrowsing || topBarLayout.visibility == View.VISIBLE || isNativeVideoPlaying()) {
+        if (!isBrowsing || topBarLayout.visibility == View.VISIBLE || isNativeVideoPlaying() || contextMenu.visibility == View.VISIBLE || isLongPressing || currentDialog?.isShowing == true) {
             if (event.action == KeyEvent.ACTION_UP) {
                 keyStates[event.keyCode] = false
             }
@@ -1613,6 +1620,13 @@ class MainActivity : AppCompatActivity() {
     private var isHoverCheckPending = false
 
     private fun updateMovement(): Boolean {
+        if (!isBrowsing || topBarLayout.visibility == View.VISIBLE || contextMenu.visibility == View.VISIBLE || isLongPressing || currentDialog?.isShowing == true) {
+            cursorVelocityX = 0f
+            cursorVelocityY = 0f
+            scrollVelocityY = 0f
+            lastMovementTime = 0L
+            return false
+        }
         val currentTime = System.currentTimeMillis()
         if (lastMovementTime == 0L) {
             lastMovementTime = currentTime
@@ -1737,7 +1751,7 @@ class MainActivity : AppCompatActivity() {
 
         if (isBrowsing && customViewContainer.visibility != View.VISIBLE) {
             val wv = currentWebView
-            if (scrollTopbarEnabled && cursorY < 1 && (wv?.scrollY ?: 0) == 0 && dy < 0) {
+            if (scrollTopbarEnabled && cursorY <= 0 && (wv?.scrollY ?: 0) == 0 && dy < 0 && !isLongPressing && contextMenu.visibility == View.GONE && currentDialog?.isShowing != true) {
                 topBarLayout.visibility = View.VISIBLE
                 cursor.visibility = View.GONE
                 topUrlInput.requestFocus()
@@ -1886,6 +1900,14 @@ class MainActivity : AppCompatActivity() {
         val x = (cursorX / density).toInt()
         val y = (cursorY / density).toInt()
 
+        // Stop any ongoing movement when the menu is requested
+        keyStates.clear()
+        isMovementLoopRunning = false
+        cursorVelocityX = 0f
+        cursorVelocityY = 0f
+        scrollVelocityY = 0f
+        isLongPressing = false
+
         wv.evaluateJavascript("""
             (function() {
                 var el = document.elementFromPoint($x, $y);
@@ -1893,12 +1915,12 @@ class MainActivity : AppCompatActivity() {
                 var temp = el;
                 while(temp && temp.tagName !== 'A') temp = temp.parentElement;
                 if(temp) link = temp.href;
-                return JSON.stringify({link: link});
+                return {link: link};
             })()
         """.trimIndent()) { result ->
-            val res = result?.trim('"')?.replace("\\\"", "\"") ?: "{}"
+            if (result == null || result == "null") return@evaluateJavascript
             try {
-                val json = JSONObject(res)
+                val json = JSONObject(result)
                 val link = json.optString("link")
                 lastClickedUrl = link
                 findViewById<Button>(R.id.ctx_new_tab).visibility = if (link.isNotEmpty()) View.VISIBLE else View.GONE
@@ -1967,27 +1989,35 @@ class MainActivity : AppCompatActivity() {
                             clear(window);
                         },
                         selectAt: function(x, y) {
-                            var candidates = [];
-                            function collect(win, rx, ry) {
-                                try {
-                                    var els = win.document.elementsFromPoint(rx, ry);
-                                    for (var el of Array.from(els)) {
-                                        if (el.tagName === 'HTML' || el.tagName === 'BODY') continue;
-                                        if (el.tagName === 'IFRAME') {
-                                            try {
-                                                var rect = el.getBoundingClientRect();
-                                                collect(el.contentWindow, rx - rect.left, ry - rect.top);
-                                            } catch(e) {}
+                            try {
+                                var candidates = [];
+                                function collect(win, rx, ry) {
+                                    try {
+                                        var els = win.document.elementsFromPoint(rx, ry);
+                                        if (!els || els.length === 0) return;
+                                        for (var el of Array.from(els)) {
+                                            if (el.tagName === 'HTML' || el.tagName === 'BODY') continue;
+                                            if (el.tagName === 'IFRAME') {
+                                                try {
+                                                    var rect = el.getBoundingClientRect();
+                                                    collect(el.contentWindow, rx - rect.left, ry - rect.top);
+                                                } catch(e) {}
+                                            }
+                                            candidates.push(el);
                                         }
-                                        candidates.push(el);
-                                    }
-                                } catch(e) {}
+                                    } catch(e) {}
+                                }
+                                collect(window, x, y);
+                                this.candidateEls = candidates.filter((el, idx) => candidates.indexOf(el) === idx);
+                                if (this.candidateEls.length === 0) {
+                                    return {error: 'No valid elements found at this position (only Body/HTML)'};
+                                }
+                                this.candidateIndex = 0;
+                                this.currentEl = this.candidateEls[0];
+                                return this.getOptions();
+                            } catch(e) {
+                                return {error: 'Script Error: ' + e.message};
                             }
-                            collect(window, x, y);
-                            this.candidateEls = candidates.filter((el, idx) => candidates.indexOf(el) === idx);
-                            this.candidateIndex = 0;
-                            this.currentEl = this.candidateEls[0];
-                            return this.getOptions();
                         },
                         nextCandidate: function() {
                             if (this.candidateEls.length > 1) {
@@ -2003,7 +2033,7 @@ class MainActivity : AppCompatActivity() {
                             return this.getOptions();
                         },
                         getOptions: function() {
-                            if (!this.currentEl) return JSON.stringify({error: 'No element'});
+                            if (!this.currentEl) return {error: 'No element'};
                             var options = [];
                             var el = this.currentEl;
                             var tag = el.tagName.toLowerCase();
@@ -2053,14 +2083,14 @@ class MainActivity : AppCompatActivity() {
                                 } catch(e) {}
                             }
                             
-                            return JSON.stringify({
+                            return {
                                 tagName: el.tagName,
                                 id: el.id,
                                 className: el.className,
                                 candidatesCount: this.candidateEls.length,
                                 candidateIndex: this.candidateIndex,
                                 options: options
-                            });
+                            };
                         }
                     };
                 }
@@ -2069,16 +2099,33 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent()
 
         wv.evaluateJavascript(setupScript) { result ->
-            val res = result?.trim('"')?.replace("\\\"", "\"") ?: "{}"
+            if (result == null || result == "null") return@evaluateJavascript
             try {
-                val json = JSONObject(res)
+                val json = JSONObject(result)
                 if (json.has("options")) {
                     showAdvancedBlockDialog(json)
+                } else {
+                    val error = json.optString("error", "No element detected at this position.")
+                    showBlockErrorDialog(error)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                showBlockErrorDialog("Failed to detect element: ${e.message}")
             }
         }
+    }
+
+    private fun showBlockErrorDialog(message: String) {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Block Element")
+            .setMessage(message)
+            .setPositiveButton("OK", null)
+            .setOnDismissListener {
+                if (currentDialog == it) currentDialog = null
+                rootLayout.requestFocus()
+            }
+            .create()
+        currentDialog = dialog
+        dialog.show()
     }
 
     private fun showAdvancedBlockDialog(data: JSONObject) {
@@ -2167,9 +2214,9 @@ class MainActivity : AppCompatActivity() {
             
             setOnClickListener {
                 wv.evaluateJavascript("window.blockerHelper.nextCandidate()") { result ->
-                    val res = result?.trim('"')?.replace("\\\"", "\"") ?: "{}"
+                    if (result == null || result == "null") return@evaluateJavascript
                     try {
-                        val json = JSONObject(res)
+                        val json = JSONObject(result)
                         if (json.has("options")) {
                             populateOptions(json)
                             if (optionsContainer.childCount > 0) optionsContainer.getChildAt(0).requestFocus()
@@ -2189,9 +2236,9 @@ class MainActivity : AppCompatActivity() {
             
             setOnClickListener {
                 wv.evaluateJavascript("window.blockerHelper.selectParent()") { result ->
-                    val res = result?.trim('"')?.replace("\\\"", "\"") ?: "{}"
+                    if (result == null || result == "null") return@evaluateJavascript
                     try {
-                        val json = JSONObject(res)
+                        val json = JSONObject(result)
                         if (json.has("options")) {
                             populateOptions(json)
                             if (optionsContainer.childCount > 0) optionsContainer.getChildAt(0).requestFocus()
@@ -2205,14 +2252,18 @@ class MainActivity : AppCompatActivity() {
         actionRow.addView(parentBtn)
         layout.addView(actionRow)
 
-        currentDialog = AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setView(layout)
-            .setOnDismissListener {
-                wv.evaluateJavascript("window.blockerHelper.clearHighlight()", null)
-            }
             .create()
-
-        currentDialog?.show()
+            
+        dialog.setOnDismissListener {
+            wv.evaluateJavascript("window.blockerHelper.clearHighlight()", null)
+            if (currentDialog == dialog) currentDialog = null
+            rootLayout.requestFocus()
+        }
+        
+        currentDialog = dialog
+        dialog.show()
     }
     
     private var currentDialog: AlertDialog? = null
@@ -2225,7 +2276,7 @@ class MainActivity : AppCompatActivity() {
             ViewUtils.applySmartDpadFocus(this)
         }
         
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("Save Blocked Element")
             .setMessage("Rule name for this site:")
             .setView(editText)
@@ -2234,7 +2285,13 @@ class MainActivity : AppCompatActivity() {
                 saveBlockedElement(name, url, selector)
             }
             .setNegativeButton("Just for now", null)
-            .show()
+            .setOnDismissListener {
+                if (currentDialog == it) currentDialog = null
+                rootLayout.requestFocus()
+            }
+            .create()
+        currentDialog = dialog
+        dialog.show()
     }
 
     private fun saveBlockedElement(name: String, url: String, selector: String) {
