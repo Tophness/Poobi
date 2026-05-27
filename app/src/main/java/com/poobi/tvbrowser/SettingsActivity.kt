@@ -31,6 +31,7 @@ class SettingsActivity : AppCompatActivity() {
     private var historyIconPref = 0
     private var bookmarkIconPref = 0
     private var clickjackPref = true
+    private var navigationModePref = 0 // 0: Cursor, 1: D-pad
 
     private var activeCategory: Button? = null
 
@@ -214,6 +215,7 @@ class SettingsActivity : AppCompatActivity() {
         val themeBtn = findViewById<Button>(R.id.theme_btn)
         val embeddedSubsBtn = findViewById<Button>(R.id.embedded_subs_btn)
         val scrollTopbarBtn = findViewById<Button>(R.id.scroll_topbar_btn)
+        val navigationModeBtn = findViewById<Button>(R.id.navigation_mode_btn)
         val historyIconBtn = findViewById<Button>(R.id.history_icon_btn)
         val bookmarkIconBtn = findViewById<Button>(R.id.bookmark_icon_btn)
         val clickjackBtn = findViewById<Button>(R.id.clickjack_btn)
@@ -233,6 +235,7 @@ class SettingsActivity : AppCompatActivity() {
         historyIconPref = prefs.getInt("history_icon_pref", 0)
         bookmarkIconPref = prefs.getInt("bookmark_icon_pref", 0)
         clickjackPref = prefs.getBoolean("clickjack_prevention", true)
+        navigationModePref = prefs.getInt("navigation_mode_pref", 0)
 
         fun updateUI() {
             popupBtn.text = if (silentPopupBlock) "Popups: Block Silently" else "Popups: Ask to Allow"
@@ -251,6 +254,7 @@ class SettingsActivity : AppCompatActivity() {
             themeBtn.text = if (isLightTheme) "Theme: Light" else "Theme: Dark"
             embeddedSubsBtn.text = if (embeddedSubsEnabled) "Embedded Subtitles: Enabled" else "Embedded Subtitles: Disabled"
             scrollTopbarBtn.text = if (scrollTopbarEnabled) "Scroll Up for Top Bar: Enabled" else "Scroll Up for Top Bar: Disabled"
+            navigationModeBtn.text = if (navigationModePref == 0) "Navigation Mode: Cursor" else "Navigation Mode: D-pad"
             historyIconBtn.text = if (historyIconPref == 0) "History Icons: Thumbnail" else "History Icons: Favicon"
             bookmarkIconBtn.text = if (bookmarkIconPref == 0) "Bookmark Icons: Thumbnail" else "Bookmark Icons: Favicon"
             clickjackBtn.text = if (clickjackPref) "Clickjack Prevention: Enabled" else "Clickjack Prevention: Disabled"
@@ -273,6 +277,7 @@ class SettingsActivity : AppCompatActivity() {
         historyIconBtn.setOnClickListener { historyIconPref = (historyIconPref + 1) % 2; updateUI() }
         bookmarkIconBtn.setOnClickListener { bookmarkIconPref = (bookmarkIconPref + 1) % 2; updateUI() }
         clickjackBtn.setOnClickListener { clickjackPref = !clickjackPref; updateUI() }
+        navigationModeBtn.setOnClickListener { navigationModePref = (navigationModePref + 1) % 2; updateUI() }
 
         saveBtn.setOnClickListener {
             val newUrl = urlInput.text.toString()
@@ -289,6 +294,7 @@ class SettingsActivity : AppCompatActivity() {
                 .putInt("history_icon_pref", historyIconPref)
                 .putInt("bookmark_icon_pref", bookmarkIconPref)
                 .putBoolean("clickjack_prevention", clickjackPref)
+                .putInt("navigation_mode_pref", navigationModePref)
                 .apply()
 
             val appContext = applicationContext

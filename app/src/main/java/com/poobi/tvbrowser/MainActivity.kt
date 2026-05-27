@@ -103,6 +103,8 @@ class MainActivity : AppCompatActivity() {
 
     private var historyIconPref = 0
     private var bookmarkIconPref = 0
+    private var navigationModePref = 0 // 0: Cursor, 1: D-pad
+    private var isSelectionMode = false
 
     private lateinit var downloadsContainer: LinearLayout
     private lateinit var topDownloadsBtn: ImageButton
@@ -268,6 +270,7 @@ class MainActivity : AppCompatActivity() {
         historyIconPref = prefs.getInt("history_icon_pref", 0)
         bookmarkIconPref = prefs.getInt("bookmark_icon_pref", 0)
         clickjackPref = prefs.getBoolean("clickjack_prevention", true)
+        navigationModePref = prefs.getInt("navigation_mode_pref", 0)
 
         updateAutoPlayIcon()
         applyTheme()
@@ -309,12 +312,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun wakeCursor() {
         if (isBrowsing && topBarLayout.visibility == View.GONE && !isNativeVideoPlaying()) {
-            cursor.visibility = View.VISIBLE
-            cursor.removeCallbacks(hideCursorRunnable)
-            cursor.postDelayed(hideCursorRunnable, 3500)
+            if (navigationModePref == 1 || isSelectionMode) {
+                cursor.visibility = View.GONE
+                // Ensure navHelper is ready
+                val wv = currentWebView ?: return
+                wv.evaluateJavascript("if(typeof window.navHelper === 'undefined') { /* trigger init script */ }", null)
+                // We actually need the full script here if it's missing, but it's easier to just call startDpadSelectionMode logic without the toast
+                initDpadNav()
+            } else {
+                cursor.visibility = View.VISIBLE
+                cursor.removeCallbacks(hideCursorRunnable)
+                cursor.postDelayed(hideCursorRunnable, 3500)
+            }
 
             movementHandler.removeCallbacks(hoverCheckRunnable)
-            movementHandler.postDelayed(hoverCheckRunnable, 500)
+            if (navigationModePref == 0 && !isSelectionMode) {
+                movementHandler.postDelayed(hoverCheckRunnable, 500)
+            }
         }
     }
 
@@ -1388,6 +1402,9 @@ class MainActivity : AppCompatActivity() {
                 if (videoTriggerPref == 0) {
                     triggerAutoPlayClicks(view)
                 }
+                if (navigationModePref == 1 || isSelectionMode) {
+                    initDpadNav()
+                }
                 view.postDelayed({ saveSnapshot(url, view.title ?: "Website") }, 2500)
             }
 
@@ -1523,6 +1540,30 @@ class MainActivity : AppCompatActivity() {
 
         if (handleMovementKey(event)) return true
 
+        if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
+            if (isSelectionMode) {
+                if (event.action == KeyEvent.ACTION_UP) selectDpadElement()
+                return true
+            }
+            if (navigationModePref == 1 && isBrowsing && topBarLayout.visibility == View.GONE && contextMenu.visibility == View.GONE && !isLongPressing) {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    if (event.repeatCount == 0) {
+                        okDownTime = System.currentTimeMillis()
+                    } else if (!isLongPressing && okDownTime > 0 && System.currentTimeMillis() - okDownTime > LONG_PRESS_THRESHOLD) {
+                        isLongPressing = true
+                        showContextMenuAtFocused()
+                    }
+                } else if (event.action == KeyEvent.ACTION_UP) {
+                    if (!isLongPressing) {
+                        currentWebView?.evaluateJavascript("if(window.navHelper) window.navHelper.clickFocused();", null)
+                    }
+                    okDownTime = 0
+                    isLongPressing = false
+                }
+                return true
+            }
+        }
+
         if (isNativeVideoPlaying()) {
             if (event.action == KeyEvent.ACTION_DOWN) {
                 when (event.keyCode) {
@@ -1575,6 +1616,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (isSelectionMode) {
+                isSelectionMode = false
+                wakeCursor()
+                // If we want to return to the dialog, we'd need to store the previous data.
+                // For now, let's just exit the mode.
+                return true
+            }
             if (customViewContainer.visibility == View.VISIBLE) hideFullscreenVideo()
             else if (currentWebView?.canGoBack() == true) currentWebView?.goBack()
             else {
@@ -1597,6 +1645,19 @@ class MainActivity : AppCompatActivity() {
 
         val keyCode = event.keyCode
         val isDown = event.action == KeyEvent.ACTION_DOWN
+
+        if (navigationModePref == 1 || isSelectionMode) {
+            if (isDown) {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_UP -> handleDpadNav("up")
+                    KeyEvent.KEYCODE_DPAD_DOWN -> handleDpadNav("down")
+                    KeyEvent.KEYCODE_DPAD_LEFT -> handleDpadNav("left")
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> handleDpadNav("right")
+                    else -> return false
+                }
+            }
+            return true
+        }
 
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
@@ -2114,6 +2175,188 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun initDpadNav(showToast: Boolean = false) {
+        val wv = currentWebView ?: return
+        if (showToast) Toast.makeText(this, "D-pad Navigation: Select Element and Press OK", Toast.LENGTH_LONG).show()
+        
+        val setupScript = """
+            (function() {
+                if (!window.navHelper) {
+                    window.navHelper = {
+                        focusedEl: null,
+                        highlight: function(el) {
+                            this.clearHighlight();
+                            if (!el) return;
+                            this.focusedEl = el;
+                            const styleId = 'poobi-nav-highlight';
+                            let style = document.getElementById(styleId);
+                            if (!style) {
+                                style = document.createElement('style');
+                                style.id = styleId;
+                                document.head.appendChild(style);
+                            }
+                            el.classList.add('poobi-focused');
+                            style.innerHTML = '.poobi-focused { outline: 6px solid #FF5722 !important; outline-offset: -4px !important; box-shadow: 0 0 15px rgba(255, 87, 34, 0.7) !important; position: relative !important; z-index: 2147483645 !important; }';
+                            el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+                        },
+                        clearHighlight: function() {
+                            if (this.focusedEl) {
+                                this.focusedEl.classList.remove('poobi-focused');
+                                this.focusedEl = null;
+                            }
+                        },
+                        getFocusableElements: function() {
+                            const selectors = 'a, button, input, select, textarea, [tabindex]:not([tabindex="-1"]), [onclick], [role="button"]';
+                            return Array.from(document.querySelectorAll(selectors)).filter(el => {
+                                const rect = el.getBoundingClientRect();
+                                return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden' && window.getComputedStyle(el).display !== 'none';
+                            });
+                        },
+                        move: function(direction) {
+                            const elements = this.getFocusableElements();
+                            if (elements.length === 0) return;
+                            
+                            let currentRect;
+                            if (this.focusedEl) {
+                                currentRect = this.focusedEl.getBoundingClientRect();
+                            } else {
+                                currentRect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+                            }
+                            
+                            let bestCandidate = null;
+                            let minDistance = Infinity;
+                            
+                            const curX = (currentRect.left + currentRect.right) / 2;
+                            const curY = (currentRect.top + currentRect.bottom) / 2;
+
+                            elements.forEach(el => {
+                                if (el === this.focusedEl) return;
+                                const rect = el.getBoundingClientRect();
+                                const tgtX = (rect.left + rect.right) / 2;
+                                const tgtY = (rect.top + rect.bottom) / 2;
+                                
+                                let isCandidate = false;
+                                if (direction === 'up' && rect.bottom <= currentRect.top + 5) isCandidate = true;
+                                else if (direction === 'down' && rect.top >= currentRect.bottom - 5) isCandidate = true;
+                                else if (direction === 'left' && rect.right <= currentRect.left + 5) isCandidate = true;
+                                else if (direction === 'right' && rect.left >= currentRect.right - 5) isCandidate = true;
+                                
+                                if (isCandidate) {
+                                    const distance = Math.sqrt(Math.pow(curX - tgtX, 2) + Math.pow(curY - tgtY, 2));
+                                    if (distance < minDistance) {
+                                        minDistance = distance;
+                                        bestCandidate = el;
+                                    }
+                                }
+                            });
+                            
+                            if (bestCandidate) this.highlight(bestCandidate);
+                            else if (!this.focusedEl && elements.length > 0) this.highlight(elements[0]);
+                        },
+                        getSelector: function(el) {
+                            if (!el) return null;
+                            if (el.id) return '#' + el.id;
+                            let path = [];
+                            let curr = el;
+                            while (curr && curr.nodeType === Node.ELEMENT_NODE && curr.tagName !== 'BODY' && curr.tagName !== 'HTML') {
+                                let selector = curr.nodeName.toLowerCase();
+                                if (curr.id) {
+                                    selector += '#' + curr.id;
+                                    path.unshift(selector);
+                                    break;
+                                } else {
+                                    let sib = curr, nth = 1;
+                                    while (sib = sib.previousElementSibling) {
+                                        if (sib.nodeName.toLowerCase() == selector) nth++;
+                                    }
+                                    if (nth != 1) selector += ":nth-of-type(" + nth + ")";
+                                }
+                                path.unshift(selector);
+                                curr = curr.parentNode;
+                            }
+                            return path.join(" > ");
+                        },
+                        getSelectedSelector: function() {
+                            return this.getSelector(this.focusedEl);
+                        },
+                        getFocusedCoords: function() {
+                            if (!this.focusedEl) return null;
+                            const rect = this.focusedEl.getBoundingClientRect();
+                            return { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 };
+                        },
+                        clickFocused: function() {
+                            if (this.focusedEl) this.focusedEl.click();
+                        }
+                    };
+                }
+                if (!window.navHelper.focusedEl) {
+                    const elements = window.navHelper.getFocusableElements();
+                    if (elements.length > 0) window.navHelper.highlight(elements[0]);
+                }
+            })();
+        """.trimIndent()
+        wv.evaluateJavascript(setupScript, null)
+    }
+
+    private fun showContextMenuAtFocused() {
+        currentWebView?.evaluateJavascript("if(window.navHelper) window.navHelper.getFocusedCoords();") { result ->
+            if (result != null && result != "null") {
+                try {
+                    val obj = JSONObject(result)
+                    val density = resources.displayMetrics.density
+                    cursorX = obj.getDouble("x").toFloat() * density
+                    cursorY = obj.getDouble("y").toFloat() * density
+                    showContextMenu()
+                } catch (e: Exception) {
+                    showContextMenu() // Fallback
+                }
+            } else {
+                showContextMenu() // Fallback
+            }
+        }
+    }
+
+    private fun startDpadSelectionMode() {
+        isSelectionMode = true
+        cursor.visibility = View.GONE
+        currentWebView?.evaluateJavascript("if(window.blockerHelper) window.blockerHelper.clearHighlight();", null)
+        initDpadNav(true)
+    }
+
+    private fun handleDpadNav(direction: String) {
+        currentWebView?.evaluateJavascript("if(window.navHelper) window.navHelper.move('$direction');", null)
+    }
+
+    private fun selectDpadElement() {
+        currentWebView?.evaluateJavascript("if(window.navHelper) window.navHelper.getSelectedSelector();") { result ->
+            val selector = result?.replace("\"", "")
+            if (selector != null && selector != "null" && selector.isNotEmpty()) {
+                isSelectionMode = false
+                currentWebView?.evaluateJavascript("if(window.navHelper) window.navHelper.clearHighlight();", null)
+
+                val script = "window.blockerHelper.currentEl = document.querySelector('$selector'); window.blockerHelper.getOptions();"
+                currentWebView?.evaluateJavascript(script) { blockData ->
+                    if (blockData != null && blockData != "null") {
+                        try {
+                            val jsonStr = if (blockData.startsWith("\"") && blockData.endsWith("\"")) {
+                                blockData.substring(1, blockData.length - 1).replace("\\\"", "\"")
+                            } else {
+                                blockData
+                            }
+                            showAdvancedBlockDialog(JSONObject(jsonStr))
+                        } catch (e: Exception) {
+                            Log.e("TVBrowser", "Error parsing block options: ${e.message}")
+                        }
+                    }
+                }
+            } else {
+                Toast.makeText(this, "No element selected", Toast.LENGTH_SHORT).show()
+                isSelectionMode = false
+                wakeCursor()
+            }
+        }
+    }
+
     private fun showBlockErrorDialog(message: String) {
         val dialog = AlertDialog.Builder(this)
             .setTitle("Block Element")
@@ -2252,10 +2495,26 @@ class MainActivity : AppCompatActivity() {
         actionRow.addView(parentBtn)
         layout.addView(actionRow)
 
+        val dpadSelectBtn = Button(this).apply {
+            text = "Navigate & Select Element"
+            background = getDrawable(R.drawable.bg_focusable)
+            setTextColor(android.graphics.Color.WHITE)
+            setPadding(20, 0, 20, 0)
+            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 90)
+            params.topMargin = 10
+            layoutParams = params
+        }
+        layout.addView(dpadSelectBtn)
+
         val dialog = AlertDialog.Builder(this)
             .setView(layout)
             .create()
-            
+
+        dpadSelectBtn.setOnClickListener {
+            dialog.dismiss()
+            startDpadSelectionMode()
+        }
+
         dialog.setOnDismissListener {
             wv.evaluateJavascript("window.blockerHelper.clearHighlight()", null)
             if (currentDialog == dialog) currentDialog = null
