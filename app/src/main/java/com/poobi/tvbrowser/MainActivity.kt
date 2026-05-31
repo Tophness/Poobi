@@ -11,6 +11,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Message
 import android.os.SystemClock
@@ -21,6 +22,7 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.*
@@ -1299,9 +1301,9 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView(wv: WebView) {
-        wv.isFocusable = false
-        wv.isFocusableInTouchMode = false
-        wv.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        wv.isFocusable = true
+        wv.isFocusableInTouchMode = true
+        wv.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
 
         wv.settings.apply {
             javaScriptEnabled = true; domStorageEnabled = true
@@ -1521,6 +1523,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val isImeVisible = rootLayout.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true
+            if (isImeVisible) {
+                if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_DOWN) {
+                    return super.dispatchKeyEvent(event)
+                }
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
+                    return super.dispatchKeyEvent(event)
+                }
+            }
+        }
+
         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_MENU) {
             if (contextMenu.visibility == View.VISIBLE) {
                 contextMenu.visibility = View.GONE
@@ -1932,6 +1948,7 @@ class MainActivity : AppCompatActivity() {
             val url = it.url?.takeIf { u -> u != "about:blank" } ?: ""
             topUrlInput.setText(url)
             updateFavIcon()
+            it.requestFocus()
         }
     }
 
@@ -2643,6 +2660,9 @@ class MainActivity : AppCompatActivity() {
     private fun simulateClick() {
         val downTime = SystemClock.uptimeMillis()
         val eventTime = SystemClock.uptimeMillis()
+
+        // Ensure the WebView has focus so the IME can be triggered
+        currentWebView?.requestFocus()
 
         @Suppress("SpellCheckingInspection")
         val properties = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_FINGER }
