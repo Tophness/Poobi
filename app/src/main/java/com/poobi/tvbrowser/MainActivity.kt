@@ -46,6 +46,7 @@ import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
 
 data class AutoplayProfile(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -113,7 +114,7 @@ class MainActivity : AppCompatActivity() {
 
     private var embeddedSubsEnabled = true
     private var scrollTopbarEnabled = true
-    private val interceptedSubtitleUrls = mutableSetOf<String>()
+    private val interceptedSubtitleUrls = mutableMapOf<String, Map<String, String>>()
 
     private var lastClickedUrl: String? = null
     private var okDownTime = 0L
@@ -134,7 +135,7 @@ class MainActivity : AppCompatActivity() {
     private var isRecordingAutoplay = false
     private val recordedSelectors = mutableListOf<String>()
 
-    private val interceptedMediaUrls = mutableSetOf<String>()
+    private val interceptedMediaUrls = mutableMapOf<String, Map<String, String>>()
 
     private var cursorX = 500f
     private var cursorY = 500f
@@ -982,7 +983,7 @@ class MainActivity : AppCompatActivity() {
             if (jsUrl.startsWith("http") && !jsUrl.contains("blob:")) {
                 candidates.add(jsUrl)
             }
-            candidates.addAll(interceptedMediaUrls)
+            candidates.addAll(interceptedMediaUrls.keys)
 
             val finalCandidates = candidates.distinct()
 
@@ -1013,10 +1014,13 @@ class MainActivity : AppCompatActivity() {
         @Suppress("OPT_IN_USAGE")
         kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
             for (url in streams) {
+                val headers = interceptedMediaUrls[url] ?: emptyMap()
                 if (url.contains(".m3u8")) {
                     try {
                         val content = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            java.net.URL(url).readText()
+                            val connection = java.net.URL(url).openConnection() as HttpURLConnection
+                            headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
+                            connection.inputStream.bufferedReader().use { it.readText() }
                         }
                         if (content.contains("#EXT-X-STREAM-INF")) {
                             if (!streamUrls.contains(url)) {
@@ -1049,6 +1053,9 @@ class MainActivity : AppCompatActivity() {
                                             if (!streamUrls.contains(fullUrl)) {
                                                 streamInfos.add(info)
                                                 streamUrls.add(fullUrl)
+                                                if (!interceptedMediaUrls.containsKey(fullUrl)) {
+                                                    interceptedMediaUrls[fullUrl] = headers
+                                                }
                                             }
                                             break
                                         }
@@ -1189,9 +1196,11 @@ class MainActivity : AppCompatActivity() {
 
         exoPlayer?.release()
 
+        val headers = interceptedMediaUrls[videoUrl] ?: emptyMap()
         val dataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(currentWebView?.settings?.userAgentString ?: "")
             .setAllowCrossProtocolRedirects(true)
+            .setDefaultRequestProperties(headers)
 
         exoPlayer = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(dataSourceFactory))
@@ -1212,7 +1221,7 @@ class MainActivity : AppCompatActivity() {
 
         val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
 
-        val subtitleConfigs = interceptedSubtitleUrls.map { subUrl ->
+        val subtitleConfigs = interceptedSubtitleUrls.keys.map { subUrl ->
             val mimeType = if (subUrl.contains(".vtt")) MimeTypes.TEXT_VTT
             else if (subUrl.contains(".ass")) MimeTypes.TEXT_SSA
             else MimeTypes.APPLICATION_SUBRIP
@@ -1482,13 +1491,13 @@ class MainActivity : AppCompatActivity() {
 
                     if (requestedUrl.contains(".m3u8") || requestedUrl.contains(".mp4") || requestedUrl.contains(".mkv")) {
                         val wasEmpty = interceptedMediaUrls.isEmpty()
-                        interceptedMediaUrls.add(requestedUrl)
+                        interceptedMediaUrls[requestedUrl] = request.requestHeaders
                         if (videoTriggerPref == 0 && isBrowsing && wasEmpty) {
                             view?.post { attemptVideoExtraction(null, null) }
                         }
                     }
                     if (requestedUrl.contains(".srt") || requestedUrl.contains(".vtt") || requestedUrl.contains(".ass")) {
-                        interceptedSubtitleUrls.add(requestedUrl)
+                        interceptedSubtitleUrls[requestedUrl] = request.requestHeaders
                     }
 
                     val filterOption = AdBlockUtils.mapRequestToFilterOption(request)
@@ -1519,7 +1528,8 @@ class MainActivity : AppCompatActivity() {
         seekIncrement = (5000L + (repeatCount * repeatCount) * 100L).coerceAtMost(300000L)
 
         val newPos = player.currentPosition + (direction * seekIncrement)
-        player.seekTo(newPos.coerceIn(0, player.duration))
+        val duration = if (player.duration > 0) player.duration else 0L
+        player.seekTo(newPos.coerceIn(0, duration))
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -1556,6 +1566,20 @@ class MainActivity : AppCompatActivity() {
 
         if (handleMovementKey(event)) return true
 
+        if (isNativeVideoPlaying()) {
+            if (!nativeVideoView.hasFocus()) {
+                nativeVideoView.requestFocus()
+            }
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> { seekVideo(-1, event.repeatCount); return true }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> { seekVideo(1, event.repeatCount); return true }
+                    KeyEvent.KEYCODE_BACK -> { hideFullscreenVideo(); return true }
+                }
+            }
+            return super.dispatchKeyEvent(event)
+        }
+
         if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
             if (isSelectionMode) {
                 if (event.action == KeyEvent.ACTION_UP) selectDpadElement()
@@ -1578,17 +1602,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 return true
             }
-        }
-
-        if (isNativeVideoPlaying()) {
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                when (event.keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT -> { seekVideo(-1, event.repeatCount); return true }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> { seekVideo(1, event.repeatCount); return true }
-                    KeyEvent.KEYCODE_BACK -> { hideFullscreenVideo(); return true }
-                }
-            }
-            return super.dispatchKeyEvent(event)
         }
 
         if (!isBrowsing || topBarLayout.visibility == View.VISIBLE) {
