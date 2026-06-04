@@ -360,6 +360,7 @@ class MainActivity : AppCompatActivity() {
         btnStreamsClearRecentPlayed.setOnClickListener {
             prefs.edit().putString("streams_recently_played", "[]").apply()
             refreshStreamsHistory()
+            streamsSearchInput.requestFocus()
         }
         streamsSearchInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
@@ -451,7 +452,7 @@ class MainActivity : AppCompatActivity() {
         refreshStreamsHistory()
     }
 
-    private fun setupHistoryLongPress(view: View, progress: ProgressBar, query: String) {
+    private fun setupHistoryLongPress(view: View, progress: ProgressBar, query: String, isRecentPlayed: Boolean = false) {
         val progressHandler = android.os.Handler(android.os.Looper.getMainLooper())
         var startTime = 0L
         val updateProgress = object : Runnable {
@@ -464,12 +465,18 @@ class MainActivity : AppCompatActivity() {
                 if (progressValue >= 100) {
                     val parent = view.parent as? ViewGroup
                     val index = parent?.indexOfChild(view) ?: -1
-                    removeFromStreamsHistory(query)
+                    
+                    if (isRecentPlayed) {
+                        removeFromRecentlyPlayedStreams(query)
+                    } else {
+                        removeFromStreamsHistory(query)
+                    }
                     
                     // Focus reassignment
-                    if (parent != null && parent.childCount > 0) {
-                        val nextToFocus = if (index >= parent.childCount) parent.childCount - 1 else index
-                        if (nextToFocus >= 0) parent.getChildAt(nextToFocus).requestFocus()
+                    val newParent = if (isRecentPlayed) streamsRecentPlayedContainer else streamsHistoryContainer
+                    if (newParent.childCount > 0) {
+                        val nextToFocus = if (index >= newParent.childCount) newParent.childCount - 1 else index
+                        if (nextToFocus >= 0) newParent.getChildAt(nextToFocus).requestFocus()
                         else streamsSearchInput.requestFocus()
                     } else {
                         streamsSearchInput.requestFocus()
@@ -560,36 +567,55 @@ class MainActivity : AppCompatActivity() {
             val episode = if (obj.has("episode")) obj.getInt("episode") else null
 
             val view = inflater.inflate(R.layout.item_search_history, streamsRecentPlayedContainer, false)
-            val icon = view.findViewById<ImageView>(android.R.id.icon) // Wait, item_search_history doesn't have android.R.id.icon
-            // Looking at item_search_history.xml:
-            // ImageView (no id), TextView (id/history_text), FrameLayout/ImageView(id/btn_delete_history), ProgressBar(id/history_delete_progress)
-            
             val textView = view.findViewById<TextView>(R.id.history_text)
+            val deleteProgress = view.findViewById<ProgressBar>(R.id.history_delete_progress)
             textView.text = title
 
             val iconView = (view as? ViewGroup)?.getChildAt(0) as? ImageView
             iconView?.setImageResource(R.drawable.ic_history)
 
             view.setOnClickListener {
-                performScrape(itemData, season, episode)
+                val cachedUrl = obj.optString("video_url")
+                if (cachedUrl.isNotEmpty()) {
+                    val headersObj = obj.optJSONObject("headers")
+                    if (headersObj != null) {
+                        val headers = mutableMapOf<String, String>()
+                        headersObj.keys().forEach { k -> headers[k] = headersObj.getString(k) }
+                        interceptedMediaUrls[cachedUrl] = headers
+                    }
+                    
+                    lastScrapedItem = itemData
+                    lastScrapedSeason = season
+                    lastScrapedEpisode = episode
+                    
+                    launchNativeVideoPlayer(cachedUrl, null, title) {
+                        // On failure, fallback to scraping
+                        performScrape(itemData, season, episode)
+                    }
+                } else {
+                    performScrape(itemData, season, episode)
+                }
             }
+
+            setupHistoryLongPress(view, deleteProgress, title, true)
 
             // Simple delete for now
             view.findViewById<View>(R.id.btn_delete_history).setOnClickListener {
                 removeFromRecentlyPlayedStreams(title)
+                if (streamsRecentPlayedContainer.childCount == 0) streamsSearchInput.requestFocus()
             }
 
             streamsRecentPlayedContainer.addView(view)
         }
     }
 
-    private fun addToRecentlyPlayedStreams(displayTitle: String, item: JSONObject, season: Int?, episode: Int?) {
+    private fun addToRecentlyPlayedStreams(displayTitle: String, item: JSONObject, season: Int?, episode: Int?, videoUrl: String? = null, headers: Map<String, String>? = null) {
         val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
         val array = JSONArray(recentJson)
         val newList = mutableListOf<JSONObject>()
         for (i in 0 until array.length()) newList.add(array.getJSONObject(i))
 
-        // Remove if exists
+        val existing = newList.find { it.getString("display_title") == displayTitle }
         newList.removeAll { it.getString("display_title") == displayTitle }
 
         val newEntry = JSONObject().apply {
@@ -597,6 +623,12 @@ class MainActivity : AppCompatActivity() {
             put("item", item)
             if (season != null) put("season", season)
             if (episode != null) put("episode", episode)
+            
+            val finalUrl = videoUrl ?: existing?.optString("video_url")
+            if (!finalUrl.isNullOrEmpty()) put("video_url", finalUrl)
+            
+            val finalHeaders = if (headers != null) JSONObject(headers) else existing?.optJSONObject("headers")
+            if (finalHeaders != null) put("headers", finalHeaders)
         }
         newList.add(0, newEntry)
         if (newList.size > 20) newList.removeAt(newList.size - 1)
@@ -1242,9 +1274,6 @@ class MainActivity : AppCompatActivity() {
                     streamsProgress.visibility = View.GONE
                     if (streamUrl.isNotEmpty() && streamUrl.startsWith("http")) {
                         val title = currentStreamingTitle
-                        if (title != null && lastScrapedItem != null) {
-                            addToRecentlyPlayedStreams(title, lastScrapedItem!!, lastScrapedSeason, lastScrapedEpisode)
-                        }
                         launchNativeVideoPlayer(streamUrl, null, title)
                     } else {
                         Toast.makeText(this@MainActivity, "Could not resolve stream URL", Toast.LENGTH_SHORT).show()
@@ -2198,7 +2227,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("UnsafeOptInUsageError")
-    private fun launchNativeVideoPlayer(videoUrl: String, callback: WebChromeClient.CustomViewCallback?, title: String? = null) {
+    private fun launchNativeVideoPlayer(videoUrl: String, callback: WebChromeClient.CustomViewCallback?, title: String? = null, onFailure: (() -> Unit)? = null) {
         // Halt the WebView entirely
         currentWebView?.apply {
             onPause()
@@ -2228,7 +2257,7 @@ class MainActivity : AppCompatActivity() {
 
         val headers = interceptedMediaUrls[videoUrl] ?: emptyMap()
         val dataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(currentWebView?.settings?.userAgentString ?: "")
+            .setUserAgent(currentWebView?.settings?.userAgentString ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
 
@@ -2242,10 +2271,25 @@ class MainActivity : AppCompatActivity() {
         nativeVideoView.setShowSubtitleButton(true)
 
         exoPlayer?.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) {
+                    val title = lastVideoTitle
+                    if (title != null && lastScrapedItem != null) {
+                        val headers = interceptedMediaUrls[videoUrl] ?: emptyMap()
+                        addToRecentlyPlayedStreams(title, lastScrapedItem!!, lastScrapedSeason, lastScrapedEpisode, videoUrl, headers)
+                    }
+                }
+            }
+
             override fun onPlayerError(error: PlaybackException) {
-                val cause = error.cause?.message ?: "Unknown"
-                Toast.makeText(this@MainActivity, "ExoPlayer Error: ${error.errorCodeName}\n${cause}", Toast.LENGTH_LONG).show()
-                Log.e("ExoPlayerDebug", "Playback failed: ", error)
+                if (onFailure != null) {
+                    hideFullscreenVideo()
+                    onFailure.invoke()
+                } else {
+                    val cause = error.cause?.message ?: "Unknown"
+                    Toast.makeText(this@MainActivity, "ExoPlayer Error: ${error.errorCodeName}\n${cause}", Toast.LENGTH_LONG).show()
+                    Log.e("ExoPlayerDebug", "Playback failed: ", error)
+                }
             }
         })
 
@@ -2349,6 +2393,13 @@ class MainActivity : AppCompatActivity() {
         webContainer.visibility = View.VISIBLE
         if (!isBrowsing) {
             mainTabsLayout.visibility = View.VISIBLE
+            if (streamsScreenLayout.visibility == View.VISIBLE) {
+                if (streamsResultsContainer.childCount > 0) {
+                    streamsResultsContainer.getChildAt(0).requestFocus()
+                } else {
+                    streamsSearchInput.requestFocus()
+                }
+            }
         }
         wakeCursor()
     }
