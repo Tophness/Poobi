@@ -1272,15 +1272,40 @@ class MainActivity : AppCompatActivity() {
             try {
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
-                val streamUrl = scraper.callAttr("resolve", sourceDataJson).toString()
+                val resolveResult = scraper.callAttr("resolve", sourceDataJson).toString()
                 
                 withContext(Dispatchers.Main) {
                     streamsProgress.visibility = View.GONE
-                    if (streamUrl.isNotEmpty() && streamUrl.startsWith("http")) {
-                        val title = currentStreamingTitle
-                        launchNativeVideoPlayer(streamUrl, null, title)
-                    } else {
-                        Toast.makeText(this@MainActivity, "Could not resolve stream URL", Toast.LENGTH_SHORT).show()
+                    try {
+                        val json = JSONObject(resolveResult)
+                        if (json.has("error")) {
+                            Toast.makeText(this@MainActivity, "Resolve error: ${json.getString("error")}", Toast.LENGTH_LONG).show()
+                            return@withContext
+                        }
+
+                        val streamUrl = json.optString("url")
+                        val isVideo = json.optBoolean("is_video", false)
+
+                        if (streamUrl.isNotEmpty() && streamUrl.startsWith("http")) {
+                            if (isVideo) {
+                                val title = currentStreamingTitle
+                                launchNativeVideoPlayer(streamUrl, null, title)
+                            } else {
+                                // Resolved to what looks like a webpage, open in browser instead
+                                loadUrlAndBrowse(streamUrl, true)
+                                Toast.makeText(this@MainActivity, "Opening as webpage...", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(this@MainActivity, "Could not resolve stream URL", Toast.LENGTH_SHORT).show()
+                        }
+                    } catch (e: Exception) {
+                        // Fallback if not JSON (legacy or unexpected error)
+                        if (resolveResult.isNotEmpty() && resolveResult.startsWith("http")) {
+                            val title = currentStreamingTitle
+                            launchNativeVideoPlayer(resolveResult, null, title)
+                        } else {
+                            Toast.makeText(this@MainActivity, "Resolve error: $resolveResult", Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
             } catch (e: Exception) {

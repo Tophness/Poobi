@@ -343,6 +343,7 @@ class UniversalScraper:
     def resolveSource(self, source_data):
         url = source_data.get('url')
         provider_key = source_data.get('provider_key')
+        is_video = source_data.get('direct', False)
 
         if provider_key in self.provider_instances:
             provider = self.provider_instances[provider_key]
@@ -350,23 +351,29 @@ class UniversalScraper:
                 try: url = provider.resolve(url)
                 except: pass
 
-        if not url: return None
+        if not url: return None, False
 
         try:
             import modules.scrape_sources as scrape_sources
             url = scrape_sources.prepare_link(url)
         except Exception: pass
 
-        if not url: return None
+        if not url: return None, False
 
         if resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
             try:
                 if resolveurl.HostedMediaFile(url):
                     resolved = resolveurl.resolve(url)
-                    if resolved: return resolved
+                    if resolved: return resolved, True
             except: pass
             
-        return url
+        # Fallback check for direct links or common video extensions
+        video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
+        if not is_video:
+            if any(url.lower().split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url:
+                is_video = True
+                
+        return url, is_video
 
 # --- ANDROID BRIDGE FUNCTIONS ---
 
@@ -590,17 +597,10 @@ def resolve(source_data_json):
             enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
         
         scraper = UniversalScraper(enabled_packs)
-        # Re-initialize provider instances if needed (they are initialized in getSources usually)
-        # However, for resolution we might need to be careful if it's a new scraper instance.
-        # The original code stores provider_instances in the scraper object.
-        # Let's ensure resolveSource can work.
-        # We might need to mock getSources or just initialize providers.
-
-        # For simplicity, let's just try to resolve directly if it's a direct link or needs resolveurl
-        url = scraper.resolveSource(source_data)
-        return url if url else ""
+        url, is_video = scraper.resolveSource(source_data)
+        return json.dumps({"url": url if url else "", "is_video": is_video})
     except Exception as e:
-        return f"Error: {str(e)}"
+        return json.dumps({"error": str(e)})
 
 # --- END ANDROID BRIDGE ---
 
@@ -1221,10 +1221,10 @@ class UniversalApp(QMainWindow):
         source_data = self.found_sources[idx]
         try:
             scraper = UniversalScraper(self.get_enabled_packs())
-            final = scraper.resolveSource(source_data)
+            final_url, is_video = scraper.resolveSource(source_data)
             
-            if final:
-                QApplication.clipboard().setText(final)
+            if final_url:
+                QApplication.clipboard().setText(final_url)
             else:
                 pass
         except Exception:
