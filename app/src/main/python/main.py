@@ -278,12 +278,24 @@ class UniversalScraper:
         self.status["timeout"] = max_wait
         
         start_time = time.time()
+        paused_duration = 0
         while any(t.is_alive() for t in threads):
             if self.stop_event.is_set():
                 self.status["message"] = "Stopped!"
                 break
 
-            elapsed = time.time() - start_time
+            if not self.pause_event.is_set():
+                p_start = time.time()
+                self.status["message"] = "Paused..."
+                while not self.pause_event.is_set():
+                    if self.stop_event.is_set(): break
+                    time.sleep(0.5)
+                paused_duration += (time.time() - p_start)
+                if self.stop_event.is_set():
+                    self.status["message"] = "Stopped!"
+                    break
+
+            elapsed = time.time() - start_time - paused_duration
             if elapsed > max_wait: 
                 self.status["message"] = "Timeout reached!"
                 break
@@ -596,6 +608,7 @@ def pause_scrape():
     global active_scraper
     if active_scraper:
         active_scraper.pause_event.clear()
+        active_scraper.status["message"] = "Paused..."
         return "Paused"
     return "No active scraper"
 
@@ -603,6 +616,7 @@ def resume_scrape():
     global active_scraper
     if active_scraper:
         active_scraper.pause_event.set()
+        active_scraper.status["message"] = "Resuming..."
         return "Resumed"
     return "No active scraper"
 

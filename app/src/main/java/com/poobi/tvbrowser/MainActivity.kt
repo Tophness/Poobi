@@ -141,6 +141,7 @@ class MainActivity : AppCompatActivity() {
     private var autoSubCount = 1
     private var autoSubWaitPref = 0 // 0: Stop, 1: Ask, 2: Progressive
     private var isDownloadingAutoSubs = false
+    private var isInteractingWithSources = false
     private var lastSubtitledItemKey: String? = null
     private var cachedSubtitleResults = mutableMapOf<String, JSONArray>()
     private var isSelectionMode = false
@@ -392,6 +393,7 @@ class MainActivity : AppCompatActivity() {
             cursor.visibility = View.GONE
 
             // Resume scraping when returning to streams tab
+            isInteractingWithSources = false
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     val py = Python.getInstance()
@@ -761,7 +763,15 @@ class MainActivity : AppCompatActivity() {
                     Log.e("TVBrowser", "Error stopping scrape: ${e.message}")
                 }
             }
+            val hadFocus = btnStreamsStop.hasFocus()
             btnStreamsStop.visibility = View.GONE
+            if (hadFocus) {
+                if (streamsResultsContainer.childCount > 0 && streamsResultsContainer.getChildAt(0).isFocusable) {
+                    streamsResultsContainer.getChildAt(0).requestFocus()
+                } else {
+                    btnStreamsBack.requestFocus()
+                }
+            }
         }
 
         val title = item.optString("orig_title") ?: item.optString("title")
@@ -769,8 +779,10 @@ class MainActivity : AppCompatActivity() {
         currentStreamingTitle = displayTitle
         
         // Polling task for progress and incremental results
-        val pollingJob = lifecycleScope.launch(Dispatchers.Main) {
+        val pollingJob = lifecycleScope.launch(Dispatchers.IO) {
             var lastSourcesJson = ""
+            var lastUIUpdateTime = 0L
+            
             while (isActive) {
                 try {
                     val py = Python.getInstance()
@@ -782,35 +794,58 @@ class MainActivity : AppCompatActivity() {
                     val total = status.optInt("total", 0)
                     val message = status.optString("message", "")
                     val sources = status.optJSONArray("sources")
+                    val isFinished = message == "Finished!" || message == "Stopped!" || message == "Timeout reached!"
                     
-                    if (sources != null) {
-                        val sourcesStr = sources.toString()
-                        if (sourcesStr != lastSourcesJson) {
-                            val isFinished = message == "Finished!" || message == "Stopped!" || message == "Timeout reached!"
-                            displaySources(sources, isFinished)
-                            lastSourcesJson = sourcesStr
+                    val currentTime = System.currentTimeMillis()
+                    // Throttle UI updates and skip if user is interacting with a source
+                    val shouldUpdateList = !isInteractingWithSources && sources != null && (isFinished || (currentTime - lastUIUpdateTime > 1500))
+
+                    withContext(Dispatchers.Main) {
+                        if (shouldUpdateList) {
+                            val sourcesStr = sources!!.toString()
+                            if (sourcesStr != lastSourcesJson) {
+                                displaySources(sources, isFinished)
+                                lastSourcesJson = sourcesStr
+                                lastUIUpdateTime = currentTime
+                            }
                         }
-                    }
 
-                    if (total > 0) {
-                        subtitlesStatus.text = "Scraping: $displayTitle ($current/$total)"
-                        subtitlesStatus.visibility = View.VISIBLE
-                        streamsProgress.isIndeterminate = false
-                        streamsProgress.max = total
-                        streamsProgress.progress = current
-                    } else {
-                        subtitlesStatus.text = "Scraping: $displayTitle..."
-                        subtitlesStatus.visibility = View.VISIBLE
-                        streamsProgress.isIndeterminate = true
-                    }
+                        if (total > 0) {
+                            val statusMsg = if (message.contains("Paused")) "Paused: $displayTitle ($current/$total)" 
+                                            else "Scraping: $displayTitle ($current/$total)"
+                            subtitlesStatus.text = statusMsg
+                            subtitlesStatus.visibility = View.VISIBLE
+                            streamsProgress.visibility = View.VISIBLE
+                            streamsProgress.isIndeterminate = false
+                            streamsProgress.max = total
+                            streamsProgress.progress = current
+                        } else if (message != "No active scrape") {
+                            subtitlesStatus.text = if (message.isNotEmpty()) message else "Scraping: $displayTitle..."
+                            subtitlesStatus.visibility = View.VISIBLE
+                            streamsProgress.visibility = View.VISIBLE
+                            streamsProgress.isIndeterminate = true
+                        }
 
-                    if (message == "Finished!" || message == "Stopped!" || message == "Timeout reached!") {
-                        btnStreamsStop.visibility = View.GONE
+                        if (isFinished) {
+                            val hadFocus = btnStreamsStop.hasFocus()
+                            btnStreamsStop.visibility = View.GONE
+                            subtitlesStatus.visibility = View.GONE
+                            streamsProgress.visibility = View.GONE
+                            if (hadFocus) {
+                                if (streamsResultsContainer.childCount > 0 && streamsResultsContainer.getChildAt(0).isFocusable) {
+                                    streamsResultsContainer.getChildAt(0).requestFocus()
+                                } else {
+                                    btnStreamsBack.requestFocus()
+                                }
+                            }
+                        } else if (message != "No active scrape") {
+                            btnStreamsStop.visibility = View.VISIBLE
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("TVBrowser", "Polling error: ${e.message}")
                 }
-                delay(800)
+                delay(1000)
             }
         }
 
@@ -999,6 +1034,7 @@ class MainActivity : AppCompatActivity() {
             thumbView.setImageResource(R.drawable.ic_go)
 
             view.setOnClickListener {
+                isInteractingWithSources = true
                 resolveAndPlay(sourceData)
             }
             streamsResultsContainer.addView(view)
@@ -1371,6 +1407,7 @@ class MainActivity : AppCompatActivity() {
                             launchNativeVideoPlayer(resolveResult, null, title)
                         } else {
                             // Resume if error
+                            isInteractingWithSources = false
                             lifecycleScope.launch(Dispatchers.IO) { 
                                 try { scraper.callAttr("resume_scrape") } catch (e: Exception) {}
                             }
@@ -1381,6 +1418,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     // Resume if error
+                    isInteractingWithSources = false
                     lifecycleScope.launch(Dispatchers.IO) { 
                         try { Python.getInstance().getModule("main").callAttr("resume_scrape") } catch (e: Exception) {}
                     }
@@ -2479,6 +2517,7 @@ class MainActivity : AppCompatActivity() {
             nativeVideoView.player = null
 
             // Resume scraping when player is closed
+            isInteractingWithSources = false
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     val py = Python.getInstance()
