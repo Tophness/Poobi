@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="200dp"
-    android:layout_height="wrap_content"
+    android:layout_height="160dp"
     android:orientation="vertical"
     android:focusable="true"
     android:clickable="true"
@@ -12,7 +12,7 @@
     <ImageView
         android:id="@+id/card_thumb"
         android:layout_width="match_parent"
-        android:layout_height="100dp"
+        android:layout_height="90dp"
         android:scaleType="fitCenter"
         android:background="#222222" />
 
@@ -22,8 +22,18 @@
         android:layout_height="wrap_content"
         android:textColor="#FFFFFF"
         android:textSize="14sp"
-        android:maxLines="2"
+        android:maxLines="1"
         android:ellipsize="end"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="6dp"
         android:text="Website" />
+
+    <TextView
+        android:id="@+id/card_url"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#AAAAAA"
+        android:textSize="11sp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="https://example.com" />
 </LinearLayout>

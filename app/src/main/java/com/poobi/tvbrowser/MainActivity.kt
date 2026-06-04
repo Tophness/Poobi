@@ -40,6 +40,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.brave.adblock.AdBlockUtils
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -65,6 +68,25 @@ class MainActivity : AppCompatActivity() {
     private lateinit var contextMenu: LinearLayout
     private lateinit var rootLayout: FrameLayout
 
+    private lateinit var mainTabsLayout: LinearLayout
+    private lateinit var btnTabBrowser: Button
+    private lateinit var btnTabStreams: Button
+    private lateinit var streamsScreenLayout: LinearLayout
+    private lateinit var streamsSearchInput: EditText
+    private lateinit var streamsSearchBtn: ImageButton
+    private lateinit var streamsProgress: ProgressBar
+    private lateinit var streamsResultsContainer: LinearLayout
+    private lateinit var streamsResultsScroll: ScrollView
+    private lateinit var btnStreamsBack: ImageButton
+    private lateinit var streamsTitle: TextView
+    private lateinit var streamsHistoryContainer: LinearLayout
+    private lateinit var btnStreamsClearHistory: Button
+    private lateinit var streamsHistoryLayout: LinearLayout
+
+    private var lastSearchResults: JSONArray? = null
+    private var lastScrapedItem: JSONObject? = null
+    private var lastScrapedSeason: Int? = null
+    private var lastScrapedEpisode: Int? = null
     private var webViews = mutableListOf<WebView>()
     private var webViewHosts = java.util.WeakHashMap<WebView, String>()
     private var currentTabIndex = -1
@@ -107,6 +129,10 @@ class MainActivity : AppCompatActivity() {
     private var historyIconPref = 0
     private var bookmarkIconPref = 0
     private var navigationModePref = 0 // 0: Cursor, 1: D-pad
+    private var autoSubPref = 0 // 0: Ask, 1: Automatic, 2: Never
+    private var autoSubCount = 1
+    private var autoSubWaitPref = 0 // 0: Dialog, 1: Stop on Play
+    private var isDownloadingAutoSubs = false
     private var isSelectionMode = false
 
     private lateinit var downloadsContainer: LinearLayout
@@ -203,6 +229,20 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         rootLayout = findViewById(R.id.root_layout)
+        mainTabsLayout = findViewById(R.id.main_tabs_layout)
+        btnTabBrowser = findViewById(R.id.btn_main_tab_browser)
+        btnTabStreams = findViewById(R.id.btn_main_tab_streams)
+        streamsScreenLayout = findViewById(R.id.streams_screen_layout)
+        streamsSearchInput = findViewById(R.id.streams_search_input)
+        streamsSearchBtn = findViewById(R.id.streams_search_btn)
+        streamsProgress = findViewById(R.id.streams_progress)
+        streamsResultsContainer = findViewById(R.id.streams_results_container)
+        streamsResultsScroll = findViewById(R.id.streams_results_scroll)
+        btnStreamsBack = findViewById(R.id.btn_streams_back)
+        streamsHistoryContainer = findViewById(R.id.streams_history_container)
+        btnStreamsClearHistory = findViewById(R.id.btn_streams_clear_history)
+        streamsHistoryLayout = findViewById(R.id.streams_history_layout)
+
         webContainer = findViewById(R.id.web_container)
         tabsContainer = findViewById(R.id.tabs_container)
         contextMenu = findViewById(R.id.context_menu)
@@ -258,7 +298,809 @@ class MainActivity : AppCompatActivity() {
         }
 
         checkStartupTabs()
+        setupMainTabs()
+        initPython()
+        refreshStreamsHistory()
         showHomeScreen()
+        btnTabBrowser.post { btnTabBrowser.requestFocus() }
+    }
+
+    private fun initPython() {
+        if (!Python.isStarted()) {
+            Python.start(AndroidPlatform(this))
+        }
+    }
+
+    private fun setupMainTabs() {
+        btnTabBrowser.setOnClickListener { switchMainTab(true) }
+        btnTabStreams.setOnClickListener { switchMainTab(false) }
+
+        btnTabBrowser.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) switchMainTab(true)
+        }
+        btnTabStreams.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) switchMainTab(false)
+        }
+        
+        btnStreamsBack.setOnClickListener {
+            if (streamsTitle.text.toString().startsWith("Sources for:") || streamsTitle.text.toString().startsWith("Scraping:")) {
+                // Going back from Sources/Scraping to Results
+                if (lastSearchResults != null) {
+                    displayStreamResults(lastSearchResults!!)
+                    btnStreamsBack.visibility = View.VISIBLE
+                    streamsTitle.text = "Search Results"
+                } else {
+                    // Fallback if results are lost
+                    streamsResultsContainer.removeAllViews()
+                    streamsResultsScroll.visibility = View.GONE
+                    btnStreamsBack.visibility = View.GONE
+                    streamsTitle.text = "Stream Scraper"
+                    refreshStreamsHistory()
+                    streamsSearchInput.post { streamsSearchInput.requestFocus() }
+                }
+            } else {
+                // Going back from Results to History
+                streamsResultsContainer.removeAllViews()
+                streamsResultsScroll.visibility = View.GONE
+                btnStreamsBack.visibility = View.GONE
+                streamsTitle.text = "Stream Scraper"
+                refreshStreamsHistory()
+                streamsSearchInput.post { streamsSearchInput.requestFocus() }
+            }
+        }
+
+        streamsSearchBtn.setOnClickListener { performStreamSearch() }
+        btnStreamsClearHistory.setOnClickListener {
+            prefs.edit().putString("streams_search_history", "[]").apply()
+            refreshStreamsHistory()
+        }
+        streamsSearchInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                performStreamSearch()
+                true
+            } else false
+        }
+    }
+
+    private fun switchMainTab(isBrowser: Boolean) {
+        if (isBrowser) {
+            btnTabBrowser.alpha = 1.0f
+            btnTabStreams.alpha = 0.5f
+            if (!isBrowsing) {
+                homeScreenLayout.visibility = View.VISIBLE
+                streamsScreenLayout.visibility = View.GONE
+            }
+        } else {
+            btnTabBrowser.alpha = 0.5f
+            btnTabStreams.alpha = 1.0f
+            homeScreenLayout.visibility = View.GONE
+            streamsScreenLayout.visibility = View.VISIBLE
+            refreshStreamsHistory()
+            webContainer.visibility = View.GONE
+            topBarLayout.visibility = View.GONE
+            isBrowsing = false
+            cursor.visibility = View.GONE
+        }
+    }
+
+    private fun performStreamSearch() {
+        val query = streamsSearchInput.text.toString().trim()
+        if (query.isEmpty()) return
+
+        addToStreamsHistory(query)
+        streamsProgress.visibility = View.VISIBLE
+        streamsResultsContainer.removeAllViews()
+        streamsResultsScroll.visibility = View.VISIBLE
+        btnStreamsBack.visibility = View.GONE
+        streamsHistoryLayout.visibility = View.GONE
+        streamsTitle.text = "Searching..."
+        
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(streamsSearchInput.windowToken, 0)
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                val resultsJson = scraper.callAttr("search", query).toString()
+                val results = JSONArray(resultsJson)
+                lastSearchResults = results
+
+                withContext(Dispatchers.Main) {
+                    streamsProgress.visibility = View.GONE
+                    btnStreamsBack.visibility = View.VISIBLE
+                    streamsTitle.text = "Results: $query"
+                    displayStreamResults(results)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    streamsProgress.visibility = View.GONE
+                    streamsTitle.text = "Search Error"
+                    Toast.makeText(this@MainActivity, "Search error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun addToStreamsHistory(query: String) {
+        val historyJson = prefs.getString("streams_search_history", "[]") ?: "[]"
+        val array = JSONArray(historyJson)
+        val newList = mutableListOf<String>()
+        for (i in 0 until array.length()) newList.add(array.getString(i))
+        
+        newList.remove(query) // Remove if already exists to move to top
+        newList.add(0, query)
+        if (newList.size > 20) newList.removeAt(newList.size - 1)
+        
+        val newArray = JSONArray()
+        newList.forEach { newArray.put(it) }
+        prefs.edit().putString("streams_search_history", newArray.toString()).apply()
+        refreshStreamsHistory()
+    }
+
+    private fun setupHistoryLongPress(view: View, progress: ProgressBar, query: String) {
+        val progressHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        var startTime = 0L
+        val updateProgress = object : Runnable {
+            override fun run() {
+                if (startTime == 0L) return
+                val elapsed = System.currentTimeMillis() - startTime
+                val progressValue = (elapsed / 10f).toInt()
+
+                progress.progress = progressValue
+                if (progressValue >= 100) {
+                    val parent = view.parent as? ViewGroup
+                    val index = parent?.indexOfChild(view) ?: -1
+                    removeFromStreamsHistory(query)
+                    
+                    // Focus reassignment
+                    if (parent != null && parent.childCount > 0) {
+                        val nextToFocus = if (index >= parent.childCount) parent.childCount - 1 else index
+                        if (nextToFocus >= 0) parent.getChildAt(nextToFocus).requestFocus()
+                        else streamsSearchInput.requestFocus()
+                    } else {
+                        streamsSearchInput.requestFocus()
+                    }
+
+                    startTime = 0L
+                    progress.visibility = View.GONE
+                } else {
+                    progressHandler.postDelayed(this, 16)
+                }
+            }
+        }
+
+        view.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    if (event.repeatCount == 0) {
+                        startTime = System.currentTimeMillis()
+                        progress.progress = 0
+                        progress.visibility = View.VISIBLE
+                        progressHandler.post(updateProgress)
+                    }
+                    return@setOnKeyListener true
+                } else if (event.action == KeyEvent.ACTION_UP) {
+                    val duration = System.currentTimeMillis() - startTime
+                    startTime = 0L
+                    progressHandler.removeCallbacks(updateProgress)
+                    progress.visibility = View.GONE
+                    
+                    if (duration < 500) {
+                        view.performClick()
+                    }
+                    return@setOnKeyListener true
+                }
+            }
+            false
+        }
+    }
+
+    private fun refreshStreamsHistory() {
+        streamsHistoryContainer.removeAllViews()
+        val historyJson = prefs.getString("streams_search_history", "[]") ?: "[]"
+        val array = JSONArray(historyJson)
+        
+        if (array.length() == 0) {
+            streamsHistoryLayout.visibility = View.GONE
+            return
+        }
+        streamsHistoryLayout.visibility = View.VISIBLE
+        
+        val inflater = LayoutInflater.from(this)
+        for (i in 0 until array.length()) {
+            val query = array.getString(i)
+            val view = inflater.inflate(R.layout.item_search_history, streamsHistoryContainer, false)
+            val text = view.findViewById<TextView>(R.id.history_text)
+            val deleteProgress = view.findViewById<ProgressBar>(R.id.history_delete_progress)
+            
+            text.text = query
+            view.setOnClickListener {
+                streamsSearchInput.setText(query)
+                performStreamSearch()
+            }
+            
+            setupHistoryLongPress(view, deleteProgress, query)
+            
+            streamsHistoryContainer.addView(view)
+        }
+    }
+
+    private fun removeFromStreamsHistory(query: String) {
+        val historyJson = prefs.getString("streams_search_history", "[]") ?: "[]"
+        val array = JSONArray(historyJson)
+        val newArray = JSONArray()
+        for (i in 0 until array.length()) {
+            val item = array.getString(i)
+            if (item != query) newArray.put(item)
+        }
+        prefs.edit().putString("streams_search_history", newArray.toString()).apply()
+        refreshStreamsHistory()
+    }
+
+    private fun displayStreamResults(results: JSONArray) {
+        val inflater = LayoutInflater.from(this)
+        streamsResultsContainer.removeAllViews()
+        for (i in 0 until results.length()) {
+            val item = results.getJSONObject(i)
+            val view = inflater.inflate(R.layout.item_stream, streamsResultsContainer, false)
+            val titleView = view.findViewById<TextView>(R.id.card_title)
+            val detailView = view.findViewById<TextView>(R.id.card_detail)
+            val thumbView = view.findViewById<ImageView>(R.id.card_thumb)
+
+            val title = item.optString("title")
+            val overview = item.optString("overview")
+            val mediaType = item.optString("media_type").uppercase()
+            val posterPath = item.optString("poster_path")
+
+            titleView.text = title
+            detailView.text = "[$mediaType] ${if (overview.isNotEmpty()) overview else "No description available."}"
+            
+            if (posterPath.isNotEmpty() && posterPath != "null") {
+                val thumbUrl = "https://image.tmdb.org/t/p/w185$posterPath"
+                loadStreamThumb(thumbUrl, thumbView)
+            } else {
+                thumbView.setImageResource(R.drawable.ic_history)
+            }
+            
+            view.setOnClickListener {
+                performScrape(item)
+            }
+            streamsResultsContainer.addView(view)
+            if (i == 0) view.post { view.requestFocus() }
+        }
+    }
+
+    private fun loadStreamThumb(url: String, imageView: ImageView) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val connection = java.net.URL(url).openConnection() as HttpURLConnection
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                connection.inputStream.use { input ->
+                    val bitmap = BitmapFactory.decodeStream(input)
+                    withContext(Dispatchers.Main) {
+                        imageView.setImageBitmap(bitmap)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "Failed to load thumb: ${e.message}")
+            }
+        }
+    }
+
+    private fun performScrape(item: JSONObject, season: Int? = null, episode: Int? = null) {
+        val mediaType = item.optString("media_type")
+        if (mediaType == "tv" && (season == null || episode == null)) {
+            showTvSelectionDialog(item)
+            return
+        }
+
+        lastScrapedItem = item
+        lastScrapedSeason = season
+        lastScrapedEpisode = episode
+
+        streamsProgress.visibility = View.VISIBLE
+        streamsProgress.isIndeterminate = true
+        streamsProgress.progress = 0
+        streamsResultsContainer.removeAllViews()
+        streamsResultsScroll.visibility = View.VISIBLE
+        btnStreamsBack.visibility = View.VISIBLE // Allow going back while scraping
+        streamsHistoryLayout.visibility = View.GONE
+        
+        val title = item.optString("orig_title") ?: item.optString("title")
+        val displayTitle = if (season != null && episode != null) "$title S${season}E$episode" else title
+        streamsTitle.text = "Scraping: $displayTitle"
+        
+        // Polling task for progress
+        val pollingJob = lifecycleScope.launch(Dispatchers.Main) {
+            while (isActive) {
+                try {
+                    val py = Python.getInstance()
+                    val scraper = py.getModule("main")
+                    val statusJson = scraper.callAttr("get_scrape_status").toString()
+                    val status = JSONObject(statusJson)
+                    
+                    val current = status.optInt("current", 0)
+                    val total = status.optInt("total", 0)
+                    val message = status.optString("message", "")
+                    
+                    if (total > 0) {
+                        streamsTitle.text = "Scraping: $displayTitle ($current/$total)"
+                        streamsProgress.isIndeterminate = false
+                        streamsProgress.max = total
+                        streamsProgress.progress = current
+                    } else {
+                        streamsTitle.text = "Scraping: $displayTitle..."
+                        streamsProgress.isIndeterminate = true
+                    }
+                } catch (e: Exception) {
+                    Log.e("TVBrowser", "Polling error: ${e.message}")
+                }
+                delay(800)
+            }
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                val sourcesJson = scraper.callAttr("scrape", item.toString(), season, episode).toString()
+                val sources = JSONArray(sourcesJson)
+
+                withContext(Dispatchers.Main) {
+                    pollingJob.cancel()
+                    streamsProgress.visibility = View.GONE
+                    btnStreamsBack.visibility = View.VISIBLE
+                    streamsTitle.text = "Sources for: $displayTitle"
+                    displaySources(sources)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    pollingJob.cancel()
+                    streamsProgress.visibility = View.GONE
+                    streamsTitle.text = "Scrape Error"
+                    Toast.makeText(this@MainActivity, "Scrape error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun showTvSelectionDialog(item: JSONObject) {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Loading Seasons...")
+            .setMessage("Please wait while we fetch the seasons for ${item.optString("title")}")
+            .setNegativeButton("Cancel", null)
+            .create()
+        dialog.show()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                val seasonsJson = scraper.callAttr("get_tv_seasons", item.optInt("id")).toString()
+                val details = JSONObject(seasonsJson)
+                val seasons = details.optJSONArray("seasons")
+
+                withContext(Dispatchers.Main) {
+                    dialog.dismiss()
+                    if (seasons == null || seasons.length() == 0) {
+                        Toast.makeText(this@MainActivity, "No seasons found", Toast.LENGTH_SHORT).show()
+                        return@withContext
+                    }
+
+                    val seasonNames = mutableListOf<String>()
+                    val seasonNumbers = mutableListOf<Int>()
+                    for (i in 0 until seasons.length()) {
+                        val s = seasons.getJSONObject(i)
+                        val num = s.optInt("season_number")
+                        val name = s.optString("name") ?: "Season $num"
+                        val epCount = s.optInt("episode_count")
+                        seasonNames.add("$name ($epCount Episodes)")
+                        seasonNumbers.add(num)
+                    }
+
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Select Season")
+                        .setItems(seasonNames.toTypedArray()) { _, which ->
+                            showTvEpisodeSelectionDialog(item, seasonNumbers[which])
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    dialog.dismiss()
+                    Toast.makeText(this@MainActivity, "Error fetching seasons: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun showTvEpisodeSelectionDialog(item: JSONObject, seasonNumber: Int) {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Loading Episodes...")
+            .setMessage("Fetching episodes for Season $seasonNumber")
+            .setNegativeButton("Cancel", null)
+            .create()
+        dialog.show()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                val episodesJson = scraper.callAttr("get_tv_episodes", item.optInt("id"), seasonNumber).toString()
+                val episodes = JSONArray(episodesJson)
+
+                withContext(Dispatchers.Main) {
+                    dialog.dismiss()
+                    if (episodes.length() == 0) {
+                        Toast.makeText(this@MainActivity, "No episodes found", Toast.LENGTH_SHORT).show()
+                        return@withContext
+                    }
+
+                    val epNames = mutableListOf<String>()
+                    for (i in 0 until episodes.length()) {
+                        val ep = episodes.getJSONObject(i)
+                        val num = ep.optInt("episode_number")
+                        val name = ep.optString("name") ?: "Episode $num"
+                        epNames.add("E$num: $name")
+                    }
+
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Select Episode")
+                        .setItems(epNames.toTypedArray()) { _, which ->
+                            val selectedEp = episodes.getJSONObject(which).optInt("episode_number")
+                            performScrape(item, seasonNumber, selectedEp)
+                        }
+                        .setNegativeButton("Back") { _, _ -> showTvSelectionDialog(item) }
+                        .show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    dialog.dismiss()
+                    Toast.makeText(this@MainActivity, "Error fetching episodes: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun displaySources(sources: JSONArray) {
+        val inflater = LayoutInflater.from(this)
+        streamsResultsContainer.removeAllViews()
+        if (sources.length() == 0) {
+            val emptyView = TextView(this).apply {
+                text = "No sources found for this title."
+                setTextColor(android.graphics.Color.WHITE)
+                textSize = 18f
+                setPadding(40, 40, 40, 40)
+            }
+            streamsResultsContainer.addView(emptyView)
+            return
+        }
+
+        // Add a "Find Subtitles" button at the top
+        val subBtn = Button(this).apply {
+            text = "🔍 Search External Subtitles"
+            background = getDrawable(R.drawable.bg_focusable)
+            setTextColor(android.graphics.Color.WHITE)
+            setPadding(20, 10, 20, 10)
+            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 90)
+            params.setMargins(20, 10, 20, 20)
+            layoutParams = params
+            setOnClickListener {
+                lastScrapedItem?.let { item ->
+                    showSubtitlePicker(item, lastScrapedSeason, lastScrapedEpisode)
+                }
+            }
+            visibility = if (autoSubPref == 2) View.VISIBLE else View.GONE
+        }
+        streamsResultsContainer.addView(subBtn)
+
+        for (i in 0 until sources.length()) {
+            val sourceItem = sources.getJSONObject(i)
+            val view = inflater.inflate(R.layout.item_stream, streamsResultsContainer, false)
+            val titleView = view.findViewById<TextView>(R.id.card_title)
+            val detailView = view.findViewById<TextView>(R.id.card_detail)
+            val thumbView = view.findViewById<ImageView>(R.id.card_thumb)
+
+            titleView.text = sourceItem.getString("title")
+            detailView.text = "Click to play stream"
+            thumbView.setImageResource(R.drawable.ic_go)
+
+            view.setOnClickListener {
+                resolveAndPlay(sourceItem.getString("source_data"))
+            }
+            streamsResultsContainer.addView(view)
+            if (i == 0) view.post { view.requestFocus() }
+        }
+    }
+
+    private fun showSubtitlePicker(item: JSONObject, season: Int?, episode: Int?) {
+        val progress = AlertDialog.Builder(this)
+            .setTitle("Searching Subtitles...")
+            .setMessage("Looking for subtitles for ${item.optString("title")}")
+            .setNegativeButton("Cancel", null)
+            .show()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                val subsJson = scraper.callAttr("search_subtitles", item.toString(), season, episode).toString()
+                val subs = JSONArray(subsJson)
+                
+                withContext(Dispatchers.Main) {
+                    progress.dismiss()
+                    if (subs.length() == 0) {
+                        Toast.makeText(this@MainActivity, "No external subtitles found", Toast.LENGTH_SHORT).show()
+                        return@withContext
+                    }
+                    
+                    val subNames = mutableListOf<String>()
+                    for (i in 0 until subs.length()) {
+                        val sub = subs.getJSONObject(i)
+                        subNames.add("[${sub.optString("service")}] ${sub.optString("lang")}: ${sub.optString("name")}")
+                    }
+                    
+                    val inflater = LayoutInflater.from(this@MainActivity)
+                    val layout = inflater.inflate(R.layout.dialog_subtitle_picker, null)
+                    val listView = layout.findViewById<ListView>(R.id.sub_list)
+                    val btnDownload = layout.findViewById<Button>(R.id.btn_download)
+                    val btnCancel = layout.findViewById<Button>(R.id.btn_cancel)
+                    
+                    val adapter = ArrayAdapter<String>(this@MainActivity, R.layout.item_subtitle_choice, subNames)
+                    listView.adapter = adapter
+                    
+                    val dialog = AlertDialog.Builder(this@MainActivity)
+                        .setView(layout)
+                        .create()
+                        
+                    btnCancel.setOnClickListener { dialog.dismiss() }
+                    btnDownload.setOnClickListener {
+                        val checkedPositions = listView.checkedItemPositions
+                        val selectedIndices = mutableListOf<Int>()
+                        for (i in 0 until adapter.count) {
+                            if (checkedPositions.get(i)) selectedIndices.add(i)
+                        }
+                        
+                        if (selectedIndices.isEmpty()) {
+                            Toast.makeText(this@MainActivity, "No subtitles selected", Toast.LENGTH_SHORT).show()
+                            return@setOnClickListener
+                        }
+                        
+                        dialog.dismiss()
+
+                        val selectedCount = selectedIndices.size
+                        val downloadDialog = AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Downloading Subtitles")
+                            .setMessage("Getting 0 / $selectedCount...")
+                            .setCancelable(false)
+                            .create()
+                        
+                        val progressBar = ProgressBar(this@MainActivity, null, android.R.attr.progressBarStyleHorizontal).apply {
+                            max = selectedCount
+                            setPadding(40, 20, 40, 20)
+                        }
+                        
+                        val dLayout = LinearLayout(this@MainActivity).apply {
+                            orientation = LinearLayout.VERTICAL
+                            addView(progressBar)
+                        }
+                        downloadDialog.setView(dLayout)
+                        downloadDialog.show()
+
+                        var downloaded = 0
+                        
+                        fun downloadNext(idx: Int) {
+                            if (idx >= selectedIndices.size) {
+                                downloadDialog.dismiss()
+                                Toast.makeText(this@MainActivity, "Finished downloading $downloaded subtitles", Toast.LENGTH_SHORT).show()
+                                return
+                            }
+                            
+                            downloadDialog.setMessage("Getting ${idx + 1} / $selectedCount...")
+                            downloadSubtitle(subs.getJSONObject(selectedIndices[idx]), silent = true) { path ->
+                                if (path != null) downloaded++
+                                progressBar.progress = idx + 1
+                                downloadNext(idx + 1)
+                            }
+                        }
+                        downloadNext(0)
+                    }
+                    dialog.show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    progress.dismiss()
+                    Toast.makeText(this@MainActivity, "Subtitle search failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun downloadSubtitle(subItem: JSONObject, silent: Boolean = false, onComplete: ((String?) -> Unit)? = null) {
+        val progress = if (silent) null else AlertDialog.Builder(this)
+            .setTitle("Downloading Subtitle...")
+            .setMessage("Please wait...")
+            .show()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                val serviceName = subItem.getString("service")
+                val actionArgs = subItem.getString("action_args")
+                val filePath = scraper.callAttr("get_subtitle_file", serviceName, actionArgs).toString()
+
+                withContext(Dispatchers.Main) {
+                    progress?.dismiss()
+                    if (filePath.isNotEmpty()) {
+                        val subUri = Uri.fromFile(File(filePath)).toString()
+                        val source = subItem.optString("service", "Unknown")
+                        val name = subItem.optString("name", "Subtitle")
+                        val label = "[$source] $name"
+                        val lang = subItem.optString("lang", "und")
+
+                        Log.d("TVBrowserSubs", "Setting label: $label, lang: $lang, uri: $subUri")
+
+                        interceptedSubtitleUrls[subUri] = mapOf(
+                            "label" to label,
+                            "lang" to lang
+                        )
+
+                        if (silent) {
+                            // If playing, add to current player
+                            exoPlayer?.let { player ->
+                                val mimeType = if (subUri.contains(".vtt")) MimeTypes.TEXT_VTT
+                                else if (subUri.contains(".ass")) MimeTypes.TEXT_SSA
+                                else MimeTypes.APPLICATION_SUBRIP
+
+                                val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUri))
+                                    .setMimeType(mimeType)
+                                    .setLanguage(lang)
+                                    .setLabel(label)
+                                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                                    .setRoleFlags(C.ROLE_FLAG_SUBTITLE)
+                                    .build()
+
+                                val currentMediaItem = player.currentMediaItem
+                                if (currentMediaItem != null) {
+                                    val newMediaItem = currentMediaItem.buildUpon()
+                                        .setSubtitleConfigurations(currentMediaItem.localConfiguration?.subtitleConfigurations.orEmpty() + subConfig)
+                                        .build()
+                                    val currentPos = player.currentPosition
+                                    player.setMediaItem(newMediaItem, false)
+                                    player.seekTo(currentPos)
+                                    player.prepare()
+                                }
+                            }
+                        } else {
+                            Toast.makeText(this@MainActivity, "Subtitle added! Start video to use.", Toast.LENGTH_SHORT).show()
+                        }
+                        onComplete?.invoke(filePath)
+                    } else {
+                        if (!silent) Toast.makeText(this@MainActivity, "Subtitle download failed", Toast.LENGTH_SHORT).show()
+                        onComplete?.invoke(null)
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    progress?.dismiss()
+                    if (!silent) Toast.makeText(this@MainActivity, "Subtitle download error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    onComplete?.invoke(null)
+                }
+            }
+        }
+    }
+
+    private fun performAutoSubtitleSearch(item: JSONObject, season: Int?, episode: Int?) {
+        isDownloadingAutoSubs = true
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                val subsJson = scraper.callAttr("search_subtitles", item.toString(), season, episode).toString()
+                val subs = JSONArray(subsJson)
+                
+                if (subs.length() > 0) {
+                    val countToGet = if (autoSubCount == 0) subs.length() else autoSubCount.coerceAtMost(subs.length())
+                    
+                    // Prioritize "sync" subtitles
+                    val prioritizedSubs = mutableListOf<JSONObject>()
+                    for (i in 0 until subs.length()) {
+                        val sub = subs.getJSONObject(i)
+                        if (sub.optString("sync") == "true") prioritizedSubs.add(sub)
+                    }
+                    for (i in 0 until subs.length()) {
+                        val sub = subs.getJSONObject(i)
+                        if (sub.optString("sync") != "true") prioritizedSubs.add(sub)
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        var downloadedCount = 0
+                        var index = 0
+                        fun next() {
+                            if (isDownloadingAutoSubs && downloadedCount < countToGet && index < prioritizedSubs.size) {
+                                val subToGet = prioritizedSubs[index++]
+                                downloadSubtitle(subToGet, silent = true) { path ->
+                                    if (path != null) downloadedCount++
+                                    next()
+                                }
+                            } else {
+                                isDownloadingAutoSubs = false
+                            }
+                        }
+                        next()
+                    }
+                } else {
+                    isDownloadingAutoSubs = false
+                }
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "Auto subtitle search failed: ${e.message}")
+                isDownloadingAutoSubs = false
+            }
+        }
+    }
+
+    private fun resolveAndPlay(sourceDataJson: String) {
+        if (isDownloadingAutoSubs && autoSubWaitPref == 0) {
+            val downloadDialog = AlertDialog.Builder(this)
+                .setTitle("Downloading Subtitles")
+                .setMessage("Please wait while automatic subtitles are being fetched...")
+                .setPositiveButton("Skip & Play") { _, _ -> 
+                    isDownloadingAutoSubs = false
+                    resolveAndPlayInternal(sourceDataJson) 
+                }
+                .setNegativeButton("Cancel", null)
+                .create()
+            
+            val pBar = ProgressBar(this).apply { setPadding(0, 40, 0, 40) }
+            downloadDialog.setView(pBar)
+            downloadDialog.show()
+
+            lifecycleScope.launch {
+                while (isDownloadingAutoSubs) {
+                    delay(500)
+                }
+                if (downloadDialog.isShowing) {
+                    downloadDialog.dismiss()
+                    resolveAndPlayInternal(sourceDataJson)
+                }
+            }
+            return
+        }
+        resolveAndPlayInternal(sourceDataJson)
+    }
+
+    private fun resolveAndPlayInternal(sourceDataJson: String) {
+        if (autoSubWaitPref == 1) isDownloadingAutoSubs = false // Stop progressive adding if requested
+
+        streamsProgress.visibility = View.VISIBLE
+        streamsProgress.isIndeterminate = true
+        streamsTitle.text = "Resolving Stream URL..."
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                val streamUrl = scraper.callAttr("resolve", sourceDataJson).toString()
+                
+                withContext(Dispatchers.Main) {
+                    streamsProgress.visibility = View.GONE
+                    if (streamUrl.isNotEmpty() && streamUrl.startsWith("http")) {
+                        launchNativeVideoPlayer(streamUrl, null)
+                    } else {
+                        Toast.makeText(this@MainActivity, "Could not resolve stream URL", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    streamsProgress.visibility = View.GONE
+                    Toast.makeText(this@MainActivity, "Resolve error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 
     override fun onResume() {
@@ -274,6 +1116,9 @@ class MainActivity : AppCompatActivity() {
         bookmarkIconPref = prefs.getInt("bookmark_icon_pref", 0)
         clickjackPref = prefs.getBoolean("clickjack_prevention", true)
         navigationModePref = prefs.getInt("navigation_mode_pref", 0)
+        autoSubPref = prefs.getInt("auto_sub_pref", 0)
+        autoSubCount = prefs.getInt("auto_sub_count", 1)
+        autoSubWaitPref = prefs.getInt("auto_sub_wait_pref", 0)
 
         updateAutoPlayIcon()
         applyTheme()
@@ -542,12 +1387,20 @@ class MainActivity : AppCompatActivity() {
                 "history" -> historyContainer
                 "favorites" -> favContainer
                 "downloads" -> downloadsContainer
+                "tabs" -> openTabsContainer
                 else -> null
             }
-            container?.let {
-                val nextToFocus = if (focusUIIndex > 0) focusUIIndex - 1 else 0
-                if (it.childCount > 0) {
-                    it.getChildAt(nextToFocus.coerceAtMost(it.childCount - 1)).requestFocus()
+            container?.post {
+                if (container.childCount > 0) {
+                    val target = container.getChildAt(focusUIIndex.coerceAtMost(container.childCount - 1))
+                    target?.requestFocus()
+                } else {
+                    when (focusKey) {
+                        "history" -> homeTabHistory.requestFocus()
+                        "favorites" -> homeTabBookmarks.requestFocus()
+                        "downloads" -> homeTabDownloads.requestFocus()
+                        "tabs" -> homeTabTabs.requestFocus()
+                    }
                 }
             }
         }
@@ -581,11 +1434,13 @@ class MainActivity : AppCompatActivity() {
     private fun createCard(inflater: LayoutInflater, obj: JSONObject, listKey: String): View {
         val view = inflater.inflate(R.layout.item_card, null)
         val titleView = view.findViewById<TextView>(R.id.card_title)
+        val urlView = view.findViewById<TextView>(R.id.card_url)
         val thumbView = view.findViewById<ImageView>(R.id.card_thumb)
 
         val url = obj.getString("url")
         val title = obj.getString("title")
         titleView.text = title
+        urlView.text = url
 
         val iconPref = if (listKey == "history") historyIconPref else bookmarkIconPref
 
@@ -703,7 +1558,7 @@ class MainActivity : AppCompatActivity() {
                 progress.progress = progressValue
                 if (progressValue >= 100) {
                     closeTab(index)
-                    if (!isBrowsing) refreshLists()
+                    if (!isBrowsing) refreshLists("tabs", index)
                 } else {
                     progressHandler.postDelayed(this, 16)
                 }
@@ -741,7 +1596,7 @@ class MainActivity : AppCompatActivity() {
                 progress.progress = progressValue
                 if (progressValue >= 100) {
                     removeSavedTab(index)
-                    refreshLists()
+                    refreshLists("tabs", index)
                 } else {
                     progressHandler.postDelayed(this, 16)
                 }
@@ -934,7 +1789,18 @@ class MainActivity : AppCompatActivity() {
     private fun showHomeScreen() {
         isBrowsing = false
         cursor.visibility = View.GONE
-        homeScreenLayout.visibility = View.VISIBLE
+        
+        mainTabsLayout.visibility = View.VISIBLE
+        // Default to browser tab if not already in streams
+        if (streamsScreenLayout.visibility != View.VISIBLE) {
+            homeScreenLayout.visibility = View.VISIBLE
+            streamsScreenLayout.visibility = View.GONE
+            btnTabBrowser.alpha = 1.0f
+            btnTabStreams.alpha = 0.5f
+        } else {
+            homeScreenLayout.visibility = View.GONE
+        }
+        
         webContainer.visibility = View.GONE
         topBarLayout.visibility = View.GONE
         contextMenu.visibility = View.GONE
@@ -942,7 +1808,11 @@ class MainActivity : AppCompatActivity() {
         for (wv in webViews) wv.visibility = View.GONE
 
         refreshLists()
-        findViewById<ImageButton>(R.id.home_settings_btn).requestFocus()
+        if (homeScreenLayout.visibility == View.VISIBLE) {
+            findViewById<ImageButton>(R.id.home_settings_btn).requestFocus()
+        } else {
+            streamsSearchInput.requestFocus()
+        }
     }
 
     private fun loadUrlAndBrowse(inputUrl: String, newTab: Boolean = false) {
@@ -953,6 +1823,8 @@ class MainActivity : AppCompatActivity() {
             }
             isBrowsing = true
             homeScreenLayout.visibility = View.GONE
+            streamsScreenLayout.visibility = View.GONE
+            mainTabsLayout.visibility = View.GONE
             topBarLayout.visibility = View.GONE
             contextMenu.visibility = View.GONE
             webContainer.visibility = View.VISIBLE
@@ -1192,6 +2064,7 @@ class MainActivity : AppCompatActivity() {
         nativeVideoView.visibility = View.VISIBLE
         nativeVideoView.keepScreenOn = true
         webContainer.visibility = View.GONE
+        mainTabsLayout.visibility = View.GONE
         cursor.visibility = View.GONE
 
         exoPlayer?.release()
@@ -1221,16 +2094,18 @@ class MainActivity : AppCompatActivity() {
 
         val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
 
-        val subtitleConfigs = interceptedSubtitleUrls.keys.map { subUrl ->
+        val subtitleConfigs = interceptedSubtitleUrls.map { (subUrl, infoMap) ->
             val mimeType = if (subUrl.contains(".vtt")) MimeTypes.TEXT_VTT
             else if (subUrl.contains(".ass")) MimeTypes.TEXT_SSA
             else MimeTypes.APPLICATION_SUBRIP
 
-            val info = getLanguageInfo(subUrl)
+            val lang = infoMap["lang"] ?: getLanguageInfo(subUrl).first
+            val label = infoMap["label"] ?: getLanguageInfo(subUrl).second
+
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
                 .setMimeType(mimeType)
-                .setLanguage(info.first)
-                .setLabel(info.second)
+                .setLanguage(lang)
+                .setLabel(label)
                 .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                 .setRoleFlags(C.ROLE_FLAG_SUBTITLE)
                 .build()
@@ -1256,6 +2131,17 @@ class MainActivity : AppCompatActivity() {
         exoPlayer?.prepare()
         exoPlayer?.playWhenReady = true
         nativeVideoView.requestFocus()
+
+        // Auto-Subtitle Logic
+        if (autoSubPref != 2 && lastScrapedItem != null) {
+            if (autoSubPref == 1) {
+                // Automatic: Trigger search immediately and pick first
+                performAutoSubtitleSearch(lastScrapedItem!!, lastScrapedSeason, lastScrapedEpisode)
+            } else if (autoSubPref == 0) {
+                // Ask: Trigger the picker
+                showSubtitlePicker(lastScrapedItem!!, lastScrapedSeason, lastScrapedEpisode)
+            }
+        }
     }
 
     private fun showWebsiteFullscreen(view: View?, callback: WebChromeClient.CustomViewCallback?) {
@@ -1305,6 +2191,9 @@ class MainActivity : AppCompatActivity() {
         customViewCallback?.onCustomViewHidden()
         customViewCallback = null
         webContainer.visibility = View.VISIBLE
+        if (!isBrowsing) {
+            mainTabsLayout.visibility = View.VISIBLE
+        }
         wakeCursor()
     }
 
@@ -1532,6 +2421,7 @@ class MainActivity : AppCompatActivity() {
         player.seekTo(newPos.coerceIn(0, duration))
     }
 
+    @SuppressLint("UnsafeOptInUsageError")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val isImeVisible = rootLayout.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true
@@ -1571,10 +2461,35 @@ class MainActivity : AppCompatActivity() {
                 nativeVideoView.requestFocus()
             }
             if (event.action == KeyEvent.ACTION_DOWN) {
-                when (event.keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT -> { seekVideo(-1, event.repeatCount); return true }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> { seekVideo(1, event.repeatCount); return true }
-                    KeyEvent.KEYCODE_BACK -> { hideFullscreenVideo(); return true }
+                // Smooth seeking: If controller is hidden OR if seek bar is focused (conceptually, we assume DPAD keys are for seeking if not navigation elements)
+                // Actually, let's stick to the rule: Seek if controller is hidden. 
+                // If controller is visible, let D-pad move focus. 
+                // BUT, if focus is ON the seek bar (or just generally), we want our smooth seek.
+                
+                val isControllerVisible = nativeVideoView.isControllerFullyVisible
+                if (!isControllerVisible) {
+                    when (event.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_LEFT -> { seekVideo(-1, event.repeatCount); return true }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> { seekVideo(1, event.repeatCount); return true }
+                    }
+                } else {
+                    // If visible, check if we are on a "seek" action or just moving focus
+                    // Standard ExoPlayer behavior is jumpy. To use smooth seek with visible bar, 
+                    // we'd need to know what's focused. 
+                    // For now, let's restore smooth seek for LEFT/RIGHT when NOT on a button.
+                    val focusedView = currentFocus
+                    val isButton = focusedView is ImageButton || focusedView is Button
+                    if (!isButton) {
+                        when (event.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_LEFT -> { seekVideo(-1, event.repeatCount); return true }
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> { seekVideo(1, event.repeatCount); return true }
+                        }
+                    }
+                }
+
+                if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                    hideFullscreenVideo()
+                    return true
                 }
             }
             return super.dispatchKeyEvent(event)
@@ -1618,6 +2533,11 @@ class MainActivity : AppCompatActivity() {
                     topBarLayout.visibility = View.GONE
                     wakeCursor()
                     return true
+                } else if (!isBrowsing && streamsScreenLayout.visibility == View.VISIBLE) {
+                    if (btnStreamsBack.visibility == View.VISIBLE) {
+                        btnStreamsBack.performClick()
+                        return true
+                    }
                 }
             }
             return super.dispatchKeyEvent(event)
@@ -1843,6 +2763,7 @@ class MainActivity : AppCompatActivity() {
             val wv = currentWebView
             if (scrollTopbarEnabled && cursorY <= 0 && (wv?.scrollY ?: 0) == 0 && dy < 0 && !isLongPressing && contextMenu.visibility == View.GONE && currentDialog?.isShowing != true) {
                 topBarLayout.visibility = View.VISIBLE
+                mainTabsLayout.visibility = View.GONE // Ensure main tabs stay hidden during browsing
                 cursor.visibility = View.GONE
                 topUrlInput.requestFocus()
             }
@@ -1945,6 +2866,7 @@ class MainActivity : AppCompatActivity() {
         if (!isBrowsing) {
             isBrowsing = true
             homeScreenLayout.visibility = View.GONE
+            mainTabsLayout.visibility = View.GONE
             webContainer.visibility = View.VISIBLE
             wakeCursor()
         }
@@ -1980,9 +2902,17 @@ class MainActivity : AppCompatActivity() {
             if (currentTabIndex >= webViews.size) {
                 currentTabIndex = webViews.size - 1
             }
-            switchTab(currentTabIndex)
+            if (isBrowsing) {
+                switchTab(currentTabIndex)
+            } else {
+                for (i in 0 until tabsContainer.childCount) {
+                    val child = tabsContainer.getChildAt(i)
+                    child.isSelected = (i == currentTabIndex)
+                    child.alpha = if (i == currentTabIndex) 1.0f else 0.5f
+                }
+            }
         }
-        if (!isBrowsing) refreshLists()
+        if (!isBrowsing) refreshLists("tabs", index)
     }
 
     private fun showContextMenu() {
@@ -2027,9 +2957,12 @@ class MainActivity : AppCompatActivity() {
     private fun toggleTopBar() {
         if (topBarLayout.visibility == View.VISIBLE) {
             topBarLayout.visibility = View.GONE
+            if (!isBrowsing) mainTabsLayout.visibility = View.VISIBLE
             wakeCursor()
         } else {
             topBarLayout.visibility = View.VISIBLE
+            if (!isBrowsing) mainTabsLayout.visibility = View.VISIBLE
+            else mainTabsLayout.visibility = View.GONE // Hide mode switch tabs when browsing
             cursor.visibility = View.GONE
             topUrlInput.requestFocus()
         }

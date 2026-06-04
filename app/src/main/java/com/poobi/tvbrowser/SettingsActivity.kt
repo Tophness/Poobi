@@ -2,19 +2,18 @@ package com.poobi.tvbrowser
 
 import android.content.Context
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
-import android.widget.EditText
-import android.widget.ImageButton
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.Switch
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.chaquo.python.Python
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -32,6 +31,28 @@ class SettingsActivity : AppCompatActivity() {
     private var bookmarkIconPref = 0
     private var clickjackPref = true
     private var navigationModePref = 0 // 0: Cursor, 1: D-pad
+    private var autoSubPref = 0 // 0: Ask, 1: Automatic, 2: Never
+    private var autoSubCount = 1 // 0 means "All"
+    private var autoSubWaitPref = 0 // 0: Dialog, 1: Progressively/Stop on Play
+
+    // Streaming Settings
+    private var timeoutMode = "Both"
+    private var globalTimeout = 30
+    private var perSourceTimeout = 15
+    private var useWhitelist = false
+    private var enabledPacks = mutableListOf<String>()
+    private var whitelistedHosts = mutableListOf<String>()
+
+    // Subtitle Settings
+    private var subLangs = "English"
+    private var subLimit = 20
+    private val subServices = mutableMapOf<String, Boolean>()
+    private var openSubUser = ""
+    private var openSubPass = ""
+    private var openSubOrgUser = ""
+    private var openSubOrgPass = ""
+    private var subdlKey = ""
+    private var subsourceKey = ""
 
     private var activeCategory: Button? = null
 
@@ -121,6 +142,8 @@ class SettingsActivity : AppCompatActivity() {
         val catPlayer = findViewById<Button>(R.id.cat_player)
         val catInterface = findViewById<Button>(R.id.cat_interface)
         val catAutoplay = findViewById<Button>(R.id.cat_autoplay)
+        val catStreaming = findViewById<Button>(R.id.cat_streaming)
+        val catSubtitles = findViewById<Button>(R.id.cat_subtitles)
         val catBlocked = findViewById<Button>(R.id.cat_blocked)
 
         val panelGeneral = findViewById<LinearLayout>(R.id.panel_general)
@@ -128,6 +151,8 @@ class SettingsActivity : AppCompatActivity() {
         val panelPlayer = findViewById<LinearLayout>(R.id.panel_player)
         val panelInterface = findViewById<LinearLayout>(R.id.panel_interface)
         val panelAutoplay = findViewById<LinearLayout>(R.id.panel_autoplay)
+        val panelStreaming = findViewById<LinearLayout>(R.id.panel_streaming)
+        val panelSubtitles = findViewById<LinearLayout>(R.id.panel_subtitles)
         val panelBlocked = findViewById<LinearLayout>(R.id.panel_blocked)
 
         fun findFirstFocusable(view: View): View? {
@@ -150,6 +175,8 @@ class SettingsActivity : AppCompatActivity() {
             panelPlayer.visibility = View.GONE
             panelInterface.visibility = View.GONE
             panelAutoplay.visibility = View.GONE
+            panelStreaming.visibility = View.GONE
+            panelSubtitles.visibility = View.GONE
             panelBlocked.visibility = View.GONE
             panel.visibility = View.VISIBLE
 
@@ -158,6 +185,8 @@ class SettingsActivity : AppCompatActivity() {
             catPlayer.alpha = 0.5f
             catInterface.alpha = 0.5f
             catAutoplay.alpha = 0.5f
+            catStreaming.alpha = 0.5f
+            catSubtitles.alpha = 0.5f
             catBlocked.alpha = 0.5f
 
             activeCategory?.isSelected = false
@@ -168,12 +197,17 @@ class SettingsActivity : AppCompatActivity() {
             if (panel == panelAutoplay) {
                 refreshAutoplayProfiles()
             }
+            if (panel == panelStreaming) {
+                refreshStreamingPanel()
+            }
+            if (panel == panelSubtitles) {
+                refreshSubtitlesPanel()
+            }
             if (panel == panelBlocked) {
                 refreshBlockedElements()
             }
 
             // Dynamic Focus: Point nextFocusRight to the first focusable element in the new panel
-            // IMPORTANT: This must happen AFTER refresh functions so the container is populated
             panel.post {
                 val firstFocusable = findFirstFocusable(panel)
                 if (firstFocusable != null) {
@@ -190,6 +224,8 @@ class SettingsActivity : AppCompatActivity() {
                     R.id.cat_player -> showPanel(panelPlayer, catPlayer)
                     R.id.cat_interface -> showPanel(panelInterface, catInterface)
                     R.id.cat_autoplay -> showPanel(panelAutoplay, catAutoplay)
+                    R.id.cat_streaming -> showPanel(panelStreaming, catStreaming)
+                    R.id.cat_subtitles -> showPanel(panelSubtitles, catSubtitles)
                     R.id.cat_blocked -> showPanel(panelBlocked, catBlocked)
                 }
             }
@@ -200,6 +236,8 @@ class SettingsActivity : AppCompatActivity() {
         catPlayer.onFocusChangeListener = focusListener
         catInterface.onFocusChangeListener = focusListener
         catAutoplay.onFocusChangeListener = focusListener
+        catStreaming.onFocusChangeListener = focusListener
+        catSubtitles.onFocusChangeListener = focusListener
         catBlocked.onFocusChangeListener = focusListener
 
         // Initial state
@@ -236,6 +274,7 @@ class SettingsActivity : AppCompatActivity() {
         bookmarkIconPref = prefs.getInt("bookmark_icon_pref", 0)
         clickjackPref = prefs.getBoolean("clickjack_prevention", true)
         navigationModePref = prefs.getInt("navigation_mode_pref", 0)
+        autoSubPref = prefs.getInt("auto_sub_pref", 0)
 
         fun updateUI() {
             popupBtn.text = if (silentPopupBlock) "Popups: Block Silently" else "Popups: Ask to Allow"
@@ -295,6 +334,7 @@ class SettingsActivity : AppCompatActivity() {
                 .putInt("bookmark_icon_pref", bookmarkIconPref)
                 .putBoolean("clickjack_prevention", clickjackPref)
                 .putInt("navigation_mode_pref", navigationModePref)
+                .putInt("auto_sub_pref", autoSubPref)
                 .apply()
 
             val appContext = applicationContext
@@ -310,18 +350,10 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun refreshAutoplayProfiles() {
         val container = findViewById<LinearLayout>(R.id.autoplay_profiles_container) ?: return
-        
-        // General fix: If focus is inside the container being refreshed, move it to the category button
-        // to prevent it from jumping to the first category (General) and resetting the screen.
-        if (container.hasFocus()) {
-            activeCategory?.requestFocus()
-        }
-
+        if (container.hasFocus()) activeCategory?.requestFocus()
         container.removeAllViews()
-        
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
-        val profilesJson = prefs.getString("autoplay_profiles", "[]") ?: "[]"
-        val array = JSONArray(profilesJson)
+        val array = JSONArray(prefs.getString("autoplay_profiles", "[]") ?: "[]")
         
         var defaultProfileIndex = -1
         for (i in 0 until array.length()) {
@@ -356,25 +388,20 @@ class SettingsActivity : AppCompatActivity() {
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
             val isEnabled = obj.optBoolean("enabled", true)
-
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 background = getDrawable(R.drawable.bg_focusable)
                 setPadding(30, 10, 20, 10)
-                val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                params.setMargins(0, 0, 0, 10)
-                layoutParams = params
-                isFocusable = false // Let children handle focus
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 0, 0, 10) }
+                isFocusable = false
             }
-
             val nameTxt = TextView(this).apply {
                 text = obj.getString("name")
                 setTextColor(if (isEnabled) android.graphics.Color.WHITE else android.graphics.Color.GRAY)
                 textSize = 16f
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
-
             val toggle = Switch(this).apply {
                 isChecked = isEnabled
                 background = getDrawable(R.drawable.bg_focusable)
@@ -387,7 +414,6 @@ class SettingsActivity : AppCompatActivity() {
                     nameTxt.setTextColor(if (checked) android.graphics.Color.WHITE else android.graphics.Color.GRAY)
                 }
             }
-
             val editBtn = ImageButton(this).apply {
                 setImageResource(R.drawable.ic_settings)
                 background = getDrawable(R.drawable.bg_focusable)
@@ -395,13 +421,10 @@ class SettingsActivity : AppCompatActivity() {
                 id = View.generateViewId()
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
                 setPadding(20, 20, 20, 20)
-                val btnParams = LinearLayout.LayoutParams(90, 90)
-                btnParams.marginStart = 20
-                layoutParams = btnParams
+                layoutParams = LinearLayout.LayoutParams(90, 90).apply { marginStart = 20 }
                 setOnClickListener { editAutoplayProfile(obj, i) }
                 nextFocusLeftId = R.id.cat_autoplay
             }
-
             val deleteBtn = ImageButton(this).apply {
                 setImageResource(R.drawable.ic_close)
                 background = getDrawable(R.drawable.bg_focusable)
@@ -409,31 +432,19 @@ class SettingsActivity : AppCompatActivity() {
                 id = View.generateViewId()
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
                 setPadding(20, 20, 20, 20)
-                val btnParams = LinearLayout.LayoutParams(90, 90)
-                btnParams.marginStart = 10
-                layoutParams = btnParams
+                layoutParams = LinearLayout.LayoutParams(90, 90).apply { marginStart = 10 }
                 setOnClickListener {
                     if (obj.optString("id") == "default") {
                         Toast.makeText(this@SettingsActivity, "Cannot delete default profile", Toast.LENGTH_SHORT).show()
                     } else {
-                        AlertDialog.Builder(this@SettingsActivity)
-                            .setTitle("Delete Profile")
-                            .setMessage("Are you sure you want to delete '${obj.getString("name")}'?")
-                            .setPositiveButton("Delete") { _, _ -> deleteAutoplayProfile(i) }
-                            .setNegativeButton("Cancel", null)
-                            .show()
+                        AlertDialog.Builder(this@SettingsActivity).setTitle("Delete Profile").setMessage("Are you sure?").setPositiveButton("Delete") { _, _ -> deleteAutoplayProfile(i) }.setNegativeButton("Cancel", null).show()
                     }
                 }
                 nextFocusLeftId = R.id.cat_autoplay
             }
-
-            row.addView(nameTxt)
-            row.addView(toggle)
-            row.addView(editBtn)
-            row.addView(deleteBtn)
+            row.addView(nameTxt); row.addView(toggle); row.addView(editBtn); row.addView(deleteBtn)
             container.addView(row)
         }
-        
         val addNewBtn = Button(this).apply {
             text = "+ Add New Profile"
             background = getDrawable(R.drawable.bg_green_focusable)
@@ -445,200 +456,67 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun editAutoplayProfile(profile: JSONObject, index: Int) {
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 20, 40, 20)
-        }
-        
-        val nameInput = EditText(this).apply { 
-            id = View.generateViewId()
-            hint = "Profile Name"
-            setText(profile.optString("name"))
-            setSelectAllOnFocus(false)
-            isSingleLine = true
-            ViewUtils.applySmartDpadFocus(this)
-        }
-        val patternsInput = EditText(this).apply { 
-            id = View.generateViewId()
-            hint = "URL Patterns (comma separated, e.g. *example.com*)"
-            setText(profile.optJSONArray("urlPatterns")?.let { arr ->
-                (0 until arr.length()).map { arr.getString(it) }.joinToString(", ")
-            } ?: "")
-            setSelectAllOnFocus(false)
-            isSingleLine = true
-            ViewUtils.applySmartDpadFocus(this)
-        }
-
-        layout.addView(TextView(this).apply { text = "Name"; setTextColor(android.graphics.Color.GRAY) })
-        layout.addView(nameInput)
-        layout.addView(TextView(this).apply { text = "URL Patterns (* for wildcards)"; setTextColor(android.graphics.Color.GRAY); setPadding(0, 20, 0, 0) })
-        layout.addView(patternsInput)
-
-        // Mode Selection
+        val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 20) }
+        val nameInput = EditText(this).apply { id = View.generateViewId(); hint = "Profile Name"; setText(profile.optString("name")); setSelectAllOnFocus(false); isSingleLine = true; ViewUtils.applySmartDpadFocus(this) }
+        val patternsInput = EditText(this).apply { id = View.generateViewId(); hint = "URL Patterns (comma separated, e.g. *example.com*)"; setText(profile.optJSONArray("urlPatterns")?.let { arr -> (0 until arr.length()).map { arr.getString(it) }.joinToString(", ") } ?: ""); setSelectAllOnFocus(false); isSingleLine = true; ViewUtils.applySmartDpadFocus(this) }
+        layout.addView(TextView(this).apply { text = "Name"; setTextColor(android.graphics.Color.GRAY) }); layout.addView(nameInput)
+        layout.addView(TextView(this).apply { text = "URL Patterns (* for wildcards)"; setTextColor(android.graphics.Color.GRAY); setPadding(0, 20, 0, 0) }); layout.addView(patternsInput)
         layout.addView(TextView(this).apply { text = "Clicker Mode"; setTextColor(android.graphics.Color.GRAY); setPadding(0, 20, 0, 0) })
-        val modeBtn = Button(this).apply {
-            id = View.generateViewId()
-            background = getDrawable(R.drawable.bg_focusable)
-            isFocusable = true
-        }
+        val modeBtn = Button(this).apply { id = View.generateViewId(); background = getDrawable(R.drawable.bg_focusable); isFocusable = true }
         layout.addView(modeBtn)
 
         var useScript = profile.optBoolean("use_script", profile.optString("id") == "default" || profile.optJSONArray("selectors") == null || profile.optJSONArray("selectors")!!.length() == 0)
-
-        // Custom Script UI
-        val scriptLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 10, 0, 0)
-        }
-        val scriptInput = EditText(this).apply { 
-            id = View.generateViewId()
-            hint = "JavaScript Clicker"
-            setText(profile.optString("script"))
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            minLines = 3
-            setSelectAllOnFocus(false)
-            ViewUtils.applySmartDpadFocus(this)
-        }
-        scriptLayout.addView(TextView(this).apply { text = "Script"; setTextColor(android.graphics.Color.GRAY) })
-        scriptLayout.addView(scriptInput)
-        layout.addView(scriptLayout)
-
-        // Simple List UI
-        val listLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 10, 0, 0)
-        }
-        val selectorsContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        val addSelectorBtn = Button(this).apply {
-            text = "+ Add Element Selector"
-            background = getDrawable(R.drawable.bg_focusable)
-            isFocusable = true
-            id = View.generateViewId()
-        }
-        listLayout.addView(TextView(this).apply { text = "Element Selectors"; setTextColor(android.graphics.Color.GRAY) })
-        listLayout.addView(selectorsContainer)
-        listLayout.addView(addSelectorBtn)
-        layout.addView(listLayout)
+        val scriptHeader = TextView(this).apply { text = "Script"; setTextColor(android.graphics.Color.GRAY); setPadding(0, 20, 0, 0) }
+        val selectorsHeader = TextView(this).apply { text = "Element Selectors"; setTextColor(android.graphics.Color.GRAY); setPadding(0, 20, 0, 0) }
+        val scriptInput = EditText(this).apply { id = View.generateViewId(); hint = "JavaScript Clicker"; setText(profile.optString("script")); inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE; minLines = 3; setSelectAllOnFocus(false); ViewUtils.applySmartDpadFocus(this) }
+        val selectorsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val addSelectorBtn = Button(this).apply { text = "+ Add Element Selector"; background = getDrawable(R.drawable.bg_focusable); isFocusable = true; id = View.generateViewId() }
 
         fun updateModeUI() {
             modeBtn.text = if (useScript) "Custom Script" else "Simple Element List"
-            scriptLayout.visibility = if (useScript) View.VISIBLE else View.GONE
-            listLayout.visibility = if (useScript) View.GONE else View.VISIBLE
+            scriptHeader.visibility = if (useScript) View.VISIBLE else View.GONE
+            scriptInput.visibility = if (useScript) View.VISIBLE else View.GONE
+            selectorsHeader.visibility = if (useScript) View.GONE else View.VISIBLE
+            selectorsContainer.visibility = if (useScript) View.GONE else View.VISIBLE
+            addSelectorBtn.visibility = if (useScript) View.GONE else View.VISIBLE
         }
-
-        modeBtn.setOnClickListener {
-            useScript = !useScript
-            updateModeUI()
-        }
-
+        modeBtn.setOnClickListener { useScript = !useScript; updateModeUI() }
+        
         val selectorList = mutableListOf<String>()
-        profile.optJSONArray("selectors")?.let { arr ->
-            for (i in 0 until arr.length()) selectorList.add(arr.getString(i))
-        }
-
+        profile.optJSONArray("selectors")?.let { arr -> for (i in 0 until arr.length()) selectorList.add(arr.getString(i)) }
         fun refreshSelectorsUI() {
             selectorsContainer.removeAllViews()
             selectorList.forEachIndexed { idx, selector ->
-                val row = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = android.view.Gravity.CENTER_VERTICAL
-                    setPadding(0, 5, 0, 5)
-                }
-                val input = EditText(this).apply {
-                    setText(selector)
-                    hint = "e.g. .play-button"
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                    setSelectAllOnFocus(false)
-                    isSingleLine = true
-                    ViewUtils.applySmartDpadFocus(this)
-                    addTextChangedListener(object : android.text.TextWatcher {
-                        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                            selectorList[idx] = s.toString()
-                        }
-                        override fun afterTextChanged(s: android.text.Editable?) {}
-                    })
-                }
-                val delBtn = ImageButton(this).apply {
-                    setImageResource(R.drawable.ic_close)
-                    background = getDrawable(R.drawable.bg_focusable)
-                    isFocusable = true
-                    scaleType = ImageView.ScaleType.CENTER_INSIDE
-                    setPadding(20, 20, 20, 20)
-                    layoutParams = LinearLayout.LayoutParams(90, 90).apply { marginStart = 10 }
-                    setOnClickListener {
-                        selectorList.removeAt(idx)
-                        refreshSelectorsUI()
-                    }
-                }
-                row.addView(input)
-                row.addView(delBtn)
-                selectorsContainer.addView(row)
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+                val input = EditText(this).apply { setText(selector); hint = "e.g. .play-button"; layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f); setSelectAllOnFocus(false); isSingleLine = true; ViewUtils.applySmartDpadFocus(this); addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { selectorList[idx] = s.toString() }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} }) }
+                val delBtn = ImageButton(this).apply { setImageResource(R.drawable.ic_close); background = getDrawable(R.drawable.bg_focusable); layoutParams = LinearLayout.LayoutParams(90, 90).apply { marginStart = 10 }; setOnClickListener { selectorList.removeAt(idx); refreshSelectorsUI() } }
+                row.addView(input); row.addView(delBtn); selectorsContainer.addView(row)
             }
         }
+        addSelectorBtn.setOnClickListener { selectorList.add(""); refreshSelectorsUI() }
+        layout.addView(scriptHeader); layout.addView(scriptInput); layout.addView(selectorsHeader); layout.addView(selectorsContainer); layout.addView(addSelectorBtn)
+        refreshSelectorsUI(); updateModeUI()
 
-        addSelectorBtn.setOnClickListener {
-            selectorList.add("")
-            refreshSelectorsUI()
-        }
-
-        refreshSelectorsUI()
-        updateModeUI()
-
-        val scrollView = android.widget.ScrollView(this).apply {
-            addView(layout)
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Edit Autoplay Profile")
-            .setView(scrollView)
-            .setPositiveButton("Save") { _, _ ->
-                val newPatterns = patternsInput.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                profile.put("name", nameInput.text.toString())
-                profile.put("urlPatterns", JSONArray(newPatterns))
-                profile.put("use_script", useScript)
-                
-                val filteredSelectors = selectorList.filter { it.isNotEmpty() }
-                profile.put("selectors", JSONArray(filteredSelectors))
-                
-                val newScript = scriptInput.text.toString()
-                profile.put("script", newScript)
-
-                if (profile.optString("id") == "default") {
-                    if (useScript && newScript != DEFAULT_AUTOPLAY_SCRIPT.trimIndent()) {
-                        profile.put("is_custom", true)
-                    } else if (!useScript) {
-                        profile.put("is_custom", true)
-                    }
-                }
-                
-                updateAutoplayProfile(profile, index)
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        AlertDialog.Builder(this).setTitle("Edit Autoplay Profile").setView(layout).setPositiveButton("Save") { _, _ ->
+            profile.put("name", nameInput.text.toString())
+            profile.put("urlPatterns", JSONArray(patternsInput.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }))
+            profile.put("use_script", useScript)
+            profile.put("selectors", JSONArray(selectorList.filter { it.isNotEmpty() }))
+            profile.put("script", scriptInput.text.toString())
+            if (profile.optString("id") == "default") profile.put("is_custom", !(useScript && scriptInput.text.toString() == DEFAULT_AUTOPLAY_SCRIPT.trimIndent()))
+            updateAutoplayProfile(profile, index)
+        }.setNegativeButton("Cancel", null).show()
     }
 
     private fun addNewAutoplayProfile() {
-        val newProfile = JSONObject().apply {
-            put("id", java.util.UUID.randomUUID().toString())
-            put("name", "New Profile")
-            put("enabled", true)
-            put("urlPatterns", JSONArray().put("*"))
-            put("script", "")
-        }
+        val newProfile = JSONObject().apply { put("id", java.util.UUID.randomUUID().toString()); put("name", "New Profile"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("script", "") }
         editAutoplayProfile(newProfile, -1)
     }
 
     private fun updateAutoplayProfile(profile: JSONObject, index: Int, refresh: Boolean = true) {
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
         val array = JSONArray(prefs.getString("autoplay_profiles", "[]"))
-        if (index >= 0) {
-            array.put(index, profile)
-        } else {
-            array.put(profile)
-        }
+        if (index >= 0) array.put(index, profile) else array.put(profile)
         prefs.edit().putString("autoplay_profiles", array.toString()).apply()
         if (refresh) refreshAutoplayProfiles()
     }
@@ -647,48 +525,35 @@ class SettingsActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
         val array = JSONArray(prefs.getString("autoplay_profiles", "[]"))
         val newArray = JSONArray()
-        for (i in 0 until array.length()) {
-            if (i != index) newArray.put(array.get(i))
-        }
+        for (i in 0 until array.length()) { if (i != index) newArray.put(array.get(i)) }
         prefs.edit().putString("autoplay_profiles", newArray.toString()).apply()
         refreshAutoplayProfiles()
     }
 
     private fun refreshBlockedElements() {
         val container = findViewById<LinearLayout>(R.id.blocked_elements_container) ?: return
-        
-        if (container.hasFocus()) {
-            activeCategory?.requestFocus()
-        }
-
+        if (container.hasFocus()) activeCategory?.requestFocus()
         container.removeAllViews()
-        
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
-        val blockedJson = prefs.getString("blocked_elements", "[]") ?: "[]"
-        val array = JSONArray(blockedJson)
+        val array = JSONArray(prefs.getString("blocked_elements", "[]") ?: "[]")
 
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
             val isEnabled = obj.optBoolean("enabled", true)
-
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 background = getDrawable(R.drawable.bg_focusable)
                 setPadding(30, 10, 20, 10)
-                val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                params.setMargins(0, 0, 0, 10)
-                layoutParams = params
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 0, 0, 10) }
                 isFocusable = false
             }
-
             val nameTxt = TextView(this).apply {
                 text = obj.getString("name")
                 setTextColor(if (isEnabled) android.graphics.Color.WHITE else android.graphics.Color.GRAY)
                 textSize = 16f
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
-
             val toggle = Switch(this).apply {
                 isChecked = isEnabled
                 background = getDrawable(R.drawable.bg_focusable)
@@ -701,7 +566,6 @@ class SettingsActivity : AppCompatActivity() {
                     nameTxt.setTextColor(if (checked) android.graphics.Color.WHITE else android.graphics.Color.GRAY)
                 }
             }
-
             val editBtn = ImageButton(this).apply {
                 setImageResource(R.drawable.ic_settings)
                 background = getDrawable(R.drawable.bg_focusable)
@@ -709,13 +573,10 @@ class SettingsActivity : AppCompatActivity() {
                 id = View.generateViewId()
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
                 setPadding(20, 20, 20, 20)
-                val btnParams = LinearLayout.LayoutParams(90, 90)
-                btnParams.marginStart = 20
-                layoutParams = btnParams
+                layoutParams = LinearLayout.LayoutParams(90, 90).apply { marginStart = 20 }
                 setOnClickListener { editBlockedElement(obj, i) }
                 nextFocusLeftId = R.id.cat_blocked
             }
-
             val deleteBtn = ImageButton(this).apply {
                 setImageResource(R.drawable.ic_close)
                 background = getDrawable(R.drawable.bg_focusable)
@@ -723,27 +584,15 @@ class SettingsActivity : AppCompatActivity() {
                 id = View.generateViewId()
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
                 setPadding(20, 20, 20, 20)
-                val btnParams = LinearLayout.LayoutParams(90, 90)
-                btnParams.marginStart = 10
-                layoutParams = btnParams
+                layoutParams = LinearLayout.LayoutParams(90, 90).apply { marginStart = 10 }
                 setOnClickListener {
-                    AlertDialog.Builder(this@SettingsActivity)
-                        .setTitle("Delete Rule")
-                        .setMessage("Are you sure you want to delete '${obj.getString("name")}'?")
-                        .setPositiveButton("Delete") { _, _ -> deleteBlockedElement(i) }
-                        .setNegativeButton("Cancel", null)
-                        .show()
+                    AlertDialog.Builder(this@SettingsActivity).setTitle("Delete Rule").setMessage("Are you sure?").setPositiveButton("Delete") { _, _ -> deleteBlockedElement(i) }.setNegativeButton("Cancel", null).show()
                 }
                 nextFocusLeftId = R.id.cat_blocked
             }
-
-            row.addView(nameTxt)
-            row.addView(toggle)
-            row.addView(editBtn)
-            row.addView(deleteBtn)
+            row.addView(nameTxt); row.addView(toggle); row.addView(editBtn); row.addView(deleteBtn)
             container.addView(row)
         }
-        
         val addNewBtn = Button(this).apply {
             text = "+ Add New Rule"
             background = getDrawable(R.drawable.bg_green_focusable)
@@ -755,92 +604,32 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun editBlockedElement(rule: JSONObject, index: Int) {
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 20, 40, 20)
-        }
-        
-        val nameInput = EditText(this).apply { 
-            id = View.generateViewId()
-            hint = "Rule Name (e.g. Site Name)"
-            setText(rule.optString("name"))
-            setSelectAllOnFocus(false)
-            isSingleLine = true
-            ViewUtils.applySmartDpadFocus(this)
-        }
-        val patternsInput = EditText(this).apply { 
-            id = View.generateViewId()
-            hint = "URL Patterns (comma separated)"
-            setText(rule.optJSONArray("urlPatterns")?.let { arr ->
-                (0 until arr.length()).map { arr.getString(it) }.joinToString(", ")
-            } ?: "")
-            setSelectAllOnFocus(false)
-            isSingleLine = true
-            ViewUtils.applySmartDpadFocus(this)
-        }
-        val selectorsInput = EditText(this).apply { 
-            id = View.generateViewId()
-            hint = "CSS Selectors (one per line)"
-            setText(rule.optJSONArray("selectors")?.let { arr ->
-                (0 until arr.length()).map { arr.getString(it) }.joinToString("\n")
-            } ?: "")
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            minLines = 3
-            setSelectAllOnFocus(false)
-            ViewUtils.applySmartDpadFocus(this)
-        }
-
-        nameInput.nextFocusDownId = patternsInput.id
-        patternsInput.nextFocusUpId = nameInput.id
-        patternsInput.nextFocusDownId = selectorsInput.id
-        selectorsInput.nextFocusUpId = patternsInput.id
-
-        layout.addView(TextView(this).apply { text = "Name"; setTextColor(android.graphics.Color.GRAY) })
-        layout.addView(nameInput)
-        layout.addView(TextView(this).apply { text = "URL Patterns (* for wildcards)"; setTextColor(android.graphics.Color.GRAY); setPadding(0, 20, 0, 0) })
-        layout.addView(patternsInput)
-        layout.addView(TextView(this).apply { text = "CSS Selectors (to hide)"; setTextColor(android.graphics.Color.GRAY); setPadding(0, 20, 0, 0) })
-        layout.addView(selectorsInput)
-
-        val scrollView = android.widget.ScrollView(this).apply {
-            addView(layout)
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Edit Blocked Elements")
-            .setView(scrollView)
-            .setPositiveButton("Save") { _, _ ->
-                val newPatterns = patternsInput.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                val newSelectors = selectorsInput.text.toString().split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-                rule.put("name", nameInput.text.toString())
-                rule.put("urlPatterns", JSONArray(newPatterns))
-                rule.put("selectors", JSONArray(newSelectors))
-                
-                updateBlockedElement(rule, index)
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 20) }
+        val nameInput = EditText(this).apply { id = View.generateViewId(); hint = "Rule Name (e.g. Site Name)"; setText(rule.optString("name")); setSelectAllOnFocus(false); isSingleLine = true; ViewUtils.applySmartDpadFocus(this) }
+        val patternsInput = EditText(this).apply { id = View.generateViewId(); hint = "URL Patterns (comma separated)"; setText(rule.optJSONArray("urlPatterns")?.let { arr -> (0 until arr.length()).map { arr.getString(it) }.joinToString(", ") } ?: ""); setSelectAllOnFocus(false); isSingleLine = true; ViewUtils.applySmartDpadFocus(this) }
+        val selectorsInput = EditText(this).apply { id = View.generateViewId(); hint = "CSS Selectors (one per line)"; setText(rule.optJSONArray("selectors")?.let { arr -> (0 until arr.length()).map { arr.getString(it) }.joinToString("\n") } ?: ""); inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE; minLines = 3; setSelectAllOnFocus(false); ViewUtils.applySmartDpadFocus(this) }
+        nameInput.nextFocusDownId = patternsInput.id; patternsInput.nextFocusUpId = nameInput.id; patternsInput.nextFocusDownId = selectorsInput.id; selectorsInput.nextFocusUpId = patternsInput.id
+        layout.addView(TextView(this).apply { text = "Name"; setTextColor(android.graphics.Color.GRAY) }); layout.addView(nameInput)
+        layout.addView(TextView(this).apply { text = "URL Patterns (* for wildcards)"; setTextColor(android.graphics.Color.GRAY); setPadding(0, 20, 0, 0) }); layout.addView(patternsInput)
+        layout.addView(TextView(this).apply { text = "CSS Selectors (to hide)"; setTextColor(android.graphics.Color.GRAY); setPadding(0, 20, 0, 0) }); layout.addView(selectorsInput)
+        val scrollView = android.widget.ScrollView(this).apply { addView(layout) }
+        AlertDialog.Builder(this).setTitle("Edit Blocked Elements").setView(scrollView).setPositiveButton("Save") { _, _ ->
+            rule.put("name", nameInput.text.toString())
+            rule.put("urlPatterns", JSONArray(patternsInput.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }))
+            rule.put("selectors", JSONArray(selectorsInput.text.toString().split("\n").map { it.trim() }.filter { it.isNotEmpty() }))
+            updateBlockedElement(rule, index)
+        }.setNegativeButton("Cancel", null).show()
     }
 
     private fun addNewBlockedElement() {
-        val newRule = JSONObject().apply {
-            put("id", java.util.UUID.randomUUID().toString())
-            put("name", "New Rule")
-            put("enabled", true)
-            put("urlPatterns", JSONArray().put("*"))
-            put("selectors", JSONArray())
-        }
+        val newRule = JSONObject().apply { put("id", java.util.UUID.randomUUID().toString()); put("name", "New Rule"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("selectors", JSONArray()) }
         editBlockedElement(newRule, -1)
     }
 
     private fun updateBlockedElement(rule: JSONObject, index: Int, refresh: Boolean = true) {
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
         val array = JSONArray(prefs.getString("blocked_elements", "[]"))
-        if (index >= 0) {
-            array.put(index, rule)
-        } else {
-            array.put(rule)
-        }
+        if (index >= 0) array.put(index, rule) else array.put(rule)
         prefs.edit().putString("blocked_elements", array.toString()).apply()
         if (refresh) refreshBlockedElements()
     }
@@ -849,10 +638,170 @@ class SettingsActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
         val array = JSONArray(prefs.getString("blocked_elements", "[]"))
         val newArray = JSONArray()
-        for (i in 0 until array.length()) {
-            if (i != index) newArray.put(array.get(i))
-        }
+        for (i in 0 until array.length()) { if (i != index) newArray.put(array.get(i)) }
         prefs.edit().putString("blocked_elements", newArray.toString()).apply()
         refreshBlockedElements()
+    }
+
+    private fun refreshStreamingPanel() {
+        val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
+        timeoutMode = prefs.getString("timeout_mode", "Both") ?: "Both"
+        globalTimeout = prefs.getInt("global_timeout", 30)
+        perSourceTimeout = prefs.getInt("per_source_timeout", 15)
+        useWhitelist = prefs.getBoolean("use_only_whitelisted_hosts", true)
+        val packsArr = JSONArray(prefs.getString("enabled_packs", "[]") ?: "[]")
+        enabledPacks.clear(); for (i in 0 until packsArr.length()) enabledPacks.add(packsArr.getString(i))
+        val hostsArr = JSONArray(prefs.getString("whitelisted_hosts", "[]") ?: "[]")
+        whitelistedHosts.clear(); for (i in 0 until hostsArr.length()) whitelistedHosts.add(hostsArr.getString(i))
+
+        val timeoutBtn = findViewById<Button>(R.id.timeout_mode_btn)
+        val globalLayout = findViewById<LinearLayout>(R.id.global_timeout_layout)
+        val globalInput = findViewById<EditText>(R.id.global_timeout_input)
+        val sourceLayout = findViewById<LinearLayout>(R.id.source_timeout_layout)
+        val sourceInput = findViewById<EditText>(R.id.source_timeout_input)
+        val whitelistBtn = findViewById<Button>(R.id.whitelist_toggle_btn)
+        val whitelistControls = findViewById<LinearLayout>(R.id.whitelist_controls_layout)
+        val packsContainer = findViewById<LinearLayout>(R.id.provider_packs_container)
+        val hostsContainer = findViewById<LinearLayout>(R.id.whitelist_hosts_container)
+        val hostSearchInput = findViewById<EditText>(R.id.host_search_input)
+
+        fun updateTimeoutUI() {
+            timeoutBtn.text = "Timeout Mode: $timeoutMode"
+            globalLayout.visibility = if (timeoutMode == "Global" || timeoutMode == "Both") View.VISIBLE else View.GONE
+            sourceLayout.visibility = if (timeoutMode == "Per-Source" || timeoutMode == "Both") View.VISIBLE else View.GONE
+        }
+        timeoutBtn.setOnClickListener { timeoutMode = when (timeoutMode) { "Global" -> "Per-Source"; "Per-Source" -> "Both"; else -> "Global" }; updateTimeoutUI(); saveStreamingSettings() }
+        globalInput.setText(globalTimeout.toString())
+        globalInput.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) { globalTimeout = s.toString().toIntOrNull() ?: 30; saveStreamingSettings() }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+        sourceInput.setText(perSourceTimeout.toString())
+        sourceInput.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) { perSourceTimeout = s.toString().toIntOrNull() ?: 15; saveStreamingSettings() }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+        updateTimeoutUI()
+        fun updateWhitelistUI() { whitelistBtn.text = if (useWhitelist) "Use Whitelist: Enabled" else "Use Whitelist: Disabled"; whitelistControls.visibility = if (useWhitelist) View.VISIBLE else View.GONE }
+        whitelistBtn.setOnClickListener { useWhitelist = !useWhitelist; updateWhitelistUI(); saveStreamingSettings() }
+        updateWhitelistUI()
+
+        packsContainer.removeAllViews()
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance(); val packs = JSONArray(py.getModule("main").callAttr("get_enabled_packs").toString())
+                withContext(Dispatchers.Main) {
+                    for (i in 0 until packs.length()) {
+                        val name = packs.getString(i)
+                        packsContainer.addView(CheckBox(this@SettingsActivity).apply { text = name; setTextColor(android.graphics.Color.WHITE); isChecked = enabledPacks.isEmpty() || enabledPacks.contains(name); setOnCheckedChangeListener { _, c -> if (c) { if (!enabledPacks.contains(name)) enabledPacks.add(name) } else enabledPacks.remove(name); saveStreamingSettings() } })
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+        fun refreshHosts(filter: String = "") {
+            hostsContainer.removeAllViews()
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val py = Python.getInstance(); val allHosts = JSONArray(py.getModule("main").callAttr("get_all_hosts").toString())
+                    withContext(Dispatchers.Main) {
+                        for (i in 0 until allHosts.length()) {
+                            val h = allHosts.getString(i); if (filter.isNotEmpty() && !h.contains(filter, true)) continue
+                            hostsContainer.addView(CheckBox(this@SettingsActivity).apply { text = h; setTextColor(android.graphics.Color.WHITE); isChecked = whitelistedHosts.contains(h); setOnCheckedChangeListener { _, c -> if (c) { if (!whitelistedHosts.contains(h)) whitelistedHosts.add(h) } else whitelistedHosts.remove(h); saveStreamingSettings() } })
+                        }
+                    }
+                } catch (e: Exception) {}
+            }
+        }
+        findViewById<Button>(R.id.btn_whitelist_select_all).setOnClickListener { for (i in 0 until hostsContainer.childCount) (hostsContainer.getChildAt(i) as? CheckBox)?.isChecked = true }
+        findViewById<Button>(R.id.btn_whitelist_clear_all).setOnClickListener { whitelistedHosts.clear(); for (i in 0 until hostsContainer.childCount) (hostsContainer.getChildAt(i) as? CheckBox)?.isChecked = false; saveStreamingSettings() }
+        hostSearchInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { refreshHosts(s.toString()) }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
+        refreshHosts()
+    }
+
+    private fun saveStreamingSettings() {
+        val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
+        prefs.edit().putString("timeout_mode", timeoutMode).putInt("global_timeout", globalTimeout).putInt("per_source_timeout", perSourceTimeout).putBoolean("use_only_whitelisted_hosts", useWhitelist).putString("enabled_packs", JSONArray(enabledPacks).toString()).putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString()).apply()
+        lifecycleScope.launch(Dispatchers.IO) { try { val py = Python.getInstance(); val cfg = JSONObject().apply { put("timeout_mode", timeoutMode); put("global_timeout", globalTimeout); put("per_source_timeout", perSourceTimeout); put("use_only_whitelisted_hosts", useWhitelist); put("whitelisted_hosts", JSONArray(whitelistedHosts)); enabledPacks.forEach { put("pack_$it", true) } }; py.getModule("main").callAttr("set_config", cfg.toString()) } catch (e: Exception) {} }
+    }
+
+    private fun refreshSubtitlesPanel() {
+        val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
+        autoSubPref = prefs.getInt("auto_sub_pref", 0)
+        autoSubCount = prefs.getInt("auto_sub_count", 1)
+        autoSubWaitPref = prefs.getInt("auto_sub_wait_pref", 0)
+        subLangs = prefs.getString("subtitles_languages", "English") ?: "English"
+        subLimit = prefs.getInt("subtitles_limit", 20)
+        val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
+        serviceKeys.forEach { subServices[it] = prefs.getBoolean("${it}_enabled", it != "bsplayer" && it != "opensubtitles_org" && it != "podnadpisi") }
+        openSubUser = prefs.getString("opensubtitles_username", "") ?: ""; openSubPass = prefs.getString("opensubtitles_password", "") ?: ""
+        openSubOrgUser = prefs.getString("opensubtitles_org_username", "") ?: ""; openSubOrgPass = prefs.getString("opensubtitles_org_password", "") ?: ""
+        subdlKey = prefs.getString("subdl_apikey", "") ?: ""; subsourceKey = prefs.getString("subsource_apikey", "") ?: ""
+
+        val autoSubBtn = findViewById<Button>(R.id.auto_sub_pref_btn)
+        val autoSubCountLayout = findViewById<LinearLayout>(R.id.auto_sub_count_layout)
+        val autoSubCountBtn = findViewById<Button>(R.id.auto_sub_count_btn)
+        val autoSubWaitBtn = findViewById<Button>(R.id.auto_sub_wait_btn)
+        val langsInput = findViewById<EditText>(R.id.sub_langs_input)
+        val limitInput = findViewById<EditText>(R.id.sub_limit_input)
+        val servicesContainer = findViewById<LinearLayout>(R.id.sub_services_container)
+        val openSubUserInput = findViewById<EditText>(R.id.opensub_user_input)
+        val openSubPassInput = findViewById<EditText>(R.id.opensub_pass_input)
+        val openSubOrgUserInput = findViewById<EditText>(R.id.opensub_org_user_input)
+        val openSubOrgPassInput = findViewById<EditText>(R.id.opensub_org_pass_input)
+        val subdlKeyInput = findViewById<EditText>(R.id.subdl_key_input)
+        val subsourceKeyInput = findViewById<EditText>(R.id.subsource_key_input)
+
+        fun updateAutoSubUI() { 
+            autoSubBtn.text = when(autoSubPref) { 1 -> "Auto-search Subtitles: Automatic"; 2 -> "Auto-search Subtitles: Never"; else -> "Auto-search Subtitles: Ask" }
+            autoSubCountLayout.visibility = if (autoSubPref == 1) View.VISIBLE else View.GONE
+        }
+        autoSubBtn.setOnClickListener { autoSubPref = (autoSubPref + 1) % 3; updateAutoSubUI(); saveSubtitlesSettings() }
+        updateAutoSubUI()
+
+        fun updateAutoSubCountUI() {
+            autoSubCountBtn.text = if (autoSubCount == 0) "Add: All Subtitles" else "Add: $autoSubCount Subtitle${if (autoSubCount > 1) "s" else ""}"
+        }
+        autoSubCountBtn.setOnClickListener { 
+            autoSubCount = if (autoSubCount >= 5) 0 else if (autoSubCount == 0) 1 else autoSubCount + 1
+            updateAutoSubCountUI()
+            saveSubtitlesSettings()
+        }
+        updateAutoSubCountUI()
+
+        fun updateAutoSubWaitUI() {
+            autoSubWaitBtn.text = when(autoSubWaitPref) {
+                1 -> "Wait: Progressively (Stop on Play)"
+                else -> "Wait: Automatic (Ask via Dialog)"
+            }
+        }
+        autoSubWaitBtn.setOnClickListener {
+            autoSubWaitPref = (autoSubWaitPref + 1) % 2
+            updateAutoSubWaitUI()
+            saveSubtitlesSettings()
+        }
+        updateAutoSubWaitUI()
+
+        langsInput.setText(subLangs); langsInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { subLangs = s.toString(); saveSubtitlesSettings() }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
+        limitInput.setText(subLimit.toString()); limitInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { subLimit = s.toString().toIntOrNull() ?: 20; saveSubtitlesSettings() }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
+
+        servicesContainer.removeAllViews()
+        serviceKeys.forEach { key -> servicesContainer.addView(CheckBox(this).apply { text = key.replace("_", " ").capitalize(); setTextColor(android.graphics.Color.WHITE); isChecked = subServices[key] ?: true; setOnCheckedChangeListener { _, c -> subServices[key] = c; saveSubtitlesSettings() } }) }
+
+        openSubUserInput.setText(openSubUser); openSubUserInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { openSubUser = s.toString(); saveSubtitlesSettings() }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
+        openSubPassInput.setText(openSubPass); openSubPassInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { openSubPass = s.toString(); saveSubtitlesSettings() }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
+        openSubOrgUserInput.setText(openSubOrgUser); openSubOrgUserInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { openSubOrgUser = s.toString(); saveSubtitlesSettings() }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
+        openSubOrgPassInput.setText(openSubOrgPass); openSubOrgPassInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { openSubOrgPass = s.toString(); saveSubtitlesSettings() }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
+        subdlKeyInput.setText(subdlKey); subdlKeyInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { subdlKey = s.toString(); saveSubtitlesSettings() }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
+        subsourceKeyInput.setText(subsourceKey); subsourceKeyInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { subsourceKey = s.toString(); saveSubtitlesSettings() }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
+    }
+
+    private fun saveSubtitlesSettings() {
+        val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE); val editor = prefs.edit()
+        editor.putInt("auto_sub_pref", autoSubPref).putInt("auto_sub_count", autoSubCount).putInt("auto_sub_wait_pref", autoSubWaitPref).putString("subtitles_languages", subLangs).putInt("subtitles_limit", subLimit)
+        subServices.forEach { (k, v) -> editor.putBoolean("${k}_enabled", v) }
+        editor.putString("opensubtitles_username", openSubUser).putString("opensubtitles_password", openSubPass).putString("opensubtitles_org_username", openSubOrgUser).putString("opensubtitles_org_password", openSubOrgPass).putString("subdl_apikey", subdlKey).putString("subsource_apikey", subsourceKey).apply()
+        lifecycleScope.launch(Dispatchers.IO) { try { val py = Python.getInstance(); val cfg = JSONObject().apply { put("subtitles_languages", subLangs); put("subtitles_limit", subLimit); subServices.forEach { (k, v) -> put("${k}_enabled", v) }; put("opensubtitles_username", openSubUser); put("opensubtitles_password", openSubPass); put("opensubtitles_org_username", openSubOrgUser); put("opensubtitles_org_password", openSubOrgPass); put("subdl_apikey", subdlKey); put("subsource_apikey", subsourceKey) }; py.getModule("main").callAttr("set_config", cfg.toString()) } catch (e: Exception) {} }
     }
 }

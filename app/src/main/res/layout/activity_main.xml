@@ -8,26 +8,67 @@
     android:focusable="true"
     android:focusableInTouchMode="true">
 
-    <!-- 1. MODERN HOME SCREEN -->
+    <!-- TOP LEVEL TABS -->
+    <LinearLayout
+        android:id="@+id/main_tabs_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="20dp"
+        android:paddingHorizontal="40dp"
+        android:background="#1A1A1D"
+        android:elevation="10dp">
+
+        <Button
+            android:id="@+id/btn_main_tab_browser"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Browser"
+            android:background="@drawable/bg_focusable"
+            android:textColor="#FFF"
+            android:textAllCaps="false"
+            android:paddingHorizontal="30dp"
+            android:layout_marginEnd="10dp"/>
+
+        <Button
+            android:id="@+id/btn_main_tab_streams"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Streams"
+            android:background="@drawable/bg_focusable"
+            android:textColor="#FFF"
+            android:textAllCaps="false"
+            android:paddingHorizontal="30dp"
+            android:alpha="0.5"/>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"/>
+
+        <ImageButton
+            android:id="@+id/home_settings_btn"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:background="@drawable/bg_focusable"
+            android:src="@drawable/ic_settings"
+            app:tint="#FFF"
+            android:contentDescription="Settings"/>
+    </LinearLayout>
+
+    <!-- 1. MODERN HOME SCREEN (BROWSER TAB) -->
     <LinearLayout
         android:id="@+id/home_screen_layout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="40dp">
+        android:paddingHorizontal="40dp"
+        android:paddingTop="10dp"
+        android:layout_marginTop="70dp">
 
-        <!-- Search Bar with Settings on the Left -->
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="40dp">
-
-            <ImageButton
-                android:id="@+id/home_settings_btn"
-                android:layout_width="60dp"
-                android:layout_height="60dp"
-                android:layout_marginEnd="10dp"
-                android:background="@drawable/bg_focusable"
-                android:src="@drawable/ic_settings"
-                app:tint="#FFF"
-                android:contentDescription="Settings"/>
+        <!-- Search Bar -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="10dp">
 
             <EditText
                 android:id="@+id/home_url_input"
@@ -59,8 +100,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="40dp"
-            android:layout_marginBottom="20dp">
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="10dp">
 
             <Button android:id="@+id/home_tab_tabs" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Open Tabs" android:drawableStart="@drawable/ic_tab" android:drawablePadding="10dp" android:paddingHorizontal="20dp" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginEnd="10dp" android:textAllCaps="false"/>
             <Button android:id="@+id/home_tab_bookmarks" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bookmarks" android:drawableStart="@drawable/ic_heart_empty" android:drawablePadding="10dp" android:paddingHorizontal="20dp" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginEnd="10dp" android:textAllCaps="false"/>
@@ -95,24 +136,147 @@
             </LinearLayout>
 
             <LinearLayout android:id="@+id/home_panel_history" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="end" android:layout_marginBottom="10dp">
+                <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:scrollbars="none">
+                    <LinearLayout android:id="@+id/history_container" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingBottom="10dp" android:clipToPadding="false"/>
+                </HorizontalScrollView>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center" android:layout_marginTop="10dp">
                     <Button android:id="@+id/btn_clear_history" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:text="Clear History" android:paddingHorizontal="25dp"/>
                 </LinearLayout>
-                <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:scrollbars="none">
-                    <LinearLayout android:id="@+id/history_container" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal"/>
-                </HorizontalScrollView>
             </LinearLayout>
 
             <LinearLayout android:id="@+id/home_panel_downloads" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="end" android:layout_marginBottom="10dp">
+                <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:scrollbars="none">
+                    <LinearLayout android:id="@+id/downloads_container" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingBottom="10dp" android:clipToPadding="false"/>
+                </HorizontalScrollView>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center" android:layout_marginTop="10dp">
                     <Button android:id="@+id/btn_view_all_downloads" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:text="Manage Downloads" android:paddingHorizontal="25dp"/>
                 </LinearLayout>
-                <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:scrollbars="none">
-                    <LinearLayout android:id="@+id/downloads_container" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal"/>
-                </HorizontalScrollView>
             </LinearLayout>
 
         </FrameLayout>
+    </LinearLayout>
+
+    <!-- STREAMS TAB -->
+    <LinearLayout
+        android:id="@+id/streams_screen_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingHorizontal="40dp"
+        android:paddingTop="10dp"
+        android:layout_marginTop="70dp"
+        android:visibility="gone">
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="10dp">
+            <ImageButton
+                android:id="@+id/btn_streams_back"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:background="@drawable/bg_focusable"
+                android:src="@drawable/ic_back"
+                app:tint="#FFF"
+                android:visibility="gone"
+                android:layout_marginEnd="10dp"
+                android:contentDescription="Back"/>
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <EditText
+                android:id="@+id/streams_search_input"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="60dp"
+                android:background="@drawable/bg_focusable"
+                android:textColor="#FFFFFF"
+                android:padding="16dp"
+                android:hint="Search Movie or TV Show..."
+                android:textColorHint="#888888"
+                android:inputType="text"
+                android:imeOptions="actionSearch"
+                android:maxLines="1"/>
+
+            <ImageButton
+                android:id="@+id/streams_search_btn"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:background="@drawable/bg_focusable"
+                android:src="@drawable/ic_go"
+                app:tint="#FFF"
+                android:layout_marginStart="10dp"
+                android:contentDescription="Search"/>
+        </LinearLayout>
+
+        <!-- Search History Section -->
+        <LinearLayout
+            android:id="@+id/streams_history_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Recent Searches"
+                    android:textColor="#888"
+                    android:textSize="14sp"
+                    android:textStyle="bold"/>
+
+                <Button
+                    android:id="@+id/btn_streams_clear_history"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:text="Clear All"
+                    android:background="@drawable/bg_focusable"
+                    android:textColor="#FFF"
+                    android:textSize="12sp"
+                    android:textAllCaps="false"
+                    android:paddingHorizontal="15dp"/>
+            </LinearLayout>
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:scrollbars="none">
+                <LinearLayout
+                    android:id="@+id/streams_history_container"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"/>
+            </HorizontalScrollView>
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/streams_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:visibility="gone"
+            android:progressTint="#00BCD4"
+            android:progressBackgroundTint="#333"/>
+
+        <ScrollView
+            android:id="@+id/streams_results_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="20dp"
+            android:visibility="gone">
+            <LinearLayout
+                android:id="@+id/streams_results_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"/>
+        </ScrollView>
     </LinearLayout>
 
     <FrameLayout android:id="@+id/web_container" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone" />

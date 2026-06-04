@@ -23,14 +23,27 @@
             android:textStyle="bold"
             android:layout_marginBottom="30dp"/>
 
-    <Button android:id="@+id/cat_general" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="General" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/theme_btn"/>
-    <Button android:id="@+id/cat_web" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Web" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/popup_pref_btn"/>
-    <Button android:id="@+id/cat_player" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Player" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/video_pref_btn"/>
-    <Button android:id="@+id/cat_interface" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Interface" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/scroll_topbar_btn"/>
-    <Button android:id="@+id/cat_autoplay" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Autoplay" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/video_trigger_btn"/>
-    <Button android:id="@+id/cat_blocked" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Blocked Elements" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:scrollbars="none">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
 
-        <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
+                <Button android:id="@+id/cat_general" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="General" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/theme_btn"/>
+                <Button android:id="@+id/cat_web" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Web" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/popup_pref_btn"/>
+                <Button android:id="@+id/cat_player" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Player" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/video_pref_btn"/>
+                <Button android:id="@+id/cat_interface" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Interface" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/scroll_topbar_btn"/>
+                <Button android:id="@+id/cat_streaming" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Streaming" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
+                <Button android:id="@+id/cat_autoplay" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Autoplay" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/video_trigger_btn"/>
+                <Button android:id="@+id/cat_subtitles" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Subtitles" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
+                <Button android:id="@+id/cat_blocked" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Blocked Elements" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
+
+            </LinearLayout>
+        </ScrollView>
 
         <Button
             android:id="@+id/save_button"
@@ -39,7 +52,8 @@
             android:text="Save &amp; Exit"
             android:background="@drawable/bg_green_focusable"
             android:textColor="#FFFFFF"
-            android:padding="16dp"/>
+            android:padding="16dp"
+            android:layout_marginTop="10dp"/>
     </LinearLayout>
 
     <!-- CONTENT AREA -->
@@ -89,6 +103,39 @@
                 <Button android:id="@+id/embedded_subs_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Embedded Subtitles: Enabled" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
             </LinearLayout>
 
+            <!-- STREAMING CATEGORY -->
+            <LinearLayout android:id="@+id/panel_streaming" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Streaming Settings" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Timeout Engine" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/timeout_mode_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Timeout Mode: Both" android:layout_marginBottom="10dp" android:gravity="start" android:nextFocusLeft="@+id/cat_streaming"/>
+
+                <LinearLayout android:id="@+id/global_timeout_layout" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Global Timeout (seconds)" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                    <EditText android:id="@+id/global_timeout_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="16dp" android:inputType="number" android:text="30" android:layout_marginBottom="10dp" android:nextFocusLeft="@+id/cat_streaming"/>
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/source_timeout_layout" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Per-Source Timeout (seconds)" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                    <EditText android:id="@+id/source_timeout_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="16dp" android:inputType="number" android:text="15" android:layout_marginBottom="16dp" android:nextFocusLeft="@+id/cat_streaming"/>
+                </LinearLayout>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Provider Packs" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="8dp"/>
+                <LinearLayout android:id="@+id/provider_packs_container" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginBottom="16dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Host Whitelist" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/whitelist_toggle_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Use Only Whitelisted Hosts: Disabled" android:layout_marginBottom="10dp" android:gravity="start" android:nextFocusLeft="@+id/cat_streaming"/>
+
+                <LinearLayout android:id="@+id/whitelist_controls_layout" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="10dp">
+                        <Button android:id="@+id/btn_whitelist_select_all" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Select All" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginEnd="5dp" android:textAllCaps="false"/>
+                        <Button android:id="@+id/btn_whitelist_clear_all" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Clear All" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:textAllCaps="false"/>
+                    </LinearLayout>
+                    <EditText android:id="@+id/host_search_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="16dp" android:hint="Search hosts..." android:textColorHint="#666" android:layout_marginBottom="10dp" android:nextFocusLeft="@+id/cat_streaming"/>
+                    <LinearLayout android:id="@+id/whitelist_hosts_container" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- INTERFACE CATEGORY -->
             <LinearLayout android:id="@+id/panel_interface" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Interface &amp; Navigation" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
@@ -121,6 +168,40 @@
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Custom Rules" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="8dp"/>
                 <LinearLayout android:id="@+id/blocked_elements_container" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
+            </LinearLayout>
+
+            <!-- SUBTITLES CATEGORY -->
+            <LinearLayout android:id="@+id/panel_subtitles" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Subtitle Settings" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Playback Behavior" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/auto_sub_pref_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Auto-search Subtitles: Ask" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_subtitles"/>
+
+                <LinearLayout android:id="@+id/auto_sub_count_layout" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Automatic Subtitle Count" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                    <Button android:id="@+id/auto_sub_count_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Add: 1 Subtitle" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_subtitles"/>
+
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Wait for Subtitles" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                    <Button android:id="@+id/auto_sub_wait_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Wait: Automatic (Ask)" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_subtitles"/>
+                </LinearLayout>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Search Preferences" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Languages (comma separated):" android:textColor="#888" android:textSize="12sp"/>
+                <EditText android:id="@+id/sub_langs_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="12dp" android:text="English" android:layout_marginBottom="10dp" android:nextFocusLeft="@+id/cat_subtitles"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Result Limit:" android:textColor="#888" android:textSize="12sp"/>
+                <EditText android:id="@+id/sub_limit_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="12dp" android:inputType="number" android:text="20" android:layout_marginBottom="16dp" android:nextFocusLeft="@+id/cat_subtitles"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Subtitle Services" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="8dp"/>
+                <LinearLayout android:id="@+id/sub_services_container" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginBottom="16dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Account Settings / API Keys" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="8dp"/>
+                <EditText android:id="@+id/opensub_user_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="12dp" android:hint="OpenSubtitles Username" android:layout_marginBottom="8dp" android:nextFocusLeft="@+id/cat_subtitles"/>
+                <EditText android:id="@+id/opensub_pass_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="12dp" android:hint="OpenSubtitles Password" android:inputType="textPassword" android:layout_marginBottom="8dp" android:nextFocusLeft="@+id/cat_subtitles"/>
+                <EditText android:id="@+id/opensub_org_user_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="12dp" android:hint="OpenSubtitles.org Username" android:layout_marginBottom="8dp" android:nextFocusLeft="@+id/cat_subtitles"/>
+                <EditText android:id="@+id/opensub_org_pass_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="12dp" android:hint="OpenSubtitles.org Password" android:inputType="textPassword" android:layout_marginBottom="8dp" android:nextFocusLeft="@+id/cat_subtitles"/>
+                <EditText android:id="@+id/subdl_key_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="12dp" android:hint="SubDL API Key" android:layout_marginBottom="8dp" android:nextFocusLeft="@+id/cat_subtitles"/>
+                <EditText android:id="@+id/subsource_key_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="12dp" android:hint="Subsource API Key" android:layout_marginBottom="16dp" android:nextFocusLeft="@+id/cat_subtitles"/>
             </LinearLayout>
 
         </FrameLayout>

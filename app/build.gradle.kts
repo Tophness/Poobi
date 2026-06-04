@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
+    alias(libs.plugins.chaquopy)
 }
 
 android {
@@ -9,12 +10,30 @@ android {
 
     defaultConfig {
         applicationId = "com.poobi.tvbrowser"
-        minSdk = 21
+        minSdk = 24
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+        }
+    }
+
+    chaquopy {
+        defaultConfig {
+            buildPython("C:/Users/Chris/AppData/Local/Python/pythoncore-3.11-64/python.exe")
+            version = "3.11"
+            extractPackages("sources", "modules", "resolveurl", "subtitles")
+            pip {
+                install("requests")
+                install("beautifulsoup4")
+                install("six")
+                install("simplejson")
+            }
+        }
     }
 
     buildTypes {
@@ -48,4 +67,5 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.2.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.2.1")
     implementation("androidx.media3:media3-ui:1.2.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
 }
