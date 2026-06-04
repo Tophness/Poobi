@@ -348,7 +348,13 @@ class UniversalScraper:
         if provider_key in self.provider_instances:
             provider = self.provider_instances[provider_key]
             if hasattr(provider, 'resolve'):
-                try: url = provider.resolve(url)
+                try: 
+                    new_url = provider.resolve(url)
+                    if new_url:
+                        url = new_url
+                        # If the provider resolved it, we tend to treat it as video 
+                        # unless it's obviously a webpage
+                        is_video = True
                 except: pass
 
         if not url: return None, False
@@ -369,9 +375,14 @@ class UniversalScraper:
             
         # Fallback check for direct links or common video extensions
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
-        if not is_video:
-            if any(url.lower().split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url:
-                is_video = True
+        # Also check for common video hosting keywords if it's not a known extension
+        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
+        
+        url_lower = url.lower()
+        if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
+            is_video = True
+        elif any(k in url_lower for k in video_keywords):
+            is_video = True
                 
         return url, is_video
 
@@ -574,9 +585,27 @@ def scrape(item_json, season=None, episode=None):
         
         # Format for display
         display_sources = []
+        video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
+        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
+        
         for s in sources:
+            url = s.get('url', '')
+            is_video = s.get('direct', False)
+            if not is_video:
+                url_lower = url.lower()
+                if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
+                    is_video = True
+                elif any(k in url_lower for k in video_keywords):
+                    is_video = True
+                elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
+                    try:
+                        if resolveurl.HostedMediaFile(url):
+                            is_video = True
+                    except: pass
+
+            title_prefix = "[BROWSER] " if not is_video else ""
             display_sources.append({
-                "title": f"[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
+                "title": f"{title_prefix}[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
                 "source_data": json.dumps(s)
             })
             
