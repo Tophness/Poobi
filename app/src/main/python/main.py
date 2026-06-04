@@ -453,7 +453,7 @@ def scrape(item_json, season=None, episode=None):
 
         packs = [d for d in os.listdir(SOURCES_PATH) if os.path.isdir(os.path.join(SOURCES_PATH, d))]
         enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
-        
+
         if not enabled_packs:
             # If no packs detected, maybe the detection failed. Let's try to find common ones.
             for p in ['free99', 'vidscr', 'thecrew', 'scrubsv2', 'gratisred']:
@@ -503,7 +503,7 @@ def resolve(source_data_json):
         # The original code stores provider_instances in the scraper object.
         # Let's ensure resolveSource can work.
         # We might need to mock getSources or just initialize providers.
-        
+
         # For simplicity, let's just try to resolve directly if it's a direct link or needs resolveurl
         url = scraper.resolveSource(source_data)
         return url if url else ""

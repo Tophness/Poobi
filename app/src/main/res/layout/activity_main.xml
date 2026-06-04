@@ -264,6 +264,26 @@
             android:progressTint="#00BCD4"
             android:progressBackgroundTint="#333"/>
 
+        <TextView
+            android:id="@+id/subtitles_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:textColor="#FFC107"
+            android:textSize="12sp"
+            android:visibility="gone"
+            android:gravity="center_horizontal"/>
+
+        <ProgressBar
+            android:id="@+id/subtitles_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:visibility="gone"
+            android:progressTint="#FFC107"
+            android:progressBackgroundTint="#333"/>
+
         <ScrollView
             android:id="@+id/streams_results_scroll"
             android:layout_width="match_parent"

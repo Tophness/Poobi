@@ -772,12 +772,14 @@ class SettingsActivity : AppCompatActivity() {
 
         fun updateAutoSubWaitUI() {
             autoSubWaitBtn.text = when(autoSubWaitPref) {
-                1 -> "Wait: Progressively (Stop on Play)"
-                else -> "Wait: Automatic (Ask via Dialog)"
+                0 -> "When launching video: Stop adding subtitles"
+                1 -> "When launching video: Ask to wait for subtitles"
+                2 -> "When launching video: Launch anyway & add progressively"
+                else -> "When launching video: Stop adding subtitles"
             }
         }
         autoSubWaitBtn.setOnClickListener {
-            autoSubWaitPref = (autoSubWaitPref + 1) % 2
+            autoSubWaitPref = (autoSubWaitPref + 1) % 3
             updateAutoSubWaitUI()
             saveSubtitlesSettings()
         }

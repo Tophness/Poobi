@@ -75,10 +75,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var streamsSearchInput: EditText
     private lateinit var streamsSearchBtn: ImageButton
     private lateinit var streamsProgress: ProgressBar
+    private lateinit var subtitlesProgress: ProgressBar
+    private lateinit var subtitlesStatus: TextView
     private lateinit var streamsResultsContainer: LinearLayout
     private lateinit var streamsResultsScroll: ScrollView
     private lateinit var btnStreamsBack: ImageButton
-    private lateinit var streamsTitle: TextView
     private lateinit var streamsHistoryContainer: LinearLayout
     private lateinit var btnStreamsClearHistory: Button
     private lateinit var streamsHistoryLayout: LinearLayout
@@ -131,8 +132,10 @@ class MainActivity : AppCompatActivity() {
     private var navigationModePref = 0 // 0: Cursor, 1: D-pad
     private var autoSubPref = 0 // 0: Ask, 1: Automatic, 2: Never
     private var autoSubCount = 1
-    private var autoSubWaitPref = 0 // 0: Dialog, 1: Stop on Play
+    private var autoSubWaitPref = 0 // 0: Stop, 1: Ask, 2: Progressive
     private var isDownloadingAutoSubs = false
+    private var lastSubtitledItemKey: String? = null
+    private var cachedSubtitleResults = mutableMapOf<String, JSONArray>()
     private var isSelectionMode = false
 
     private lateinit var downloadsContainer: LinearLayout
@@ -236,6 +239,8 @@ class MainActivity : AppCompatActivity() {
         streamsSearchInput = findViewById(R.id.streams_search_input)
         streamsSearchBtn = findViewById(R.id.streams_search_btn)
         streamsProgress = findViewById(R.id.streams_progress)
+        subtitlesProgress = findViewById(R.id.subtitles_progress)
+        subtitlesStatus = findViewById(R.id.subtitles_status)
         streamsResultsContainer = findViewById(R.id.streams_results_container)
         streamsResultsScroll = findViewById(R.id.streams_results_scroll)
         btnStreamsBack = findViewById(R.id.btn_streams_back)
@@ -323,29 +328,17 @@ class MainActivity : AppCompatActivity() {
         }
         
         btnStreamsBack.setOnClickListener {
-            if (streamsTitle.text.toString().startsWith("Sources for:") || streamsTitle.text.toString().startsWith("Scraping:")) {
-                // Going back from Sources/Scraping to Results
+            // Check current screen state via visibility instead of title text
+            if (streamsResultsContainer.childCount > 0 && streamsResultsContainer.getChildAt(0) is Button) {
+                // If the first item is the "Search External Subtitles" button, we are on Sources page
                 if (lastSearchResults != null) {
                     displayStreamResults(lastSearchResults!!)
                     btnStreamsBack.visibility = View.VISIBLE
-                    streamsTitle.text = "Search Results"
                 } else {
-                    // Fallback if results are lost
-                    streamsResultsContainer.removeAllViews()
-                    streamsResultsScroll.visibility = View.GONE
-                    btnStreamsBack.visibility = View.GONE
-                    streamsTitle.text = "Stream Scraper"
-                    refreshStreamsHistory()
-                    streamsSearchInput.post { streamsSearchInput.requestFocus() }
+                    goBackToHistory()
                 }
             } else {
-                // Going back from Results to History
-                streamsResultsContainer.removeAllViews()
-                streamsResultsScroll.visibility = View.GONE
-                btnStreamsBack.visibility = View.GONE
-                streamsTitle.text = "Stream Scraper"
-                refreshStreamsHistory()
-                streamsSearchInput.post { streamsSearchInput.requestFocus() }
+                goBackToHistory()
             }
         }
 
@@ -383,6 +376,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun goBackToHistory() {
+        streamsResultsContainer.removeAllViews()
+        streamsResultsScroll.visibility = View.GONE
+        btnStreamsBack.visibility = View.GONE
+        refreshStreamsHistory()
+        streamsSearchInput.post { streamsSearchInput.requestFocus() }
+    }
+
     private fun performStreamSearch() {
         val query = streamsSearchInput.text.toString().trim()
         if (query.isEmpty()) return
@@ -393,7 +394,6 @@ class MainActivity : AppCompatActivity() {
         streamsResultsScroll.visibility = View.VISIBLE
         btnStreamsBack.visibility = View.GONE
         streamsHistoryLayout.visibility = View.GONE
-        streamsTitle.text = "Searching..."
         
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.hideSoftInputFromWindow(streamsSearchInput.windowToken, 0)
@@ -409,13 +409,11 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     streamsProgress.visibility = View.GONE
                     btnStreamsBack.visibility = View.VISIBLE
-                    streamsTitle.text = "Results: $query"
                     displayStreamResults(results)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     streamsProgress.visibility = View.GONE
-                    streamsTitle.text = "Search Error"
                     Toast.makeText(this@MainActivity, "Search error: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
@@ -610,7 +608,6 @@ class MainActivity : AppCompatActivity() {
         
         val title = item.optString("orig_title") ?: item.optString("title")
         val displayTitle = if (season != null && episode != null) "$title S${season}E$episode" else title
-        streamsTitle.text = "Scraping: $displayTitle"
         
         // Polling task for progress
         val pollingJob = lifecycleScope.launch(Dispatchers.Main) {
@@ -626,12 +623,14 @@ class MainActivity : AppCompatActivity() {
                     val message = status.optString("message", "")
                     
                     if (total > 0) {
-                        streamsTitle.text = "Scraping: $displayTitle ($current/$total)"
+                        subtitlesStatus.text = "Scraping: $displayTitle ($current/$total)"
+                        subtitlesStatus.visibility = View.VISIBLE
                         streamsProgress.isIndeterminate = false
                         streamsProgress.max = total
                         streamsProgress.progress = current
                     } else {
-                        streamsTitle.text = "Scraping: $displayTitle..."
+                        subtitlesStatus.text = "Scraping: $displayTitle..."
+                        subtitlesStatus.visibility = View.VISIBLE
                         streamsProgress.isIndeterminate = true
                     }
                 } catch (e: Exception) {
@@ -651,15 +650,19 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     pollingJob.cancel()
                     streamsProgress.visibility = View.GONE
+                    subtitlesStatus.visibility = View.GONE
                     btnStreamsBack.visibility = View.VISIBLE
-                    streamsTitle.text = "Sources for: $displayTitle"
                     displaySources(sources)
+
+                    if (autoSubPref == 1) { // 1 is Automatic
+                        performAutoSubtitleSearch(item, season, episode)
+                    }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     pollingJob.cancel()
                     streamsProgress.visibility = View.GONE
-                    streamsTitle.text = "Scrape Error"
+                    subtitlesStatus.visibility = View.GONE
                     Toast.makeText(this@MainActivity, "Scrape error: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
@@ -817,11 +820,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSubtitlePicker(item: JSONObject, season: Int?, episode: Int?) {
-        val progress = AlertDialog.Builder(this)
-            .setTitle("Searching Subtitles...")
-            .setMessage("Looking for subtitles for ${item.optString("title")}")
-            .setNegativeButton("Cancel", null)
-            .show()
+        val itemKey = "${item.optInt("id")}_${season ?: 0}_${episode ?: 0}"
+        val cached = cachedSubtitleResults[itemKey]
+        if (cached != null) {
+            displaySubtitlePicker(cached)
+            return
+        }
+
+        subtitlesStatus.text = "Searching external subtitles..."
+        subtitlesStatus.visibility = View.VISIBLE
+        subtitlesProgress.visibility = View.VISIBLE
+        subtitlesProgress.isIndeterminate = true
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -829,101 +838,99 @@ class MainActivity : AppCompatActivity() {
                 val scraper = py.getModule("main")
                 val subsJson = scraper.callAttr("search_subtitles", item.toString(), season, episode).toString()
                 val subs = JSONArray(subsJson)
+                cachedSubtitleResults[itemKey] = subs
                 
                 withContext(Dispatchers.Main) {
-                    progress.dismiss()
-                    if (subs.length() == 0) {
-                        Toast.makeText(this@MainActivity, "No external subtitles found", Toast.LENGTH_SHORT).show()
-                        return@withContext
-                    }
-                    
-                    val subNames = mutableListOf<String>()
-                    for (i in 0 until subs.length()) {
-                        val sub = subs.getJSONObject(i)
-                        subNames.add("[${sub.optString("service")}] ${sub.optString("lang")}: ${sub.optString("name")}")
-                    }
-                    
-                    val inflater = LayoutInflater.from(this@MainActivity)
-                    val layout = inflater.inflate(R.layout.dialog_subtitle_picker, null)
-                    val listView = layout.findViewById<ListView>(R.id.sub_list)
-                    val btnDownload = layout.findViewById<Button>(R.id.btn_download)
-                    val btnCancel = layout.findViewById<Button>(R.id.btn_cancel)
-                    
-                    val adapter = ArrayAdapter<String>(this@MainActivity, R.layout.item_subtitle_choice, subNames)
-                    listView.adapter = adapter
-                    
-                    val dialog = AlertDialog.Builder(this@MainActivity)
-                        .setView(layout)
-                        .create()
-                        
-                    btnCancel.setOnClickListener { dialog.dismiss() }
-                    btnDownload.setOnClickListener {
-                        val checkedPositions = listView.checkedItemPositions
-                        val selectedIndices = mutableListOf<Int>()
-                        for (i in 0 until adapter.count) {
-                            if (checkedPositions.get(i)) selectedIndices.add(i)
-                        }
-                        
-                        if (selectedIndices.isEmpty()) {
-                            Toast.makeText(this@MainActivity, "No subtitles selected", Toast.LENGTH_SHORT).show()
-                            return@setOnClickListener
-                        }
-                        
-                        dialog.dismiss()
-
-                        val selectedCount = selectedIndices.size
-                        val downloadDialog = AlertDialog.Builder(this@MainActivity)
-                            .setTitle("Downloading Subtitles")
-                            .setMessage("Getting 0 / $selectedCount...")
-                            .setCancelable(false)
-                            .create()
-                        
-                        val progressBar = ProgressBar(this@MainActivity, null, android.R.attr.progressBarStyleHorizontal).apply {
-                            max = selectedCount
-                            setPadding(40, 20, 40, 20)
-                        }
-                        
-                        val dLayout = LinearLayout(this@MainActivity).apply {
-                            orientation = LinearLayout.VERTICAL
-                            addView(progressBar)
-                        }
-                        downloadDialog.setView(dLayout)
-                        downloadDialog.show()
-
-                        var downloaded = 0
-                        
-                        fun downloadNext(idx: Int) {
-                            if (idx >= selectedIndices.size) {
-                                downloadDialog.dismiss()
-                                Toast.makeText(this@MainActivity, "Finished downloading $downloaded subtitles", Toast.LENGTH_SHORT).show()
-                                return
-                            }
-                            
-                            downloadDialog.setMessage("Getting ${idx + 1} / $selectedCount...")
-                            downloadSubtitle(subs.getJSONObject(selectedIndices[idx]), silent = true) { path ->
-                                if (path != null) downloaded++
-                                progressBar.progress = idx + 1
-                                downloadNext(idx + 1)
-                            }
-                        }
-                        downloadNext(0)
-                    }
-                    dialog.show()
+                    subtitlesStatus.visibility = View.GONE
+                    subtitlesProgress.visibility = View.GONE
+                    displaySubtitlePicker(subs)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    progress.dismiss()
+                    subtitlesStatus.visibility = View.GONE
+                    subtitlesProgress.visibility = View.GONE
                     Toast.makeText(this@MainActivity, "Subtitle search failed: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
+    private fun displaySubtitlePicker(subs: JSONArray) {
+        if (subs.length() == 0) {
+            Toast.makeText(this@MainActivity, "No external subtitles found", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        val subNames = mutableListOf<String>()
+        for (i in 0 until subs.length()) {
+            val sub = subs.getJSONObject(i)
+            subNames.add("[${sub.optString("service")}] ${sub.optString("lang")}: ${sub.optString("name")}")
+        }
+        
+        val inflater = LayoutInflater.from(this@MainActivity)
+        val layout = inflater.inflate(R.layout.dialog_subtitle_picker, null)
+        val listView = layout.findViewById<ListView>(R.id.sub_list)
+        val btnDownload = layout.findViewById<Button>(R.id.btn_download)
+        val btnCancel = layout.findViewById<Button>(R.id.btn_cancel)
+        
+        val adapter = ArrayAdapter<String>(this@MainActivity, R.layout.item_subtitle_choice, subNames)
+        listView.adapter = adapter
+        
+        val dialog = AlertDialog.Builder(this@MainActivity)
+            .setView(layout)
+            .create()
+            
+        btnCancel.setOnClickListener { dialog.dismiss() }
+        btnDownload.setOnClickListener {
+            val checkedPositions = listView.checkedItemPositions
+            val selectedIndices = mutableListOf<Int>()
+            for (i in 0 until adapter.count) {
+                if (checkedPositions.get(i)) selectedIndices.add(i)
+            }
+            
+            if (selectedIndices.isEmpty()) {
+                Toast.makeText(this@MainActivity, "No subtitles selected", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            
+            dialog.dismiss()
+
+            val selectedCount = selectedIndices.size
+            subtitlesStatus.text = "Downloading 0 / $selectedCount subtitles..."
+            subtitlesStatus.visibility = View.VISIBLE
+            subtitlesProgress.visibility = View.VISIBLE
+            subtitlesProgress.isIndeterminate = false
+            subtitlesProgress.max = selectedCount
+            subtitlesProgress.progress = 0
+
+            var downloadedCount = 0
+            fun downloadNext(idx: Int) {
+                if (idx >= selectedIndices.size) {
+                    subtitlesStatus.visibility = View.GONE
+                    subtitlesProgress.visibility = View.GONE
+                    Toast.makeText(this@MainActivity, "Finished downloading $downloadedCount subtitles", Toast.LENGTH_SHORT).show()
+                    return
+                }
+                
+                subtitlesStatus.text = "Downloading ${idx + 1} / $selectedCount subtitles..."
+                downloadSubtitle(subs.getJSONObject(selectedIndices[idx]), silent = true) { path ->
+                    if (path != null) downloadedCount++
+                    subtitlesProgress.progress = idx + 1
+                    downloadNext(idx + 1)
+                }
+            }
+            downloadNext(0)
+        }
+        dialog.show()
+    }
+
     private fun downloadSubtitle(subItem: JSONObject, silent: Boolean = false, onComplete: ((String?) -> Unit)? = null) {
-        val progress = if (silent) null else AlertDialog.Builder(this)
-            .setTitle("Downloading Subtitle...")
-            .setMessage("Please wait...")
-            .show()
+        if (!silent) {
+            subtitlesStatus.text = "Downloading subtitle..."
+            subtitlesStatus.visibility = View.VISIBLE
+            subtitlesProgress.visibility = View.VISIBLE
+            subtitlesProgress.isIndeterminate = true
+        }
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -934,7 +941,10 @@ class MainActivity : AppCompatActivity() {
                 val filePath = scraper.callAttr("get_subtitle_file", serviceName, actionArgs).toString()
 
                 withContext(Dispatchers.Main) {
-                    progress?.dismiss()
+                    if (!silent) {
+                        subtitlesStatus.visibility = View.GONE
+                        subtitlesProgress.visibility = View.GONE
+                    }
                     if (filePath.isNotEmpty()) {
                         val subUri = Uri.fromFile(File(filePath)).toString()
                         val source = subItem.optString("service", "Unknown")
@@ -986,8 +996,11 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    progress?.dismiss()
-                    if (!silent) Toast.makeText(this@MainActivity, "Subtitle download error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    if (!silent) {
+                        subtitlesStatus.visibility = View.GONE
+                        subtitlesProgress.visibility = View.GONE
+                        Toast.makeText(this@MainActivity, "Subtitle download error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
                     onComplete?.invoke(null)
                 }
             }
@@ -995,7 +1008,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun performAutoSubtitleSearch(item: JSONObject, season: Int?, episode: Int?) {
+        val itemKey = "${item.optInt("id")}_${season ?: 0}_${episode ?: 0}"
+        if (isDownloadingAutoSubs || lastSubtitledItemKey == itemKey) return
         isDownloadingAutoSubs = true
+        lastSubtitledItemKey = itemKey
+        
+        subtitlesStatus.text = "Searching automatic subtitles..."
+        subtitlesStatus.visibility = View.VISIBLE
+        subtitlesProgress.visibility = View.VISIBLE
+        subtitlesProgress.isIndeterminate = true
+        
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
@@ -1006,7 +1028,6 @@ class MainActivity : AppCompatActivity() {
                 if (subs.length() > 0) {
                     val countToGet = if (autoSubCount == 0) subs.length() else autoSubCount.coerceAtMost(subs.length())
                     
-                    // Prioritize "sync" subtitles
                     val prioritizedSubs = mutableListOf<JSONObject>()
                     for (i in 0 until subs.length()) {
                         val sub = subs.getJSONObject(i)
@@ -1018,67 +1039,101 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     withContext(Dispatchers.Main) {
+                        subtitlesStatus.text = "Downloading subtitles: 0 / $countToGet"
+                        subtitlesProgress.isIndeterminate = false
+                        subtitlesProgress.max = countToGet
+                        subtitlesProgress.progress = 0
+
                         var downloadedCount = 0
                         var index = 0
                         fun next() {
                             if (isDownloadingAutoSubs && downloadedCount < countToGet && index < prioritizedSubs.size) {
                                 val subToGet = prioritizedSubs[index++]
                                 downloadSubtitle(subToGet, silent = true) { path ->
-                                    if (path != null) downloadedCount++
+                                    if (path != null) {
+                                        downloadedCount++
+                                        subtitlesProgress.progress = downloadedCount
+                                        subtitlesStatus.text = "Downloading subtitles: $downloadedCount / $countToGet"
+                                    }
                                     next()
                                 }
                             } else {
                                 isDownloadingAutoSubs = false
+                                subtitlesStatus.visibility = View.GONE
+                                subtitlesProgress.visibility = View.GONE
                             }
                         }
                         next()
                     }
                 } else {
-                    isDownloadingAutoSubs = false
+                    withContext(Dispatchers.Main) {
+                        isDownloadingAutoSubs = false
+                        subtitlesStatus.visibility = View.GONE
+                        subtitlesProgress.visibility = View.GONE
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("TVBrowser", "Auto subtitle search failed: ${e.message}")
-                isDownloadingAutoSubs = false
+                withContext(Dispatchers.Main) {
+                    isDownloadingAutoSubs = false
+                    subtitlesStatus.visibility = View.GONE
+                    subtitlesProgress.visibility = View.GONE
+                }
             }
         }
     }
 
     private fun resolveAndPlay(sourceDataJson: String) {
-        if (isDownloadingAutoSubs && autoSubWaitPref == 0) {
-            val downloadDialog = AlertDialog.Builder(this)
-                .setTitle("Downloading Subtitles")
-                .setMessage("Please wait while automatic subtitles are being fetched...")
-                .setPositiveButton("Skip & Play") { _, _ -> 
+        if (isDownloadingAutoSubs) {
+            when (autoSubWaitPref) {
+                0 -> { // Stop adding
                     isDownloadingAutoSubs = false
-                    resolveAndPlayInternal(sourceDataJson) 
-                }
-                .setNegativeButton("Cancel", null)
-                .create()
-            
-            val pBar = ProgressBar(this).apply { setPadding(0, 40, 0, 40) }
-            downloadDialog.setView(pBar)
-            downloadDialog.show()
-
-            lifecycleScope.launch {
-                while (isDownloadingAutoSubs) {
-                    delay(500)
-                }
-                if (downloadDialog.isShowing) {
-                    downloadDialog.dismiss()
                     resolveAndPlayInternal(sourceDataJson)
+                    return
+                }
+                1 -> { // Ask to wait
+                    val downloadDialog = AlertDialog.Builder(this)
+                        .setTitle("Downloading Subtitles")
+                        .setMessage("Automatic subtitles are being fetched. Would you like to wait for them to finish?")
+                        .setPositiveButton("Skip & Play") { _, _ ->
+                            resolveAndPlayInternal(sourceDataJson)
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .create()
+
+                    val pBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+                        setPadding(60, 40, 60, 0)
+                    }
+                    downloadDialog.setView(pBar)
+                    downloadDialog.show()
+                    downloadDialog.getButton(AlertDialog.BUTTON_POSITIVE).requestFocus()
+
+                    lifecycleScope.launch {
+                        while (isDownloadingAutoSubs) {
+                            pBar.isIndeterminate = subtitlesProgress.isIndeterminate
+                            pBar.max = subtitlesProgress.max
+                            pBar.progress = subtitlesProgress.progress
+                            delay(500)
+                        }
+                        if (downloadDialog.isShowing) {
+                            downloadDialog.dismiss()
+                            resolveAndPlayInternal(sourceDataJson)
+                        }
+                    }
+                    return
+                }
+                2 -> { // Progressive
+                    resolveAndPlayInternal(sourceDataJson)
+                    return
                 }
             }
-            return
         }
         resolveAndPlayInternal(sourceDataJson)
     }
 
     private fun resolveAndPlayInternal(sourceDataJson: String) {
-        if (autoSubWaitPref == 1) isDownloadingAutoSubs = false // Stop progressive adding if requested
-
         streamsProgress.visibility = View.VISIBLE
         streamsProgress.isIndeterminate = true
-        streamsTitle.text = "Resolving Stream URL..."
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -2131,17 +2186,6 @@ class MainActivity : AppCompatActivity() {
         exoPlayer?.prepare()
         exoPlayer?.playWhenReady = true
         nativeVideoView.requestFocus()
-
-        // Auto-Subtitle Logic
-        if (autoSubPref != 2 && lastScrapedItem != null) {
-            if (autoSubPref == 1) {
-                // Automatic: Trigger search immediately and pick first
-                performAutoSubtitleSearch(lastScrapedItem!!, lastScrapedSeason, lastScrapedEpisode)
-            } else if (autoSubPref == 0) {
-                // Ask: Trigger the picker
-                showSubtitlePicker(lastScrapedItem!!, lastScrapedSeason, lastScrapedEpisode)
-            }
-        }
     }
 
     private fun showWebsiteFullscreen(view: View?, callback: WebChromeClient.CustomViewCallback?) {
@@ -2179,6 +2223,7 @@ class MainActivity : AppCompatActivity() {
 
         currentWebView?.apply {
             onResume()
+            resumeTimers()
             resumeTimers()
         }
 
