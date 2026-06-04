@@ -178,6 +178,18 @@
                 android:visibility="gone"
                 android:layout_marginEnd="10dp"
                 android:contentDescription="Back"/>
+            <Button
+                android:id="@+id/btn_streams_stop"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="Stop Scanning"
+                android:drawableStart="@drawable/ic_stop"
+                android:drawablePadding="10dp"
+                android:paddingHorizontal="20dp"
+                android:background="@drawable/bg_focusable"
+                android:textColor="#FFF"
+                android:visibility="gone"
+                android:textAllCaps="false"/>
         </LinearLayout>
 
         <LinearLayout

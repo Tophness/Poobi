@@ -81,6 +81,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var streamsResultsContainer: LinearLayout
     private lateinit var streamsResultsScroll: ScrollView
     private lateinit var btnStreamsBack: ImageButton
+    private lateinit var btnStreamsStop: Button
     private lateinit var streamsHistoryContainer: LinearLayout
     private lateinit var btnStreamsClearHistory: Button
     private lateinit var streamsHistoryLayout: LinearLayout
@@ -251,6 +252,7 @@ class MainActivity : AppCompatActivity() {
         streamsResultsContainer = findViewById(R.id.streams_results_container)
         streamsResultsScroll = findViewById(R.id.streams_results_scroll)
         btnStreamsBack = findViewById(R.id.btn_streams_back)
+        btnStreamsStop = findViewById(R.id.btn_streams_stop)
         streamsHistoryContainer = findViewById(R.id.streams_history_container)
         btnStreamsClearHistory = findViewById(R.id.btn_streams_clear_history)
         streamsHistoryLayout = findViewById(R.id.streams_history_layout)
@@ -388,6 +390,14 @@ class MainActivity : AppCompatActivity() {
             topBarLayout.visibility = View.GONE
             isBrowsing = false
             cursor.visibility = View.GONE
+
+            // Resume scraping when returning to streams tab
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val py = Python.getInstance()
+                    py.getModule("main").callAttr("resume_scrape")
+                } catch (e: Exception) {}
+            }
         }
     }
 
@@ -733,17 +743,34 @@ class MainActivity : AppCompatActivity() {
         streamsProgress.isIndeterminate = true
         streamsProgress.progress = 0
         streamsResultsContainer.removeAllViews()
+        streamsResultsContainer.tag = -1 // Reset tag
         streamsResultsScroll.visibility = View.VISIBLE
         btnStreamsBack.visibility = View.VISIBLE // Allow going back while scraping
+        btnStreamsStop.visibility = View.VISIBLE
+        btnStreamsStop.requestFocus()
         streamsHistoryLayout.visibility = View.GONE
         streamsSearchBarLayout.visibility = View.GONE
         
+        btnStreamsStop.setOnClickListener {
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val py = Python.getInstance()
+                    val scraper = py.getModule("main")
+                    scraper.callAttr("stop_scrape")
+                } catch (e: Exception) {
+                    Log.e("TVBrowser", "Error stopping scrape: ${e.message}")
+                }
+            }
+            btnStreamsStop.visibility = View.GONE
+        }
+
         val title = item.optString("orig_title") ?: item.optString("title")
         val displayTitle = if (season != null && episode != null) "$title S${season}E$episode" else title
         currentStreamingTitle = displayTitle
         
-        // Polling task for progress
+        // Polling task for progress and incremental results
         val pollingJob = lifecycleScope.launch(Dispatchers.Main) {
+            var lastSourcesJson = ""
             while (isActive) {
                 try {
                     val py = Python.getInstance()
@@ -754,7 +781,17 @@ class MainActivity : AppCompatActivity() {
                     val current = status.optInt("current", 0)
                     val total = status.optInt("total", 0)
                     val message = status.optString("message", "")
+                    val sources = status.optJSONArray("sources")
                     
+                    if (sources != null) {
+                        val sourcesStr = sources.toString()
+                        if (sourcesStr != lastSourcesJson) {
+                            val isFinished = message == "Finished!" || message == "Stopped!" || message == "Timeout reached!"
+                            displaySources(sources, isFinished)
+                            lastSourcesJson = sourcesStr
+                        }
+                    }
+
                     if (total > 0) {
                         subtitlesStatus.text = "Scraping: $displayTitle ($current/$total)"
                         subtitlesStatus.visibility = View.VISIBLE
@@ -765,6 +802,10 @@ class MainActivity : AppCompatActivity() {
                         subtitlesStatus.text = "Scraping: $displayTitle..."
                         subtitlesStatus.visibility = View.VISIBLE
                         streamsProgress.isIndeterminate = true
+                    }
+
+                    if (message == "Finished!" || message == "Stopped!" || message == "Timeout reached!") {
+                        btnStreamsStop.visibility = View.GONE
                     }
                 } catch (e: Exception) {
                     Log.e("TVBrowser", "Polling error: ${e.message}")
@@ -785,7 +826,8 @@ class MainActivity : AppCompatActivity() {
                     streamsProgress.visibility = View.GONE
                     subtitlesStatus.visibility = View.GONE
                     btnStreamsBack.visibility = View.VISIBLE
-                    displaySources(sources)
+                    btnStreamsStop.visibility = View.GONE
+                    displaySources(sources, true)
 
                     if (autoSubPref == 1) { // 1 is Automatic
                         performAutoSubtitleSearch(item, season, episode)
@@ -796,6 +838,7 @@ class MainActivity : AppCompatActivity() {
                     pollingJob.cancel()
                     streamsProgress.visibility = View.GONE
                     subtitlesStatus.visibility = View.GONE
+                    btnStreamsStop.visibility = View.GONE
                     Toast.makeText(this@MainActivity, "Scrape error: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
@@ -901,17 +944,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun displaySources(sources: JSONArray) {
+    private fun displaySources(sources: JSONArray, isFinished: Boolean = false) {
         val inflater = LayoutInflater.from(this)
+        
+        val currentTag = streamsResultsContainer.tag as? Int ?: 0
+        if (sources.length() > 0 && sources.length() == currentTag) return
+        streamsResultsContainer.tag = sources.length()
+
         streamsResultsContainer.removeAllViews()
+        
         if (sources.length() == 0) {
-            val emptyView = TextView(this).apply {
-                text = "No sources found for this title."
-                setTextColor(android.graphics.Color.WHITE)
-                textSize = 18f
-                setPadding(40, 40, 40, 40)
+            if (isFinished) {
+                val emptyView = TextView(this).apply {
+                    text = "No sources found for this title."
+                    setTextColor(android.graphics.Color.WHITE)
+                    textSize = 18f
+                    setPadding(40, 40, 40, 40)
+                }
+                streamsResultsContainer.addView(emptyView)
             }
-            streamsResultsContainer.addView(emptyView)
             return
         }
 
@@ -934,21 +985,24 @@ class MainActivity : AppCompatActivity() {
         streamsResultsContainer.addView(subBtn)
 
         for (i in 0 until sources.length()) {
-            val sourceItem = sources.getJSONObject(i)
+            val item = sources.getJSONObject(i)
+            val displayTitle = item.optString("title")
+            val sourceData = item.optString("source_data")
+
             val view = inflater.inflate(R.layout.item_stream, streamsResultsContainer, false)
             val titleView = view.findViewById<TextView>(R.id.card_title)
             val detailView = view.findViewById<TextView>(R.id.card_detail)
             val thumbView = view.findViewById<ImageView>(R.id.card_thumb)
 
-            titleView.text = sourceItem.getString("title")
+            titleView.text = displayTitle
             detailView.text = "Click to play stream"
             thumbView.setImageResource(R.drawable.ic_go)
 
             view.setOnClickListener {
-                resolveAndPlay(sourceItem.getString("source_data"))
+                resolveAndPlay(sourceData)
             }
             streamsResultsContainer.addView(view)
-            if (i == 0) view.post { view.requestFocus() }
+            if (i == 0 && !streamsResultsContainer.hasFocus()) view.post { view.requestFocus() }
         }
     }
 
@@ -1272,6 +1326,10 @@ class MainActivity : AppCompatActivity() {
             try {
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
+                
+                // Pause scraping while resolving/playing
+                try { scraper.callAttr("pause_scrape") } catch (e: Exception) {}
+
                 val resolveResult = scraper.callAttr("resolve", sourceDataJson).toString()
                 
                 withContext(Dispatchers.Main) {
@@ -1279,6 +1337,10 @@ class MainActivity : AppCompatActivity() {
                     try {
                         val json = JSONObject(resolveResult)
                         if (json.has("error")) {
+                            // Resume if error
+                            lifecycleScope.launch(Dispatchers.IO) { 
+                                try { scraper.callAttr("resume_scrape") } catch (e: Exception) {}
+                            }
                             Toast.makeText(this@MainActivity, "Resolve error: ${json.getString("error")}", Toast.LENGTH_LONG).show()
                             return@withContext
                         }
@@ -1296,6 +1358,10 @@ class MainActivity : AppCompatActivity() {
                                 Toast.makeText(this@MainActivity, "Opening as webpage...", Toast.LENGTH_SHORT).show()
                             }
                         } else {
+                            // Resume if empty
+                            lifecycleScope.launch(Dispatchers.IO) { 
+                                try { scraper.callAttr("resume_scrape") } catch (e: Exception) {}
+                            }
                             Toast.makeText(this@MainActivity, "Could not resolve stream URL", Toast.LENGTH_SHORT).show()
                         }
                     } catch (e: Exception) {
@@ -1304,12 +1370,20 @@ class MainActivity : AppCompatActivity() {
                             val title = currentStreamingTitle
                             launchNativeVideoPlayer(resolveResult, null, title)
                         } else {
+                            // Resume if error
+                            lifecycleScope.launch(Dispatchers.IO) { 
+                                try { scraper.callAttr("resume_scrape") } catch (e: Exception) {}
+                            }
                             Toast.makeText(this@MainActivity, "Resolve error: $resolveResult", Toast.LENGTH_LONG).show()
                         }
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
+                    // Resume if error
+                    lifecycleScope.launch(Dispatchers.IO) { 
+                        try { Python.getInstance().getModule("main").callAttr("resume_scrape") } catch (e: Exception) {}
+                    }
                     streamsProgress.visibility = View.GONE
                     Toast.makeText(this@MainActivity, "Resolve error: ${e.message}", Toast.LENGTH_LONG).show()
                 }
@@ -2403,6 +2477,14 @@ class MainActivity : AppCompatActivity() {
             exoPlayer?.release()
             exoPlayer = null
             nativeVideoView.player = null
+
+            // Resume scraping when player is closed
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val py = Python.getInstance()
+                    py.getModule("main").callAttr("resume_scrape")
+                } catch (e: Exception) {}
+            }
         }
 
         customViewContainer.visibility = View.GONE

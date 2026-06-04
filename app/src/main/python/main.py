@@ -193,6 +193,9 @@ class UniversalScraper:
         self.sources = []
         self.provider_instances = {}
         self.status = {"total": 0, "current": 0, "message": "Initializing...", "timeout": 0}
+        self.stop_event = threading.Event()
+        self.pause_event = threading.Event()
+        self.pause_event.set()
 
         cfg = GLOBAL_CONFIG
         use_only = cfg.get("use_only_whitelisted_hosts", True)
@@ -276,6 +279,10 @@ class UniversalScraper:
         
         start_time = time.time()
         while any(t.is_alive() for t in threads):
+            if self.stop_event.is_set():
+                self.status["message"] = "Stopped!"
+                break
+
             elapsed = time.time() - start_time
             if elapsed > max_wait: 
                 self.status["message"] = "Timeout reached!"
@@ -285,7 +292,9 @@ class UniversalScraper:
             self.status["message"] = f"Waiting for {alive} providers ({round(max_wait - elapsed)}s left)..."
             time.sleep(0.5)
 
-        self.status["message"] = f"Finished! Found {len(self.sources)} sources."
+        if not self.stop_event.is_set():
+            self.status["message"] = f"Finished! Found {len(self.sources)} sources."
+
         # Quality sorting
         quality_map = {'4k': 0, '1080p': 1, '720p': 2, 'hd': 2, 'sd': 3, 'cam': 4, 'scr': 4}
         for s in self.sources:
@@ -301,6 +310,12 @@ class UniversalScraper:
 
     def worker(self, provider, content, title, localtitle, aliases, year, imdb, tmdb, tvdb, season, episode, premiered, name, pack_name):
         try:
+            if self.stop_event.is_set(): return
+            
+            while not self.pause_event.is_set():
+                if self.stop_event.is_set(): return
+                time.sleep(0.5)
+
             if content == 'movie':
                 sig = inspect.signature(provider.movie)
                 if 'tmdb' in sig.parameters:
@@ -322,6 +337,11 @@ class UniversalScraper:
                         url = provider.episode(url, imdb, tvdb, title, premiered, season, episode)
 
             if url:
+                if self.stop_event.is_set(): return
+                while not self.pause_event.is_set():
+                    if self.stop_event.is_set(): return
+                    time.sleep(0.5)
+
                 sources_sig = inspect.signature(provider.sources)
                 if 'hostprDict' in sources_sig.parameters:
                     results = provider.sources(url, self.hostDict, [])
@@ -330,6 +350,7 @@ class UniversalScraper:
 
                 if results:
                     for res in results:
+                        if self.stop_event.is_set(): break
                         res.setdefault('provider', f"[{pack_name}] {name}")
                         res.setdefault('direct', False)
                         # Store the internal key for resolution
@@ -338,7 +359,7 @@ class UniversalScraper:
             self.status["current"] += 1
         except Exception:
             self.status["current"] += 1
-            traceback.print_exc()
+            # traceback.print_exc()
 
     def resolveSource(self, source_data):
         url = source_data.get('url')
@@ -517,8 +538,73 @@ def get_subtitle_file(service_name, action_args_json):
 def get_scrape_status():
     global active_scraper
     if active_scraper:
-        return json.dumps(active_scraper.status)
-    return json.dumps({"total": 0, "current": 0, "message": "No active scrape", "timeout": 0})
+        res = active_scraper.status.copy()
+        sources = active_scraper.sources[:]
+        
+        # Check if we have cached display results for this count to save CPU
+        cached_count = getattr(active_scraper, "_last_format_count", -1)
+        if cached_count == len(sources) and hasattr(active_scraper, "_cached_display_sources"):
+            res["sources"] = active_scraper._cached_display_sources
+            return json.dumps(res)
+
+        display_sources = []
+        video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
+        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
+
+        # Quality sorting for current sources
+        quality_map = {'4k': 0, '1080p': 1, '720p': 2, 'hd': 2, 'sd': 3, 'cam': 4, 'scr': 4}
+        for s in sources:
+            s['q_sort'] = quality_map.get(str(s.get('quality')).lower(), 3)
+        sources.sort(key=lambda x: x['q_sort'])
+
+        for s in sources:
+            url = s.get('url', '')
+            is_video = s.get('direct', False)
+            if not is_video:
+                url_lower = url.lower()
+                if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
+                    is_video = True
+                elif any(k in url_lower for k in video_keywords):
+                    is_video = True
+                elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
+                    try:
+                        if resolveurl.HostedMediaFile(url):
+                            is_video = True
+                    except: pass
+
+            title_prefix = "[BROWSER] " if not is_video else ""
+            display_sources.append({
+                "title": f"{title_prefix}[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
+                "source_data": json.dumps(s)
+            })
+        
+        active_scraper._last_format_count = len(sources)
+        active_scraper._cached_display_sources = display_sources
+        res["sources"] = display_sources
+        return json.dumps(res)
+    return json.dumps({"total": 0, "current": 0, "message": "No active scrape", "timeout": 0, "sources": []})
+
+def stop_scrape():
+    global active_scraper
+    if active_scraper:
+        active_scraper.stop_event.set()
+        active_scraper.pause_event.set() # Unpause if paused so threads can exit
+        return "Stopped"
+    return "No active scraper"
+
+def pause_scrape():
+    global active_scraper
+    if active_scraper:
+        active_scraper.pause_event.clear()
+        return "Paused"
+    return "No active scraper"
+
+def resume_scrape():
+    global active_scraper
+    if active_scraper:
+        active_scraper.pause_event.set()
+        return "Resumed"
+    return "No active scraper"
 
 def search(query):
     try:
@@ -548,6 +634,7 @@ def search(query):
 
 def scrape(item_json, season=None, episode=None):
     global active_scraper
+    stop_scrape()
     try:
         item = json.loads(item_json)
         tmdb_id = str(item['id'])
