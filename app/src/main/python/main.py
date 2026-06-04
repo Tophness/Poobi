@@ -99,6 +99,31 @@ DEFAULT_WHITELIST = [
     'fzmovies.live'
 ]
 
+def gather_provider_pack_hosts():
+    hosts = set()
+    if not os.path.exists(SOURCES_PATH):
+        return []
+    for pack in os.listdir(SOURCES_PATH):
+        pack_dir = os.path.join(SOURCES_PATH, pack)
+        if not os.path.isdir(pack_dir):
+            continue
+        for file in os.listdir(pack_dir):
+            if not (file.endswith('.py') and not file.startswith('__')):
+                continue
+            filepath = os.path.join(pack_dir, file)
+            try:
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                matches = re.findall(r"self\.domains\s*=\s*\[([^\]]*)\]", content, re.DOTALL)
+                for list_content in matches:
+                    found = re.findall(r"['\"]([^'\"]+)['\"]", list_content)
+                    for d in found:
+                        if d and '*' not in d:
+                            hosts.add(d.lower())
+            except Exception:
+                pass
+    return sorted(list(hosts))
+
 def get_default_whitelist():
     hosts = list(DEFAULT_WHITELIST)
     if resolveurl and hasattr(resolveurl, 'relevant_resolvers'):
@@ -111,6 +136,9 @@ def get_default_whitelist():
                         if d_low not in hosts:
                             hosts.append(d_low)
         except: pass
+    for h in gather_provider_pack_hosts():
+        if h not in hosts:
+            hosts.append(h)
     return sorted(hosts)
 
 def load_config():
@@ -136,6 +164,15 @@ def load_config():
         "subdl_apikey": "",
         "subsource_apikey": ""
     }
+    
+    # Initialize all detected packs as enabled by default in the base config
+    try:
+        if os.path.exists(SOURCES_PATH):
+            for d in os.listdir(SOURCES_PATH):
+                if os.path.isdir(os.path.join(SOURCES_PATH, d)):
+                    default_config[f"pack_{d}"] = True
+    except: pass
+
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r') as f:
@@ -169,6 +206,13 @@ class UniversalScraper:
             # while 'source_utils.is_host_valid' is updated to treat empty as 'allow all'.
             self.hostDict = []
 
+        # Subset of the whitelist that corresponds to provider-pack source domains
+        # (e.g. 'freeprojecttv.cyou'). Used to skip entire providers whose
+        # self.domains are not in the whitelist. Only meaningful when hostDict
+        # is non-empty (i.e. the whitelist is active).
+        provider_set = set(gather_provider_pack_hosts())
+        self.provider_hosts = [h for h in self.hostDict if h in provider_set]
+
     def getSources(self, title, year, imdb, tmdb, tvdb='0', season=None, episode=None, tvshowtitle=None, premiered='0'):
         providers = []
 
@@ -189,6 +233,14 @@ class UniversalScraper:
                         spec.loader.exec_module(mod)
                         if hasattr(mod, 'source'):
                             instance = mod.source()
+                            # If the whitelist is active and the provider declared
+                            # one or more self.domains, require at least one of them
+                            # to be whitelisted. Providers with empty domains are
+                            # always allowed (no info to filter on).
+                            instance_domains = [d.lower() for d in (getattr(instance, 'domains', None) or [])]
+                            if self.hostDict and instance_domains:
+                                if not any(d in self.provider_hosts for d in instance_domains):
+                                    continue
                             providers.append((pack, file[:-3], instance))
                             # Use a unique key for provider instances to avoid collisions between packs
                             self.provider_instances[f"{pack}_{file[:-3]}"] = instance
@@ -324,6 +376,15 @@ def set_config(cfg_json):
     try:
         cfg = json.loads(cfg_json)
         global GLOBAL_CONFIG
+        
+        # If enabled_packs list is provided, update individual pack_ flags to keep in sync
+        if "enabled_packs" in cfg:
+            enabled = cfg["enabled_packs"]
+            if os.path.exists(SOURCES_PATH):
+                for d in os.listdir(SOURCES_PATH):
+                    if os.path.isdir(os.path.join(SOURCES_PATH, d)):
+                        GLOBAL_CONFIG[f"pack_{d}"] = d in enabled
+
         GLOBAL_CONFIG.update(cfg)
         save_config(GLOBAL_CONFIG)
         return "Success"
@@ -339,10 +400,41 @@ def get_enabled_packs():
 
 def get_all_hosts():
     try:
-        hosts = gather_all_hosts_dynamically()
-        return json.dumps(hosts)
+        resolveurl_hosts = set()
+        if resolveurl and hasattr(resolveurl, 'relevant_resolvers'):
+            try:
+                resolvers = resolveurl.relevant_resolvers(order_matters=True)
+                for r in resolvers:
+                    if hasattr(r, 'domains') and r.domains:
+                        for dom in r.domains:
+                            if '*' not in dom:
+                                resolveurl_hosts.add(dom.lower())
+            except: pass
+        
+        # Add scrape_sources.py hosts to resolveurl category
+        try:
+            scrape_sources_path = os.path.join(PROJECT_ROOT, 'modules', 'scrape_sources.py')
+            if os.path.exists(scrape_sources_path):
+                with open(scrape_sources_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                matches = re.findall(r'(\w+(?:_domains|_working_domains|_redir_domains))\s*=\s*\[(.*?)\]', content, re.DOTALL)
+                for var_name, list_content in matches:
+                    found = re.findall(r"['\"]([^'\"]+)['\"]", list_content)
+                    for dom in found:
+                        resolveurl_hosts.add(dom.lower())
+        except: pass
+
+        provider_hosts = set(gather_provider_pack_hosts())
+        # Remove duplicates from provider_hosts if they are already in resolveurl_hosts
+        provider_hosts = provider_hosts - resolveurl_hosts
+        
+        return json.dumps({
+            "ResolveURL Hosts": sorted(list(resolveurl_hosts)),
+            "Provider Pack Hosts": sorted(list(provider_hosts))
+        })
     except:
-        return json.dumps([])
+        return json.dumps({})
+
 
 def get_tv_seasons(tv_id):
     try:
@@ -452,13 +544,11 @@ def scrape(item_json, season=None, episode=None):
             return json.dumps([{"title": f"Error: SOURCES_PATH not found at {SOURCES_PATH}", "source_data": ""}])
 
         packs = [d for d in os.listdir(SOURCES_PATH) if os.path.isdir(os.path.join(SOURCES_PATH, d))]
-        enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
-
-        if not enabled_packs:
-            # If no packs detected, maybe the detection failed. Let's try to find common ones.
-            for p in ['free99', 'vidscr', 'thecrew', 'scrubsv2', 'gratisred']:
-                if os.path.exists(os.path.join(SOURCES_PATH, p)):
-                    enabled_packs.append(p)
+        
+        enabled_packs = GLOBAL_CONFIG.get("enabled_packs")
+        if enabled_packs is None:
+            # Fallback to individual flags, which default to True in load_config
+            enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
         
         active_scraper = UniversalScraper(enabled_packs)
         
@@ -495,7 +585,9 @@ def resolve(source_data_json):
         source_data = json.loads(source_data_json)
         # Get enabled packs
         packs = [d for d in os.listdir(SOURCES_PATH) if os.path.isdir(os.path.join(SOURCES_PATH, d))]
-        enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
+        enabled_packs = GLOBAL_CONFIG.get("enabled_packs")
+        if enabled_packs is None:
+            enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
         
         scraper = UniversalScraper(enabled_packs)
         # Re-initialize provider instances if needed (they are initialized in getSources usually)
@@ -559,6 +651,9 @@ def gather_all_hosts_dynamically():
                     hosts.add(dom.lower())
     except Exception:
         pass
+    
+    for h in gather_provider_pack_hosts():
+        hosts.add(h)
 
     return sorted(list(hosts))
 

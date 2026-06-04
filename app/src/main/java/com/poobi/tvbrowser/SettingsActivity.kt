@@ -684,7 +684,11 @@ class SettingsActivity : AppCompatActivity() {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
         updateTimeoutUI()
-        fun updateWhitelistUI() { whitelistBtn.text = if (useWhitelist) "Use Whitelist: Enabled" else "Use Whitelist: Disabled"; whitelistControls.visibility = if (useWhitelist) View.VISIBLE else View.GONE }
+        fun updateWhitelistUI() {
+            whitelistBtn.text = if (useWhitelist) "Use Whitelist: Enabled" else "Use Whitelist: Disabled"
+            whitelistControls.visibility = View.VISIBLE
+            updateWhitelistUIControls(useWhitelist)
+        }
         whitelistBtn.setOnClickListener { useWhitelist = !useWhitelist; updateWhitelistUI(); saveStreamingSettings() }
         updateWhitelistUI()
 
@@ -693,10 +697,24 @@ class SettingsActivity : AppCompatActivity() {
             try {
                 val py = Python.getInstance(); val packs = JSONArray(py.getModule("main").callAttr("get_enabled_packs").toString())
                 withContext(Dispatchers.Main) {
+                    val wasEmpty = enabledPacks.isEmpty()
+                    if (wasEmpty) {
+                        for (i in 0 until packs.length()) enabledPacks.add(packs.getString(i))
+                    }
                     for (i in 0 until packs.length()) {
                         val name = packs.getString(i)
-                        packsContainer.addView(CheckBox(this@SettingsActivity).apply { text = name; setTextColor(android.graphics.Color.WHITE); isChecked = enabledPacks.isEmpty() || enabledPacks.contains(name); setOnCheckedChangeListener { _, c -> if (c) { if (!enabledPacks.contains(name)) enabledPacks.add(name) } else enabledPacks.remove(name); saveStreamingSettings() } })
+                        packsContainer.addView(CheckBox(this@SettingsActivity).apply { 
+                            text = name
+                            setTextColor(android.graphics.Color.WHITE)
+                            isChecked = enabledPacks.contains(name)
+                            setOnCheckedChangeListener { _, c -> 
+                                if (c) { if (!enabledPacks.contains(name)) enabledPacks.add(name) } 
+                                else { enabledPacks.remove(name) }
+                                saveStreamingSettings() 
+                            } 
+                        })
                     }
+                    if (wasEmpty) saveStreamingSettings()
                 }
             } catch (e: Exception) {}
         }
@@ -704,26 +722,100 @@ class SettingsActivity : AppCompatActivity() {
             hostsContainer.removeAllViews()
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    val py = Python.getInstance(); val allHosts = JSONArray(py.getModule("main").callAttr("get_all_hosts").toString())
+                    val py = Python.getInstance()
+                    val hostsJson = py.getModule("main").callAttr("get_all_hosts").toString()
+                    val hostsObj = JSONObject(hostsJson)
+                    
                     withContext(Dispatchers.Main) {
-                        for (i in 0 until allHosts.length()) {
-                            val h = allHosts.getString(i); if (filter.isNotEmpty() && !h.contains(filter, true)) continue
-                            hostsContainer.addView(CheckBox(this@SettingsActivity).apply { text = h; setTextColor(android.graphics.Color.WHITE); isChecked = whitelistedHosts.contains(h); setOnCheckedChangeListener { _, c -> if (c) { if (!whitelistedHosts.contains(h)) whitelistedHosts.add(h) } else whitelistedHosts.remove(h); saveStreamingSettings() } })
+                        val keys = hostsObj.keys()
+                        while(keys.hasNext()) {
+                            val category = keys.next()
+                            val hosts = hostsObj.getJSONArray(category)
+                            
+                            if (hosts.length() > 0) {
+                                    val header = TextView(this@SettingsActivity).apply {
+                                        text = category
+                                        setTypeface(null, android.graphics.Typeface.BOLD)
+                                        setTextColor(android.graphics.Color.parseColor("#0e639c"))
+                                        setPadding(0, 30, 0, 10)
+                                        textSize = 16f
+                                    }
+                                hostsContainer.addView(header)
+
+                                for (i in 0 until hosts.length()) {
+                                    val h = hosts.getString(i)
+                                    if (filter.isNotEmpty() && !h.contains(filter, true)) continue
+                                    hostsContainer.addView(CheckBox(this@SettingsActivity).apply { 
+                                        text = h
+                                        setTextColor(android.graphics.Color.WHITE)
+                                        isChecked = whitelistedHosts.contains(h)
+                                        isEnabled = useWhitelist
+                                        alpha = if (useWhitelist) 1.0f else 0.5f
+                                        setOnCheckedChangeListener { _, c -> 
+                                            if (c) { if (!whitelistedHosts.contains(h)) whitelistedHosts.add(h) } 
+                                            else { whitelistedHosts.remove(h) }
+                                            saveStreamingSettings() 
+                                        } 
+                                    })
+                                }
+                            }
                         }
+                        updateWhitelistUIControls(useWhitelist)
                     }
                 } catch (e: Exception) {}
             }
         }
-        findViewById<Button>(R.id.btn_whitelist_select_all).setOnClickListener { for (i in 0 until hostsContainer.childCount) (hostsContainer.getChildAt(i) as? CheckBox)?.isChecked = true }
-        findViewById<Button>(R.id.btn_whitelist_clear_all).setOnClickListener { whitelistedHosts.clear(); for (i in 0 until hostsContainer.childCount) (hostsContainer.getChildAt(i) as? CheckBox)?.isChecked = false; saveStreamingSettings() }
+        findViewById<Button>(R.id.btn_whitelist_select_all).setOnClickListener { 
+            for (i in 0 until hostsContainer.childCount) {
+                (hostsContainer.getChildAt(i) as? CheckBox)?.let { if (it.isEnabled) it.isChecked = true }
+            }
+        }
+        findViewById<Button>(R.id.btn_whitelist_clear_all).setOnClickListener { 
+            whitelistedHosts.clear()
+            for (i in 0 until hostsContainer.childCount) {
+                (hostsContainer.getChildAt(i) as? CheckBox)?.let { if (it.isEnabled) it.isChecked = false }
+            }
+            saveStreamingSettings() 
+        }
         hostSearchInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { refreshHosts(s.toString()) }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
         refreshHosts()
+    }
+
+    private fun updateWhitelistUIControls(enabled: Boolean) {
+        val whitelistControls = findViewById<LinearLayout>(R.id.whitelist_controls_layout)
+        val container = findViewById<LinearLayout>(R.id.whitelist_hosts_container)
+        val searchInput = findViewById<EditText>(R.id.host_search_input)
+        val selectAll = findViewById<Button>(R.id.btn_whitelist_select_all)
+        val clearAll = findViewById<Button>(R.id.btn_whitelist_clear_all)
+
+        searchInput.isEnabled = enabled
+        selectAll.isEnabled = enabled
+        clearAll.isEnabled = enabled
+        
+        for (i in 0 until container.childCount) {
+            val child = container.getChildAt(i)
+            child.isEnabled = enabled
+            child.alpha = if (enabled) 1.0f else 0.5f
+        }
     }
 
     private fun saveStreamingSettings() {
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
         prefs.edit().putString("timeout_mode", timeoutMode).putInt("global_timeout", globalTimeout).putInt("per_source_timeout", perSourceTimeout).putBoolean("use_only_whitelisted_hosts", useWhitelist).putString("enabled_packs", JSONArray(enabledPacks).toString()).putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString()).apply()
-        lifecycleScope.launch(Dispatchers.IO) { try { val py = Python.getInstance(); val cfg = JSONObject().apply { put("timeout_mode", timeoutMode); put("global_timeout", globalTimeout); put("per_source_timeout", perSourceTimeout); put("use_only_whitelisted_hosts", useWhitelist); put("whitelisted_hosts", JSONArray(whitelistedHosts)); enabledPacks.forEach { put("pack_$it", true) } }; py.getModule("main").callAttr("set_config", cfg.toString()) } catch (e: Exception) {} }
+        lifecycleScope.launch(Dispatchers.IO) { 
+            try { 
+                val py = Python.getInstance()
+                val cfg = JSONObject().apply { 
+                    put("timeout_mode", timeoutMode)
+                    put("global_timeout", globalTimeout)
+                    put("per_source_timeout", perSourceTimeout)
+                    put("use_only_whitelisted_hosts", useWhitelist)
+                    put("whitelisted_hosts", JSONArray(whitelistedHosts))
+                    put("enabled_packs", JSONArray(enabledPacks))
+                } 
+                py.getModule("main").callAttr("set_config", cfg.toString()) 
+            } catch (e: Exception) {} 
+        }
     }
 
     private fun refreshSubtitlesPanel() {
