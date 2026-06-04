@@ -648,6 +648,10 @@ class MainActivity : AppCompatActivity() {
             if (obj.getString("display_title") != displayTitle) newArray.put(obj)
         }
         prefs.edit().putString("streams_recently_played", newArray.toString()).apply()
+        
+        // Clear autoresume state for this title
+        prefs.edit().remove("resume_stream_$displayTitle").apply()
+        
         refreshRecentlyPlayedStreams()
     }
 
@@ -2355,13 +2359,16 @@ class MainActivity : AppCompatActivity() {
                 if (pageUrl.isNotEmpty()) "resume_$pageUrl" else null
             }
 
-            if (resumeKey != null && exoPlayer != null) {
+            if (resumeKey != null && exoPlayer != null && exoPlayer!!.playerError == null) {
                 val pos = exoPlayer!!.currentPosition
                 val dur = exoPlayer!!.duration
-                if (dur > 0 && pos < dur - 10000) { // Don't save if near the end
-                    prefs.edit().putLong(resumeKey, pos).apply()
-                } else {
-                    prefs.edit().remove(resumeKey).apply()
+                if (dur > 0) {
+                    if (pos > 5000L && pos < dur - 10000L) { // Save if between 5s and 10s from end
+                        prefs.edit().putLong(resumeKey, pos).apply()
+                    } else if (pos >= dur - 10000L) { // If near end, clear it
+                        prefs.edit().remove(resumeKey).apply()
+                    }
+                    // If pos <= 5000L, we do nothing to avoid overwriting a valid saved position with 0 on start/error
                 }
             }
 
