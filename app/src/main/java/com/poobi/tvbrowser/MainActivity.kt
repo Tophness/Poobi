@@ -72,6 +72,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnTabBrowser: Button
     private lateinit var btnTabStreams: Button
     private lateinit var streamsScreenLayout: LinearLayout
+    private lateinit var streamsSearchBarLayout: LinearLayout
     private lateinit var streamsSearchInput: EditText
     private lateinit var streamsSearchBtn: ImageButton
     private lateinit var streamsProgress: ProgressBar
@@ -83,11 +84,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var streamsHistoryContainer: LinearLayout
     private lateinit var btnStreamsClearHistory: Button
     private lateinit var streamsHistoryLayout: LinearLayout
+    private lateinit var streamsRecentPlayedLayout: LinearLayout
+    private lateinit var streamsRecentPlayedContainer: LinearLayout
+    private lateinit var btnStreamsClearRecentPlayed: Button
 
     private var lastSearchResults: JSONArray? = null
     private var lastScrapedItem: JSONObject? = null
     private var lastScrapedSeason: Int? = null
     private var lastScrapedEpisode: Int? = null
+    private var currentStreamingTitle: String? = null
+    private var lastVideoTitle: String? = null
     private var webViews = mutableListOf<WebView>()
     private var webViewHosts = java.util.WeakHashMap<WebView, String>()
     private var currentTabIndex = -1
@@ -236,6 +242,7 @@ class MainActivity : AppCompatActivity() {
         btnTabBrowser = findViewById(R.id.btn_main_tab_browser)
         btnTabStreams = findViewById(R.id.btn_main_tab_streams)
         streamsScreenLayout = findViewById(R.id.streams_screen_layout)
+        streamsSearchBarLayout = findViewById(R.id.streams_search_bar_layout)
         streamsSearchInput = findViewById(R.id.streams_search_input)
         streamsSearchBtn = findViewById(R.id.streams_search_btn)
         streamsProgress = findViewById(R.id.streams_progress)
@@ -247,6 +254,9 @@ class MainActivity : AppCompatActivity() {
         streamsHistoryContainer = findViewById(R.id.streams_history_container)
         btnStreamsClearHistory = findViewById(R.id.btn_streams_clear_history)
         streamsHistoryLayout = findViewById(R.id.streams_history_layout)
+        streamsRecentPlayedLayout = findViewById(R.id.streams_recent_played_layout)
+        streamsRecentPlayedContainer = findViewById(R.id.streams_recent_played_container)
+        btnStreamsClearRecentPlayed = findViewById(R.id.btn_streams_clear_recent_played)
 
         webContainer = findViewById(R.id.web_container)
         tabsContainer = findViewById(R.id.tabs_container)
@@ -347,6 +357,10 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putString("streams_search_history", "[]").apply()
             refreshStreamsHistory()
         }
+        btnStreamsClearRecentPlayed.setOnClickListener {
+            prefs.edit().putString("streams_recently_played", "[]").apply()
+            refreshStreamsHistory()
+        }
         streamsSearchInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
                 performStreamSearch()
@@ -380,6 +394,7 @@ class MainActivity : AppCompatActivity() {
         streamsResultsContainer.removeAllViews()
         streamsResultsScroll.visibility = View.GONE
         btnStreamsBack.visibility = View.GONE
+        streamsSearchBarLayout.visibility = View.VISIBLE
         refreshStreamsHistory()
         streamsSearchInput.post { streamsSearchInput.requestFocus() }
     }
@@ -499,7 +514,7 @@ class MainActivity : AppCompatActivity() {
         val historyJson = prefs.getString("streams_search_history", "[]") ?: "[]"
         val array = JSONArray(historyJson)
         
-        if (array.length() == 0) {
+        if (array.length() == 0 && (prefs.getString("streams_recently_played", "[]") ?: "[]") == "[]") {
             streamsHistoryLayout.visibility = View.GONE
             return
         }
@@ -522,6 +537,86 @@ class MainActivity : AppCompatActivity() {
             
             streamsHistoryContainer.addView(view)
         }
+        refreshRecentlyPlayedStreams()
+    }
+
+    private fun refreshRecentlyPlayedStreams() {
+        streamsRecentPlayedContainer.removeAllViews()
+        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+        val array = JSONArray(recentJson)
+
+        if (array.length() == 0) {
+            streamsRecentPlayedLayout.visibility = View.GONE
+            return
+        }
+        streamsRecentPlayedLayout.visibility = View.VISIBLE
+
+        val inflater = LayoutInflater.from(this)
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            val title = obj.getString("display_title")
+            val itemData = obj.getJSONObject("item")
+            val season = if (obj.has("season")) obj.getInt("season") else null
+            val episode = if (obj.has("episode")) obj.getInt("episode") else null
+
+            val view = inflater.inflate(R.layout.item_search_history, streamsRecentPlayedContainer, false)
+            val icon = view.findViewById<ImageView>(android.R.id.icon) // Wait, item_search_history doesn't have android.R.id.icon
+            // Looking at item_search_history.xml:
+            // ImageView (no id), TextView (id/history_text), FrameLayout/ImageView(id/btn_delete_history), ProgressBar(id/history_delete_progress)
+            
+            val textView = view.findViewById<TextView>(R.id.history_text)
+            textView.text = title
+
+            val iconView = (view as? ViewGroup)?.getChildAt(0) as? ImageView
+            iconView?.setImageResource(R.drawable.ic_history)
+
+            view.setOnClickListener {
+                performScrape(itemData, season, episode)
+            }
+
+            // Simple delete for now
+            view.findViewById<View>(R.id.btn_delete_history).setOnClickListener {
+                removeFromRecentlyPlayedStreams(title)
+            }
+
+            streamsRecentPlayedContainer.addView(view)
+        }
+    }
+
+    private fun addToRecentlyPlayedStreams(displayTitle: String, item: JSONObject, season: Int?, episode: Int?) {
+        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+        val array = JSONArray(recentJson)
+        val newList = mutableListOf<JSONObject>()
+        for (i in 0 until array.length()) newList.add(array.getJSONObject(i))
+
+        // Remove if exists
+        newList.removeAll { it.getString("display_title") == displayTitle }
+
+        val newEntry = JSONObject().apply {
+            put("display_title", displayTitle)
+            put("item", item)
+            if (season != null) put("season", season)
+            if (episode != null) put("episode", episode)
+        }
+        newList.add(0, newEntry)
+        if (newList.size > 20) newList.removeAt(newList.size - 1)
+
+        val newArray = JSONArray()
+        newList.forEach { newArray.put(it) }
+        prefs.edit().putString("streams_recently_played", newArray.toString()).apply()
+        refreshRecentlyPlayedStreams()
+    }
+
+    private fun removeFromRecentlyPlayedStreams(displayTitle: String) {
+        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+        val array = JSONArray(recentJson)
+        val newArray = JSONArray()
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            if (obj.getString("display_title") != displayTitle) newArray.put(obj)
+        }
+        prefs.edit().putString("streams_recently_played", newArray.toString()).apply()
+        refreshRecentlyPlayedStreams()
     }
 
     private fun removeFromStreamsHistory(query: String) {
@@ -605,9 +700,11 @@ class MainActivity : AppCompatActivity() {
         streamsResultsScroll.visibility = View.VISIBLE
         btnStreamsBack.visibility = View.VISIBLE // Allow going back while scraping
         streamsHistoryLayout.visibility = View.GONE
+        streamsSearchBarLayout.visibility = View.GONE
         
         val title = item.optString("orig_title") ?: item.optString("title")
         val displayTitle = if (season != null && episode != null) "$title S${season}E$episode" else title
+        currentStreamingTitle = displayTitle
         
         // Polling task for progress
         val pollingJob = lifecycleScope.launch(Dispatchers.Main) {
@@ -1144,7 +1241,11 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     streamsProgress.visibility = View.GONE
                     if (streamUrl.isNotEmpty() && streamUrl.startsWith("http")) {
-                        launchNativeVideoPlayer(streamUrl, null)
+                        val title = currentStreamingTitle
+                        if (title != null && lastScrapedItem != null) {
+                            addToRecentlyPlayedStreams(title, lastScrapedItem!!, lastScrapedSeason, lastScrapedEpisode)
+                        }
+                        launchNativeVideoPlayer(streamUrl, null, title)
                     } else {
                         Toast.makeText(this@MainActivity, "Could not resolve stream URL", Toast.LENGTH_SHORT).show()
                     }
@@ -1916,7 +2017,7 @@ class MainActivity : AppCompatActivity() {
 
             if (finalCandidates.isNotEmpty()) {
                 if (extractVideoPref == 1 && finalCandidates.size == 1) {
-                    launchNativeVideoPlayer(finalCandidates[0], callback)
+                    launchNativeVideoPlayer(finalCandidates[0], callback, currentWebView?.title)
                     // keep isExtractionActive true until player is hidden or stream changes
                 } else if (extractVideoPref == 2) {
                     showWebsiteFullscreen(view, callback)
@@ -2046,7 +2147,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 dialog.dismiss()
                 // isExtractionActive stays true while player is open to prevent re-triggering
-                launchNativeVideoPlayer(streamUrls[position], callback)
+                launchNativeVideoPlayer(streamUrls[position], callback, currentWebView?.title)
             }
             dialog.show()
         }
@@ -2097,7 +2198,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("UnsafeOptInUsageError")
-    private fun launchNativeVideoPlayer(videoUrl: String, callback: WebChromeClient.CustomViewCallback?) {
+    private fun launchNativeVideoPlayer(videoUrl: String, callback: WebChromeClient.CustomViewCallback?, title: String? = null) {
         // Halt the WebView entirely
         currentWebView?.apply {
             onPause()
@@ -2121,6 +2222,7 @@ class MainActivity : AppCompatActivity() {
         webContainer.visibility = View.GONE
         mainTabsLayout.visibility = View.GONE
         cursor.visibility = View.GONE
+        lastVideoTitle = title
 
         exoPlayer?.release()
 
@@ -2169,9 +2271,13 @@ class MainActivity : AppCompatActivity() {
 
         exoPlayer?.setMediaItem(mediaItemBuilder.build())
 
-        val pageUrl = currentWebView?.url ?: ""
-        if (pageUrl.isNotEmpty()) {
-            val savedPos = prefs.getLong("resume_$pageUrl", 0L)
+        val resumeKey = if (title != null) "resume_stream_$title" else {
+            val pageUrl = currentWebView?.url ?: ""
+            if (pageUrl.isNotEmpty()) "resume_$pageUrl" else null
+        }
+
+        if (resumeKey != null) {
+            val savedPos = prefs.getLong(resumeKey, 0L)
             if (savedPos > 5000L) { // Only resume if more than 5 seconds in
                 exoPlayer?.seekTo(savedPos)
             }
@@ -2199,14 +2305,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun hideFullscreenVideo() {
         if (nativeVideoView.visibility == View.VISIBLE) {
-            val pageUrl = currentWebView?.url ?: ""
-            if (pageUrl.isNotEmpty() && exoPlayer != null) {
+            val title = lastVideoTitle
+            val resumeKey = if (title != null) "resume_stream_$title" else {
+                val pageUrl = currentWebView?.url ?: ""
+                if (pageUrl.isNotEmpty()) "resume_$pageUrl" else null
+            }
+
+            if (resumeKey != null && exoPlayer != null) {
                 val pos = exoPlayer!!.currentPosition
                 val dur = exoPlayer!!.duration
                 if (dur > 0 && pos < dur - 10000) { // Don't save if near the end
-                    prefs.edit().putLong("resume_$pageUrl", pos).apply()
+                    prefs.edit().putLong(resumeKey, pos).apply()
                 } else {
-                    prefs.edit().remove("resume_$pageUrl").apply()
+                    prefs.edit().remove(resumeKey).apply()
                 }
             }
 

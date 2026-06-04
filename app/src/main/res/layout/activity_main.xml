@@ -180,7 +180,11 @@
                 android:contentDescription="Back"/>
         </LinearLayout>
 
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+        <LinearLayout
+            android:id="@+id/streams_search_bar_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
             <EditText
                 android:id="@+id/streams_search_input"
                 android:layout_width="0dp"
@@ -206,52 +210,111 @@
                 android:contentDescription="Search"/>
         </LinearLayout>
 
-        <!-- Search History Section -->
+        <!-- History and Recently Played Section -->
         <LinearLayout
             android:id="@+id/streams_history_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
+            android:orientation="horizontal"
             android:layout_marginTop="20dp">
 
+            <!-- Recent Searches -->
             <LinearLayout
-                android:layout_width="match_parent"
+                android:id="@+id/streams_recent_searches_layout"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:layout_weight="1"
+                android:orientation="vertical">
 
-                <TextView
-                    android:layout_width="0dp"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Recent Searches"
-                    android:textColor="#888"
-                    android:textSize="14sp"
-                    android:textStyle="bold"/>
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
 
-                <Button
-                    android:id="@+id/btn_streams_clear_history"
-                    android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:text="Clear All"
-                    android:background="@drawable/bg_focusable"
-                    android:textColor="#FFF"
-                    android:textSize="12sp"
-                    android:textAllCaps="false"
-                    android:paddingHorizontal="15dp"/>
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Recent Searches"
+                        android:textColor="#888"
+                        android:textSize="14sp"
+                        android:textStyle="bold"/>
+
+                    <Button
+                        android:id="@+id/btn_streams_clear_history"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:text="Clear"
+                        android:background="@drawable/bg_focusable"
+                        android:textColor="#FFF"
+                        android:textSize="12sp"
+                        android:textAllCaps="false"
+                        android:paddingHorizontal="15dp"/>
+                </LinearLayout>
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:scrollbars="none">
+                    <LinearLayout
+                        android:id="@+id/streams_history_container"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"/>
+                </HorizontalScrollView>
             </LinearLayout>
 
-            <HorizontalScrollView
-                android:layout_width="match_parent"
+            <!-- Recently Played Videos -->
+            <LinearLayout
+                android:id="@+id/streams_recent_played_layout"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:scrollbars="none">
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="30dp"
+                android:visibility="gone">
+
                 <LinearLayout
-                    android:id="@+id/streams_history_container"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"/>
-            </HorizontalScrollView>
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Recently Played"
+                        android:textColor="#888"
+                        android:textSize="14sp"
+                        android:textStyle="bold"/>
+
+                    <Button
+                        android:id="@+id/btn_streams_clear_recent_played"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:text="Clear"
+                        android:background="@drawable/bg_focusable"
+                        android:textColor="#FFF"
+                        android:textSize="12sp"
+                        android:textAllCaps="false"
+                        android:paddingHorizontal="15dp"/>
+                </LinearLayout>
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:scrollbars="none">
+                    <LinearLayout
+                        android:id="@+id/streams_recent_played_container"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"/>
+                </HorizontalScrollView>
+            </LinearLayout>
         </LinearLayout>
 
         <ProgressBar
