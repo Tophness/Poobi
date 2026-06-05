@@ -145,6 +145,7 @@ class MainActivity : AppCompatActivity() {
     private var autoSubWaitPref = 0 // 0: Stop, 1: Ask, 2: Progressive
     private var subRetentionDays = 3
     private var isDownloadingAutoSubs = false
+    private var exoFallbackPref = 0
     private var isInteractingWithSources = false
     private var lastSubtitledItemKey: String? = null
     private var cachedSubtitleResults = mutableMapOf<String, JSONArray>()
@@ -1630,6 +1631,7 @@ class MainActivity : AppCompatActivity() {
         autoSubCount = prefs.getInt("auto_sub_count", 1)
         autoSubWaitPref = prefs.getInt("auto_sub_wait_pref", 0)
         subRetentionDays = prefs.getInt("sub_retention_days", 3)
+        exoFallbackPref = prefs.getInt("exo_fallback_pref", 0)
 
         updateAutoPlayIcon()
         applyTheme()
@@ -2608,9 +2610,7 @@ class MainActivity : AppCompatActivity() {
                     hideFullscreenVideo()
                     onFailure.invoke()
                 } else {
-                    val cause = error.cause?.message ?: "Unknown"
-                    Toast.makeText(this@MainActivity, "ExoPlayer Error: ${error.errorCodeName}\n${cause}", Toast.LENGTH_LONG).show()
-                    Log.e("ExoPlayerDebug", "Playback failed: ", error)
+                    handleExoPlayerError(error, videoUrl)
                 }
             }
         })
@@ -2658,6 +2658,47 @@ class MainActivity : AppCompatActivity() {
         exoPlayer?.prepare()
         exoPlayer?.playWhenReady = true
         nativeVideoView.requestFocus()
+    }
+
+    private fun handleExoPlayerError(error: PlaybackException, videoUrl: String) {
+        val cause = error.cause?.message ?: "Unknown"
+        Log.e("ExoPlayerDebug", "Playback failed: ", error)
+
+        val fallback = prefs.getInt("exo_fallback_pref", 0)
+        if (fallback == 1) { // Always
+            hideFullscreenVideo()
+            loadUrlAndBrowse(videoUrl, true)
+            return
+        } else if (fallback == 2) { // Never
+            hideFullscreenVideo()
+            Toast.makeText(this, "ExoPlayer Error: ${error.errorCodeName}\n${cause}", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        // Ask
+        val checkBox = CheckBox(this).apply {
+            text = "Never ask again (Remember choice)"
+            setPadding(50, 20, 50, 20)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Playback Error")
+            .setMessage("ExoPlayer failed to play this stream. Would you like to try opening it in the browser instead?\n\nError: ${error.errorCodeName}")
+            .setView(checkBox)
+            .setPositiveButton("Open in Browser") { _, _ ->
+                if (checkBox.isChecked) {
+                    prefs.edit().putInt("exo_fallback_pref", 1).apply()
+                }
+                hideFullscreenVideo()
+                loadUrlAndBrowse(videoUrl, true)
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                if (checkBox.isChecked) {
+                    prefs.edit().putInt("exo_fallback_pref", 2).apply()
+                }
+                hideFullscreenVideo()
+            }
+            .show()
     }
 
     private fun showWebsiteFullscreen(view: View?, callback: WebChromeClient.CustomViewCallback?) {

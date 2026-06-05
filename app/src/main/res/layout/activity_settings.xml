@@ -100,6 +100,9 @@
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Extraction" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
                 <Button android:id="@+id/video_pref_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Native Player Hijack: Ask" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
 
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ExoPlayer Errors" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/exo_fallback_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="On Error: Ask to open in Browser" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
+
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Subtitles" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
                 <Button android:id="@+id/embedded_subs_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Embedded Subtitles: Enabled" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
             </LinearLayout>

@@ -181,7 +181,8 @@ class ResolveUrl(object):
     @classmethod
     def _is_enabled(cls):
         # default behaviour is enabled is True if resolver is enabled, or has login set to "true", or doesn't have the setting
-        return cls.get_setting('enabled') == 'true' and cls.get_setting('login') in ['', 'true']
+        enabled = cls.get_setting('enabled')
+        return (enabled == 'true' or enabled == '') and cls.get_setting('login') in ['', 'true']
 
     def _get_host(self, host):
         if '.' not in host:

@@ -35,6 +35,7 @@ class SettingsActivity : AppCompatActivity() {
     private var autoSubCount = 1 // 0 means "All"
     private var autoSubWaitPref = 0 // 0: Dialog, 1: Progressively/Stop on Play
     private var subRetentionDays = 3
+    private var exoFallbackPref = 0
 
     // Streaming Settings
     private var timeoutMode = "Both"
@@ -267,6 +268,7 @@ class SettingsActivity : AppCompatActivity() {
         val historyIconBtn = findViewById<Button>(R.id.history_icon_btn)
         val bookmarkIconBtn = findViewById<Button>(R.id.bookmark_icon_btn)
         val clickjackBtn = findViewById<Button>(R.id.clickjack_btn)
+        val exoFallbackBtn = findViewById<Button>(R.id.exo_fallback_btn)
         val saveBtn = findViewById<Button>(R.id.save_button)
 
         // Load Prefs
@@ -285,6 +287,7 @@ class SettingsActivity : AppCompatActivity() {
         clickjackPref = prefs.getBoolean("clickjack_prevention", true)
         navigationModePref = prefs.getInt("navigation_mode_pref", 0)
         autoSubPref = prefs.getInt("auto_sub_pref", 0)
+        exoFallbackPref = prefs.getInt("exo_fallback_pref", 0)
 
         fun updateUI() {
             popupBtn.text = if (silentPopupBlock) "Popups: Block Silently" else "Popups: Ask to Allow"
@@ -307,6 +310,11 @@ class SettingsActivity : AppCompatActivity() {
             historyIconBtn.text = if (historyIconPref == 0) "History Icons: Thumbnail" else "History Icons: Favicon"
             bookmarkIconBtn.text = if (bookmarkIconPref == 0) "Bookmark Icons: Thumbnail" else "Bookmark Icons: Favicon"
             clickjackBtn.text = if (clickjackPref) "Clickjack Prevention: Enabled" else "Clickjack Prevention: Disabled"
+            exoFallbackBtn.text = when (exoFallbackPref) {
+                1 -> "On Error: Always open in Browser"
+                2 -> "On Error: Never open in Browser"
+                else -> "On Error: Ask to open in Browser"
+            }
         }
         updateUI()
 
@@ -326,6 +334,7 @@ class SettingsActivity : AppCompatActivity() {
         historyIconBtn.setOnClickListener { historyIconPref = (historyIconPref + 1) % 2; updateUI() }
         bookmarkIconBtn.setOnClickListener { bookmarkIconPref = (bookmarkIconPref + 1) % 2; updateUI() }
         clickjackBtn.setOnClickListener { clickjackPref = !clickjackPref; updateUI() }
+        exoFallbackBtn.setOnClickListener { exoFallbackPref = (exoFallbackPref + 1) % 3; updateUI() }
         navigationModeBtn.setOnClickListener { navigationModePref = (navigationModePref + 1) % 2; updateUI() }
 
         saveBtn.setOnClickListener {
@@ -345,6 +354,7 @@ class SettingsActivity : AppCompatActivity() {
                 .putBoolean("clickjack_prevention", clickjackPref)
                 .putInt("navigation_mode_pref", navigationModePref)
                 .putInt("auto_sub_pref", autoSubPref)
+                .putInt("exo_fallback_pref", exoFallbackPref)
                 .apply()
 
             val appContext = applicationContext
