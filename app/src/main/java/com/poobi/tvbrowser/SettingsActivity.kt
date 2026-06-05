@@ -2,6 +2,7 @@ package com.poobi.tvbrowser
 
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
@@ -10,6 +11,8 @@ import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.chaquo.python.Python
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -44,6 +47,11 @@ class SettingsActivity : AppCompatActivity() {
     private var useWhitelist = false
     private var enabledPacks = mutableListOf<String>()
     private var whitelistedHosts = mutableListOf<String>()
+    private var allHostsList = mutableListOf<HostItem>()
+    private var filteredHostsList = mutableListOf<HostItem>()
+    private lateinit var hostsAdapter: HostAdapter
+
+    data class HostItem(val name: String, val category: String, val isHeader: Boolean = false)
 
     // Subtitle Settings
     private var subLangs = "English"
@@ -667,7 +675,7 @@ class SettingsActivity : AppCompatActivity() {
         val container = findViewById<LinearLayout>(R.id.sorting_priorities_container) ?: return
         container.removeAllViews()
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
-        
+
         val priorities = mutableListOf<SortCriteria>()
         val json = prefs.getString("sort_priorities", null)
         if (json != null) {
@@ -758,8 +766,12 @@ class SettingsActivity : AppCompatActivity() {
         val whitelistBtn = findViewById<Button>(R.id.whitelist_toggle_btn)
         val whitelistControls = findViewById<LinearLayout>(R.id.whitelist_controls_layout)
         val packsContainer = findViewById<LinearLayout>(R.id.provider_packs_container)
-        val hostsContainer = findViewById<LinearLayout>(R.id.whitelist_hosts_container)
+        val hostsRecycler = findViewById<RecyclerView>(R.id.whitelist_hosts_recycler)
         val hostSearchInput = findViewById<EditText>(R.id.host_search_input)
+
+        hostsRecycler.layoutManager = LinearLayoutManager(this)
+        hostsAdapter = HostAdapter()
+        hostsRecycler.adapter = hostsAdapter
 
         fun updateTimeoutUI() {
             timeoutBtn.text = "Timeout Mode: $timeoutMode"
@@ -815,71 +827,116 @@ class SettingsActivity : AppCompatActivity() {
             } catch (e: Exception) {}
         }
         fun refreshHosts(filter: String = "") {
-            hostsContainer.removeAllViews()
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    val py = Python.getInstance()
-                    val hostsJson = py.getModule("main").callAttr("get_all_hosts").toString()
-                    val hostsObj = JSONObject(hostsJson)
-                    
-                    withContext(Dispatchers.Main) {
+                    if (allHostsList.isEmpty()) {
+                        val py = Python.getInstance()
+                        val hostsJson = py.getModule("main").callAttr("get_all_hosts").toString()
+                        val hostsObj = JSONObject(hostsJson)
+                        val newList = mutableListOf<HostItem>()
                         val keys = hostsObj.keys()
                         while(keys.hasNext()) {
                             val category = keys.next()
                             val hosts = hostsObj.getJSONArray(category)
-                            
                             if (hosts.length() > 0) {
-                                    val header = TextView(this@SettingsActivity).apply {
-                                        text = category
-                                        setTypeface(null, android.graphics.Typeface.BOLD)
-                                        setTextColor(android.graphics.Color.parseColor("#0e639c"))
-                                        setPadding(0, 30, 0, 10)
-                                        textSize = 16f
-                                    }
-                                hostsContainer.addView(header)
-
+                                newList.add(HostItem(category, category, true))
                                 for (i in 0 until hosts.length()) {
-                                    val h = hosts.getString(i)
-                                    if (filter.isNotEmpty() && !h.contains(filter, true)) continue
-                                    hostsContainer.addView(CheckBox(this@SettingsActivity).apply { 
-                                        text = h
-                                        setTextColor(android.graphics.Color.WHITE)
-                                        isChecked = whitelistedHosts.contains(h)
-                                        isEnabled = useWhitelist
-                                        alpha = if (useWhitelist) 1.0f else 0.5f
-                                        setOnCheckedChangeListener { _, c -> 
-                                            if (c) { if (!whitelistedHosts.contains(h)) whitelistedHosts.add(h) } 
-                                            else { whitelistedHosts.remove(h) }
-                                            saveStreamingSettings() 
-                                        } 
-                                    })
+                                    newList.add(HostItem(hosts.getString(i), category, false))
                                 }
                             }
                         }
-                        updateWhitelistUIControls(useWhitelist)
+                        allHostsList.clear()
+                        allHostsList.addAll(newList)
                     }
-                } catch (e: Exception) {}
+
+                    filteredHostsList = if (filter.isEmpty()) {
+                        allHostsList.toMutableList()
+                    } else {
+                        val result = mutableListOf<HostItem>()
+                        var lastHeader: HostItem? = null
+                        allHostsList.forEach { 
+                            if (it.isHeader) {
+                                lastHeader = it
+                            } else if (it.name.contains(filter, true)) {
+                                if (lastHeader != null) {
+                                    result.add(lastHeader)
+                                    lastHeader = null
+                                }
+                                result.add(it)
+                            }
+                        }
+                        result
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        hostsAdapter.notifyDataSetChanged()
+                    }
+                } catch (e: Exception) {
+                    Log.e("TVBrowser", "refreshHosts error: ${e.message}")
+                }
             }
         }
         findViewById<Button>(R.id.btn_whitelist_select_all).setOnClickListener { 
-            for (i in 0 until hostsContainer.childCount) {
-                (hostsContainer.getChildAt(i) as? CheckBox)?.let { if (it.isEnabled) it.isChecked = true }
-            }
+            filteredHostsList.forEach { if (!it.isHeader) { if (!whitelistedHosts.contains(it.name)) whitelistedHosts.add(it.name) } }
+            hostsAdapter.notifyDataSetChanged()
+            saveStreamingSettings()
         }
         findViewById<Button>(R.id.btn_whitelist_clear_all).setOnClickListener { 
             whitelistedHosts.clear()
-            for (i in 0 until hostsContainer.childCount) {
-                (hostsContainer.getChildAt(i) as? CheckBox)?.let { if (it.isEnabled) it.isChecked = false }
-            }
+            hostsAdapter.notifyDataSetChanged()
             saveStreamingSettings() 
         }
         hostSearchInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { refreshHosts(s.toString()) }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
         refreshHosts()
     }
 
+    private inner class HostAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+        override fun getItemViewType(position: Int) = if (filteredHostsList[position].isHeader) 0 else 1
+        
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            return if (viewType == 0) {
+                val tv = TextView(parent.context).apply {
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                    setTextColor(android.graphics.Color.parseColor("#0e639c"))
+                    setPadding(20, 30, 20, 10)
+                    textSize = 16f
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                }
+                object : RecyclerView.ViewHolder(tv) {}
+            } else {
+                val cb = CheckBox(parent.context).apply {
+                    setTextColor(android.graphics.Color.WHITE)
+                    background = parent.context.getDrawable(R.drawable.bg_focusable)
+                    setPadding(20, 20, 20, 20)
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                }
+                object : RecyclerView.ViewHolder(cb) {}
+            }
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            val item = filteredHostsList[position]
+            if (item.isHeader) {
+                (holder.itemView as TextView).text = item.name
+            } else {
+                val cb = holder.itemView as CheckBox
+                cb.setOnCheckedChangeListener(null)
+                cb.text = item.name
+                cb.isChecked = whitelistedHosts.contains(item.name)
+                cb.isEnabled = useWhitelist
+                cb.alpha = if (useWhitelist) 1.0f else 0.5f
+                cb.setOnCheckedChangeListener { _, c -> 
+                    if (c) { if (!whitelistedHosts.contains(item.name)) whitelistedHosts.add(item.name) } 
+                    else { whitelistedHosts.remove(item.name) }
+                    saveStreamingSettings()
+                }
+            }
+        }
+
+        override fun getItemCount() = filteredHostsList.size
+    }
+
     private fun updateWhitelistUIControls(enabled: Boolean) {
-        val whitelistControls = findViewById<LinearLayout>(R.id.whitelist_controls_layout)
-        val container = findViewById<LinearLayout>(R.id.whitelist_hosts_container)
         val searchInput = findViewById<EditText>(R.id.host_search_input)
         val selectAll = findViewById<Button>(R.id.btn_whitelist_select_all)
         val clearAll = findViewById<Button>(R.id.btn_whitelist_clear_all)
@@ -888,10 +945,8 @@ class SettingsActivity : AppCompatActivity() {
         selectAll.isEnabled = enabled
         clearAll.isEnabled = enabled
         
-        for (i in 0 until container.childCount) {
-            val child = container.getChildAt(i)
-            child.isEnabled = enabled
-            child.alpha = if (enabled) 1.0f else 0.5f
+        if (::hostsAdapter.isInitialized) {
+            hostsAdapter.notifyDataSetChanged()
         }
     }
 
@@ -909,8 +964,8 @@ class SettingsActivity : AppCompatActivity() {
                     put("whitelisted_hosts", JSONArray(whitelistedHosts))
                     put("enabled_packs", JSONArray(enabledPacks))
                 } 
-                py.getModule("main").callAttr("set_config", cfg.toString()) 
-            } catch (e: Exception) {} 
+                py.getModule("main").callAttr("set_config", cfg.toString())
+            } catch (e: Exception) {}
         }
     }
 

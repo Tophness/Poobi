@@ -136,7 +136,13 @@
                         <Button android:id="@+id/btn_whitelist_clear_all" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Clear All" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:textAllCaps="false"/>
                     </LinearLayout>
                     <EditText android:id="@+id/host_search_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="16dp" android:hint="Search hosts..." android:textColorHint="#666" android:layout_marginBottom="10dp" android:nextFocusLeft="@+id/cat_streaming"/>
-                    <LinearLayout android:id="@+id/whitelist_hosts_container" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/whitelist_hosts_recycler"
+                        android:layout_width="match_parent"
+                        android:layout_height="500dp"
+                        android:scrollbars="vertical"
+                        android:focusable="false"
+                        android:descendantFocusability="afterDescendants"/>
                 </LinearLayout>
             </LinearLayout>
 
