@@ -1562,6 +1562,11 @@ class MainActivity : AppCompatActivity() {
                             if (isVideo) {
                                 val title = currentStreamingTitle
                                 launchNativeVideoPlayer(streamUrl, null, title)
+                                if (autoSubPref == 0) {
+                                    lastScrapedItem?.let { item ->
+                                        showSubtitlePicker(item, lastScrapedSeason, lastScrapedEpisode)
+                                    }
+                                }
                             } else {
                                 // Resolved to what looks like a webpage, open in browser instead
                                 loadUrlAndBrowse(streamUrl, true)
@@ -1579,6 +1584,11 @@ class MainActivity : AppCompatActivity() {
                         if (resolveResult.isNotEmpty() && resolveResult.startsWith("http")) {
                             val title = currentStreamingTitle
                             launchNativeVideoPlayer(resolveResult, null, title)
+                            if (autoSubPref == 0) {
+                                lastScrapedItem?.let { item ->
+                                    showSubtitlePicker(item, lastScrapedSeason, lastScrapedEpisode)
+                                }
+                            }
                         } else {
                             // Resume if error
                             isInteractingWithSources = false
