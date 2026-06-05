@@ -321,6 +321,7 @@ class MainActivity : AppCompatActivity() {
 
         checkStartupTabs()
         setupMainTabs()
+        btnTabBrowser.isSelected = true
         initPython()
         refreshStreamsHistory()
         showHomeScreen()
@@ -382,16 +383,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun switchMainTab(isBrowser: Boolean) {
+        btnTabBrowser.isSelected = isBrowser
+        btnTabStreams.isSelected = !isBrowser
+        
         if (isBrowser) {
-            btnTabBrowser.alpha = 1.0f
-            btnTabStreams.alpha = 0.5f
             if (!isBrowsing) {
                 homeScreenLayout.visibility = View.VISIBLE
                 streamsScreenLayout.visibility = View.GONE
             }
         } else {
-            btnTabBrowser.alpha = 0.5f
-            btnTabStreams.alpha = 1.0f
             homeScreenLayout.visibility = View.GONE
             streamsScreenLayout.visibility = View.VISIBLE
             refreshStreamsHistory()
@@ -2077,15 +2077,9 @@ class MainActivity : AppCompatActivity() {
             homePanelDownloads.visibility = View.GONE
             panel.visibility = View.VISIBLE
 
-            homeTabBookmarks.alpha = 0.5f
-            homeTabTabs.alpha = 0.5f
-            homeTabHistory.alpha = 0.5f
-            homeTabDownloads.alpha = 0.5f
-
             activeHomeTab?.isSelected = false
             activeHomeTab = tab
             tab.isSelected = true
-            tab.alpha = 1.0f
         }
 
         val tabListener = View.OnClickListener { v ->

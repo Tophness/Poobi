@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Focused and Selected -->
+    <item android:state_focused="true" android:state_selected="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#00BCD4"/>
+            <corners android:topLeftRadius="12dp" android:topRightRadius="12dp"/>
+            <stroke android:width="2dp" android:color="#FFFFFF"/>
+        </shape>
+    </item>
+    <!-- Focused only -->
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#444444"/>
+            <corners android:topLeftRadius="12dp" android:topRightRadius="12dp"/>
+            <stroke android:width="2dp" android:color="#00BCD4"/>
+        </shape>
+    </item>
+    <!-- Selected only -->
+    <item android:state_selected="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#00BCD4"/>
+            <corners android:topLeftRadius="12dp" android:topRightRadius="12dp"/>
+        </shape>
+    </item>
+    <!-- Default (unselected, unfocused) -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#333333"/>
+            <corners android:topLeftRadius="12dp" android:topRightRadius="12dp"/>
+        </shape>
+    </item>
+</selector>

@@ -12,10 +12,9 @@
     <LinearLayout
         android:id="@+id/main_tabs_layout"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="70dp"
         android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingTop="20dp"
+        android:gravity="bottom"
         android:paddingHorizontal="40dp"
         android:background="#1A1A1D"
         android:elevation="10dp">
@@ -23,24 +22,23 @@
         <Button
             android:id="@+id/btn_main_tab_browser"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="50dp"
             android:text="Browser"
-            android:background="@drawable/bg_focusable"
+            android:background="@drawable/bg_tab_nav"
             android:textColor="#FFF"
             android:textAllCaps="false"
-            android:paddingHorizontal="30dp"
-            android:layout_marginEnd="10dp"/>
+            android:paddingHorizontal="35dp"
+            android:layout_marginEnd="2dp"/>
 
         <Button
             android:id="@+id/btn_main_tab_streams"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="50dp"
             android:text="Streams"
-            android:background="@drawable/bg_focusable"
+            android:background="@drawable/bg_tab_nav"
             android:textColor="#FFF"
             android:textAllCaps="false"
-            android:paddingHorizontal="30dp"
-            android:alpha="0.5"/>
+            android:paddingHorizontal="35dp"/>
 
         <Space
             android:layout_width="0dp"
@@ -54,8 +52,16 @@
             android:background="@drawable/bg_focusable"
             android:src="@drawable/ic_settings"
             app:tint="#FFF"
+            android:layout_marginBottom="5dp"
             android:contentDescription="Settings"/>
     </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="2dp"
+        android:background="#00BCD4"
+        android:layout_marginTop="70dp"
+        android:elevation="11dp"/>
 
     <!-- 1. MODERN HOME SCREEN (BROWSER TAB) -->
     <LinearLayout
@@ -101,20 +107,28 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginTop="20dp"
-            android:layout_marginBottom="10dp">
+            android:layout_marginBottom="0dp"
+            android:gravity="bottom">
 
-            <Button android:id="@+id/home_tab_tabs" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Open Tabs" android:drawableStart="@drawable/ic_tab" android:drawablePadding="10dp" android:paddingHorizontal="20dp" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginEnd="10dp" android:textAllCaps="false"/>
-            <Button android:id="@+id/home_tab_bookmarks" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bookmarks" android:drawableStart="@drawable/ic_heart_empty" android:drawablePadding="10dp" android:paddingHorizontal="20dp" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginEnd="10dp" android:textAllCaps="false"/>
-            <Button android:id="@+id/home_tab_history" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="History" android:drawableStart="@drawable/ic_history" android:drawablePadding="10dp" android:paddingHorizontal="20dp" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginEnd="10dp" android:textAllCaps="false"/>
-            <Button android:id="@+id/home_tab_downloads" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Downloads" android:drawableStart="@drawable/ic_download" android:drawablePadding="10dp" android:paddingHorizontal="20dp" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginEnd="10dp" android:textAllCaps="false"/>
+            <Button android:id="@+id/home_tab_tabs" android:layout_width="wrap_content" android:layout_height="50dp" android:text="Open Tabs" android:drawableStart="@drawable/ic_tab" android:drawablePadding="10dp" android:paddingHorizontal="25dp" android:background="@drawable/bg_tab_nav" android:textColor="#FFF" android:layout_marginEnd="2dp" android:textAllCaps="false"/>
+            <Button android:id="@+id/home_tab_bookmarks" android:layout_width="wrap_content" android:layout_height="50dp" android:text="Bookmarks" android:drawableStart="@drawable/ic_heart_empty" android:drawablePadding="10dp" android:paddingHorizontal="25dp" android:background="@drawable/bg_tab_nav" android:textColor="#FFF" android:layout_marginEnd="2dp" android:textAllCaps="false"/>
+            <Button android:id="@+id/home_tab_history" android:layout_width="wrap_content" android:layout_height="50dp" android:text="History" android:drawableStart="@drawable/ic_history" android:drawablePadding="10dp" android:paddingHorizontal="25dp" android:background="@drawable/bg_tab_nav" android:textColor="#FFF" android:layout_marginEnd="2dp" android:textAllCaps="false"/>
+            <Button android:id="@+id/home_tab_downloads" android:layout_width="wrap_content" android:layout_height="50dp" android:text="Downloads" android:drawableStart="@drawable/ic_download" android:drawablePadding="10dp" android:paddingHorizontal="25dp" android:background="@drawable/bg_tab_nav" android:textColor="#FFF" android:layout_marginEnd="2dp" android:textAllCaps="false"/>
 
         </LinearLayout>
 
         <!-- Content Panels -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:background="#00BCD4"/>
+
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1">
+            android:layout_weight="1"
+            android:background="#1A1A1D"
+            android:padding="15dp">
 
             <LinearLayout android:id="@+id/home_panel_tabs" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="visible">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="end" android:layout_marginBottom="10dp">
