@@ -143,6 +143,7 @@ class MainActivity : AppCompatActivity() {
     private var autoSubPref = 0 // 0: Ask, 1: Automatic, 2: Never
     private var autoSubCount = 1
     private var autoSubWaitPref = 0 // 0: Stop, 1: Ask, 2: Progressive
+    private var subRetentionDays = 3
     private var isDownloadingAutoSubs = false
     private var isInteractingWithSources = false
     private var lastSubtitledItemKey: String? = null
@@ -607,10 +608,53 @@ class MainActivity : AppCompatActivity() {
                     lastScrapedItem = itemData
                     lastScrapedSeason = season
                     lastScrapedEpisode = episode
-                    
-                    launchNativeVideoPlayer(cachedUrl, null, title) {
-                        // On failure, fallback to scraping
-                        performScrape(itemData, season, episode)
+
+                    // Restore subtitles
+                    interceptedSubtitleUrls.clear()
+                    val subsArray = obj.optJSONArray("subtitles")
+                    var subsMissing = false
+                    if (subsArray != null && subsArray.length() > 0) {
+                        for (j in 0 until subsArray.length()) {
+                            val subObj = subsArray.getJSONObject(j)
+                            val subUrl = subObj.getString("url")
+                            val infoObj = subObj.getJSONObject("info")
+                            val info = mutableMapOf<String, String>()
+                            infoObj.keys().forEach { k -> info[k] = infoObj.getString(k) }
+                            
+                            if (subUrl.startsWith("file://")) {
+                                val file = File(Uri.parse(subUrl).path ?: "")
+                                if (file.exists()) {
+                                    interceptedSubtitleUrls[subUrl] = info
+                                } else {
+                                    subsMissing = true
+                                }
+                            } else {
+                                interceptedSubtitleUrls[subUrl] = info
+                            }
+                        }
+                    }
+
+                    if (subsMissing || (subsArray != null && subsArray.length() > 0 && interceptedSubtitleUrls.isEmpty())) {
+                        // Some or all previously loaded subs are missing
+                        if (autoSubPref == 1) { // Automatic
+                            // We will launch the video and then auto-search
+                            launchNativeVideoPlayer(cachedUrl, null, title) {
+                                performScrape(itemData, season, episode)
+                            }
+                            // Trigger auto subtitle search
+                            performAutoSubtitleSearch(itemData, season, episode)
+                        } else {
+                            // Ask or Never -> Bring up subtitle picker
+                            launchNativeVideoPlayer(cachedUrl, null, title) {
+                                performScrape(itemData, season, episode)
+                            }
+                            showSubtitlePicker(itemData, season, episode)
+                        }
+                    } else {
+                        launchNativeVideoPlayer(cachedUrl, null, title) {
+                            // On failure, fallback to scraping
+                            performScrape(itemData, season, episode)
+                        }
                     }
                 } else {
                     performScrape(itemData, season, episode)
@@ -649,6 +693,21 @@ class MainActivity : AppCompatActivity() {
             
             val finalHeaders = if (headers != null) JSONObject(headers) else existing?.optJSONObject("headers")
             if (finalHeaders != null) put("headers", finalHeaders)
+            
+            if (interceptedSubtitleUrls.isNotEmpty()) {
+                val subsArray = JSONArray()
+                interceptedSubtitleUrls.forEach { (url, info) ->
+                    val subObj = JSONObject()
+                    subObj.put("url", url)
+                    val infoObj = JSONObject()
+                    info.forEach { (k, v) -> infoObj.put(k, v) }
+                    subObj.put("info", infoObj)
+                    subsArray.put(subObj)
+                }
+                put("subtitles", subsArray)
+            } else if (existing?.has("subtitles") == true) {
+                put("subtitles", existing.getJSONArray("subtitles"))
+            }
         }
         newList.add(0, newEntry)
         if (newList.size > 20) newList.removeAt(newList.size - 1)
@@ -748,6 +807,9 @@ class MainActivity : AppCompatActivity() {
         lastScrapedItem = item
         lastScrapedSeason = season
         lastScrapedEpisode = episode
+
+        interceptedSubtitleUrls.clear()
+        interceptedMediaUrls.clear()
 
         streamsProgress.visibility = View.VISIBLE
         streamsProgress.isIndeterminate = true
@@ -1557,6 +1619,7 @@ class MainActivity : AppCompatActivity() {
         autoSubPref = prefs.getInt("auto_sub_pref", 0)
         autoSubCount = prefs.getInt("auto_sub_count", 1)
         autoSubWaitPref = prefs.getInt("auto_sub_wait_pref", 0)
+        subRetentionDays = prefs.getInt("sub_retention_days", 3)
 
         updateAutoPlayIcon()
         applyTheme()
@@ -2592,6 +2655,7 @@ class MainActivity : AppCompatActivity() {
         customViewContainer.addView(mCustomView)
         customViewContainer.visibility = View.VISIBLE
         webContainer.visibility = View.GONE
+        mainTabsLayout.visibility = View.GONE
         customViewCallback = callback
         wakeCursor()
     }

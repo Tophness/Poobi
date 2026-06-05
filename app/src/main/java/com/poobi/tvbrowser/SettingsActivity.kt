@@ -34,6 +34,7 @@ class SettingsActivity : AppCompatActivity() {
     private var autoSubPref = 0 // 0: Ask, 1: Automatic, 2: Never
     private var autoSubCount = 1 // 0 means "All"
     private var autoSubWaitPref = 0 // 0: Dialog, 1: Progressively/Stop on Play
+    private var subRetentionDays = 3
 
     // Streaming Settings
     private var timeoutMode = "Both"
@@ -908,6 +909,7 @@ class SettingsActivity : AppCompatActivity() {
         autoSubPref = prefs.getInt("auto_sub_pref", 0)
         autoSubCount = prefs.getInt("auto_sub_count", 1)
         autoSubWaitPref = prefs.getInt("auto_sub_wait_pref", 0)
+        subRetentionDays = prefs.getInt("sub_retention_days", 3)
         subLangs = prefs.getString("subtitles_languages", "English") ?: "English"
         subLimit = prefs.getInt("subtitles_limit", 20)
         val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
@@ -920,6 +922,9 @@ class SettingsActivity : AppCompatActivity() {
         val autoSubCountLayout = findViewById<LinearLayout>(R.id.auto_sub_count_layout)
         val autoSubCountBtn = findViewById<Button>(R.id.auto_sub_count_btn)
         val autoSubWaitBtn = findViewById<Button>(R.id.auto_sub_wait_btn)
+        
+        val subRetentionBtn = findViewById<Button>(R.id.sub_retention_btn)
+
         val langsInput = findViewById<EditText>(R.id.sub_langs_input)
         val limitInput = findViewById<EditText>(R.id.sub_limit_input)
         val servicesContainer = findViewById<LinearLayout>(R.id.sub_services_container)
@@ -962,6 +967,18 @@ class SettingsActivity : AppCompatActivity() {
         }
         updateAutoSubWaitUI()
 
+        fun updateSubRetentionUI() {
+            subRetentionBtn.text = if (subRetentionDays == 0) "Retention: Indefinite" else "Retention: $subRetentionDays Day${if (subRetentionDays > 1) "s" else ""}"
+        }
+        subRetentionBtn.setOnClickListener {
+            subRetentionDays = when(subRetentionDays) {
+                1 -> 3; 3 -> 7; 7 -> 14; 14 -> 30; 30 -> 0; else -> 1
+            }
+            updateSubRetentionUI()
+            saveSubtitlesSettings()
+        }
+        updateSubRetentionUI()
+
         langsInput.setText(subLangs); langsInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { subLangs = s.toString(); saveSubtitlesSettings() }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
         limitInput.setText(subLimit.toString()); limitInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { subLimit = s.toString().toIntOrNull() ?: 20; saveSubtitlesSettings() }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
 
@@ -978,9 +995,11 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun saveSubtitlesSettings() {
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE); val editor = prefs.edit()
-        editor.putInt("auto_sub_pref", autoSubPref).putInt("auto_sub_count", autoSubCount).putInt("auto_sub_wait_pref", autoSubWaitPref).putString("subtitles_languages", subLangs).putInt("subtitles_limit", subLimit)
+        editor.putInt("auto_sub_pref", autoSubPref).putInt("auto_sub_count", autoSubCount).putInt("auto_sub_wait_pref", autoSubWaitPref)
+        editor.putInt("sub_retention_days", subRetentionDays)
+        editor.putString("subtitles_languages", subLangs).putInt("subtitles_limit", subLimit)
         subServices.forEach { (k, v) -> editor.putBoolean("${k}_enabled", v) }
         editor.putString("opensubtitles_username", openSubUser).putString("opensubtitles_password", openSubPass).putString("opensubtitles_org_username", openSubOrgUser).putString("opensubtitles_org_password", openSubOrgPass).putString("subdl_apikey", subdlKey).putString("subsource_apikey", subsourceKey).apply()
-        lifecycleScope.launch(Dispatchers.IO) { try { val py = Python.getInstance(); val cfg = JSONObject().apply { put("subtitles_languages", subLangs); put("subtitles_limit", subLimit); subServices.forEach { (k, v) -> put("${k}_enabled", v) }; put("opensubtitles_username", openSubUser); put("opensubtitles_password", openSubPass); put("opensubtitles_org_username", openSubOrgUser); put("opensubtitles_org_password", openSubOrgPass); put("subdl_apikey", subdlKey); put("subsource_apikey", subsourceKey) }; py.getModule("main").callAttr("set_config", cfg.toString()) } catch (e: Exception) {} }
+        lifecycleScope.launch(Dispatchers.IO) { try { val py = Python.getInstance(); val cfg = JSONObject().apply { put("subtitles_languages", subLangs); put("subtitles_limit", subLimit); subServices.forEach { (k, v) -> put("${k}_enabled", v) }; put("opensubtitles_username", openSubUser); put("opensubtitles_password", openSubPass); put("opensubtitles_org_username", openSubOrgUser); put("opensubtitles_org_password", openSubOrgPass); put("subdl_apikey", subdlKey); put("subsource_apikey", subsourceKey); put("sub_retention_days", subRetentionDays) }; py.getModule("main").callAttr("set_config", cfg.toString()) } catch (e: Exception) {} }
     }
 }

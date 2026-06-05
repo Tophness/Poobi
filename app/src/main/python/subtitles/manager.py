@@ -7,6 +7,7 @@ Handles search and download for all subtitle services.
 import os
 import sys
 import shutil
+import time
 
 # The a4kSubtitles package lives right next to this file.
 SUBTITLES_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -156,3 +157,25 @@ def download_subtitle(service_name, action_args, settings=None):
         shutil.copy2(temp_filepath, dest_filepath)
         return dest_filepath
     return None
+
+def purge_old_subtitles(retention_days):
+    """
+    Remove subtitle files in userdata/subtitles older than retention_days.
+    If retention_days is 0, all subtitles are purged.
+    """
+    userdata_sub_dir = os.path.join(PROJECT_ROOT, 'userdata', 'subtitles')
+    if not os.path.exists(userdata_sub_dir):
+        return
+
+    now = time.time()
+    for filename in os.listdir(userdata_sub_dir):
+        filepath = os.path.join(userdata_sub_dir, filename)
+        if not os.path.isfile(filepath):
+            continue
+
+        file_age_days = (now - os.path.getmtime(filepath)) / (24 * 3600)
+        if file_age_days > retention_days:
+            try:
+                os.remove(filepath)
+            except Exception:
+                pass

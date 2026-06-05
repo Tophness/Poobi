@@ -162,7 +162,8 @@ def load_config():
         "opensubtitles_org_username": "",
         "opensubtitles_org_password": "",
         "subdl_apikey": "",
-        "subsource_apikey": ""
+        "subsource_apikey": "",
+        "sub_retention_days": 3
     }
     
     # Initialize all detected packs as enabled by default in the base config
@@ -179,6 +180,13 @@ def load_config():
                 user_cfg = json.load(f)
                 default_config.update(user_cfg)
         except Exception: pass
+    
+    # Subtitle purging
+    try:
+        import subtitles.manager as sub_manager
+        sub_manager.purge_old_subtitles(default_config.get('sub_retention_days', 3))
+    except: pass
+
     return default_config
 
 def save_config(cfg):
