@@ -11,6 +11,8 @@ LOGNONE = logging.NOTSET
 
 logging.basicConfig(level=logging.WARNING, format='%(name)s [%(levelname)s]: %(message)s')
 
+def execute_jsonrpc(command): return {}
+
 class Logger(object):
     __loggers = {}
     

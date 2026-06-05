@@ -101,6 +101,33 @@ def _is_cache_valid(cached_time, cache_timeout):
     return (cache_timeout * 3600) > diff
 
 
+def _find_cache_version():
+    versionFile = os.path.join(control.dataPath, 'cache.v')
+    try:
+        if six.PY2:
+            with open(versionFile, 'rb') as fh:
+                oldVersion = fh.read()
+        elif six.PY3:
+            with open(versionFile, 'r') as fh:
+                oldVersion = fh.read()
+    except:
+        oldVersion = '0'
+    try:
+        curVersion = control.addon('plugin.video.free99').getAddonInfo('version')
+        if oldVersion != curVersion:
+            if six.PY2:
+                with open(versionFile, 'wb') as fh:
+                    fh.write(curVersion)
+            elif six.PY3:
+                with open(versionFile, 'w') as fh:
+                    fh.write(curVersion)
+            return True
+        else:
+            return False
+    except:
+        return False
+
+
 def get(function_, duration, *args, **table):
     try:
         response = None
@@ -184,6 +211,69 @@ def timeout(function_, *args):
         return None
 
 
+def clean_settings():
+    current_user_settings = []
+    removed_settings = []
+    active_settings = []
+    def _make_content(dict_object):
+        if kodi_version >= 18:
+            content = '<settings version="2">'
+            for item in dict_object:
+                if item['id'] in active_settings:
+                    if 'default' in item and 'value' in item:
+                        content += '\n    <setting id="%s" default="%s">%s</setting>' % (item['id'], item['default'], item['value'])
+                    elif 'default' in item:
+                        content += '\n    <setting id="%s" default="%s"></setting>' % (item['id'], item['default'])
+                    elif 'value' in item:
+                        content += '\n    <setting id="%s">%s</setting>' % (item['id'], item['value'])
+                    else:
+                        content += '\n    <setting id="%s"></setting>'
+                else:
+                    removed_settings.append(item)
+        else:
+            content = '<settings>'
+            for item in dict_object:
+                if item['id'] in active_settings:
+                    if 'value' in item:
+                        content += '\n    <setting id="%s" value="%s" />' % (item['id'], item['value'])
+                    else:
+                        content += '\n    <setting id="%s" value="" />' % item['id']
+                else:
+                    removed_settings.append(item)
+        content += '\n</settings>'
+        return content
+    try:
+        root = ET.parse(control.settingsPath).getroot()
+        for item in root.findall('./category/setting'):
+            setting_id = item.get('id')
+            if setting_id:
+                active_settings.append(setting_id)
+        root = ET.parse(control.settingsFile).getroot()
+        for item in root:
+            dict_item = {}
+            setting_id = item.get('id')
+            setting_default = item.get('default')
+            if kodi_version >= 18:
+                setting_value = item.text
+            else:
+                setting_value = item.get('value')
+            dict_item['id'] = setting_id
+            if setting_value:
+                dict_item['value'] = setting_value
+            if setting_default:
+                dict_item['default'] = setting_default
+            current_user_settings.append(dict_item)
+        new_content = _make_content(current_user_settings)
+        nfo_file = control.openFile(control.settingsFile, 'w')
+        nfo_file.write(new_content)
+        nfo_file.close()
+        control.infoDialog('Clean Settings: %s Old Settings Removed' % (str(len(removed_settings))))
+    except:
+        log_utils.log('clean_settings', 1)
+        control.infoDialog('Clean Settings: Error Cleaning Settings')
+        return
+
+
 def cache_clear():
     try:
         cursor = _get_connection_cursor()
@@ -248,5 +338,19 @@ def cache_clear_all():
     cache_clear()
     cache_clear_meta()
     cache_clear_providers()
+
+
+def cache_version_check():
+    if _find_cache_version():
+        cache_clear_all()
+        clean_settings()
+        control.sleep(1000)
+        if control.setting('addon.notifcations') == 'true' and control.setting('addon.enable_notifcations') == 'true':
+            control.setSetting('addon.notifcations', 'false')
+        control.infoDialog('Version Check - AutoClean: Process Complete', sound=True, icon='INFO')
+        control.checkArtwork()
+        if control.setting('show.changelog') == 'true':
+            control.sleep(3000)
+            log_utils.changelog()
 
 

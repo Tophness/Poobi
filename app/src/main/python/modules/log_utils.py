@@ -14,3 +14,8 @@ logging.basicConfig(level=logging.DEBUG, format='[Scraper] %(message)s')
 
 def log(msg, trace=0, level=LOGDEBUG):
     logging.log(level, str(msg))
+
+def changelog(): pass
+def previous_changelogs(): pass
+def view_log(): pass
+def empty_log(): pass

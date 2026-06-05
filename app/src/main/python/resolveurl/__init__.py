@@ -286,5 +286,98 @@ def cleanup_settings():
     return False
 
 
-# Settings XML generation has been removed as settings.xml is no longer used outside Kodi.
-pass
+def _update_settings_xml():
+    """
+    This function writes a new ``resources/settings.xml`` file which contains
+    all settings for this addon and its plugins.
+    """
+    try:
+        os.makedirs(common.settings_path, exist_ok=True)
+    except OSError:
+        pass
+
+    new_xml = [
+        '<?xml version="1.0" encoding="utf-8" standalone="yes"?>',
+        '<settings>',
+        '\t<category label="ResolveURL">',
+        '\t\t<setting default="true" id="allow_universal" label="%s" type="bool"/>' % (common.i18n('enable_universal')),
+        '\t\t<setting default="true" id="allow_popups" label="%s" type="bool"/>' % (common.i18n('enable_popups')),
+        '\t\t<setting default="true" id="auto_pick" label="%s" type="bool"/>' % (common.i18n('auto_pick')),
+        '\t\t<setting default="true" id="use_cache" label="%s" type="bool"/>' % (common.i18n('use_function_cache')),
+        '\t\t<setting id="reset_cache" type="action" label="%s" action="RunPlugin(plugin://script.module.resolveurl/?mode=reset_cache)"/>' % (common.i18n('reset_function_cache')),
+        '\t\t<setting default="false" id="bp_enable" label="%s" type="bool"/>' % (common.i18n('enable_byparr')),
+        '\t\t<setting id="bp_url" visible="eq(-1,true)" enable="eq(-1,true)" type="text" label="%s" default="http://localhost:8191"/>' % (common.i18n('byparr_url')),
+        '\t\t<setting id="bp_timeout" visible="eq(-2,true)" enable="eq(-2,true)" type="slider" label="%s" default="60" range="30,30,180" option="int" />' % (common.i18n('byparr_timeout')),
+        '\t\t<setting id="personal_nid" label="Your NID" type="text" visible="false" default=""/>',
+        '\t\t<setting id="last_ua_create" label="last_ua_create" type="number" visible="false" default="0"/>',
+        '\t\t<setting id="current_ua" label="current_ua" type="text" visible="false" default=""/>',
+        '\t\t<setting id="addon_debug" label="addon_debug" type="bool" visible="false" default="false"/>',
+        '\t\t<setting id="clean_settings" type="action" label="%s" action="RunPlugin(plugin://script.module.resolveurl/?mode=clean_settings)"/>' % (common.i18n('clean_settings')),
+        '\t</category>',
+        '\t<category label="%s 1">' % (common.i18n('universal_resolvers'))]
+
+    i = 0
+    cat_count = 2
+    resolvers = relevant_resolvers(include_universal=True, include_disabled=True)
+    resolvers = sorted(resolvers, key=lambda x: x.name.upper())
+    for resolver in resolvers:
+        if resolver.isUniversal():
+            new_xml.append('\t\t<setting label="%s" type="lsep"/>' % resolver.name)
+            new_xml += ['\t\t' + line for line in resolver.get_settings_xml()]
+            i += 1
+        if i > 4:
+            new_xml.append('\t</category>')
+            new_xml.append('\t<category label="%s %s">' % (common.i18n('universal_resolvers'), cat_count))
+            cat_count += 1
+            i = 0
+    new_xml.append('\t</category>')
+    new_xml.append('\t<category label="%s 1">' % (common.i18n('resolvers')))
+
+    i = 0
+    cat_count = 2
+    for resolver in resolvers:
+        if not resolver.isUniversal():
+            if i > MAX_SETTINGS:
+                new_xml.append('\t</category>')
+                new_xml.append('\t<category label="%s %s">' % (common.i18n('resolvers'), cat_count))
+                cat_count += 1
+                i = 0
+            new_xml.append('\t\t<setting label="%s" type="lsep"/>' % resolver.name)
+            res_xml = resolver.get_settings_xml()
+            new_xml += ['\t\t' + line for line in res_xml]
+            i += len(res_xml) + 1
+
+    new_xml.append('\t</category>')
+    new_xml.append('</settings>')
+
+    try:
+        if six.PY3:
+            with open(common.settings_file, 'r', encoding='utf-8') as f:
+                old_xml = f.read()
+        else:
+            with open(common.settings_file, 'r') as f:
+                old_xml = f.read()
+    except:
+        old_xml = u''
+    old_xml = six.ensure_text(old_xml)
+
+    new_xml = six.ensure_text('\n'.join(new_xml))
+    if old_xml != new_xml:
+        common.logger.log_debug('Updating Settings XML')
+        try:
+            if six.PY3:
+                with open(common.settings_file, 'w', encoding='utf-8') as f:
+                    f.write(new_xml)
+            else:
+                with open(common.settings_file, 'w') as f:
+                    f.write(new_xml.encode('utf8'))
+        except:
+            raise
+        if cleanup_settings():
+            common.logger.log_debug('Cleaned User Settings XML')
+
+    else:
+        common.logger.log_debug('No Settings Update Needed')
+
+
+_update_settings_xml()

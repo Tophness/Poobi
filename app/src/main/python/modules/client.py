@@ -326,12 +326,24 @@ def request(url, close=True, redirect=True, error=False, verify=True, post=None,
         return
 
 
+_cf_sessions = {}
+
+
 def scrapePage(url, referer=None, headers=None, post=None, cookie=None, timeout='10'):
     try:
         if not url:
             return
         url =  "https:" + url if url.startswith('//') else url
-        with requests.Session() as session:
+        netloc = urllib_parse.urlparse(url).netloc
+        session = _cf_sessions.get(netloc)
+        if session is None:
+            try:
+                from resources.lib.modules import cfscrape
+                session = cfscrape.create_scraper()
+            except Exception:
+                session = requests.Session()
+            _cf_sessions[netloc] = session
+        try:
             if headers:
                 session.headers.update(headers)
             if (referer and not 'Referer' in session.headers):
@@ -366,6 +378,8 @@ def scrapePage(url, referer=None, headers=None, post=None, cookie=None, timeout=
             ###################################################################
             page.encoding = 'utf-8'
             #page.raise_for_status()  # Commented out to make trakt progress option work properly again lol
+        finally:
+            pass
         return page
     except Exception as e:
         #log_utils.log('scrapePage-Error: (%s) => %s' % (str(e), url))

@@ -17,6 +17,7 @@
 """
 
 import json
+import requests
 from six.moves import urllib_parse
 from resolveurl.lib import helpers
 from resolveurl.lib.aesgcm import python_aesgcm
@@ -45,32 +46,53 @@ class ByseResolver(ResolveUrl):
     )
 
     def get_media_url(self, host, media_id):
-        web_url = self.get_url(host, media_id)
-        ref = urllib_parse.urljoin(web_url, '/')
+        playback_url = 'https://{host}/api/videos/{media_id}/playback'.format(host=host, media_id=media_id)
+        origin_referer = 'https://{host}/'.format(host=host)
+
         headers = {
-            'User-Agent': common.FF_USER_AGENT,
-            'Referer': ref,
-            'Origin': ref[:-1]
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/114.0',
+            'Referer': origin_referer,
+            'Origin': origin_referer.rstrip('/'),
+            'Content-Type': 'application/json'
         }
-        html = self.net.http_POST(web_url, headers=headers, form_data=self.fp(16, 0.6, 0.9), jdata=True).content
-        html = json.loads(html)
-        sources = html.get('sources')
+        
+        payload = self.fp(16, 0.6, 0.9)
+        
+        try:
+            response = requests.post(playback_url, headers=headers, json=payload, timeout=10)
+            
+            if response.status_code != 200:
+                raise ResolverError('Server returned status code: %d' % response.status_code)
+                
+            html_data = response.json()
+        except Exception as e:
+            raise ResolverError('Request or JSON parse failed: %s' % str(e))
+
+        sources = html_data.get('sources')
         if sources:
             sources = [(x.get('label'), x.get('url')) for x in sources]
             uri = helpers.pick_source(helpers.sort_sources_list(sources))
             if uri.startswith('/'):
-                uri = urllib_parse.urljoin(web_url, uri)
+                uri = urllib_parse.urljoin(playback_url, uri)
             url = helpers.get_redirect_url(uri, headers=headers)
             return url + helpers.append_headers(headers)
-        pd = html.get('playback')
+            
+        # Decryption flow
+        pd = html_data.get('playback')
         if pd:
             iv = self.ft(pd.get('iv'))
             key = self.xn(pd.get('key_parts'))
             pl = self.ft(pd.get('payload'))
             cipher = python_aesgcm.new(key)
             ct = cipher.open(iv, pl)
-            ct = json.loads(ct.decode('latin-1'))
-            sources = ct.get('sources')
+            
+            try:
+                decrypted_text = ct.decode('utf-8')
+            except UnicodeDecodeError:
+                decrypted_text = ct.decode('latin-1')
+                
+            ct_json = json.loads(decrypted_text)
+            sources = ct_json.get('sources')
             if sources:
                 sources = [(x.get('label'), x.get('url')) for x in sources]
                 uri = helpers.pick_source(helpers.sort_sources_list(sources))
@@ -82,16 +104,28 @@ class ByseResolver(ResolveUrl):
         redirect_domains = ['boosteradx.online', 'byse.sx']
         if host in redirect_domains:
             host = 'streamlyplayer.online'
-        return self._default_get_url(host, media_id, 'https://{host}/api/videos/{media_id}/playback')
+        return 'https://{host}/d/{media_id}'.format(host=host, media_id=media_id)
 
     @staticmethod
     def ft(e):
+        if not e:
+            return b''
         t = e.replace('-', '+').replace('_', '/')
+        missing_padding = len(t) % 4
+        if missing_padding:
+            t += '=' * (4 - missing_padding)
         return helpers.b64decode(t, binary=True)
 
     def xn(self, e):
-        t = list(map(self.ft, e))
-        return b''.join(t)
+        decoded_parts = []
+        for part in e:
+            try:
+                decoded_parts.append(self.ft(part))
+            except Exception:
+                pass
+
+        active_parts = [part for part in decoded_parts if len(part) == 16]
+        return b''.join(active_parts)
 
     @staticmethod
     def fp(x, y, z):
@@ -113,7 +147,4 @@ class ByseResolver(ResolveUrl):
         t_bdata = helpers.b64urlencode(json.dumps(t_data), strip=True)
         t_sig = helpers.b64urlencode(sha256(t_bdata.encode()).digest(), strip=True)
         token = '{0}.{1}'.format(t_bdata, t_sig)
-        t_data.update({'token': token})
-        t_data.pop('iat')
-        t_data.pop('exp')
-        return {'fingerprint': t_data}
+        return {'fingerprint': {'viewer_id': v_id, 'device_id': d_id, 'confidence': t_data['confidence'], 'token': token}}

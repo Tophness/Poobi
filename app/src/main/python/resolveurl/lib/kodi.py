@@ -41,10 +41,21 @@ def open_settings(): print("[ResolveURL] Open Settings Requested")
 def get_keyboard(heading, default='', hide_input=False): return default
 def i18n(string_id): return str(strings.STRINGS.get(string_id, string_id))
 def get_plugin_url(queries): return ""
+def end_of_directory(cache_to_disc=True): pass
+def set_content(content): pass
+def create_item(*args, **kwargs): pass
+def add_item(*args, **kwargs): pass
+def parse_query(query): return {'mode': 'main'}
 def notify(header=None, msg='', duration=2000, sound=None): print(f"[ResolveURL] {header or 'Notify'}: {msg}")
+def close_all(): pass
+def get_current_view(): return ""
 def yesnoDialog(heading='', line1='', line2='', line3='', nolabel='', yeslabel=''): return True
 def has_addon(addon_id): return False
 def sleep(ms): time.sleep(ms / 1000.0)
+
+class WorkingDialog(object):
+    def __enter__(self): return self
+    def __exit__(self, type, value, traceback): pass
 
 class ProgressDialog(object):
     def __init__(self, *args, **kwargs): pass
