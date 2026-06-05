@@ -142,6 +142,7 @@ class SettingsActivity : AppCompatActivity() {
         val catPlayer = findViewById<Button>(R.id.cat_player)
         val catInterface = findViewById<Button>(R.id.cat_interface)
         val catAutoplay = findViewById<Button>(R.id.cat_autoplay)
+        val catSorting = findViewById<Button>(R.id.cat_sorting)
         val catStreaming = findViewById<Button>(R.id.cat_streaming)
         val catSubtitles = findViewById<Button>(R.id.cat_subtitles)
         val catBlocked = findViewById<Button>(R.id.cat_blocked)
@@ -151,6 +152,7 @@ class SettingsActivity : AppCompatActivity() {
         val panelPlayer = findViewById<LinearLayout>(R.id.panel_player)
         val panelInterface = findViewById<LinearLayout>(R.id.panel_interface)
         val panelAutoplay = findViewById<LinearLayout>(R.id.panel_autoplay)
+        val panelSorting = findViewById<LinearLayout>(R.id.panel_sorting)
         val panelStreaming = findViewById<LinearLayout>(R.id.panel_streaming)
         val panelSubtitles = findViewById<LinearLayout>(R.id.panel_subtitles)
         val panelBlocked = findViewById<LinearLayout>(R.id.panel_blocked)
@@ -175,6 +177,7 @@ class SettingsActivity : AppCompatActivity() {
             panelPlayer.visibility = View.GONE
             panelInterface.visibility = View.GONE
             panelAutoplay.visibility = View.GONE
+            panelSorting.visibility = View.GONE
             panelStreaming.visibility = View.GONE
             panelSubtitles.visibility = View.GONE
             panelBlocked.visibility = View.GONE
@@ -185,6 +188,7 @@ class SettingsActivity : AppCompatActivity() {
             catPlayer.alpha = 0.5f
             catInterface.alpha = 0.5f
             catAutoplay.alpha = 0.5f
+            catSorting.alpha = 0.5f
             catStreaming.alpha = 0.5f
             catSubtitles.alpha = 0.5f
             catBlocked.alpha = 0.5f
@@ -196,6 +200,9 @@ class SettingsActivity : AppCompatActivity() {
 
             if (panel == panelAutoplay) {
                 refreshAutoplayProfiles()
+            }
+            if (panel == panelSorting) {
+                refreshSortingPanel()
             }
             if (panel == panelStreaming) {
                 refreshStreamingPanel()
@@ -224,6 +231,7 @@ class SettingsActivity : AppCompatActivity() {
                     R.id.cat_player -> showPanel(panelPlayer, catPlayer)
                     R.id.cat_interface -> showPanel(panelInterface, catInterface)
                     R.id.cat_autoplay -> showPanel(panelAutoplay, catAutoplay)
+                    R.id.cat_sorting -> showPanel(panelSorting, catSorting)
                     R.id.cat_streaming -> showPanel(panelStreaming, catStreaming)
                     R.id.cat_subtitles -> showPanel(panelSubtitles, catSubtitles)
                     R.id.cat_blocked -> showPanel(panelBlocked, catBlocked)
@@ -236,6 +244,7 @@ class SettingsActivity : AppCompatActivity() {
         catPlayer.onFocusChangeListener = focusListener
         catInterface.onFocusChangeListener = focusListener
         catAutoplay.onFocusChangeListener = focusListener
+        catSorting.onFocusChangeListener = focusListener
         catStreaming.onFocusChangeListener = focusListener
         catSubtitles.onFocusChangeListener = focusListener
         catBlocked.onFocusChangeListener = focusListener
@@ -641,6 +650,82 @@ class SettingsActivity : AppCompatActivity() {
         for (i in 0 until array.length()) { if (i != index) newArray.put(array.get(i)) }
         prefs.edit().putString("blocked_elements", newArray.toString()).apply()
         refreshBlockedElements()
+    }
+
+    private fun refreshSortingPanel() {
+        val container = findViewById<LinearLayout>(R.id.sorting_priorities_container) ?: return
+        container.removeAllViews()
+        val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
+        
+        val priorities = mutableListOf<SortCriteria>()
+        val json = prefs.getString("sort_priorities", null)
+        if (json != null) {
+            try {
+                val array = JSONArray(json)
+                for (i in 0 until array.length()) {
+                    priorities.add(SortCriteria.valueOf(array.getString(i)))
+                }
+            } catch (e: Exception) {
+                priorities.addAll(SourceSorter.DEFAULT_PRIORITIES)
+            }
+        } else {
+            priorities.addAll(SourceSorter.DEFAULT_PRIORITIES)
+        }
+
+        val inflater = android.view.LayoutInflater.from(this)
+        priorities.forEachIndexed { index, criteria ->
+            val row = inflater.inflate(R.layout.item_sort_priority, container, false)
+            row.findViewById<TextView>(R.id.criteria_name).text = when(criteria) {
+                SortCriteria.NATIVE -> "Native Player (ExoPlayer)"
+                SortCriteria.RESOLUTION -> "Resolution (4K, 1080p, etc.)"
+                SortCriteria.DIRECT -> "Direct Link (vs HLS/Stream)"
+                SortCriteria.SOURCE -> "Source/Host Name"
+            }
+
+            val btnUp = row.findViewById<ImageButton>(R.id.btn_up)
+            val btnDown = row.findViewById<ImageButton>(R.id.btn_down)
+
+            btnUp.visibility = if (index > 0) View.VISIBLE else View.INVISIBLE
+            btnUp.isFocusable = index > 0
+            btnDown.visibility = if (index < priorities.size - 1) View.VISIBLE else View.INVISIBLE
+            btnDown.isFocusable = index < priorities.size - 1
+
+            btnUp.setOnClickListener {
+                if (index > 0) {
+                    val temp = priorities[index]
+                    priorities[index] = priorities[index - 1]
+                    priorities[index - 1] = temp
+                    saveSortPriorities(priorities)
+                    refreshSortingPanel()
+                    val targetRow = container.getChildAt(index - 1)
+                    val targetBtn = targetRow.findViewById<View>(R.id.btn_up)
+                    if (targetBtn.visibility == View.VISIBLE) targetBtn.requestFocus()
+                    else targetRow.findViewById<View>(R.id.btn_down).requestFocus()
+                }
+            }
+
+            btnDown.setOnClickListener {
+                if (index < priorities.size - 1) {
+                    val temp = priorities[index]
+                    priorities[index] = priorities[index + 1]
+                    priorities[index + 1] = temp
+                    saveSortPriorities(priorities)
+                    refreshSortingPanel()
+                    val targetRow = container.getChildAt(index + 1)
+                    val targetBtn = targetRow.findViewById<View>(R.id.btn_down)
+                    if (targetBtn.visibility == View.VISIBLE) targetBtn.requestFocus()
+                    else targetRow.findViewById<View>(R.id.btn_up).requestFocus()
+                }
+            }
+            container.addView(row)
+        }
+    }
+
+    private fun saveSortPriorities(priorities: List<SortCriteria>) {
+        val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
+        val array = JSONArray()
+        priorities.forEach { array.put(it.name) }
+        prefs.edit().putString("sort_priorities", array.toString()).apply()
     }
 
     private fun refreshStreamingPanel() {

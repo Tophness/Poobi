@@ -82,6 +82,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var streamsResultsScroll: ScrollView
     private lateinit var btnStreamsBack: ImageButton
     private lateinit var btnStreamsStop: Button
+    private lateinit var btnStreamsSort: Button
     private lateinit var streamsHistoryContainer: LinearLayout
     private lateinit var btnStreamsClearHistory: Button
     private lateinit var streamsHistoryLayout: LinearLayout
@@ -95,6 +96,7 @@ class MainActivity : AppCompatActivity() {
     private var lastScrapedEpisode: Int? = null
     private var currentStreamingTitle: String? = null
     private var lastVideoTitle: String? = null
+    private var currentSources: JSONArray? = null
     private var webViews = mutableListOf<WebView>()
     private var webViewHosts = java.util.WeakHashMap<WebView, String>()
     private var currentTabIndex = -1
@@ -254,6 +256,7 @@ class MainActivity : AppCompatActivity() {
         streamsResultsScroll = findViewById(R.id.streams_results_scroll)
         btnStreamsBack = findViewById(R.id.btn_streams_back)
         btnStreamsStop = findViewById(R.id.btn_streams_stop)
+        btnStreamsSort = findViewById(R.id.btn_streams_sort)
         streamsHistoryContainer = findViewById(R.id.streams_history_container)
         btnStreamsClearHistory = findViewById(R.id.btn_streams_clear_history)
         streamsHistoryLayout = findViewById(R.id.streams_history_layout)
@@ -353,6 +356,10 @@ class MainActivity : AppCompatActivity() {
             } else {
                 goBackToHistory()
             }
+        }
+
+        btnStreamsSort.setOnClickListener {
+            showSortPriorityDialog()
         }
 
         streamsSearchBtn.setOnClickListener { performStreamSearch() }
@@ -979,11 +986,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun displaySources(sources: JSONArray, isFinished: Boolean = false) {
+    private fun displaySources(sources: JSONArray, isFinished: Boolean = false, forceRefresh: Boolean = false) {
+        currentSources = sources
         val inflater = LayoutInflater.from(this)
         
         val currentTag = streamsResultsContainer.tag as? Int ?: 0
-        if (sources.length() > 0 && sources.length() == currentTag) return
+        if (!forceRefresh && sources.length() > 0 && sources.length() == currentTag) return
         streamsResultsContainer.tag = sources.length()
 
         streamsResultsContainer.removeAllViews()
@@ -998,8 +1006,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 streamsResultsContainer.addView(emptyView)
             }
+            btnStreamsSort.visibility = View.GONE
             return
         }
+
+        btnStreamsSort.visibility = View.VISIBLE
+
+        val priorities = getSortPriorities()
+        val sortedSources = SourceSorter(priorities).sort(sources)
 
         // Add a "Find Subtitles" button at the top
         val subBtn = Button(this).apply {
@@ -1019,8 +1033,8 @@ class MainActivity : AppCompatActivity() {
         }
         streamsResultsContainer.addView(subBtn)
 
-        for (i in 0 until sources.length()) {
-            val item = sources.getJSONObject(i)
+        for (i in 0 until sortedSources.length()) {
+            val item = sortedSources.getJSONObject(i)
             val displayTitle = item.optString("title")
             val sourceData = item.optString("source_data")
 
@@ -1040,6 +1054,102 @@ class MainActivity : AppCompatActivity() {
             streamsResultsContainer.addView(view)
             if (i == 0 && !streamsResultsContainer.hasFocus()) view.post { view.requestFocus() }
         }
+    }
+
+    private fun getSortPriorities(): List<SortCriteria> {
+        val json = prefs.getString("sort_priorities", null)
+        if (json != null) {
+            try {
+                val array = JSONArray(json)
+                val list = mutableListOf<SortCriteria>()
+                for (i in 0 until array.length()) {
+                    list.add(SortCriteria.valueOf(array.getString(i)))
+                }
+                return list
+            } catch (e: Exception) {}
+        }
+        return SourceSorter.DEFAULT_PRIORITIES
+    }
+
+    private fun saveSortPriorities(priorities: List<SortCriteria>) {
+        val array = JSONArray()
+        priorities.forEach { array.put(it.name) }
+        prefs.edit().putString("sort_priorities", array.toString()).apply()
+    }
+
+    private fun showSortPriorityDialog() {
+        val priorities = getSortPriorities().toMutableList()
+        val inflater = LayoutInflater.from(this)
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 40, 40, 40)
+        }
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
+        fun refreshList() {
+            container.removeAllViews()
+            priorities.forEachIndexed { index, criteria ->
+                val row = inflater.inflate(R.layout.item_sort_priority, container, false)
+                row.findViewById<TextView>(R.id.criteria_name).text = when(criteria) {
+                    SortCriteria.NATIVE -> "Native Player (ExoPlayer)"
+                    SortCriteria.RESOLUTION -> "Resolution (4K, 1080p, etc.)"
+                    SortCriteria.DIRECT -> "Direct Link (vs HLS/Stream)"
+                    SortCriteria.SOURCE -> "Source/Host Name"
+                }
+
+                val btnUp = row.findViewById<ImageButton>(R.id.btn_up)
+                val btnDown = row.findViewById<ImageButton>(R.id.btn_down)
+
+                btnUp.visibility = if (index > 0) View.VISIBLE else View.INVISIBLE
+                btnUp.isFocusable = index > 0
+                btnDown.visibility = if (index < priorities.size - 1) View.VISIBLE else View.INVISIBLE
+                btnDown.isFocusable = index < priorities.size - 1
+
+                btnUp.setOnClickListener {
+                    if (index > 0) {
+                        val temp = priorities[index]
+                        priorities[index] = priorities[index - 1]
+                        priorities[index - 1] = temp
+                        refreshList()
+                        val targetRow = container.getChildAt(index - 1)
+                        val targetBtn = targetRow.findViewById<View>(R.id.btn_up)
+                        if (targetBtn.visibility == View.VISIBLE) targetBtn.requestFocus()
+                        else targetRow.findViewById<View>(R.id.btn_down).requestFocus()
+                    }
+                }
+
+                btnDown.setOnClickListener {
+                    if (index < priorities.size - 1) {
+                        val temp = priorities[index]
+                        priorities[index] = priorities[index + 1]
+                        priorities[index + 1] = temp
+                        refreshList()
+                        val targetRow = container.getChildAt(index + 1)
+                        val targetBtn = targetRow.findViewById<View>(R.id.btn_down)
+                        if (targetBtn.visibility == View.VISIBLE) targetBtn.requestFocus()
+                        else targetRow.findViewById<View>(R.id.btn_up).requestFocus()
+                    }
+                }
+                container.addView(row)
+            }
+        }
+
+        refreshList()
+        layout.addView(container)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Sort Priorities")
+            .setView(layout)
+            .setPositiveButton("Apply") { _, _ ->
+                saveSortPriorities(priorities)
+                currentSources?.let { displaySources(it, isFinished = true, forceRefresh = true) }
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+        dialog.show()
     }
 
     private fun showSubtitlePicker(item: JSONObject, season: Int?, episode: Int?) {
@@ -1183,15 +1293,16 @@ class MainActivity : AppCompatActivity() {
                         )
 
                         if (silent) {
-                            // If playing, add to current player
                             exoPlayer?.let { player ->
                                 val mimeType = if (subUri.contains(".vtt")) MimeTypes.TEXT_VTT
                                 else if (subUri.contains(".ass")) MimeTypes.TEXT_SSA
                                 else MimeTypes.APPLICATION_SUBRIP
 
+                                val resolvedLang = if (!label.isNullOrEmpty()) null else lang
+
                                 val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUri))
                                     .setMimeType(mimeType)
-                                    .setLanguage(lang)
+                                    .setLanguage(resolvedLang)
                                     .setLabel(label)
                                     .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                                     .setRoleFlags(C.ROLE_FLAG_SUBTITLE)
@@ -2441,8 +2552,8 @@ class MainActivity : AppCompatActivity() {
             else if (subUrl.contains(".ass")) MimeTypes.TEXT_SSA
             else MimeTypes.APPLICATION_SUBRIP
 
-            val lang = infoMap["lang"] ?: getLanguageInfo(subUrl).first
             val label = infoMap["label"] ?: getLanguageInfo(subUrl).second
+            val lang = if (!label.isNullOrEmpty()) null else (infoMap["lang"] ?: getLanguageInfo(subUrl).first)
 
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
                 .setMimeType(mimeType)

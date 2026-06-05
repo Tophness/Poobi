@@ -190,6 +190,19 @@
                 android:textColor="#FFF"
                 android:visibility="gone"
                 android:textAllCaps="false"/>
+            <Button
+                android:id="@+id/btn_streams_sort"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="Sort"
+                android:drawableStart="@drawable/ic_sort"
+                android:drawablePadding="10dp"
+                android:paddingHorizontal="20dp"
+                android:background="@drawable/bg_focusable"
+                android:textColor="#FFF"
+                android:layout_marginStart="10dp"
+                android:textAllCaps="false"
+                android:visibility="gone"/>
         </LinearLayout>
 
         <LinearLayout

@@ -40,6 +40,7 @@
                 <Button android:id="@+id/cat_streaming" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Streaming" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
                 <Button android:id="@+id/cat_autoplay" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Autoplay" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false" android:nextFocusRight="@+id/video_trigger_btn"/>
                 <Button android:id="@+id/cat_subtitles" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Subtitles" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
+                <Button android:id="@+id/cat_sorting" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Source Sorting" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
                 <Button android:id="@+id/cat_blocked" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Blocked Elements" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
 
             </LinearLayout>
@@ -202,6 +203,15 @@
                 <EditText android:id="@+id/opensub_org_pass_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="12dp" android:hint="OpenSubtitles.org Password" android:inputType="textPassword" android:layout_marginBottom="8dp" android:nextFocusLeft="@+id/cat_subtitles"/>
                 <EditText android:id="@+id/subdl_key_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="12dp" android:hint="SubDL API Key" android:layout_marginBottom="8dp" android:nextFocusLeft="@+id/cat_subtitles"/>
                 <EditText android:id="@+id/subsource_key_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="12dp" android:hint="Subsource API Key" android:layout_marginBottom="16dp" android:nextFocusLeft="@+id/cat_subtitles"/>
+            </LinearLayout>
+
+            <!-- SORTING CATEGORY -->
+            <LinearLayout android:id="@+id/panel_sorting" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Source Sorting Priorities" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Drag or use arrows to set the priority order for source results. The top item is the primary sort criteria." android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="16dp"/>
+
+                <LinearLayout android:id="@+id/sorting_priorities_container" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
             </LinearLayout>
 
         </FrameLayout>
