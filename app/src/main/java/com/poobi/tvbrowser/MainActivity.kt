@@ -35,6 +35,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -2508,10 +2509,12 @@ class MainActivity : AppCompatActivity() {
         exoPlayer?.release()
 
         val headers = interceptedMediaUrls[videoUrl] ?: emptyMap()
-        val dataSourceFactory = DefaultHttpDataSource.Factory()
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(currentWebView?.settings?.userAgentString ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
+
+        val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
 
         exoPlayer = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(dataSourceFactory))
