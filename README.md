@@ -49,6 +49,10 @@ Poobi features a powerful scraping engine that searches for high-quality streams
 <img width="1920" height="1080" alt="Screenshot_20260521_021149" src="https://github.com/user-attachments/assets/4033d42b-96d0-4ea7-8832-35b802878749" />
 <img width="1920" height="1080" alt="Screenshot_20260521_021245" src="https://github.com/user-attachments/assets/b51a91a8-eca6-4cde-9950-e6d124f6fee7" />
 <img width="1920" height="1080" alt="Screenshot_20260521_021612" src="https://github.com/user-attachments/assets/1ad0ed94-6697-4d06-ab50-adf5f1aa2a88" />
+<img width="1920" height="1080" alt="Screenshot_20260605_183616" src="https://github.com/user-attachments/assets/99f8c292-0b20-4c7e-b090-77965f9bd1ba" />
+<img width="1920" height="1080" alt="Screenshot_20260605_183649" src="https://github.com/user-attachments/assets/c55ec865-78ec-4657-9054-7031c8864483" />
+<img width="1920" height="1080" alt="Screenshot_20260605_183824" src="https://github.com/user-attachments/assets/59f07c57-5191-45bf-b976-2e1fb75aa10e" />
+<img width="1920" height="1080" alt="Screenshot_20260605_184255" src="https://github.com/user-attachments/assets/85c405b8-6b8e-424e-8ff3-762b7093f5f1" />
 
 # Installation
 
