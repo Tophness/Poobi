@@ -2935,11 +2935,6 @@ class MainActivity : AppCompatActivity() {
                 nativeVideoView.requestFocus()
             }
             if (event.action == KeyEvent.ACTION_DOWN) {
-                // Smooth seeking: If controller is hidden OR if seek bar is focused (conceptually, we assume DPAD keys are for seeking if not navigation elements)
-                // Actually, let's stick to the rule: Seek if controller is hidden. 
-                // If controller is visible, let D-pad move focus. 
-                // BUT, if focus is ON the seek bar (or just generally), we want our smooth seek.
-                
                 val isControllerVisible = nativeVideoView.isControllerFullyVisible
                 if (!isControllerVisible) {
                     when (event.keyCode) {
@@ -2957,6 +2952,17 @@ class MainActivity : AppCompatActivity() {
                         when (event.keyCode) {
                             KeyEvent.KEYCODE_DPAD_LEFT -> { seekVideo(-1, event.repeatCount); return true }
                             KeyEvent.KEYCODE_DPAD_RIGHT -> { seekVideo(1, event.repeatCount); return true }
+                            // Fix for being stuck on seek bar: UP from seek bar should go to play/pause button
+                            KeyEvent.KEYCODE_DPAD_UP -> {
+                                val playPauseId = resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui")
+                                if (playPauseId != 0) {
+                                    val playPause = nativeVideoView.findViewById<View>(playPauseId)
+                                    if (playPause != null && playPause.visibility == View.VISIBLE) {
+                                        playPause.requestFocus()
+                                        return true
+                                    }
+                                }
+                            }
                         }
                     }
                 }
