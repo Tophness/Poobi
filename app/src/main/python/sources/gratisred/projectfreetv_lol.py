@@ -22,15 +22,6 @@ from resources.lib.modules import scrape_sources
 
 DOM = client_utils.parseDOM
 
-LOG_PATH = "E:\\Downloads\\streamscraper\\debug.log"
-
-def log(msg):
-    try:
-        with open(LOG_PATH, 'a') as f:
-            f.write(str(msg) + '\n')
-    except Exception:
-        pass
-
 class source:
     def __init__(self):
         self.results = []
@@ -66,13 +57,10 @@ class source:
 
     def sources(self, url, hostDict):
         try:
-            log(url)
             if not url:
                 return self.results
             data = parse_qs(url)
-            log(data)
             data = dict([(i, data[i][0]) if data[i] else (i, '') for i in data])
-            log(data)
             is_show = 'tvshowtitle' in data
             title = data['tvshowtitle'] if is_show else data.get('title', '')
             year = data.get('premiered', '') if is_show else data.get('year', '')
@@ -103,7 +91,6 @@ class source:
             # Step 1: episode page -> locate the vembed URL (the only iframe
             # on the episode page is the hdplayer that points to /vembed/<id>/)
             ep_html = _fetch_text(result_url, referer=self.base_link)
-            log(('ep_html_len', len(ep_html)))
             if not ep_html:
                 return self.results
 
@@ -114,14 +101,12 @@ class source:
                         vembed_urls.append(self.base_link + src if not src.startswith('http') else src)
             except Exception:
                 pass
-            log(('vembed_urls', vembed_urls))
             if not vembed_urls:
                 try:
                     for src in re.findall(r'[\"\'](https?://[^\"\'<>]*?/vembed/[^\"\'<>]+)[\"\'<>]', ep_html, re.I):
                         vembed_urls.append(src)
                 except Exception:
                     pass
-                log(('vembed_urls_fallback', vembed_urls))
 
             if not vembed_urls:
                 return self.results
@@ -130,17 +115,14 @@ class source:
             all_source_ids = []
             for vurl in vembed_urls:
                 vhtml = _fetch_text(vurl, referer=result_url)
-                log(('vembed_html_len', len(vhtml), vurl))
                 if not vhtml:
                     continue
                 sel = DOM(vhtml, 'select', attrs={'id': 'sourceSelect'})
-                log(('sourceSelect_found', bool(sel)))
                 ids = []
                 if sel:
                     ids = DOM(sel[0], 'option', ret='value')
                 else:
                     ids = re.findall(r'<option[^>]*value=[\"\']([^\"\'<>]+)[\"\'<>]', vhtml, re.I)
-                log(('option_values', ids))
                 for vid in ids:
                     vid = (vid or '').strip()
                     if vid:
@@ -148,7 +130,6 @@ class source:
 
             seen = set()
             source_ids = [s for s in all_source_ids if not (s in seen or seen.add(s))]
-            log(('source_ids_final', source_ids))
 
             # Step 3: for each source_id, fetch /external/asset/<id>/ and
             # pull the iframe src -> hand to resolveurl via scrape_sources.process
@@ -156,11 +137,9 @@ class source:
                 try:
                     asset_url = self.base_link + '/external/asset/%s/' % source_id
                     asset_html = _fetch_text(asset_url, referer=vembed_urls[0] if vembed_urls else self.base_link)
-                    log(('asset', source_id, 'len', len(asset_html)))
                     if not asset_html:
                         continue
                     iframes = DOM(asset_html, 'iframe', ret='src')
-                    log(('asset_iframes', source_id, iframes))
                     for link in iframes:
                         try:
                             if not link:
@@ -175,7 +154,6 @@ class source:
                 except Exception:
                     continue
 
-            log(('results_count', len(self.results)))
             return self.results
         except Exception:
             return self.results
@@ -201,6 +179,5 @@ class source:
                 except Exception:
                     pass
             except Exception:
-                #log_utils.log('resolve', 1)
                 pass
         return url
