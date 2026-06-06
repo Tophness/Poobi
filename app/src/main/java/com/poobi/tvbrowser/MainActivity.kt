@@ -3054,17 +3054,19 @@ class MainActivity : AppCompatActivity() {
                     // If visible, check if we are on a "seek" action or just moving focus
                     // Standard ExoPlayer behavior is jumpy. To use smooth seek with visible bar, 
                     // we'd need to know what's focused. 
-                    // For now, let's restore smooth seek for LEFT/RIGHT when NOT on a button.
                     val focusedView = currentFocus
+                    val playPauseId = resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui")
+                    val isPlayPause = playPauseId != 0 && focusedView?.id == playPauseId
                     val isButton = focusedView is ImageButton || focusedView is Button
-                    if (!isButton) {
+
+                    // Allow smooth seek if NOT on a button, OR specifically on the Play/Pause button
+                    if (!isButton || isPlayPause) {
                         when (event.keyCode) {
                             KeyEvent.KEYCODE_DPAD_LEFT -> { seekVideo(-1, event.repeatCount); return true }
                             KeyEvent.KEYCODE_DPAD_RIGHT -> { seekVideo(1, event.repeatCount); return true }
                             // Fix for being stuck on seek bar: UP from seek bar should go to play/pause button
                             KeyEvent.KEYCODE_DPAD_UP -> {
-                                val playPauseId = resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui")
-                                if (playPauseId != 0) {
+                                if (!isPlayPause && playPauseId != 0) {
                                     val playPause = nativeVideoView.findViewById<View>(playPauseId)
                                     if (playPause != null && playPause.visibility == View.VISIBLE) {
                                         playPause.requestFocus()
@@ -3077,7 +3079,11 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-                    hideFullscreenVideo()
+                    if (isControllerVisible) {
+                        nativeVideoView.hideController()
+                    } else {
+                        hideFullscreenVideo()
+                    }
                     return true
                 }
             }
