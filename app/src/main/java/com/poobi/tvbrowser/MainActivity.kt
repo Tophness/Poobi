@@ -457,7 +457,8 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     val py = Python.getInstance()
-                    py.getModule("main").callAttr("resume_scrape")
+                    val scraper = py.getModule("main")
+                    scraper.callAttr("resume_scrape")
                 } catch (e: Exception) {}
             }
         }
@@ -468,6 +469,8 @@ class MainActivity : AppCompatActivity() {
         streamsResultsScroll.visibility = View.GONE
         btnStreamsBack.visibility = View.GONE
         streamsSearchBarLayout.visibility = View.VISIBLE
+        streamsCountText.visibility = View.GONE
+        streamsCountText.text = ""
         refreshStreamsHistory()
         streamsSearchInput.post { streamsSearchInput.requestFocus() }
     }
@@ -479,6 +482,8 @@ class MainActivity : AppCompatActivity() {
         addToStreamsHistory(query)
         streamsProgress.visibility = View.VISIBLE
         streamsResultsContainer.removeAllViews()
+        streamsCountText.visibility = View.GONE
+        streamsCountText.text = ""
         streamsResultsScroll.visibility = View.VISIBLE
         btnStreamsBack.visibility = View.GONE
         streamsHistoryLayout.visibility = View.GONE
@@ -800,6 +805,8 @@ class MainActivity : AppCompatActivity() {
     private fun displayStreamResults(results: JSONArray) {
         val inflater = LayoutInflater.from(this)
         streamsResultsContainer.removeAllViews()
+        streamsCountText.visibility = View.GONE
+        streamsCountText.text = ""
         for (i in 0 until results.length()) {
             val item = results.getJSONObject(i)
             val view = inflater.inflate(R.layout.item_stream, streamsResultsContainer, false)
@@ -874,6 +881,10 @@ class MainActivity : AppCompatActivity() {
         streamsProgress.progress = 0
         streamsResultsContainer.removeAllViews()
         streamsResultsContainer.tag = -1 // Reset tag
+        streamsCountText.visibility = View.GONE // Reset count text
+        streamsCountText.text = ""
+        subtitlesStatus.visibility = View.GONE
+        subtitlesStatus.text = ""
         streamsResultsScroll.visibility = View.VISIBLE
         btnStreamsBack.visibility = View.VISIBLE // Allow going back while scraping
         btnStreamsStop.visibility = View.VISIBLE
@@ -963,6 +974,14 @@ class MainActivity : AppCompatActivity() {
                             btnStreamsStop.visibility = View.GONE
                             subtitlesStatus.visibility = View.GONE
                             streamsProgress.visibility = View.GONE
+
+                            // Ensure final count is shown
+                            val finalCount = sources?.length() ?: 0
+                            if (finalCount > 0) {
+                                streamsCountText.text = "Total Sources Found: $finalCount"
+                                streamsCountText.visibility = View.VISIBLE
+                            }
+
                             if (hadFocus) {
                                 if (streamsResultsContainer.childCount > 0 && streamsResultsContainer.getChildAt(0).isFocusable) {
                                     streamsResultsContainer.getChildAt(0).requestFocus()

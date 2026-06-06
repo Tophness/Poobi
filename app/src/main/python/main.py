@@ -290,7 +290,7 @@ class UniversalScraper:
         max_wait = global_to if mode in ["Global", "Both"] else (per_source_to + 5)
         self.status["timeout"] = max_wait
         
-        start_time = time.time()
+        start_time = time.monotonic()
         paused_duration = 0
         while any(t.is_alive() for t in threads):
             if self.stop_event.is_set():
@@ -298,17 +298,19 @@ class UniversalScraper:
                 break
 
             if not self.pause_event.is_set():
-                p_start = time.time()
+                p_start = time.monotonic()
                 self.status["message"] = "Paused..."
                 while not self.pause_event.is_set():
                     if self.stop_event.is_set(): break
-                    time.sleep(0.5)
-                paused_duration += (time.time() - p_start)
+                    time.sleep(0.2)
+                paused_duration += (time.monotonic() - p_start)
                 if self.stop_event.is_set():
                     self.status["message"] = "Stopped!"
                     break
+                self.status["message"] = "Resuming..."
+                time.sleep(0.1) # Let threads catch up
 
-            elapsed = time.time() - start_time - paused_duration
+            elapsed = time.monotonic() - start_time - paused_duration
             if elapsed > max_wait: 
                 self.status["message"] = "Timeout reached!"
                 break
@@ -318,7 +320,10 @@ class UniversalScraper:
             time.sleep(0.5)
 
         if not self.stop_event.is_set():
-            self.status["message"] = f"Finished! Found {len(self.sources)} sources."
+            if self.status["message"] != "Timeout reached!":
+                self.status["message"] = f"Finished! Found {len(self.sources)} sources."
+            else:
+                self.status["message"] = f"Timeout reached! Found {len(self.sources)} sources."
 
         # Quality sorting
         quality_map = {'4k': 0, '1080p': 1, '720p': 2, 'hd': 2, 'sd': 3, 'cam': 4, 'scr': 4}
@@ -339,7 +344,7 @@ class UniversalScraper:
             
             while not self.pause_event.is_set():
                 if self.stop_event.is_set(): return
-                time.sleep(0.5)
+                time.sleep(0.2)
 
             if content == 'movie':
                 sig = inspect.signature(provider.movie)
@@ -365,7 +370,7 @@ class UniversalScraper:
                 if self.stop_event.is_set(): return
                 while not self.pause_event.is_set():
                     if self.stop_event.is_set(): return
-                    time.sleep(0.5)
+                    time.sleep(0.2)
 
                 sources_sig = inspect.signature(provider.sources)
                 if 'hostprDict' in sources_sig.parameters:
@@ -384,7 +389,6 @@ class UniversalScraper:
             self.status["current"] += 1
         except Exception:
             self.status["current"] += 1
-            # traceback.print_exc()
 
     def resolveSource(self, source_data):
         url = source_data.get('url')
