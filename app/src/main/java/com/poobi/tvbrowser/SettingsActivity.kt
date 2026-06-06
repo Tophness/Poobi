@@ -8,12 +8,19 @@ import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.Scope
+import com.google.api.services.drive.DriveScopes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,6 +51,31 @@ class SettingsActivity : AppCompatActivity() {
     private var upNextPopupPref = "Ask" // Ask, Always, Never
     private var upNextTime = 20 // seconds
     private var autoplayNextPref = "Closest Source" // Closest Source, Best Source, Ask
+
+    private lateinit var driveSyncManager: DriveSyncManager
+    private var googleSignInClient: GoogleSignInClient? = null
+
+    private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        Log.d("Settings", "ActivityResult received. Code: ${result.resultCode}")
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+            if (account != null) {
+                Log.d("Settings", "Sign-in successful: ${account.email}")
+                handleSignInSuccess(account)
+            } else {
+                Log.e("Settings", "Sign-in failed: Account is null")
+            }
+        } catch (e: com.google.android.gms.common.api.ApiException) {
+            Log.e("Settings", "Google sign in failed. Status Code: ${e.statusCode}", e)
+            val errorMsg = when(e.statusCode) {
+                10 -> "Developer Error (10): Check SHA-1 and Package Name in Console."
+                12500 -> "Sign-in Failed (12500): Check 'Support Email' in OAuth Consent Screen."
+                else -> "Sign-in failed: ${e.statusCode}"
+            }
+            Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
+        }
+    }
 
     // Streaming Settings
     private var timeoutMode = "Both"
@@ -153,6 +185,8 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
+        initPython()
+
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
 
         val catGeneral = findViewById<Button>(R.id.cat_general)
@@ -164,6 +198,7 @@ class SettingsActivity : AppCompatActivity() {
         val catStreaming = findViewById<Button>(R.id.cat_streaming)
         val catSubtitles = findViewById<Button>(R.id.cat_subtitles)
         val catBlocked = findViewById<Button>(R.id.cat_blocked)
+        val catSync = findViewById<Button>(R.id.cat_sync)
 
         val panelGeneral = findViewById<LinearLayout>(R.id.panel_general)
         val panelWeb = findViewById<LinearLayout>(R.id.panel_web)
@@ -174,6 +209,7 @@ class SettingsActivity : AppCompatActivity() {
         val panelStreaming = findViewById<LinearLayout>(R.id.panel_streaming)
         val panelSubtitles = findViewById<LinearLayout>(R.id.panel_subtitles)
         val panelBlocked = findViewById<LinearLayout>(R.id.panel_blocked)
+        val panelSync = findViewById<LinearLayout>(R.id.panel_sync)
 
         fun findFirstFocusable(view: View): View? {
             if (view.isFocusable && view.visibility == View.VISIBLE && view !is LinearLayout && view.id != View.NO_ID) return view
@@ -199,6 +235,7 @@ class SettingsActivity : AppCompatActivity() {
             panelStreaming.visibility = View.GONE
             panelSubtitles.visibility = View.GONE
             panelBlocked.visibility = View.GONE
+            panelSync.visibility = View.GONE
             panel.visibility = View.VISIBLE
 
             catGeneral.alpha = 0.5f
@@ -210,6 +247,7 @@ class SettingsActivity : AppCompatActivity() {
             catStreaming.alpha = 0.5f
             catSubtitles.alpha = 0.5f
             catBlocked.alpha = 0.5f
+            catSync.alpha = 0.5f
 
             activeCategory?.isSelected = false
             activeCategory = category
@@ -230,6 +268,9 @@ class SettingsActivity : AppCompatActivity() {
             }
             if (panel == panelBlocked) {
                 refreshBlockedElements()
+            }
+            if (panel == panelSync) {
+                updateSyncUI()
             }
 
             // Dynamic Focus: Point nextFocusRight to the first focusable element in the new panel
@@ -253,6 +294,7 @@ class SettingsActivity : AppCompatActivity() {
                     R.id.cat_streaming -> showPanel(panelStreaming, catStreaming)
                     R.id.cat_subtitles -> showPanel(panelSubtitles, catSubtitles)
                     R.id.cat_blocked -> showPanel(panelBlocked, catBlocked)
+                    R.id.cat_sync -> showPanel(panelSync, catSync)
                 }
             }
         }
@@ -266,6 +308,7 @@ class SettingsActivity : AppCompatActivity() {
         catStreaming.onFocusChangeListener = focusListener
         catSubtitles.onFocusChangeListener = focusListener
         catBlocked.onFocusChangeListener = focusListener
+        catSync.onFocusChangeListener = focusListener
 
         // Initial state
         showPanel(panelGeneral, catGeneral)
@@ -294,6 +337,11 @@ class SettingsActivity : AppCompatActivity() {
         // Load Prefs
         urlInput.setText(prefs.getString("custom_adblock_url", "https://easylist.to/easylist/easylist.txt"))
         ViewUtils.applySmartDpadFocus(urlInput)
+
+        driveSyncManager = DriveSyncManager(this)
+        setupGoogleSignIn()
+        updateSyncUI()
+
         silentPopupBlock = prefs.getBoolean("silent_popup_block", true)
         extractVideoPref = prefs.getInt("extract_video_pref", 0)
         videoTriggerPref = prefs.getInt("video_trigger_pref", 1)
@@ -318,7 +366,7 @@ class SettingsActivity : AppCompatActivity() {
                 upNextPopupPref = config.optString("up_next_popup_pref", "Ask")
                 upNextTime = config.optInt("up_next_time_pref", 20)
                 autoplayNextPref = config.optString("autoplay_next_pref", "Closest Source")
-                withContext(Dispatchers.Main) { 
+                withContext(Dispatchers.Main) {
                     upNextPrefBtn.text = "Up Next Mode: $upNextPopupPref"
                     if (upNextTimeInput.text.toString() != upNextTime.toString()) {
                         upNextTimeInput.setText(upNextTime.toString())
@@ -415,6 +463,9 @@ class SettingsActivity : AppCompatActivity() {
                 .putInt("navigation_mode_pref", navigationModePref)
                 .putInt("auto_sub_pref", autoSubPref)
                 .putInt("exo_fallback_pref", exoFallbackPref)
+                .putString("up_next_popup_pref", upNextPopupPref)
+                .putInt("up_next_time_pref", upNextTime)
+                .putString("autoplay_next_pref", autoplayNextPref)
                 .apply()
 
             // Save Binge settings to Python
@@ -437,7 +488,130 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             Toast.makeText(this, "Settings Saved!", Toast.LENGTH_SHORT).show()
+
+            val account = GoogleSignIn.getLastSignedInAccount(this)
+            if (account != null) {
+                lifecycleScope.launch {
+                    driveSyncManager.initService(account)
+                    driveSyncManager.uploadSettings()
+                }
+            }
+
             finish()
+        }
+    }
+
+    private fun initPython() {
+        if (!Python.isStarted()) {
+            Python.start(AndroidPlatform(this))
+        }
+    }
+
+    private fun setupGoogleSignIn() {
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+            .requestScopes(Scope(DriveScopes.DRIVE_APPDATA))
+            .build()
+        googleSignInClient = GoogleSignIn.getClient(this, gso)
+
+        findViewById<Button>(R.id.google_login_btn).setOnClickListener {
+            val account = GoogleSignIn.getLastSignedInAccount(this)
+            if (account == null) {
+                Log.d("Settings", "Starting sign-in flow...")
+                googleSignInClient?.let { client ->
+                    signInLauncher.launch(client.signInIntent)
+                } ?: Log.e("Settings", "GoogleSignInClient is null!")
+            } else {
+                googleSignInClient?.signOut()?.addOnCompleteListener {
+                    updateSyncUI()
+                }
+            }
+        }
+
+        findViewById<Button>(R.id.manual_sync_btn).setOnClickListener {
+            val account = GoogleSignIn.getLastSignedInAccount(this)
+            if (account != null) {
+                lifecycleScope.launch {
+                    findViewById<ProgressBar>(R.id.sync_progress).visibility = View.VISIBLE
+                    driveSyncManager.initService(account)
+                    val success = driveSyncManager.uploadSettings()
+                    findViewById<ProgressBar>(R.id.sync_progress).visibility = View.GONE
+                    Toast.makeText(this@SettingsActivity, if (success) "Sync successful!" else "Sync failed.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private suspend fun syncToPython() = withContext(Dispatchers.IO) {
+        try {
+            val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
+            val py = Python.getInstance()
+            val main = py.getModule("main")
+
+            val cfg = JSONObject().apply {
+                put("up_next_popup_pref", prefs.getString("up_next_popup_pref", "Ask"))
+                put("up_next_time_pref", prefs.getInt("up_next_time_pref", 20))
+                put("autoplay_next_pref", prefs.getString("autoplay_next_pref", "Closest Source"))
+
+                put("timeout_mode", prefs.getString("timeout_mode", "Both"))
+                put("global_timeout", prefs.getInt("global_timeout", 30))
+                put("per_source_timeout", prefs.getInt("per_source_timeout", 15))
+                put("use_only_whitelisted_hosts", prefs.getBoolean("use_only_whitelisted_hosts", true))
+                put("whitelisted_hosts", JSONArray(prefs.getString("whitelisted_hosts", "[]")))
+                put("enabled_packs", JSONArray(prefs.getString("enabled_packs", "[]")))
+
+                put("subtitles_languages", prefs.getString("subtitles_languages", "English"))
+                put("subtitles_limit", prefs.getInt("subtitles_limit", 20))
+                put("sub_retention_days", prefs.getInt("sub_retention_days", 3))
+
+                val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
+                serviceKeys.forEach { put("${it}_enabled", prefs.getBoolean("${it}_enabled", it != "bsplayer" && it != "opensubtitles_org" && it != "podnadpisi")) }
+
+                put("opensubtitles_username", prefs.getString("opensubtitles_username", ""))
+                put("opensubtitles_password", prefs.getString("opensubtitles_password", ""))
+                put("opensubtitles_org_username", prefs.getString("opensubtitles_org_username", ""))
+                put("opensubtitles_org_password", prefs.getString("opensubtitles_org_password", ""))
+                put("subdl_apikey", prefs.getString("subdl_apikey", ""))
+                put("subsource_apikey", prefs.getString("subsource_apikey", ""))
+            }
+            main.callAttr("set_config", cfg.toString())
+        } catch (e: Exception) {
+            Log.e("Settings", "Failed to sync to Python", e)
+        }
+    }
+
+    private fun handleSignInSuccess(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount) {
+        lifecycleScope.launch {
+            findViewById<ProgressBar>(R.id.sync_progress).visibility = View.VISIBLE
+            driveSyncManager.initService(account)
+            val success = driveSyncManager.downloadSettings()
+            if (success) {
+                syncToPython()
+                findViewById<ProgressBar>(R.id.sync_progress).visibility = View.GONE
+                Toast.makeText(this@SettingsActivity, "Settings synced from Drive!", Toast.LENGTH_LONG).show()
+                recreate()
+            } else {
+                driveSyncManager.uploadSettings()
+                findViewById<ProgressBar>(R.id.sync_progress).visibility = View.GONE
+                updateSyncUI()
+            }
+        }
+    }
+
+    private fun updateSyncUI() {
+        val statusText = findViewById<TextView>(R.id.sync_status_text)
+        val loginBtn = findViewById<Button>(R.id.google_login_btn)
+        val manualBtn = findViewById<Button>(R.id.manual_sync_btn)
+        val account = GoogleSignIn.getLastSignedInAccount(this)
+
+        if (account != null) {
+            statusText.text = "Signed in as: ${account.email}"
+            loginBtn.text = "Sign Out"
+            manualBtn.visibility = View.VISIBLE
+        } else {
+            statusText.text = "Not signed in."
+            loginBtn.text = "Sign in with Google"
+            manualBtn.visibility = View.GONE
         }
     }
 
@@ -447,14 +621,14 @@ class SettingsActivity : AppCompatActivity() {
         container.removeAllViews()
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
         val array = JSONArray(prefs.getString("autoplay_profiles", "[]") ?: "[]")
-        
+
         var defaultProfileIndex = -1
         for (i in 0 until array.length()) {
             if (array.getJSONObject(i).optString("id") == "default") {
                 defaultProfileIndex = i; break
             }
         }
-        
+
         if (defaultProfileIndex == -1) {
             val defaultProfile = JSONObject().apply {
                 put("id", "default")
@@ -574,7 +748,7 @@ class SettingsActivity : AppCompatActivity() {
             addSelectorBtn.visibility = if (useScript) View.GONE else View.VISIBLE
         }
         modeBtn.setOnClickListener { useScript = !useScript; updateModeUI() }
-        
+
         val selectorList = mutableListOf<String>()
         profile.optJSONArray("selectors")?.let { arr -> for (i in 0 until arr.length()) selectorList.add(arr.getString(i)) }
         fun refreshSelectorsUI() {
@@ -881,15 +1055,15 @@ class SettingsActivity : AppCompatActivity() {
                     }
                     for (i in 0 until packs.length()) {
                         val name = packs.getString(i)
-                        packsContainer.addView(CheckBox(this@SettingsActivity).apply { 
+                        packsContainer.addView(CheckBox(this@SettingsActivity).apply {
                             text = name
                             setTextColor(android.graphics.Color.WHITE)
                             isChecked = enabledPacks.contains(name)
-                            setOnCheckedChangeListener { _, c -> 
-                                if (c) { if (!enabledPacks.contains(name)) enabledPacks.add(name) } 
+                            setOnCheckedChangeListener { _, c ->
+                                if (c) { if (!enabledPacks.contains(name)) enabledPacks.add(name) }
                                 else { enabledPacks.remove(name) }
-                                saveStreamingSettings() 
-                            } 
+                                saveStreamingSettings()
+                            }
                         })
                     }
                     if (wasEmpty) saveStreamingSettings()
@@ -903,10 +1077,10 @@ class SettingsActivity : AppCompatActivity() {
                         val py = Python.getInstance()
                         val hostsJson = py.getModule("main").callAttr("get_all_hosts").toString()
                         val hostsObj = JSONObject(hostsJson)
-                        
+
                         val pList = mutableListOf<HostItem>()
                         val rList = mutableListOf<HostItem>()
-                        
+
                         if (hostsObj.has("Provider Pack Hosts")) {
                             val hosts = hostsObj.getJSONArray("Provider Pack Hosts")
                             for (i in 0 until hosts.length()) pList.add(HostItem(hosts.getString(i), "Provider Pack Hosts", false))
@@ -915,7 +1089,7 @@ class SettingsActivity : AppCompatActivity() {
                             val hosts = hostsObj.getJSONArray("ResolveURL Hosts")
                             for (i in 0 until hosts.length()) rList.add(HostItem(hosts.getString(i), "ResolveURL Hosts", false))
                         }
-                        
+
                         allProviderHosts.clear(); allProviderHosts.addAll(pList)
                         allResolveurlHosts.clear(); allResolveurlHosts.addAll(rList)
                     }
@@ -937,18 +1111,18 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
-        findViewById<Button>(R.id.btn_whitelist_select_all).setOnClickListener { 
+        findViewById<Button>(R.id.btn_whitelist_select_all).setOnClickListener {
             filteredProviderHosts.forEach { if (!whitelistedHosts.contains(it.name)) whitelistedHosts.add(it.name) }
             filteredResolveurlHosts.forEach { if (!whitelistedHosts.contains(it.name)) whitelistedHosts.add(it.name) }
             providerHostsAdapter.notifyDataSetChanged()
             resolveurlHostsAdapter.notifyDataSetChanged()
             saveStreamingSettings()
         }
-        findViewById<Button>(R.id.btn_whitelist_clear_all).setOnClickListener { 
+        findViewById<Button>(R.id.btn_whitelist_clear_all).setOnClickListener {
             whitelistedHosts.clear()
             providerHostsAdapter.notifyDataSetChanged()
             resolveurlHostsAdapter.notifyDataSetChanged()
-            saveStreamingSettings() 
+            saveStreamingSettings()
         }
         hostSearchInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { refreshHosts(s.toString()) }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
         refreshHosts()
@@ -956,7 +1130,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private inner class HostAdapter(private val itemList: List<HostItem>) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         override fun getItemViewType(position: Int) = if (itemList[position].isHeader) 0 else 1
-        
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
             return if (viewType == 0) {
                 val tv = TextView(parent.context).apply {
@@ -990,8 +1164,8 @@ class SettingsActivity : AppCompatActivity() {
                 cb.isChecked = whitelistedHosts.contains(item.name)
                 cb.isEnabled = useWhitelist
                 cb.alpha = if (useWhitelist) 1.0f else 0.5f
-                cb.setOnCheckedChangeListener { _, c -> 
-                    if (c) { if (!whitelistedHosts.contains(item.name)) whitelistedHosts.add(item.name) } 
+                cb.setOnCheckedChangeListener { _, c ->
+                    if (c) { if (!whitelistedHosts.contains(item.name)) whitelistedHosts.add(item.name) }
                     else { whitelistedHosts.remove(item.name) }
                     saveStreamingSettings()
                 }
@@ -1009,7 +1183,7 @@ class SettingsActivity : AppCompatActivity() {
         searchInput.isEnabled = enabled
         selectAll.isEnabled = enabled
         clearAll.isEnabled = enabled
-        
+
         if (::providerHostsAdapter.isInitialized) providerHostsAdapter.notifyDataSetChanged()
         if (::resolveurlHostsAdapter.isInitialized) resolveurlHostsAdapter.notifyDataSetChanged()
     }
@@ -1017,17 +1191,17 @@ class SettingsActivity : AppCompatActivity() {
     private fun saveStreamingSettings() {
         val prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
         prefs.edit().putString("timeout_mode", timeoutMode).putInt("global_timeout", globalTimeout).putInt("per_source_timeout", perSourceTimeout).putBoolean("use_only_whitelisted_hosts", useWhitelist).putString("enabled_packs", JSONArray(enabledPacks).toString()).putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString()).apply()
-        lifecycleScope.launch(Dispatchers.IO) { 
-            try { 
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
                 val py = Python.getInstance()
-                val cfg = JSONObject().apply { 
+                val cfg = JSONObject().apply {
                     put("timeout_mode", timeoutMode)
                     put("global_timeout", globalTimeout)
                     put("per_source_timeout", perSourceTimeout)
                     put("use_only_whitelisted_hosts", useWhitelist)
                     put("whitelisted_hosts", JSONArray(whitelistedHosts))
                     put("enabled_packs", JSONArray(enabledPacks))
-                } 
+                }
                 py.getModule("main").callAttr("set_config", cfg.toString())
             } catch (e: Exception) {}
         }
@@ -1051,7 +1225,7 @@ class SettingsActivity : AppCompatActivity() {
         val autoSubCountLayout = findViewById<LinearLayout>(R.id.auto_sub_count_layout)
         val autoSubCountBtn = findViewById<Button>(R.id.auto_sub_count_btn)
         val autoSubWaitBtn = findViewById<Button>(R.id.auto_sub_wait_btn)
-        
+
         val subRetentionBtn = findViewById<Button>(R.id.sub_retention_btn)
 
         val langsInput = findViewById<EditText>(R.id.sub_langs_input)
@@ -1064,7 +1238,7 @@ class SettingsActivity : AppCompatActivity() {
         val subdlKeyInput = findViewById<EditText>(R.id.subdl_key_input)
         val subsourceKeyInput = findViewById<EditText>(R.id.subsource_key_input)
 
-        fun updateAutoSubUI() { 
+        fun updateAutoSubUI() {
             autoSubBtn.text = when(autoSubPref) { 1 -> "Auto-search Subtitles: Automatic"; 2 -> "Auto-search Subtitles: Never"; else -> "Auto-search Subtitles: Ask" }
             autoSubCountLayout.visibility = if (autoSubPref == 1) View.VISIBLE else View.GONE
         }
@@ -1074,7 +1248,7 @@ class SettingsActivity : AppCompatActivity() {
         fun updateAutoSubCountUI() {
             autoSubCountBtn.text = if (autoSubCount == 0) "Add: All Subtitles" else "Add: $autoSubCount Subtitle${if (autoSubCount > 1) "s" else ""}"
         }
-        autoSubCountBtn.setOnClickListener { 
+        autoSubCountBtn.setOnClickListener {
             autoSubCount = if (autoSubCount >= 5) 0 else if (autoSubCount == 0) 1 else autoSubCount + 1
             updateAutoSubCountUI()
             saveSubtitlesSettings()

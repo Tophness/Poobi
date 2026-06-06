@@ -42,6 +42,7 @@
                 <Button android:id="@+id/cat_subtitles" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Subtitles" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
                 <Button android:id="@+id/cat_sorting" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Source Sorting" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
                 <Button android:id="@+id/cat_blocked" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Blocked Elements" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
+                <Button android:id="@+id/cat_sync" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Sync &amp; Backup" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
 
             </LinearLayout>
         </ScrollView>
@@ -255,6 +256,21 @@
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Drag or use arrows to set the priority order for source results. The top item is the primary sort criteria." android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="16dp"/>
 
                 <LinearLayout android:id="@+id/sorting_priorities_container" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
+            </LinearLayout>
+
+            <!-- SYNC CATEGORY -->
+            <LinearLayout android:id="@+id/panel_sync" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Google Drive Sync" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Sync your settings, bookmarks, and history across devices using your own Google Drive storage (App Data folder). This is private and only accessible by this app." android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:id="@+id/sync_status_text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Not signed in." android:textColor="#AAA" android:textSize="16sp" android:layout_marginBottom="20dp"/>
+
+                <Button android:id="@+id/google_login_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Sign in with Google" android:layout_marginBottom="16dp" android:gravity="start" android:textAllCaps="false" android:nextFocusLeft="@+id/cat_sync"/>
+
+                <ProgressBar android:id="@+id/sync_progress" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center_horizontal" android:visibility="gone" android:layout_marginBottom="16dp"/>
+
+                <Button android:id="@+id/manual_sync_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Force Sync Now" android:layout_marginBottom="16dp" android:gravity="start" android:textAllCaps="false" android:visibility="gone" android:nextFocusLeft="@+id/cat_sync"/>
             </LinearLayout>
 
         </FrameLayout>
