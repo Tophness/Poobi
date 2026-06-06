@@ -40,6 +40,11 @@ class SettingsActivity : AppCompatActivity() {
     private var subRetentionDays = 3
     private var exoFallbackPref = 0
 
+    // Binge Watching Settings
+    private var upNextPopupPref = "Ask" // Ask, Always, Never
+    private var upNextTime = 20 // seconds
+    private var autoplayNextPref = "Closest Source" // Closest Source, Best Source, Ask
+
     // Streaming Settings
     private var timeoutMode = "Both"
     private var globalTimeout = 30
@@ -279,6 +284,10 @@ class SettingsActivity : AppCompatActivity() {
         val exoFallbackBtn = findViewById<Button>(R.id.exo_fallback_btn)
         val saveBtn = findViewById<Button>(R.id.save_button)
 
+        val upNextPrefBtn = findViewById<Button>(R.id.up_next_pref_btn)
+        val upNextTimeBtn = findViewById<Button>(R.id.up_next_time_btn)
+        val autoplayNextBtn = findViewById<Button>(R.id.autoplay_next_mode_btn)
+
         // Load Prefs
         urlInput.setText(prefs.getString("custom_adblock_url", "https://easylist.to/easylist/easylist.txt"))
         ViewUtils.applySmartDpadFocus(urlInput)
@@ -296,6 +305,23 @@ class SettingsActivity : AppCompatActivity() {
         navigationModePref = prefs.getInt("navigation_mode_pref", 0)
         autoSubPref = prefs.getInt("auto_sub_pref", 0)
         exoFallbackPref = prefs.getInt("exo_fallback_pref", 0)
+
+        // Load Binge settings from Python config if possible, or prefs
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val main = py.getModule("main")
+                val config = JSONObject(main.get("GLOBAL_CONFIG").toString())
+                upNextPopupPref = config.optString("up_next_popup_pref", "Ask")
+                upNextTime = config.optInt("up_next_time_pref", 20)
+                autoplayNextPref = config.optString("autoplay_next_pref", "Closest Source")
+                withContext(Dispatchers.Main) { 
+                    upNextPrefBtn.text = "Up Next Mode: $upNextPopupPref"
+                    upNextTimeBtn.text = "Show Popup: ${upNextTime}s before end"
+                    autoplayNextBtn.text = "Source Selection: $autoplayNextPref"
+                }
+            } catch (e: Exception) {}
+        }
 
         fun updateUI() {
             popupBtn.text = if (silentPopupBlock) "Popups: Block Silently" else "Popups: Ask to Allow"
@@ -323,6 +349,10 @@ class SettingsActivity : AppCompatActivity() {
                 2 -> "On Error: Never open in Browser"
                 else -> "On Error: Ask to open in Browser"
             }
+
+            upNextPrefBtn.text = "Up Next Mode: $upNextPopupPref"
+            upNextTimeBtn.text = "Show Popup: ${upNextTime}s before end"
+            autoplayNextBtn.text = "Source Selection: $autoplayNextPref"
         }
         updateUI()
 
@@ -345,6 +375,19 @@ class SettingsActivity : AppCompatActivity() {
         exoFallbackBtn.setOnClickListener { exoFallbackPref = (exoFallbackPref + 1) % 3; updateUI() }
         navigationModeBtn.setOnClickListener { navigationModePref = (navigationModePref + 1) % 2; updateUI() }
 
+        upNextPrefBtn.setOnClickListener {
+            upNextPopupPref = when(upNextPopupPref) { "Ask" -> "Always"; "Always" -> "Never"; else -> "Ask" }
+            updateUI()
+        }
+        upNextTimeBtn.setOnClickListener {
+            upNextTime = when(upNextTime) { 10 -> 20; 20 -> 30; 30 -> 60; 60 -> 120; 120 -> 10; else -> 20 }
+            updateUI()
+        }
+        autoplayNextBtn.setOnClickListener {
+            autoplayNextPref = when(autoplayNextPref) { "Closest Source" -> "Best Source"; "Best Source" -> "Ask"; else -> "Closest Source" }
+            updateUI()
+        }
+
         saveBtn.setOnClickListener {
             val newUrl = urlInput.text.toString()
             prefs.edit()
@@ -364,6 +407,19 @@ class SettingsActivity : AppCompatActivity() {
                 .putInt("auto_sub_pref", autoSubPref)
                 .putInt("exo_fallback_pref", exoFallbackPref)
                 .apply()
+
+            // Save Binge settings to Python
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val py = Python.getInstance()
+                    val cfg = JSONObject().apply {
+                        put("up_next_popup_pref", upNextPopupPref)
+                        put("up_next_time_pref", upNextTime)
+                        put("autoplay_next_pref", autoplayNextPref)
+                    }
+                    py.getModule("main").callAttr("set_config", cfg.toString())
+                } catch (e: Exception) {}
+            }
 
             val appContext = applicationContext
             @Suppress("OPT_IN_USAGE")

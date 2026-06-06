@@ -4533,8 +4533,12 @@ class MainActivity : AppCompatActivity() {
             if (player.playbackState == Player.STATE_READY && player.playWhenReady) {
                 val pos = player.currentPosition
                 val dur = player.duration
-                if (dur > 0 && dur - pos <= 20000L && upNextPopup == null && lastScrapedSeason != null) {
-                    showUpNextPopup()
+                if (dur > 0 && lastScrapedSeason != null && upNextPopup == null) {
+                    val cfg = getPythonConfig()
+                    val threshold = cfg.optInt("up_next_time_pref", 20) * 1000L
+                    if (dur - pos <= threshold) {
+                        showUpNextPopup()
+                    }
                 }
             }
             movementHandler.postDelayed(this, 1000)

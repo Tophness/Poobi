@@ -165,6 +165,7 @@ def load_config():
         "subsource_apikey": "",
         "sub_retention_days": 3,
         "up_next_popup_pref": "Ask",
+        "up_next_time_pref": 20,
         "autoplay_next_pref": "Closest Source"
     }
     

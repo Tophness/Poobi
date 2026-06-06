@@ -104,7 +104,12 @@
                 <Button android:id="@+id/exo_fallback_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="On Error: Ask to open in Browser" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Subtitles" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
-                <Button android:id="@+id/embedded_subs_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Embedded Subtitles: Enabled" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
+                <Button android:id="@+id/embedded_subs_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Embedded Subtitles: Enabled" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Binge Watching / Auto-play" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <Button android:id="@+id/up_next_pref_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Up Next Popup: Ask" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
+                <Button android:id="@+id/up_next_time_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Show Popup: 20s before end" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
+                <Button android:id="@+id/autoplay_next_mode_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Source Selection: Closest Source" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
             </LinearLayout>
 
             <!-- STREAMING CATEGORY -->
