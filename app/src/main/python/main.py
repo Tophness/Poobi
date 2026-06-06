@@ -207,6 +207,8 @@ class UniversalScraper:
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
         self.pause_event.set()
+        self._last_format_count = -1
+        self._cached_display_sources = []
 
         cfg = GLOBAL_CONFIG
         use_only = cfg.get("use_only_whitelisted_hosts", True)
@@ -560,14 +562,15 @@ def get_subtitle_file(service_name, action_args_json):
 
 def get_scrape_status():
     global active_scraper
-    if active_scraper:
-        res = active_scraper.status.copy()
-        sources = active_scraper.sources[:]
+    s_inst = active_scraper
+    if s_inst:
+        res = s_inst.status.copy()
+        sources = s_inst.sources[:]
         
         # Check if we have cached display results for this count to save CPU
-        cached_count = getattr(active_scraper, "_last_format_count", -1)
-        if cached_count == len(sources) and hasattr(active_scraper, "_cached_display_sources"):
-            res["sources"] = active_scraper._cached_display_sources
+        cached_count = getattr(s_inst, "_last_format_count", -1)
+        if cached_count == len(sources) and hasattr(s_inst, "_cached_display_sources"):
+            res["sources"] = s_inst._cached_display_sources
             return json.dumps(res)
 
         display_sources = []
@@ -601,8 +604,8 @@ def get_scrape_status():
                 "source_data": json.dumps(s)
             })
         
-        active_scraper._last_format_count = len(sources)
-        active_scraper._cached_display_sources = display_sources
+        s_inst._last_format_count = len(sources)
+        s_inst._cached_display_sources = display_sources
         res["sources"] = display_sources
         return json.dumps(res)
     return json.dumps({"total": 0, "current": 0, "message": "No active scrape", "timeout": 0, "sources": []})

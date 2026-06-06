@@ -164,6 +164,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingNextEpisode = false
     private var lastSelectedSource: JSONObject? = null
     private var upNextPopup: View? = null
+    private var isUpNextDismissed = false
 
     private lateinit var downloadsContainer: LinearLayout
     private lateinit var topDownloadsBtn: ImageButton
@@ -296,6 +297,7 @@ class MainActivity : AppCompatActivity() {
 
         cursor = findViewById(R.id.cursor)
         customViewContainer = findViewById(R.id.fullscreen_custom_content)
+        customViewContainer.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         nativeVideoView = findViewById(R.id.native_video_view)
         homeScreenLayout = findViewById(R.id.home_screen_layout)
         topBarLayout = findViewById(R.id.top_bar_layout)
@@ -2708,6 +2710,7 @@ class MainActivity : AppCompatActivity() {
         mainTabsLayout.visibility = View.GONE
         cursor.visibility = View.GONE
         lastVideoTitle = title
+        isUpNextDismissed = false
 
         exoPlayer?.release()
 
@@ -2879,6 +2882,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             nativeVideoView.visibility = View.GONE
+            customViewContainer.visibility = View.GONE
             nativeVideoView.keepScreenOn = false
             exoPlayer?.stop()
             exoPlayer?.release()
@@ -2886,7 +2890,7 @@ class MainActivity : AppCompatActivity() {
             nativeVideoView.player = null
 
             if (upNextPopup != null) {
-                rootLayout.removeView(upNextPopup)
+                customViewContainer.removeView(upNextPopup)
                 upNextPopup = null
             }
             movementHandler.removeCallbacks(checkUpNextRunnable)
@@ -3192,23 +3196,38 @@ class MainActivity : AppCompatActivity() {
         if (handleMovementKey(event)) return true
 
         if (isNativeVideoPlaying()) {
-            if (!nativeVideoView.hasFocus() && (upNextPopup == null || !upNextPopup!!.hasFocus())) {
+            if (upNextPopup == null && !nativeVideoView.hasFocus()) {
                 nativeVideoView.requestFocus()
             }
             if (event.action == KeyEvent.ACTION_DOWN) {
+                // If Up/Down pressed and popup is visible, force focus to it
+                if (upNextPopup != null && (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
+                    if (!upNextPopup!!.isFocused) {
+                        upNextPopup!!.requestFocus()
+                        return true
+                    }
+                }
+
                 if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-                    if (upNextPopup != null) {
-                        rootLayout.removeView(upNextPopup)
+                    val isControllerVisible = nativeVideoView.isControllerFullyVisible
+                    
+                    // If the popup is specifically FOCUSED, dismiss it
+                    if (upNextPopup != null && upNextPopup!!.isFocused) {
+                        customViewContainer.removeView(upNextPopup)
                         upNextPopup = null
+                        isUpNextDismissed = true
                         nativeVideoView.requestFocus()
                         return true
                     }
-                    val isControllerVisible = nativeVideoView.isControllerFullyVisible
+                    
+                    // If controller is visible, hide it
                     if (isControllerVisible) {
                         nativeVideoView.hideController()
-                    } else {
-                        hideFullscreenVideo()
+                        return true
                     }
+                    
+                    // Otherwise (popup focused or hidden, controller hidden), exit video player
+                    hideFullscreenVideo()
                     return true
                 }
 
@@ -4533,7 +4552,7 @@ class MainActivity : AppCompatActivity() {
             if (player.playbackState == Player.STATE_READY && player.playWhenReady) {
                 val pos = player.currentPosition
                 val dur = player.duration
-                if (dur > 0 && lastScrapedSeason != null && upNextPopup == null) {
+                if (dur > 0 && lastScrapedSeason != null && upNextPopup == null && !isUpNextDismissed) {
                     val cfg = getPythonConfig()
                     val threshold = cfg.optInt("up_next_time_pref", 20) * 1000L
                     if (dur - pos <= threshold) {
@@ -4568,7 +4587,8 @@ class MainActivity : AppCompatActivity() {
         if (nextEpData == null) return
 
         val inflater = LayoutInflater.from(this)
-        val popup = inflater.inflate(R.layout.dialog_up_next, rootLayout, false)
+        val popup = inflater.inflate(R.layout.dialog_up_next, customViewContainer, false)
+        popup.id = View.generateViewId()
         val title = popup.findViewById<TextView>(R.id.up_next_title)
         val thumb = popup.findViewById<ImageView>(R.id.up_next_thumb)
         
@@ -4583,19 +4603,34 @@ class MainActivity : AppCompatActivity() {
             setMargins(0, 0, 40.dp(), 100.dp())
         }
         popup.layoutParams = params
+        popup.elevation = 50.dp().toFloat()
+        popup.translationZ = 50.dp().toFloat()
         
         popup.setOnClickListener {
-            rootLayout.removeView(popup)
+            customViewContainer.removeView(popup)
             upNextPopup = null
+            isUpNextDismissed = true
             handleNextEpisodeAutoPlay()
         }
         
-        rootLayout.addView(popup)
+        customViewContainer.addView(popup)
         upNextPopup = popup
+        popup.bringToFront()
         
         if (navigationModePref == 1) {
             popup.isFocusable = true
             popup.isFocusableInTouchMode = true
+            
+            // Allow navigation TO the popup even when controls are hidden
+            nativeVideoView.nextFocusUpId = popup.id
+            nativeVideoView.nextFocusDownId = popup.id
+            nativeVideoView.nextFocusLeftId = popup.id
+            nativeVideoView.nextFocusRightId = popup.id
+            
+            // Ensure Back from popup goes to Video, not exiting app
+            popup.nextFocusUpId = R.id.native_video_view
+            popup.nextFocusDownId = R.id.native_video_view
+
             popup.post {
                 popup.requestFocus()
             }
@@ -4603,7 +4638,7 @@ class MainActivity : AppCompatActivity() {
         
         popup.postDelayed({
             if (upNextPopup == popup) {
-                rootLayout.removeView(popup)
+                customViewContainer.removeView(popup)
                 upNextPopup = null
             }
         }, 15000)
