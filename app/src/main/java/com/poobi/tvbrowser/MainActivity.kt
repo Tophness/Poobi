@@ -437,6 +437,9 @@ class MainActivity : AppCompatActivity() {
     private fun switchMainTab(isBrowser: Boolean) {
         btnTabBrowser.isSelected = isBrowser
         btnTabStreams.isSelected = !isBrowser
+
+        btnTabBrowser.alpha = if (isBrowser) 1.0f else 0.5f
+        btnTabStreams.alpha = if (!isBrowser) 1.0f else 0.5f
         
         if (isBrowser) {
             if (!isBrowsing) {
