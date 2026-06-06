@@ -23,8 +23,8 @@ elif six.PY3:
 
 BASE_URL = 'https://api.trakt.tv'
 REDIRECT_URI = 'urn:ietf:wg:oauth:2.0:oob'
-V2_API_KEY = '234c0be756f91aae005aaf7be2457d2e6f305fb94b6af2c7735a00f0fd64eb60'
-CLIENT_SECRET = 'a910d7ef82bbfbb09d8ab1e8ca5f3b0450faf92c734807eec4a267c9e79e9c31'
+V2_API_KEY = 'ef0b7f6f8b8806a5df10e37bae8d5487b9cbec20e424a6527c1f3020cfa363a7'
+CLIENT_SECRET = 'ad86f5aef36c5a08039a6f4c8f24ca018ffd7d45fb867cd9bf8c2bd675d3de79'
 
 
 def getTraktCredentialsInfo():

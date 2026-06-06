@@ -91,6 +91,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var streamsRecentPlayedLayout: LinearLayout
     private lateinit var streamsRecentPlayedContainer: LinearLayout
     private lateinit var btnStreamsClearRecentPlayed: Button
+    private lateinit var streamsFavoritesLayout: LinearLayout
+    private lateinit var streamsFavoritesContainer: LinearLayout
 
     private lateinit var tvSelectionLayout: LinearLayout
     private lateinit var btnTvBack: ImageButton
@@ -284,6 +286,8 @@ class MainActivity : AppCompatActivity() {
         streamsRecentPlayedLayout = findViewById(R.id.streams_recent_played_layout)
         streamsRecentPlayedContainer = findViewById(R.id.streams_recent_played_container)
         btnStreamsClearRecentPlayed = findViewById(R.id.btn_streams_clear_recent_played)
+        streamsFavoritesLayout = findViewById(R.id.streams_favorites_layout)
+        streamsFavoritesContainer = findViewById(R.id.streams_favorites_container)
 
         tvSelectionLayout = findViewById(R.id.tv_selection_layout)
         btnTvBack = findViewById(R.id.btn_tv_back)
@@ -371,7 +375,10 @@ class MainActivity : AppCompatActivity() {
             if (hasFocus) switchMainTab(true)
         }
         btnTabStreams.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) switchMainTab(false)
+            if (hasFocus) {
+                switchMainTab(false)
+                checkForNewEpisodes()
+            }
         }
         
         btnStreamsBack.setOnClickListener {
@@ -450,6 +457,7 @@ class MainActivity : AppCompatActivity() {
             homeScreenLayout.visibility = View.GONE
             streamsScreenLayout.visibility = View.VISIBLE
             refreshStreamsHistory()
+            refreshStreamsFavorites()
             webContainer.visibility = View.GONE
             topBarLayout.visibility = View.GONE
             isBrowsing = false
@@ -475,6 +483,7 @@ class MainActivity : AppCompatActivity() {
         streamsCountText.visibility = View.GONE
         streamsCountText.text = ""
         refreshStreamsHistory()
+        refreshStreamsFavorites()
         streamsSearchInput.post { streamsSearchInput.requestFocus() }
     }
 
@@ -601,7 +610,8 @@ class MainActivity : AppCompatActivity() {
         val historyJson = prefs.getString("streams_search_history", "[]") ?: "[]"
         val array = JSONArray(historyJson)
         
-        if (array.length() == 0 && (prefs.getString("streams_recently_played", "[]") ?: "[]") == "[]") {
+        if (array.length() == 0 && (prefs.getString("streams_recently_played", "[]") ?: "[]") == "[]" && 
+            (prefs.getString("streams_favorites", "[]") ?: "[]") == "[]") {
             streamsHistoryLayout.visibility = View.GONE
             return
         }
@@ -625,6 +635,118 @@ class MainActivity : AppCompatActivity() {
             streamsHistoryContainer.addView(view)
         }
         refreshRecentlyPlayedStreams()
+        refreshStreamsFavorites()
+    }
+
+    private fun refreshStreamsFavorites() {
+        streamsFavoritesContainer.removeAllViews()
+        val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+        val array = JSONArray(favsJson)
+
+        if (array.length() == 0) {
+            streamsFavoritesLayout.visibility = View.GONE
+            return
+        }
+        streamsFavoritesLayout.visibility = View.VISIBLE
+
+        val inflater = LayoutInflater.from(this)
+        for (i in 0 until array.length()) {
+            val item = array.getJSONObject(i)
+            val view = inflater.inflate(R.layout.item_search_history, streamsFavoritesContainer, false)
+            val textView = view.findViewById<TextView>(R.id.history_text)
+            val deleteProgress = view.findViewById<ProgressBar>(R.id.history_delete_progress)
+            
+            val title = item.optString("title")
+            textView.text = title
+
+            val iconView = (view as? ViewGroup)?.getChildAt(0) as? ImageView
+            iconView?.setImageResource(R.drawable.ic_heart_filled)
+            iconView?.imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#40C4FF"))
+
+            view.setOnClickListener {
+                performScrape(item)
+            }
+
+            view.setOnLongClickListener {
+                toggleFavorite(item)
+                refreshStreamsFavorites()
+                true
+            }
+
+            streamsFavoritesContainer.addView(view)
+        }
+    }
+
+    private fun toggleFavorite(item: JSONObject) {
+        val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+        val array = JSONArray(favsJson)
+        val id = item.optString("id")
+        val imdb = item.optString("imdb")
+        
+        var foundIndex = -1
+        for (i in 0 until array.length()) {
+            val fav = array.getJSONObject(i)
+            if (fav.optString("id") == id || (imdb.isNotEmpty() && fav.optString("imdb") == imdb)) {
+                foundIndex = i
+                break
+            }
+        }
+
+        if (foundIndex != -1) {
+            array.remove(foundIndex)
+            Toast.makeText(this, "Removed from Favorites", Toast.LENGTH_SHORT).show()
+        } else {
+            array.put(item)
+            Toast.makeText(this, "Added to Favorites", Toast.LENGTH_SHORT).show()
+        }
+        
+        prefs.edit().putString("streams_favorites", array.toString()).apply()
+        refreshStreamsFavorites()
+    }
+
+    private fun updateFavoriteIcon(btn: ImageButton, item: JSONObject) {
+        val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+        val array = JSONArray(favsJson)
+        val id = item.optString("id")
+        val imdb = item.optString("imdb")
+        
+        var isFav = false
+        for (i in 0 until array.length()) {
+            val fav = array.getJSONObject(i)
+            if (fav.optString("id") == id || (imdb.isNotEmpty() && fav.optString("imdb") == imdb)) {
+                isFav = true
+                break
+            }
+        }
+        
+        btn.setImageResource(if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart_empty)
+        btn.imageTintList = android.content.res.ColorStateList.valueOf(
+            if (isFav) android.graphics.Color.parseColor("#40C4FF") else android.graphics.Color.WHITE
+        )
+    }
+
+    private fun checkForNewEpisodes() {
+        val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+        if (favsJson == "[]") return
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val checker = py.getModule("episode_check")
+                val resultsStr = checker.callAttr("check_new_episodes", favsJson).toString()
+                val results = JSONArray(resultsStr)
+
+                if (results.length() > 0) {
+                    withContext(Dispatchers.Main) {
+                        val first = results.getJSONObject(0)
+                        val msg = "New Episode: ${first.getString("show_title")} S${first.getInt("season")}E${first.getInt("number")}"
+                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "Episode check failed: ${e.message}")
+            }
+        }
     }
 
     private fun refreshRecentlyPlayedStreams() {
@@ -816,20 +938,28 @@ class MainActivity : AppCompatActivity() {
             val titleView = view.findViewById<TextView>(R.id.card_title)
             val detailView = view.findViewById<TextView>(R.id.card_detail)
             val thumbView = view.findViewById<ImageView>(R.id.card_thumb)
+            val favBtn = view.findViewById<ImageButton>(R.id.btn_favorite)
 
             val title = item.optString("title")
             val overview = item.optString("overview")
-            val mediaType = item.optString("media_type").uppercase()
+            val mediaType = item.optString("media_type")
             val posterPath = item.optString("poster_path")
 
             titleView.text = title
-            detailView.text = "[$mediaType] ${if (overview.isNotEmpty()) overview else "No description available."}"
+            detailView.text = "[${mediaType.uppercase()}] ${if (overview.isNotEmpty()) overview else "No description available."}"
             
             if (posterPath.isNotEmpty() && posterPath != "null") {
                 val thumbUrl = "https://image.tmdb.org/t/p/w185$posterPath"
                 loadStreamThumb(thumbUrl, thumbView)
             } else {
                 thumbView.setImageResource(R.drawable.ic_history)
+            }
+
+            favBtn.visibility = View.VISIBLE
+            updateFavoriteIcon(favBtn, item)
+            favBtn.setOnClickListener {
+                toggleFavorite(item)
+                updateFavoriteIcon(favBtn, item)
             }
             
             view.setOnClickListener {
@@ -2909,6 +3039,19 @@ class MainActivity : AppCompatActivity() {
                     } else if (pos >= dur - 10000L) { // If near end, clear it
                         prefs.edit().remove(resumeKey).apply()
                         pendingNextEpisode = true
+                        
+                        // Scrobble to Trakt
+                        lastScrapedItem?.let { item ->
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                try {
+                                    val py = Python.getInstance()
+                                    val scrobbler = py.getModule("trakt_scrobble")
+                                    scrobbler.callAttr("scrobble", item.toString(), lastScrapedSeason, lastScrapedEpisode, 100.0)
+                                } catch (e: Exception) {
+                                    Log.e("TVBrowser", "Scrobble failed: ${e.message}")
+                                }
+                            }
+                        }
                     }
                     // If pos <= 5000L, we do nothing to avoid overwriting a valid saved position with 0 on start/error
                 }

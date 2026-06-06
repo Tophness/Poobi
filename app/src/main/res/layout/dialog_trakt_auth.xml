@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="30dp"
+    android:background="#1A1A1D"
+    android:gravity="center">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1. Visit this URL on your phone or computer:"
+        android:textColor="#AAA"
+        android:textSize="14sp"
+        android:layout_marginBottom="10dp"/>
+
+    <TextView
+        android:id="@+id/auth_url"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="https://trakt.tv/activate"
+        android:textColor="#00BCD4"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="25dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="2. Enter this code when prompted:"
+        android:textColor="#AAA"
+        android:textSize="14sp"
+        android:layout_marginBottom="10dp"/>
+
+    <TextView
+        android:id="@+id/auth_code"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="ABCD-1234"
+        android:textColor="#FFF"
+        android:textSize="36sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.1"
+        android:layout_marginBottom="20dp"/>
+
+    <ProgressBar
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginTop="10dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Waiting for authorization..."
+        android:textColor="#666"
+        android:textSize="12sp"
+        android:layout_marginTop="10dp"/>
+</LinearLayout>

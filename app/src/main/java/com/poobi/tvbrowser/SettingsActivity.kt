@@ -198,6 +198,7 @@ class SettingsActivity : AppCompatActivity() {
         val catStreaming = findViewById<Button>(R.id.cat_streaming)
         val catSubtitles = findViewById<Button>(R.id.cat_subtitles)
         val catBlocked = findViewById<Button>(R.id.cat_blocked)
+        val catTrakt = findViewById<Button>(R.id.cat_trakt)
         val catSync = findViewById<Button>(R.id.cat_sync)
 
         val panelGeneral = findViewById<LinearLayout>(R.id.panel_general)
@@ -209,6 +210,7 @@ class SettingsActivity : AppCompatActivity() {
         val panelStreaming = findViewById<LinearLayout>(R.id.panel_streaming)
         val panelSubtitles = findViewById<LinearLayout>(R.id.panel_subtitles)
         val panelBlocked = findViewById<LinearLayout>(R.id.panel_blocked)
+        val panelTrakt = findViewById<LinearLayout>(R.id.panel_trakt)
         val panelSync = findViewById<LinearLayout>(R.id.panel_sync)
 
         fun findFirstFocusable(view: View): View? {
@@ -235,6 +237,7 @@ class SettingsActivity : AppCompatActivity() {
             panelStreaming.visibility = View.GONE
             panelSubtitles.visibility = View.GONE
             panelBlocked.visibility = View.GONE
+            panelTrakt.visibility = View.GONE
             panelSync.visibility = View.GONE
             panel.visibility = View.VISIBLE
 
@@ -247,6 +250,7 @@ class SettingsActivity : AppCompatActivity() {
             catStreaming.alpha = 0.5f
             catSubtitles.alpha = 0.5f
             catBlocked.alpha = 0.5f
+            catTrakt.alpha = 0.5f
             catSync.alpha = 0.5f
 
             activeCategory?.isSelected = false
@@ -268,6 +272,9 @@ class SettingsActivity : AppCompatActivity() {
             }
             if (panel == panelBlocked) {
                 refreshBlockedElements()
+            }
+            if (panel == panelTrakt) {
+                refreshTraktPanel()
             }
             if (panel == panelSync) {
                 updateSyncUI()
@@ -294,6 +301,7 @@ class SettingsActivity : AppCompatActivity() {
                     R.id.cat_streaming -> showPanel(panelStreaming, catStreaming)
                     R.id.cat_subtitles -> showPanel(panelSubtitles, catSubtitles)
                     R.id.cat_blocked -> showPanel(panelBlocked, catBlocked)
+                    R.id.cat_trakt -> showPanel(panelTrakt, catTrakt)
                     R.id.cat_sync -> showPanel(panelSync, catSync)
                 }
             }
@@ -308,6 +316,7 @@ class SettingsActivity : AppCompatActivity() {
         catStreaming.onFocusChangeListener = focusListener
         catSubtitles.onFocusChangeListener = focusListener
         catBlocked.onFocusChangeListener = focusListener
+        catTrakt.onFocusChangeListener = focusListener
         catSync.onFocusChangeListener = focusListener
 
         // Initial state
@@ -1304,5 +1313,115 @@ class SettingsActivity : AppCompatActivity() {
         subServices.forEach { (k, v) -> editor.putBoolean("${k}_enabled", v) }
         editor.putString("opensubtitles_username", openSubUser).putString("opensubtitles_password", openSubPass).putString("opensubtitles_org_username", openSubOrgUser).putString("opensubtitles_org_password", openSubOrgPass).putString("subdl_apikey", subdlKey).putString("subsource_apikey", subsourceKey).apply()
         lifecycleScope.launch(Dispatchers.IO) { try { val py = Python.getInstance(); val cfg = JSONObject().apply { put("subtitles_languages", subLangs); put("subtitles_limit", subLimit); subServices.forEach { (k, v) -> put("${k}_enabled", v) }; put("opensubtitles_username", openSubUser); put("opensubtitles_password", openSubPass); put("opensubtitles_org_username", openSubOrgUser); put("opensubtitles_org_password", openSubOrgPass); put("subdl_apikey", subdlKey); put("subsource_apikey", subsourceKey); put("sub_retention_days", subRetentionDays) }; py.getModule("main").callAttr("set_config", cfg.toString()) } catch (e: Exception) {} }
+    }
+
+    private fun refreshTraktPanel() {
+        val statusText = findViewById<TextView>(R.id.trakt_status_text)
+        val authBtn = findViewById<Button>(R.id.trakt_auth_btn)
+        val syncBtn = findViewById<Button>(R.id.trakt_sync_btn)
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val traktAuth = py.getModule("trakt_auth")
+                val username = traktAuth.callAttr("get_trakt_username").toString()
+
+                withContext(Dispatchers.Main) {
+                    if (username.isNotEmpty() && username != "0") {
+                        statusText.text = "Authorized as: $username"
+                        authBtn.text = "Logout Trakt"
+                        syncBtn.visibility = View.VISIBLE
+                        authBtn.setOnClickListener {
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                traktAuth.callAttr("logout_trakt")
+                                withContext(Dispatchers.Main) { refreshTraktPanel() }
+                            }
+                        }
+                    } else {
+                        statusText.text = "Not authorized."
+                        authBtn.text = "Authorize Trakt"
+                        syncBtn.visibility = View.GONE
+                        authBtn.setOnClickListener { startTraktAuth() }
+                    }
+
+                    syncBtn.setOnClickListener {
+                        Toast.makeText(this@SettingsActivity, "Syncing with Trakt...", Toast.LENGTH_SHORT).show()
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            try {
+                                val py = Python.getInstance()
+                                py.getModule("main") // Load main module
+                                // Future sync logic here
+                            } catch (e: Exception) {}
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("Settings", "Error refreshing Trakt panel", e)
+            }
+        }
+    }
+
+    private fun startTraktAuth() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val traktAuth = py.getModule("trakt_auth")
+                val codeData = traktAuth.callAttr("get_device_code").toString()
+                val json = JSONObject(codeData)
+
+                val userCode = json.getString("user_code")
+                val verificationUrl = json.getString("verification_url")
+                val deviceCode = json.getString("device_code")
+                val interval = json.getLong("interval")
+                val expires = json.getLong("expires_in")
+
+                withContext(Dispatchers.Main) {
+                    val dialogView = layoutInflater.inflate(R.layout.dialog_trakt_auth, null)
+                    val codeTxt = dialogView.findViewById<TextView>(R.id.auth_code)
+                    val urlTxt = dialogView.findViewById<TextView>(R.id.auth_url)
+                    codeTxt.text = userCode
+                    urlTxt.text = verificationUrl
+
+                    val dialog = AlertDialog.Builder(this@SettingsActivity)
+                        .setTitle("Authorize Trakt.tv")
+                        .setView(dialogView)
+                        .setNegativeButton("Cancel", null)
+                        .create()
+                    dialog.show()
+
+                    // Start polling
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val startTime = System.currentTimeMillis()
+                        while (System.currentTimeMillis() - startTime < expires * 1000) {
+                            if (!dialog.isShowing) break
+                            
+                            val pollResultStr = traktAuth.callAttr("poll_for_token", deviceCode).toString()
+                            val pollResult = JSONObject(pollResultStr)
+                            
+                            if (pollResult.getString("status") == "success") {
+                                withContext(Dispatchers.Main) {
+                                    dialog.dismiss()
+                                    Toast.makeText(this@SettingsActivity, "Trakt Authorized!", Toast.LENGTH_SHORT).show()
+                                    refreshTraktPanel()
+                                }
+                                break
+                            } else if (pollResult.getString("status") == "error") {
+                                withContext(Dispatchers.Main) {
+                                    dialog.dismiss()
+                                    Toast.makeText(this@SettingsActivity, "Auth Error: ${pollResult.optString("message")}", Toast.LENGTH_LONG).show()
+                                }
+                                break
+                            }
+                            
+                            kotlinx.coroutines.delay(interval * 1000 + 500)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@SettingsActivity, "Error starting auth: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 }

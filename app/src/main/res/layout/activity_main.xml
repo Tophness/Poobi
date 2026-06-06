@@ -309,6 +309,37 @@
                 </HorizontalScrollView>
             </LinearLayout>
 
+            <!-- Favorites -->
+            <LinearLayout
+                android:id="@+id/streams_favorites_layout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="30dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="My Favorites"
+                    android:textColor="#888"
+                    android:textSize="14sp"
+                    android:textStyle="bold"/>
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:scrollbars="none">
+                    <LinearLayout
+                        android:id="@+id/streams_favorites_container"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"/>
+                </HorizontalScrollView>
+            </LinearLayout>
+
             <!-- Recently Played Videos -->
             <LinearLayout
                 android:id="@+id/streams_recent_played_layout"

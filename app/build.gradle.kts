@@ -32,6 +32,7 @@ android {
                 install("beautifulsoup4")
                 install("six")
                 install("simplejson")
+                install("trakt")
             }
         }
     }
