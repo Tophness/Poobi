@@ -79,6 +79,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var streamsProgress: ProgressBar
     private lateinit var subtitlesProgress: ProgressBar
     private lateinit var subtitlesStatus: TextView
+    private lateinit var streamsCountText: TextView
     private lateinit var streamsResultsContainer: LinearLayout
     private lateinit var streamsResultsScroll: ScrollView
     private lateinit var btnStreamsBack: ImageButton
@@ -271,6 +272,7 @@ class MainActivity : AppCompatActivity() {
         streamsProgress = findViewById(R.id.streams_progress)
         subtitlesProgress = findViewById(R.id.subtitles_progress)
         subtitlesStatus = findViewById(R.id.subtitles_status)
+        streamsCountText = findViewById(R.id.streams_count_text)
         streamsResultsContainer = findViewById(R.id.streams_results_container)
         streamsResultsScroll = findViewById(R.id.streams_results_scroll)
         btnStreamsBack = findViewById(R.id.btn_streams_back)
@@ -904,7 +906,7 @@ class MainActivity : AppCompatActivity() {
         
         // Polling task for progress and incremental results
         val pollingJob = lifecycleScope.launch(Dispatchers.IO) {
-            var lastSourcesJson = ""
+            var lastTagValue = -1
             var lastUIUpdateTime = 0L
             
             while (isActive) {
@@ -926,12 +928,18 @@ class MainActivity : AppCompatActivity() {
 
                     withContext(Dispatchers.Main) {
                         if (shouldUpdateList) {
-                            val sourcesStr = sources!!.toString()
-                            if (sourcesStr != lastSourcesJson) {
-                                displaySources(sources, isFinished)
-                                lastSourcesJson = sourcesStr
+                            val count = sources?.length() ?: 0
+                            if (count != lastTagValue) {
+                                displaySources(sources!!, isFinished)
+                                lastTagValue = count
                                 lastUIUpdateTime = currentTime
                             }
+                        }
+
+                        val count = sources?.length() ?: 0
+                        if (count > 0) {
+                            streamsCountText.text = "Total Sources Found: $count"
+                            streamsCountText.visibility = View.VISIBLE
                         }
 
                         if (total > 0) {
@@ -2803,6 +2811,9 @@ class MainActivity : AppCompatActivity() {
         exoPlayer?.prepare()
         exoPlayer?.playWhenReady = true
         nativeVideoView.requestFocus()
+        nativeVideoView.post {
+            nativeVideoView.findViewById<View>(androidx.media3.ui.R.id.exo_play_pause)?.requestFocus()
+        }
     }
 
     private fun handleExoPlayerError(error: PlaybackException, videoUrl: String) {
@@ -4621,16 +4632,6 @@ class MainActivity : AppCompatActivity() {
             popup.isFocusable = true
             popup.isFocusableInTouchMode = true
             
-            // Allow navigation TO the popup even when controls are hidden
-            nativeVideoView.nextFocusUpId = popup.id
-            nativeVideoView.nextFocusDownId = popup.id
-            nativeVideoView.nextFocusLeftId = popup.id
-            nativeVideoView.nextFocusRightId = popup.id
-            
-            // Ensure Back from popup goes to Video, not exiting app
-            popup.nextFocusUpId = R.id.native_video_view
-            popup.nextFocusDownId = R.id.native_video_view
-
             popup.post {
                 popup.requestFocus()
             }

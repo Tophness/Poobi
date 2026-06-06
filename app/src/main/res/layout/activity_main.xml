@@ -380,6 +380,17 @@
             android:visibility="gone"
             android:gravity="center_horizontal"/>
 
+        <TextView
+            android:id="@+id/streams_count_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="#00BCD4"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            android:gravity="center_horizontal"/>
+
         <ProgressBar
             android:id="@+id/subtitles_progress"
             style="?android:attr/progressBarStyleHorizontal"

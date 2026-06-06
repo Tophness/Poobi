@@ -108,7 +108,12 @@
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Binge Watching / Auto-play" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
                 <Button android:id="@+id/up_next_pref_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Up Next Popup: Ask" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
-                <Button android:id="@+id/up_next_time_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Show Popup: 20s before end" android:layout_marginBottom="16dp" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginBottom="16dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Show Popup (seconds before end)" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                    <EditText android:id="@+id/up_next_time_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="16dp" android:inputType="number" android:text="20" android:nextFocusLeft="@+id/cat_player"/>
+                </LinearLayout>
+
                 <Button android:id="@+id/autoplay_next_mode_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Source Selection: Closest Source" android:gravity="start" android:nextFocusLeft="@+id/cat_player"/>
             </LinearLayout>
 
@@ -129,10 +134,10 @@
                     <EditText android:id="@+id/source_timeout_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="16dp" android:inputType="number" android:text="15" android:layout_marginBottom="16dp" android:nextFocusLeft="@+id/cat_streaming"/>
                 </LinearLayout>
 
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Provider Packs" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="8dp"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Provider Packages" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="8dp"/>
                 <LinearLayout android:id="@+id/provider_packs_container" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginBottom="16dp"/>
 
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Host Whitelist" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Host Whitelists" android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="5dp"/>
                 <Button android:id="@+id/whitelist_toggle_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Use Only Whitelisted Hosts: Disabled" android:layout_marginBottom="10dp" android:gravity="start" android:nextFocusLeft="@+id/cat_streaming"/>
 
                 <LinearLayout android:id="@+id/whitelist_controls_layout" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
@@ -140,14 +145,33 @@
                         <Button android:id="@+id/btn_whitelist_select_all" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Select All" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginEnd="5dp" android:textAllCaps="false"/>
                         <Button android:id="@+id/btn_whitelist_clear_all" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Clear All" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:textAllCaps="false"/>
                     </LinearLayout>
-                    <EditText android:id="@+id/host_search_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="16dp" android:hint="Search hosts..." android:textColorHint="#666" android:layout_marginBottom="10dp" android:nextFocusLeft="@+id/cat_streaming"/>
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/whitelist_hosts_recycler"
-                        android:layout_width="match_parent"
-                        android:layout_height="500dp"
-                        android:scrollbars="vertical"
-                        android:focusable="false"
-                        android:descendantFocusability="afterDescendants"/>
+                    <EditText android:id="@+id/host_search_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="16dp" android:hint="Search all whitelists..." android:textColorHint="#666" android:layout_marginBottom="10dp" android:nextFocusLeft="@+id/cat_streaming"/>
+
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                        <!-- Provider Sources Whitelist (Left) -->
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:paddingEnd="10dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Provider Sources Whitelist" android:textColor="#00BCD4" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="5dp"/>
+                            <androidx.recyclerview.widget.RecyclerView
+                                android:id="@+id/provider_hosts_recycler"
+                                android:layout_width="match_parent"
+                                android:layout_height="500dp"
+                                android:scrollbars="vertical"
+                                android:focusable="false"
+                                android:descendantFocusability="afterDescendants"/>
+                        </LinearLayout>
+
+                        <!-- ResolveURL Whitelist (Right) -->
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:paddingStart="10dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ResolveURL Host Whitelist" android:textColor="#00BCD4" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="5dp"/>
+                            <androidx.recyclerview.widget.RecyclerView
+                                android:id="@+id/resolveurl_hosts_recycler"
+                                android:layout_width="match_parent"
+                                android:layout_height="500dp"
+                                android:scrollbars="vertical"
+                                android:focusable="false"
+                                android:descendantFocusability="afterDescendants"/>
+                        </LinearLayout>
+                    </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
 

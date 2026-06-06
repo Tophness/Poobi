@@ -52,9 +52,12 @@ class SettingsActivity : AppCompatActivity() {
     private var useWhitelist = false
     private var enabledPacks = mutableListOf<String>()
     private var whitelistedHosts = mutableListOf<String>()
-    private var allHostsList = mutableListOf<HostItem>()
-    private var filteredHostsList = mutableListOf<HostItem>()
-    private lateinit var hostsAdapter: HostAdapter
+    private lateinit var providerHostsAdapter: HostAdapter
+    private lateinit var resolveurlHostsAdapter: HostAdapter
+    private var allProviderHosts = mutableListOf<HostItem>()
+    private var allResolveurlHosts = mutableListOf<HostItem>()
+    private var filteredProviderHosts = mutableListOf<HostItem>()
+    private var filteredResolveurlHosts = mutableListOf<HostItem>()
 
     data class HostItem(val name: String, val category: String, val isHeader: Boolean = false)
 
@@ -285,7 +288,7 @@ class SettingsActivity : AppCompatActivity() {
         val saveBtn = findViewById<Button>(R.id.save_button)
 
         val upNextPrefBtn = findViewById<Button>(R.id.up_next_pref_btn)
-        val upNextTimeBtn = findViewById<Button>(R.id.up_next_time_btn)
+        val upNextTimeInput = findViewById<EditText>(R.id.up_next_time_input)
         val autoplayNextBtn = findViewById<Button>(R.id.autoplay_next_mode_btn)
 
         // Load Prefs
@@ -317,7 +320,9 @@ class SettingsActivity : AppCompatActivity() {
                 autoplayNextPref = config.optString("autoplay_next_pref", "Closest Source")
                 withContext(Dispatchers.Main) { 
                     upNextPrefBtn.text = "Up Next Mode: $upNextPopupPref"
-                    upNextTimeBtn.text = "Show Popup: ${upNextTime}s before end"
+                    if (upNextTimeInput.text.toString() != upNextTime.toString()) {
+                        upNextTimeInput.setText(upNextTime.toString())
+                    }
                     autoplayNextBtn.text = "Source Selection: $autoplayNextPref"
                 }
             } catch (e: Exception) {}
@@ -351,7 +356,9 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             upNextPrefBtn.text = "Up Next Mode: $upNextPopupPref"
-            upNextTimeBtn.text = "Show Popup: ${upNextTime}s before end"
+            if (upNextTimeInput.text.toString() != upNextTime.toString()) {
+                upNextTimeInput.setText(upNextTime.toString())
+            }
             autoplayNextBtn.text = "Source Selection: $autoplayNextPref"
         }
         updateUI()
@@ -379,10 +386,12 @@ class SettingsActivity : AppCompatActivity() {
             upNextPopupPref = when(upNextPopupPref) { "Ask" -> "Always"; "Always" -> "Never"; else -> "Ask" }
             updateUI()
         }
-        upNextTimeBtn.setOnClickListener {
-            upNextTime = when(upNextTime) { 10 -> 20; 20 -> 30; 30 -> 60; 60 -> 120; 120 -> 10; else -> 20 }
-            updateUI()
-        }
+        upNextTimeInput.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) { upNextTime = s.toString().toIntOrNull() ?: 20 }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+        ViewUtils.applySmartDpadFocus(upNextTimeInput)
         autoplayNextBtn.setOnClickListener {
             autoplayNextPref = when(autoplayNextPref) { "Closest Source" -> "Best Source"; "Best Source" -> "Ask"; else -> "Closest Source" }
             updateUI()
@@ -822,12 +831,17 @@ class SettingsActivity : AppCompatActivity() {
         val whitelistBtn = findViewById<Button>(R.id.whitelist_toggle_btn)
         val whitelistControls = findViewById<LinearLayout>(R.id.whitelist_controls_layout)
         val packsContainer = findViewById<LinearLayout>(R.id.provider_packs_container)
-        val hostsRecycler = findViewById<RecyclerView>(R.id.whitelist_hosts_recycler)
+        val providerRecycler = findViewById<RecyclerView>(R.id.provider_hosts_recycler)
+        val resolveurlRecycler = findViewById<RecyclerView>(R.id.resolveurl_hosts_recycler)
         val hostSearchInput = findViewById<EditText>(R.id.host_search_input)
 
-        hostsRecycler.layoutManager = LinearLayoutManager(this)
-        hostsAdapter = HostAdapter()
-        hostsRecycler.adapter = hostsAdapter
+        providerRecycler.layoutManager = LinearLayoutManager(this)
+        providerHostsAdapter = HostAdapter(filteredProviderHosts)
+        providerRecycler.adapter = providerHostsAdapter
+
+        resolveurlRecycler.layoutManager = LinearLayoutManager(this)
+        resolveurlHostsAdapter = HostAdapter(filteredResolveurlHosts)
+        resolveurlRecycler.adapter = resolveurlHostsAdapter
 
         fun updateTimeoutUI() {
             timeoutBtn.text = "Timeout Mode: $timeoutMode"
@@ -885,47 +899,38 @@ class SettingsActivity : AppCompatActivity() {
         fun refreshHosts(filter: String = "") {
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    if (allHostsList.isEmpty()) {
+                    if (allProviderHosts.isEmpty() && allResolveurlHosts.isEmpty()) {
                         val py = Python.getInstance()
                         val hostsJson = py.getModule("main").callAttr("get_all_hosts").toString()
                         val hostsObj = JSONObject(hostsJson)
-                        val newList = mutableListOf<HostItem>()
-                        val keys = hostsObj.keys()
-                        while(keys.hasNext()) {
-                            val category = keys.next()
-                            val hosts = hostsObj.getJSONArray(category)
-                            if (hosts.length() > 0) {
-                                newList.add(HostItem(category, category, true))
-                                for (i in 0 until hosts.length()) {
-                                    newList.add(HostItem(hosts.getString(i), category, false))
-                                }
-                            }
+                        
+                        val pList = mutableListOf<HostItem>()
+                        val rList = mutableListOf<HostItem>()
+                        
+                        if (hostsObj.has("Provider Pack Hosts")) {
+                            val hosts = hostsObj.getJSONArray("Provider Pack Hosts")
+                            for (i in 0 until hosts.length()) pList.add(HostItem(hosts.getString(i), "Provider Pack Hosts", false))
                         }
-                        allHostsList.clear()
-                        allHostsList.addAll(newList)
+                        if (hostsObj.has("ResolveURL Hosts")) {
+                            val hosts = hostsObj.getJSONArray("ResolveURL Hosts")
+                            for (i in 0 until hosts.length()) rList.add(HostItem(hosts.getString(i), "ResolveURL Hosts", false))
+                        }
+                        
+                        allProviderHosts.clear(); allProviderHosts.addAll(pList)
+                        allResolveurlHosts.clear(); allResolveurlHosts.addAll(rList)
                     }
 
-                    filteredHostsList = if (filter.isEmpty()) {
-                        allHostsList.toMutableList()
-                    } else {
-                        val result = mutableListOf<HostItem>()
-                        var lastHeader: HostItem? = null
-                        allHostsList.forEach { 
-                            if (it.isHeader) {
-                                lastHeader = it
-                            } else if (it.name.contains(filter, true)) {
-                                if (lastHeader != null) {
-                                    result.add(lastHeader)
-                                    lastHeader = null
-                                }
-                                result.add(it)
-                            }
-                        }
-                        result
-                    }
+                    filteredProviderHosts.clear()
+                    if (filter.isEmpty()) filteredProviderHosts.addAll(allProviderHosts)
+                    else filteredProviderHosts.addAll(allProviderHosts.filter { it.name.contains(filter, true) })
+
+                    filteredResolveurlHosts.clear()
+                    if (filter.isEmpty()) filteredResolveurlHosts.addAll(allResolveurlHosts)
+                    else filteredResolveurlHosts.addAll(allResolveurlHosts.filter { it.name.contains(filter, true) })
 
                     withContext(Dispatchers.Main) {
-                        hostsAdapter.notifyDataSetChanged()
+                        providerHostsAdapter.notifyDataSetChanged()
+                        resolveurlHostsAdapter.notifyDataSetChanged()
                     }
                 } catch (e: Exception) {
                     Log.e("TVBrowser", "refreshHosts error: ${e.message}")
@@ -933,21 +938,24 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
         findViewById<Button>(R.id.btn_whitelist_select_all).setOnClickListener { 
-            filteredHostsList.forEach { if (!it.isHeader) { if (!whitelistedHosts.contains(it.name)) whitelistedHosts.add(it.name) } }
-            hostsAdapter.notifyDataSetChanged()
+            filteredProviderHosts.forEach { if (!whitelistedHosts.contains(it.name)) whitelistedHosts.add(it.name) }
+            filteredResolveurlHosts.forEach { if (!whitelistedHosts.contains(it.name)) whitelistedHosts.add(it.name) }
+            providerHostsAdapter.notifyDataSetChanged()
+            resolveurlHostsAdapter.notifyDataSetChanged()
             saveStreamingSettings()
         }
         findViewById<Button>(R.id.btn_whitelist_clear_all).setOnClickListener { 
             whitelistedHosts.clear()
-            hostsAdapter.notifyDataSetChanged()
+            providerHostsAdapter.notifyDataSetChanged()
+            resolveurlHostsAdapter.notifyDataSetChanged()
             saveStreamingSettings() 
         }
         hostSearchInput.addTextChangedListener(object : TextWatcher { override fun afterTextChanged(s: Editable?) { refreshHosts(s.toString()) }; override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}; override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {} })
         refreshHosts()
     }
 
-    private inner class HostAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-        override fun getItemViewType(position: Int) = if (filteredHostsList[position].isHeader) 0 else 1
+    private inner class HostAdapter(private val itemList: List<HostItem>) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+        override fun getItemViewType(position: Int) = if (itemList[position].isHeader) 0 else 1
         
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
             return if (viewType == 0) {
@@ -955,7 +963,7 @@ class SettingsActivity : AppCompatActivity() {
                     setTypeface(null, android.graphics.Typeface.BOLD)
                     setTextColor(android.graphics.Color.parseColor("#0e639c"))
                     setPadding(20, 30, 20, 10)
-                    textSize = 16f
+                    textSize = 14f
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 }
                 object : RecyclerView.ViewHolder(tv) {}
@@ -963,7 +971,8 @@ class SettingsActivity : AppCompatActivity() {
                 val cb = CheckBox(parent.context).apply {
                     setTextColor(android.graphics.Color.WHITE)
                     background = parent.context.getDrawable(R.drawable.bg_focusable)
-                    setPadding(20, 20, 20, 20)
+                    setPadding(10, 10, 10, 10)
+                    textSize = 12f // Smaller text for side-by-side
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 }
                 object : RecyclerView.ViewHolder(cb) {}
@@ -971,7 +980,7 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            val item = filteredHostsList[position]
+            val item = itemList[position]
             if (item.isHeader) {
                 (holder.itemView as TextView).text = item.name
             } else {
@@ -989,7 +998,7 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        override fun getItemCount() = filteredHostsList.size
+        override fun getItemCount() = itemList.size
     }
 
     private fun updateWhitelistUIControls(enabled: Boolean) {
@@ -1001,9 +1010,8 @@ class SettingsActivity : AppCompatActivity() {
         selectAll.isEnabled = enabled
         clearAll.isEnabled = enabled
         
-        if (::hostsAdapter.isInitialized) {
-            hostsAdapter.notifyDataSetChanged()
-        }
+        if (::providerHostsAdapter.isInitialized) providerHostsAdapter.notifyDataSetChanged()
+        if (::resolveurlHostsAdapter.isInitialized) resolveurlHostsAdapter.notifyDataSetChanged()
     }
 
     private fun saveStreamingSettings() {
