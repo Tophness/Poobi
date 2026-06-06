@@ -163,7 +163,9 @@ def load_config():
         "opensubtitles_org_password": "",
         "subdl_apikey": "",
         "subsource_apikey": "",
-        "sub_retention_days": 3
+        "sub_retention_days": 3,
+        "up_next_popup_pref": "Ask",
+        "autoplay_next_pref": "Closest Source"
     }
     
     # Initialize all detected packs as enabled by default in the base config
