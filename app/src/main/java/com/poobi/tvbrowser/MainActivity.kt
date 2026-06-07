@@ -101,8 +101,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var streamsHistoryContainer: LinearLayout
     private lateinit var btnStreamsClearHistory: Button
 
-    private lateinit var btnStreamsTabSearch: Button
-    private lateinit var btnStreamsTabLibraries: Button
+    private lateinit var streamsPanelMain: LinearLayout
     private lateinit var streamsPanelSearch: LinearLayout
     private lateinit var streamsPanelLibraries: LinearLayout
     private lateinit var streamsPanelScraping: LinearLayout
@@ -312,8 +311,7 @@ class MainActivity : AppCompatActivity() {
         streamsHistoryContainer = findViewById(R.id.streams_history_container)
         btnStreamsClearHistory = findViewById(R.id.btn_streams_clear_history)
 
-        btnStreamsTabSearch = findViewById(R.id.btn_streams_tab_search)
-        btnStreamsTabLibraries = findViewById(R.id.btn_streams_tab_libraries)
+        streamsPanelMain = findViewById(R.id.streams_panel_main)
         streamsPanelSearch = findViewById(R.id.streams_panel_search)
         streamsPanelLibraries = findViewById(R.id.streams_panel_libraries)
         streamsPanelScraping = findViewById(R.id.streams_panel_scraping)
@@ -535,10 +533,13 @@ class MainActivity : AppCompatActivity() {
                         showMediaDetailsScreen(lastScrapedItem!!)
                     } else if (lastSearchResults != null && !cameFromLibraries) {
                         // Return to search results for movies or if we came from search
+                        streamsPanelMain.visibility = View.VISIBLE
+                        streamsPanelSearch.visibility = View.VISIBLE
+                        streamsPanelLibraries.visibility = View.GONE
+                        findViewById<View>(R.id.streams_recent_searches_layout).visibility = View.GONE
                         streamsPanelScraping.visibility = View.GONE
                         btnStreamsStop.visibility = View.GONE
                         btnStreamsSort.visibility = View.GONE
-                        streamsPanelSearch.visibility = View.VISIBLE
                         streamsSearchResultsScroll.visibility = View.VISIBLE
                         streamsSearchBarLayout.visibility = View.VISIBLE
                         btnStreamsBack.visibility = View.VISIBLE
@@ -571,18 +572,10 @@ class MainActivity : AppCompatActivity() {
             refreshStreamsHistory()
         }
 
-        btnStreamsTabSearch.setOnClickListener { switchStreamsSubTab(true) }
-        btnStreamsTabLibraries.setOnClickListener { switchStreamsSubTab(false) }
-
-        btnStreamsTabSearch.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) switchStreamsSubTab(true)
+        // Default to Search view (first tab)
+        if (libraryTabsContainer.childCount == 0) {
+            setupLibraryTabs()
         }
-        btnStreamsTabLibraries.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) switchStreamsSubTab(false)
-        }
-
-        // Default to Search tab
-        switchStreamsSubTab(true)
 
         btnDetailsBack.setOnClickListener {
             detailsLayout.visibility = View.GONE
@@ -594,7 +587,10 @@ class MainActivity : AppCompatActivity() {
             btnStreamsSort.visibility = View.GONE
 
             if (lastSearchResults != null && !cameFromLibraries) {
+                streamsPanelMain.visibility = View.VISIBLE
                 streamsPanelSearch.visibility = View.VISIBLE
+                streamsPanelLibraries.visibility = View.GONE
+                findViewById<View>(R.id.streams_recent_searches_layout).visibility = View.GONE
                 streamsSearchResultsScroll.visibility = View.VISIBLE
                 streamsSearchBarLayout.visibility = View.VISIBLE
                 btnStreamsBack.visibility = View.VISIBLE
@@ -644,12 +640,13 @@ class MainActivity : AppCompatActivity() {
             // If details or scraping is visible, keep it; otherwise show the main streams list
             if (detailsLayout.visibility != View.VISIBLE && streamsPanelScraping.visibility != View.VISIBLE) {
                 streamsScreenLayout.visibility = View.VISIBLE
-                switchStreamsSubTab(true)
+                streamsPanelMain.visibility = View.VISIBLE
+                if (libraryTabsContainer.childCount == 0) setupLibraryTabs()
+                else (libraryTabsContainer.getChildAt(0) as? Button)?.performClick()
             } else {
                 streamsScreenLayout.visibility = View.VISIBLE
             }
             refreshStreamsHistory()
-            streamsSearchInput.post { streamsSearchInput.requestFocus() }
 
             cursor.visibility = View.GONE
 
@@ -676,15 +673,15 @@ class MainActivity : AppCompatActivity() {
         streamsCountText.visibility = View.GONE
         streamsCountText.text = ""
 
-        // Show sub-tabs navigation
-        btnStreamsTabSearch.visibility = View.VISIBLE
-        btnStreamsTabLibraries.visibility = View.VISIBLE
+        streamsPanelMain.visibility = View.VISIBLE
 
         if (cameFromLibraries) {
-            switchStreamsSubTab(false)
+            // Restore last active library tab or default to first non-search
+            val targetIdx = if (libraryTabsContainer.childCount > 1) 1 else 0
+            (libraryTabsContainer.getChildAt(targetIdx) as? Button)?.performClick()
             cameFromLibraries = false
         } else {
-            switchStreamsSubTab(true)
+            (libraryTabsContainer.getChildAt(0) as? Button)?.performClick()
             findViewById<View>(R.id.streams_recent_searches_layout).visibility = View.VISIBLE
             streamsSearchResultsScroll.visibility = View.GONE
             refreshStreamsHistory()
@@ -692,28 +689,16 @@ class MainActivity : AppCompatActivity() {
         streamsSearchInput.post { streamsSearchInput.requestFocus() }
     }
 
-    private var activeStreamsTab: Button? = null
-    private fun switchStreamsSubTab(isSearch: Boolean) {
-        btnStreamsTabSearch.isSelected = isSearch
-        btnStreamsTabLibraries.isSelected = !isSearch
-        
-        streamsPanelSearch.visibility = if (isSearch) View.VISIBLE else View.GONE
-        streamsPanelLibraries.visibility = if (isSearch) View.GONE else View.VISIBLE
-        streamsPanelScraping.visibility = View.GONE
-
-        if (isSearch) {
-            activeStreamsTab = btnStreamsTabSearch
-        } else {
-            activeStreamsTab = btnStreamsTabLibraries
-            if (libraryTabsContainer.childCount == 0) {
-                setupLibraryTabs()
-            }
-        }
-    }
-
     private fun setupLibraryTabs() {
         libraryTabsContainer.removeAllViews()
         val categories = listOf(
+            "Search" to {
+                streamsPanelSearch.visibility = View.VISIBLE
+                streamsPanelLibraries.visibility = View.GONE
+                if (streamsScreenLayout.visibility == View.VISIBLE) {
+                    streamsSearchInput.post { streamsSearchInput.requestFocus() }
+                }
+            },
             "Trending" to { loadLibraryCategory("Trending Today", "get_trending", "all") },
             "In Cinemas" to { loadLibraryCategory("In Cinemas Now", "get_movies_in_cinemas") },
             "Upcoming" to { loadLibraryCategory("Upcoming Movies", "get_upcoming_movies") },
@@ -726,15 +711,23 @@ class MainActivity : AppCompatActivity() {
         for ((name, action) in categories) {
             val btn = Button(this).apply {
                 text = name
-                background = getDrawable(R.drawable.bg_tab_nav)
-                setTextColor(android.graphics.Color.WHITE)
                 isAllCaps = false
                 setPadding(25.dp(), 0, 25.dp(), 0)
                 nextFocusUpId = R.id.library_content_scroll
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-                    50.dp()
-                ).apply { marginEnd = 5.dp() }
+                    45.dp()
+                ).apply { marginEnd = 8.dp() }
+                
+                // Set initial unselected look
+                val normalBg = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = 22.dp().toFloat()
+                    setColor(android.graphics.Color.parseColor("#2A2A2D"))
+                    setStroke(1.dp(), android.graphics.Color.parseColor("#444444"))
+                }
+                background = normalBg
+                setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
             }
             btn.setOnClickListener {
                 updateLibraryTabSelection(btn)
@@ -748,20 +741,41 @@ class MainActivity : AppCompatActivity() {
             libraryTabsContainer.addView(btn)
         }
         
-        // Load first tab by default
+        // Load first tab (Search) by default
         (libraryTabsContainer.getChildAt(0) as? Button)?.performClick()
     }
 
     private var activeLibraryTab: Button? = null
     private fun updateLibraryTabSelection(selected: Button) {
-        activeLibraryTab?.isSelected = false
+        activeLibraryTab?.let { btn ->
+            btn.isSelected = false
+            val normalBg = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                cornerRadius = 22.dp().toFloat()
+                setColor(android.graphics.Color.parseColor("#2A2A2D"))
+                setStroke(1.dp(), android.graphics.Color.parseColor("#444444"))
+            }
+            btn.background = normalBg
+            btn.setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
+        }
+
         selected.isSelected = true
+        val selectedBg = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+            cornerRadius = 22.dp().toFloat()
+            setColor(android.graphics.Color.parseColor("#00BCD4"))
+        }
+        selected.background = selectedBg
+        selected.setTextColor(android.graphics.Color.WHITE)
         activeLibraryTab = selected
     }
 
     private var libraryLoadJob: Job? = null
     private val libraryCache = mutableMapOf<String, String>()
     private fun loadLibraryCategory(title: String, method: String, arg: String? = null) {
+        streamsPanelSearch.visibility = View.GONE
+        streamsPanelLibraries.visibility = View.VISIBLE
+        
         val cacheKey = "$method|$arg"
         libraryLoadJob?.cancel()
 
@@ -808,6 +822,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshLibraryFavorites() {
+        streamsPanelSearch.visibility = View.GONE
+        streamsPanelLibraries.visibility = View.VISIBLE
         libraryLoadJob?.cancel()
         libraryGridContainer.removeAllViews()
         
@@ -825,6 +841,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshLibraryRecentlyWatched() {
+        streamsPanelSearch.visibility = View.GONE
+        streamsPanelLibraries.visibility = View.VISIBLE
         libraryLoadJob?.cancel()
         libraryGridContainer.removeAllViews()
         
@@ -1678,14 +1696,9 @@ class MainActivity : AppCompatActivity() {
 
         detailsLayout.visibility = View.GONE
         streamsScreenLayout.visibility = View.VISIBLE
-        streamsPanelSearch.visibility = View.GONE
-        streamsPanelLibraries.visibility = View.GONE
         streamsPanelScraping.visibility = View.VISIBLE
+        streamsPanelMain.visibility = View.GONE
         
-        // Hide sub-tabs navigation but keep top bar visible for Stop/Sort buttons
-        btnStreamsTabSearch.visibility = View.GONE
-        btnStreamsTabLibraries.visibility = View.GONE
-
         btnScrapeBack.visibility = View.GONE // Use btnStreamsBack instead
         interceptedSubtitleUrls.clear()
         interceptedMediaUrls.clear()
