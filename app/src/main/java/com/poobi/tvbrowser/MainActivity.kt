@@ -72,6 +72,7 @@ fun String.cleanKodiText(): String = this.replace("[CR]", "\n").replace("[B]", "
 class MainActivity : AppCompatActivity() {
 
     private val pythonReady = CompletableDeferred<Unit>()
+    private val genresReady = CompletableDeferred<Unit>()
 
     private lateinit var webContainer: FrameLayout
     private lateinit var tabsContainer: LinearLayout
@@ -484,8 +485,11 @@ class MainActivity : AppCompatActivity() {
                         val g = tArr.getJSONObject(i)
                         genreMap[g.getInt("id")] = g.getString("name")
                     }
+                    if (!genresReady.isCompleted) genresReady.complete(Unit)
                 }
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                if (!genresReady.isCompleted) genresReady.complete(Unit)
+            }
         }
     }
 
@@ -724,6 +728,7 @@ class MainActivity : AppCompatActivity() {
         libraryLoadJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 pythonReady.await()
+                genresReady.await()
                 val py = Python.getInstance()
                 val tmdb = py.getModule("tmdb.tmdb_api")
                 val resultJson = if (arg != null) {
@@ -1025,7 +1030,7 @@ class MainActivity : AppCompatActivity() {
                     reassignLibraryFocus(index)
                 } else if (isRecent) {
                     val displayTitle = if (season != null && episode != null) "$title S${season}E$episode" else title
-                    removeFromRecentlyPlayedStreams(displayTitle)
+                    removeFromRecentlyPlayedStreams(displayTitle, item, season, episode)
                     reassignLibraryFocus(index)
                 }
             }
@@ -1348,13 +1353,38 @@ class MainActivity : AppCompatActivity() {
         refreshLibraryRecentlyWatched()
     }
 
-    private fun removeFromRecentlyPlayedStreams(displayTitle: String) {
+    private fun removeFromRecentlyPlayedStreams(displayTitle: String, item: JSONObject? = null, season: Int? = null, episode: Int? = null) {
         val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
         val array = JSONArray(recentJson)
         val newArray = JSONArray()
+
+        val id = item?.optString("id")
+        val imdb = item?.optString("imdb")
+
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
-            if (obj.getString("display_title") != displayTitle) newArray.put(obj)
+            val itTitle = obj.optString("display_title")
+            
+            var matches = itTitle == displayTitle
+            
+            // Try matching without year if exact match fails
+            if (!matches && itTitle.isNotEmpty()) {
+                val itTitleNoYear = itTitle.replace(Regex("\\s\\(\\d{4}\\)"), "")
+                val displayTitleNoYear = displayTitle.replace(Regex("\\s\\(\\d{4}\\)"), "")
+                if (itTitleNoYear == displayTitleNoYear) matches = true
+            }
+
+            // Robust ID-based matching if item data is available
+            if (!matches && item != null) {
+                val itItem = obj.optJSONObject("item")
+                val itId = itItem?.optString("id")
+                val itImdb = itItem?.optString("imdb")
+                val sameItem = (itId != null && itId == id && itId.isNotEmpty()) || (itImdb != null && itImdb == imdb && itImdb.isNotEmpty())
+                val sameEpisode = obj.optInt("season", -1) == (season ?: -1) && obj.optInt("episode", -1) == (episode ?: -1)
+                if (sameItem && sameEpisode) matches = true
+            }
+
+            if (!matches) newArray.put(obj)
         }
         prefs.edit().putString("streams_recently_played", newArray.toString()).apply()
 
