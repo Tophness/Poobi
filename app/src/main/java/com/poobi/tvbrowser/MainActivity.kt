@@ -522,30 +522,34 @@ class MainActivity : AppCompatActivity() {
 
         btnStreamsBack.setOnClickListener {
             if (streamsScreenLayout.visibility == View.VISIBLE) {
-                // If we came from library and went straight to scrape (skip details), go back to library
-                if (cameFromLibraries && (detailsLayout.visibility != View.VISIBLE)) {
+                // 1. Handle Back from Scraping Panel
+                if (streamsPanelScraping.visibility == View.VISIBLE) {
+                    if (lastScrapedItem != null && lastScrapedItem!!.optString("media_type") == "tv" && lastScrapedSeason != null) {
+                        streamsScreenLayout.visibility = View.GONE
+                        showMediaDetailsScreen(lastScrapedItem!!)
+                    } else if (lastSearchResults != null && !cameFromLibraries) {
+                        // Return to search results for movies or if we came from search
+                        streamsPanelScraping.visibility = View.GONE
+                        btnStreamsStop.visibility = View.GONE
+                        btnStreamsSort.visibility = View.GONE
+                        streamsPanelSearch.visibility = View.VISIBLE
+                        streamsSearchResultsScroll.visibility = View.VISIBLE
+                        streamsSearchBarLayout.visibility = View.VISIBLE
+                        btnStreamsBack.visibility = View.VISIBLE
+                    } else {
+                        goBackToHistory()
+                    }
+                    return@setOnClickListener
+                }
+
+                // 2. Handle Back from Search Results
+                if (streamsSearchResultsScroll.visibility == View.VISIBLE) {
                     goBackToHistory()
                     return@setOnClickListener
                 }
 
-                // If we are in the middle of a TV scrape or looking at TV sources, go back to TV selection
-                if (lastScrapedItem != null && lastScrapedItem!!.optString("media_type") == "tv" && lastScrapedSeason != null) {
-                    streamsScreenLayout.visibility = View.GONE
-                    showMediaDetailsScreen(lastScrapedItem!!)
-                    return@setOnClickListener
-                }
-
-                // If we are looking at search results
-                if (lastSearchResults != null && streamsResultsContainer.childCount > 0 &&
-                    streamsResultsContainer.getChildAt(0).findViewById<View>(R.id.card_detail) != null) {
-                    goBackToHistory()
-                } else if (lastSearchResults != null) {
-                    displayStreamResults(lastSearchResults!!)
-                    streamsSearchBarLayout.visibility = View.VISIBLE
-                    btnStreamsBack.visibility = View.VISIBLE
-                } else {
-                    goBackToHistory()
-                }
+                // Fallback
+                goBackToHistory()
             } else {
                 goBackToHistory()
             }
@@ -577,11 +581,18 @@ class MainActivity : AppCompatActivity() {
         btnDetailsBack.setOnClickListener {
             detailsLayout.visibility = View.GONE
             streamsScreenLayout.visibility = View.VISIBLE
-            if (lastSearchResults != null) {
-                displayStreamResults(lastSearchResults!!)
+
+            // Hide scraping panel when returning from details
+            streamsPanelScraping.visibility = View.GONE
+            btnStreamsStop.visibility = View.GONE
+            btnStreamsSort.visibility = View.GONE
+
+            if (lastSearchResults != null && !cameFromLibraries) {
+                streamsPanelSearch.visibility = View.VISIBLE
+                streamsSearchResultsScroll.visibility = View.VISIBLE
                 streamsSearchBarLayout.visibility = View.VISIBLE
-                streamsResultsScroll.visibility = View.VISIBLE
                 btnStreamsBack.visibility = View.VISIBLE
+                displayStreamResults(lastSearchResults!!)
             } else {
                 goBackToHistory()
             }
@@ -653,11 +664,15 @@ class MainActivity : AppCompatActivity() {
         streamsResultsScroll.visibility = View.GONE
         streamsPanelScraping.visibility = View.GONE
         btnScrapeBack.visibility = View.GONE
+        btnStreamsBack.visibility = View.GONE
+        btnStreamsStop.visibility = View.GONE
+        btnStreamsSort.visibility = View.GONE
         streamsCountText.visibility = View.GONE
         streamsCountText.text = ""
 
         // Show sub-tabs navigation
-        (btnStreamsTabSearch.parent as? View)?.visibility = View.VISIBLE
+        btnStreamsTabSearch.visibility = View.VISIBLE
+        btnStreamsTabLibraries.visibility = View.VISIBLE
 
         if (cameFromLibraries) {
             switchStreamsSubTab(false)
@@ -1645,10 +1660,11 @@ class MainActivity : AppCompatActivity() {
         streamsPanelLibraries.visibility = View.GONE
         streamsPanelScraping.visibility = View.VISIBLE
         
-        // Hide sub-tabs navigation
-        (btnStreamsTabSearch.parent as? View)?.visibility = View.GONE
+        // Hide sub-tabs navigation but keep top bar visible for Stop/Sort buttons
+        btnStreamsTabSearch.visibility = View.GONE
+        btnStreamsTabLibraries.visibility = View.GONE
 
-        btnScrapeBack.visibility = View.VISIBLE
+        btnScrapeBack.visibility = View.GONE // Use btnStreamsBack instead
         interceptedSubtitleUrls.clear()
         interceptedMediaUrls.clear()
 
@@ -4196,7 +4212,7 @@ class MainActivity : AppCompatActivity() {
                         isBackHandled = true
                         return true
                     } else if (!isBrowsing && streamsScreenLayout.visibility == View.VISIBLE) {
-                        if (btnStreamsBack.visibility == View.VISIBLE) {
+                        if (btnStreamsBack.visibility == View.VISIBLE || streamsPanelScraping.visibility == View.VISIBLE || streamsSearchResultsScroll.visibility == View.VISIBLE) {
                             btnStreamsBack.performClick()
                             isBackHandled = true
                             return true
