@@ -498,10 +498,10 @@ class MainActivity : AppCompatActivity() {
         btnTabStreams.setOnClickListener { switchMainTab(false) }
 
         btnTabBrowser.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) switchMainTab(true)
+            if (hasFocus && !btnTabBrowser.isSelected) switchMainTab(true)
         }
         btnTabStreams.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) {
+            if (hasFocus && !btnTabStreams.isSelected) {
                 switchMainTab(false)
                 checkForNewEpisodes()
             }
@@ -782,7 +782,7 @@ class MainActivity : AppCompatActivity() {
             val itemData = obj.getJSONObject("item")
             val season = if (obj.has("season")) obj.getInt("season") else null
             val episode = if (obj.has("episode")) obj.getInt("episode") else null
-            libraryGridContainer.addView(createRichMediaCard(itemData, season = season, episode = episode, isRecentList = true))
+            libraryGridContainer.addView(createRichMediaCard(itemData, season = season, episode = episode, isRecentList = true, recentEntry = obj))
         }
     }
 
@@ -825,7 +825,8 @@ class MainActivity : AppCompatActivity() {
         season: Int? = null,
         episode: Int? = null,
         isFavoriteList: Boolean = false,
-        isRecentList: Boolean = false
+        isRecentList: Boolean = false,
+        recentEntry: JSONObject? = null
     ): View {
         val card = LayoutInflater.from(this).inflate(R.layout.item_media_card, null)
         val titleView = card.findViewById<TextView>(R.id.card_title)
@@ -931,7 +932,27 @@ class MainActivity : AppCompatActivity() {
         if (actualNewCount > 0) newIcon.visibility = View.VISIBLE
 
         card.setOnClickListener {
-            showMediaDetailsScreen(normalizedItem)
+            if (isRecentList && season != null && episode != null) {
+                val savedUrl = recentEntry?.optString("video_url")
+                if (!savedUrl.isNullOrEmpty()) {
+                    val savedHeaders = recentEntry.optJSONObject("headers")
+                    val headersMap = mutableMapOf<String, String>()
+                    savedHeaders?.keys()?.forEach { headersMap[it] = savedHeaders.getString(it) }
+                    interceptedMediaUrls[savedUrl] = headersMap
+                    
+                    val dispTitle = recentEntry.optString("display_title", title)
+                    lastScrapedItem = normalizedItem
+                    lastScrapedSeason = season
+                    lastScrapedEpisode = episode
+                    launchNativeVideoPlayer(savedUrl, null, dispTitle) {
+                        performScrape(normalizedItem, season, episode)
+                    }
+                    return@setOnClickListener
+                }
+                performScrape(normalizedItem, season, episode)
+            } else {
+                showMediaDetailsScreen(normalizedItem)
+            }
         }
 
         if (isFavoriteList || isRecentList) {
