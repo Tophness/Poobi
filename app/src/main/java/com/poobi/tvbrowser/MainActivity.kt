@@ -92,7 +92,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var streamsCountText: TextView
     private lateinit var streamsResultsContainer: LinearLayout
     private lateinit var streamsResultsScroll: ScrollView
+    private lateinit var streamsSearchResultsContainer: LinearLayout
+    private lateinit var streamsSearchResultsScroll: ScrollView
     private lateinit var btnStreamsBack: ImageButton
+    private lateinit var btnScrapeBack: ImageButton
     private lateinit var btnStreamsStop: Button
     private lateinit var btnStreamsSort: Button
     private lateinit var streamsHistoryContainer: LinearLayout
@@ -102,6 +105,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnStreamsTabLibraries: Button
     private lateinit var streamsPanelSearch: LinearLayout
     private lateinit var streamsPanelLibraries: LinearLayout
+    private lateinit var streamsPanelScraping: LinearLayout
     private lateinit var libraryGridContainer: LinearLayout
     private lateinit var libraryTabsContainer: LinearLayout
 
@@ -185,6 +189,7 @@ class MainActivity : AppCompatActivity() {
     private var lastSelectedSource: JSONObject? = null
     private var upNextPopup: View? = null
     private var isUpNextDismissed = false
+    private var cameFromLibraries = false
 
     private lateinit var downloadsContainer: LinearLayout
     private lateinit var topDownloadsBtn: ImageButton
@@ -294,7 +299,10 @@ class MainActivity : AppCompatActivity() {
         streamsCountText = findViewById(R.id.streams_count_text)
         streamsResultsContainer = findViewById(R.id.streams_results_container)
         streamsResultsScroll = findViewById(R.id.streams_results_scroll)
+        streamsSearchResultsContainer = findViewById(R.id.streams_search_results_container)
+        streamsSearchResultsScroll = findViewById(R.id.streams_search_results_scroll)
         btnStreamsBack = findViewById(R.id.btn_streams_back)
+        btnScrapeBack = findViewById(R.id.btn_scrape_back)
         btnStreamsStop = findViewById(R.id.btn_streams_stop)
         btnStreamsSort = findViewById(R.id.btn_streams_sort)
         streamsHistoryContainer = findViewById(R.id.streams_history_container)
@@ -304,6 +312,7 @@ class MainActivity : AppCompatActivity() {
         btnStreamsTabLibraries = findViewById(R.id.btn_streams_tab_libraries)
         streamsPanelSearch = findViewById(R.id.streams_panel_search)
         streamsPanelLibraries = findViewById(R.id.streams_panel_libraries)
+        streamsPanelScraping = findViewById(R.id.streams_panel_scraping)
         libraryGridContainer = findViewById(R.id.library_grid_container)
         libraryTabsContainer = findViewById(R.id.library_tabs_container)
 
@@ -507,8 +516,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        btnScrapeBack.setOnClickListener {
+            goBackToHistory()
+        }
+
         btnStreamsBack.setOnClickListener {
             if (streamsScreenLayout.visibility == View.VISIBLE) {
+                // If we came from library and went straight to scrape (skip details), go back to library
+                if (cameFromLibraries && (detailsLayout.visibility != View.VISIBLE)) {
+                    goBackToHistory()
+                    return@setOnClickListener
+                }
+
                 // If we are in the middle of a TV scrape or looking at TV sources, go back to TV selection
                 if (lastScrapedItem != null && lastScrapedItem!!.optString("media_type") == "tv" && lastScrapedSeason != null) {
                     streamsScreenLayout.visibility = View.GONE
@@ -605,10 +624,12 @@ class MainActivity : AppCompatActivity() {
             
             isBrowsing = false
             
-            // If details is visible, keep it; otherwise show the main streams list
-            if (detailsLayout.visibility != View.VISIBLE) {
+            // If details or scraping is visible, keep it; otherwise show the main streams list
+            if (detailsLayout.visibility != View.VISIBLE && streamsPanelScraping.visibility != View.VISIBLE) {
                 streamsScreenLayout.visibility = View.VISIBLE
                 switchStreamsSubTab(true)
+            } else {
+                streamsScreenLayout.visibility = View.VISIBLE
             }
             refreshStreamsHistory()
             streamsSearchInput.post { streamsSearchInput.requestFocus() }
@@ -630,12 +651,23 @@ class MainActivity : AppCompatActivity() {
     private fun goBackToHistory() {
         streamsResultsContainer.removeAllViews()
         streamsResultsScroll.visibility = View.GONE
-        btnStreamsBack.visibility = View.GONE
-        streamsSearchBarLayout.visibility = View.VISIBLE
+        streamsPanelScraping.visibility = View.GONE
+        btnScrapeBack.visibility = View.GONE
         streamsCountText.visibility = View.GONE
         streamsCountText.text = ""
-        refreshStreamsHistory()
-        // refreshStreamsFavorites() // Now handled by Libraries tab
+
+        // Show sub-tabs navigation
+        (btnStreamsTabSearch.parent as? View)?.visibility = View.VISIBLE
+
+        if (cameFromLibraries) {
+            switchStreamsSubTab(false)
+            cameFromLibraries = false
+        } else {
+            switchStreamsSubTab(true)
+            findViewById<View>(R.id.streams_recent_searches_layout).visibility = View.VISIBLE
+            streamsSearchResultsScroll.visibility = View.GONE
+            refreshStreamsHistory()
+        }
         streamsSearchInput.post { streamsSearchInput.requestFocus() }
     }
 
@@ -646,6 +678,7 @@ class MainActivity : AppCompatActivity() {
         
         streamsPanelSearch.visibility = if (isSearch) View.VISIBLE else View.GONE
         streamsPanelLibraries.visibility = if (isSearch) View.GONE else View.VISIBLE
+        streamsPanelScraping.visibility = View.GONE
 
         if (isSearch) {
             activeStreamsTab = btnStreamsTabSearch
@@ -870,6 +903,7 @@ class MainActivity : AppCompatActivity() {
         if (rating > 0) {
             ratingView.text = "%.1f".format(rating)
             ratingContainer.visibility = View.VISIBLE
+            normalizedItem.put("vote_average", rating)
         } else {
             ratingContainer.visibility = View.GONE
         }
@@ -905,6 +939,7 @@ class MainActivity : AppCompatActivity() {
         val posterPath = item.optString("poster_path")
         if (posterPath.isNotEmpty() && posterPath != "null") {
             loadStreamThumb("https://image.tmdb.org/t/p/w342$posterPath", thumbView)
+            normalizedItem.put("poster_path", posterPath)
         }
 
         val id = item.optString("id")
@@ -933,6 +968,17 @@ class MainActivity : AppCompatActivity() {
 
         card.setOnClickListener {
             if (isRecentList && season != null && episode != null) {
+                // Pre-fetch episodes for Up Next
+                val cacheKey = "${normalizedItem.optInt("id")}_$season"
+                if (!cachedEpisodes.containsKey(cacheKey)) {
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val py = Python.getInstance()
+                        val scraper = py.getModule("main")
+                        val episodesJson = scraper.callAttr("get_tv_episodes", normalizedItem.optInt("id"), season).toString()
+                        cachedEpisodes[cacheKey] = JSONArray(episodesJson)
+                    }
+                }
+
                 val savedUrl = recentEntry?.optString("video_url")
                 if (!savedUrl.isNullOrEmpty()) {
                     val savedHeaders = recentEntry.optJSONObject("headers")
@@ -1074,14 +1120,12 @@ class MainActivity : AppCompatActivity() {
 
         addToStreamsHistory(query)
         streamsProgress.visibility = View.VISIBLE
-        streamsResultsContainer.removeAllViews()
-        streamsResultsScroll.visibility = View.VISIBLE
+        streamsSearchResultsContainer.removeAllViews()
+        streamsSearchResultsScroll.visibility = View.VISIBLE
+        findViewById<View>(R.id.streams_recent_searches_layout).visibility = View.GONE
+        
         streamsCountText.visibility = View.GONE
         streamsCountText.text = ""
-        streamsResultsScroll.visibility = View.VISIBLE
-        // richMediaScroll.visibility = View.GONE
-        btnStreamsBack.visibility = View.GONE
-        // streamsHistoryLayout.visibility = View.GONE
 
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.hideSoftInputFromWindow(streamsSearchInput.windowToken, 0)
@@ -1429,12 +1473,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun displayStreamResults(results: JSONArray) {
         val inflater = LayoutInflater.from(this)
-        streamsResultsContainer.removeAllViews()
+        streamsSearchResultsContainer.removeAllViews()
         streamsCountText.visibility = View.GONE
         streamsCountText.text = ""
         for (i in 0 until results.length()) {
             val item = results.getJSONObject(i)
-            val view = inflater.inflate(R.layout.item_stream, streamsResultsContainer, false)
+            val view = inflater.inflate(R.layout.item_stream, streamsSearchResultsContainer, false)
             val titleView = view.findViewById<TextView>(R.id.card_title)
             val detailView = view.findViewById<TextView>(R.id.card_detail)
             val thumbView = view.findViewById<ImageView>(R.id.card_thumb)
@@ -1465,7 +1509,7 @@ class MainActivity : AppCompatActivity() {
             view.setOnClickListener {
                 showMediaDetailsScreen(item)
             }
-            streamsResultsContainer.addView(view)
+            streamsSearchResultsContainer.addView(view)
             if (i == 0) view.post { view.requestFocus() }
         }
     }
@@ -1587,6 +1631,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        cameFromLibraries = streamsPanelLibraries.visibility == View.VISIBLE
+
         val title = item.optString("orig_title") ?: item.optString("title")
         val displayTitle = if (season != null && episode != null) "$title S${season}E$episode" else title
         Toast.makeText(this, "Scraping: $displayTitle", Toast.LENGTH_SHORT).show()
@@ -1597,7 +1643,14 @@ class MainActivity : AppCompatActivity() {
 
         detailsLayout.visibility = View.GONE
         streamsScreenLayout.visibility = View.VISIBLE
+        streamsPanelSearch.visibility = View.GONE
+        streamsPanelLibraries.visibility = View.GONE
+        streamsPanelScraping.visibility = View.VISIBLE
+        
+        // Hide sub-tabs navigation
+        (btnStreamsTabSearch.parent as? View)?.visibility = View.GONE
 
+        btnScrapeBack.visibility = View.VISIBLE
         interceptedSubtitleUrls.clear()
         interceptedMediaUrls.clear()
 
@@ -1615,7 +1668,6 @@ class MainActivity : AppCompatActivity() {
         btnStreamsBack.visibility = View.VISIBLE // Allow going back while scraping
         btnStreamsStop.visibility = View.VISIBLE
         btnStreamsStop.requestFocus()
-        // streamsHistoryLayout.visibility = View.GONE
         streamsSearchBarLayout.visibility = View.GONE
 
         btnStreamsStop.setOnClickListener {
@@ -1913,6 +1965,7 @@ class MainActivity : AppCompatActivity() {
                 val scraper = py.getModule("main")
                 val episodesJson = scraper.callAttr("get_tv_episodes", id, seasonNumber).toString()
                 val episodes = JSONArray(episodesJson)
+                cachedEpisodes[cacheKey] = episodes
 
                 val watchedStatus = try {
                     val checker = py.getModule("trakt.episode_check")
