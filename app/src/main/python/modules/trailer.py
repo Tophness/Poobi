@@ -11,7 +11,7 @@ from resources.lib.modules import client
 from resources.lib.modules import client_utils
 from resources.lib.modules import control
 #from resources.lib.modules import log_utils
-from resources.lib.modules import tmdb_utils
+from tmdb import tmdb_utils
 from resources.lib.modules import trakt
 
 

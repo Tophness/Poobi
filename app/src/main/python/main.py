@@ -641,24 +641,35 @@ def resume_scrape():
 def search(query):
     try:
         # TMDB Search
-        api_key = "f5608fba6ab49e9985828b35d5653321"
-        # Try movie search
+        api_key = "55d4ea0acb04a10053c2be637eb707a9"
+        # Try multi search
         res = requests.get(f"https://api.themoviedb.org/3/search/multi?api_key={api_key}&query={query.replace(' ', '+')}").json().get('results', [])
-        # Filter for movie/tv and ensure they have enough info
+
         filtered = []
         for item in res:
-            if item.get('media_type') in ['movie', 'tv']:
+            media_type = item.get('media_type')
+            if media_type in ['movie', 'tv']:
                 title = item.get('title') or item.get('name')
                 year = (item.get('release_date') or item.get('first_air_date') or '0000')[:4]
                 filtered.append({
                     "title": f"{title} ({year})",
                     "id": item['id'],
-                    "media_type": item['media_type'],
+                    "media_type": media_type,
                     "release_date": item.get('release_date') or item.get('first_air_date'),
                     "overview": item.get('overview'),
                     "poster_path": item.get('poster_path'),
                     "orig_title": title,
                     "year": year
+                })
+            elif media_type == 'person':
+                filtered.append({
+                    "title": item.get('name'),
+                    "id": item['id'],
+                    "media_type": "person",
+                    "overview": f"Known for: {item.get('known_for_department')}",
+                    "poster_path": item.get('profile_path'),
+                    "orig_title": item.get('name'),
+                    "year": ""
                 })
         return json.dumps(filtered)
     except Exception as e:

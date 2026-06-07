@@ -1,6 +1,7 @@
 package com.poobi.tvbrowser
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.text.Editable
@@ -21,8 +22,10 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
 import com.google.api.services.drive.DriveScopes
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -199,6 +202,7 @@ class SettingsActivity : AppCompatActivity() {
         val catSubtitles = findViewById<Button>(R.id.cat_subtitles)
         val catBlocked = findViewById<Button>(R.id.cat_blocked)
         val catTrakt = findViewById<Button>(R.id.cat_trakt)
+        val catTmdb = findViewById<Button>(R.id.cat_tmdb)
         val catSync = findViewById<Button>(R.id.cat_sync)
 
         val panelGeneral = findViewById<LinearLayout>(R.id.panel_general)
@@ -211,6 +215,7 @@ class SettingsActivity : AppCompatActivity() {
         val panelSubtitles = findViewById<LinearLayout>(R.id.panel_subtitles)
         val panelBlocked = findViewById<LinearLayout>(R.id.panel_blocked)
         val panelTrakt = findViewById<LinearLayout>(R.id.panel_trakt)
+        val panelTmdb = findViewById<LinearLayout>(R.id.panel_tmdb)
         val panelSync = findViewById<LinearLayout>(R.id.panel_sync)
 
         fun findFirstFocusable(view: View): View? {
@@ -238,6 +243,7 @@ class SettingsActivity : AppCompatActivity() {
             panelSubtitles.visibility = View.GONE
             panelBlocked.visibility = View.GONE
             panelTrakt.visibility = View.GONE
+            panelTmdb.visibility = View.GONE
             panelSync.visibility = View.GONE
             panel.visibility = View.VISIBLE
 
@@ -251,6 +257,7 @@ class SettingsActivity : AppCompatActivity() {
             catSubtitles.alpha = 0.5f
             catBlocked.alpha = 0.5f
             catTrakt.alpha = 0.5f
+            catTmdb.alpha = 0.5f
             catSync.alpha = 0.5f
 
             activeCategory?.isSelected = false
@@ -275,6 +282,9 @@ class SettingsActivity : AppCompatActivity() {
             }
             if (panel == panelTrakt) {
                 refreshTraktPanel()
+            }
+            if (panel == panelTmdb) {
+                refreshTmdbPanel()
             }
             if (panel == panelSync) {
                 updateSyncUI()
@@ -302,6 +312,7 @@ class SettingsActivity : AppCompatActivity() {
                     R.id.cat_subtitles -> showPanel(panelSubtitles, catSubtitles)
                     R.id.cat_blocked -> showPanel(panelBlocked, catBlocked)
                     R.id.cat_trakt -> showPanel(panelTrakt, catTrakt)
+                    R.id.cat_tmdb -> showPanel(panelTmdb, catTmdb)
                     R.id.cat_sync -> showPanel(panelSync, catSync)
                 }
             }
@@ -317,6 +328,7 @@ class SettingsActivity : AppCompatActivity() {
         catSubtitles.onFocusChangeListener = focusListener
         catBlocked.onFocusChangeListener = focusListener
         catTrakt.onFocusChangeListener = focusListener
+        catTmdb.onFocusChangeListener = focusListener
         catSync.onFocusChangeListener = focusListener
 
         // Initial state
@@ -1315,6 +1327,126 @@ class SettingsActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) { try { val py = Python.getInstance(); val cfg = JSONObject().apply { put("subtitles_languages", subLangs); put("subtitles_limit", subLimit); subServices.forEach { (k, v) -> put("${k}_enabled", v) }; put("opensubtitles_username", openSubUser); put("opensubtitles_password", openSubPass); put("opensubtitles_org_username", openSubOrgUser); put("opensubtitles_org_password", openSubOrgPass); put("subdl_apikey", subdlKey); put("subsource_apikey", subsourceKey); put("sub_retention_days", subRetentionDays) }; py.getModule("main").callAttr("set_config", cfg.toString()) } catch (e: Exception) {} }
     }
 
+    private fun refreshTmdbPanel() {
+        val userInput = findViewById<EditText>(R.id.tmdb_user_input)
+        val passInput = findViewById<EditText>(R.id.tmdb_pass_input)
+        val authBtn = findViewById<Button>(R.id.tmdb_auth_btn)
+        val statusText = findViewById<TextView>(R.id.tmdb_status_text)
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val control = py.getModule("modules.control")
+                val user = control.callAttr("setting", "tmdb.user").toString()
+                val pass = control.callAttr("setting", "tmdb.pass").toString()
+                val session = control.callAttr("setting", "tmdb.session").toString()
+
+                withContext(Dispatchers.Main) {
+                    if (user != "0" && user.isNotEmpty()) userInput.setText(user)
+                    if (pass != "0" && pass.isNotEmpty()) passInput.setText(pass)
+                    
+                    if (session.isNotEmpty() && session != "0") {
+                        statusText.text = "Authorized (Session Active)"
+                        authBtn.text = "Logout TMDb"
+                        authBtn.setOnClickListener {
+                            logoutTmdb()
+                        }
+                    } else {
+                        statusText.text = "Not authorized."
+                        authBtn.text = "Authorize TMDb"
+                        authBtn.setOnClickListener {
+                            val u = userInput.text.toString().trim()
+                            val p = passInput.text.toString().trim()
+                            if (u.isEmpty() || p.isEmpty()) {
+                                Toast.makeText(this@SettingsActivity, "Please enter username and password", Toast.LENGTH_SHORT).show()
+                                return@setOnClickListener
+                            }
+                            startTmdbAuth(u, p)
+                        }
+                    }
+                    
+                    ViewUtils.applySmartDpadFocus(userInput)
+                    ViewUtils.applySmartDpadFocus(passInput)
+                }
+            } catch (e: Exception) {
+                Log.e("Settings", "TMDb Panel Refresh failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun logoutTmdb() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val tmdbUtils = py.getModule("tmdb.tmdb_utils")
+                tmdbUtils.callAttr("delete_session")
+                withContext(Dispatchers.Main) {
+                    refreshTmdbPanel()
+                    Toast.makeText(this@SettingsActivity, "Logged out of TMDb", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {}
+        }
+    }
+
+    private fun startTmdbAuth(user: String, pass: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val control = py.getModule("modules.control")
+                
+                // Set up dialog listener for TMDb auth process
+                control.callAttr("set_dialog_listener", object : PythonDialogListener {
+                    override fun infoDialog(message: String, heading: String, sound: Boolean, icon: String) {
+                        runOnUiThread {
+                            Toast.makeText(this@SettingsActivity, "$heading: $message", Toast.LENGTH_LONG).show()
+                        }
+                    }
+
+                    override fun okDialog(message: String, heading: String): Boolean {
+                        val future = CompletableDeferred<Boolean>()
+                        runOnUiThread {
+                            AlertDialog.Builder(this@SettingsActivity)
+                                .setTitle(heading.ifEmpty { "Notice" })
+                                .setMessage(message)
+                                .setPositiveButton("OK") { _, _ -> future.complete(true) }
+                                .setOnCancelListener { future.complete(true) }
+                                .show()
+                        }
+                        return runBlocking { future.await() }
+                    }
+
+                    override fun yesnoDialog(message: String, heading: String, nolabel: String, yeslabel: String): Boolean {
+                        val future = CompletableDeferred<Boolean>()
+                        runOnUiThread {
+                            AlertDialog.Builder(this@SettingsActivity)
+                                .setTitle(heading.ifEmpty { "Confirm" })
+                                .setMessage(message)
+                                .setPositiveButton(if (yeslabel.isEmpty()) "Yes" else yeslabel) { _, _ -> future.complete(true) }
+                                .setNegativeButton(if (nolabel.isEmpty()) "No" else nolabel) { _, _ -> future.complete(false) }
+                                .setOnCancelListener { future.complete(false) }
+                                .show()
+                        }
+                        return runBlocking { future.await() }
+                    }
+                })
+
+                control.callAttr("setSetting", "tmdb.user", user)
+                control.callAttr("setSetting", "tmdb.pass", pass)
+
+                val tmdbUtils = py.getModule("tmdb.tmdb_utils")
+                tmdbUtils.callAttr("authTMDb")
+
+                withContext(Dispatchers.Main) {
+                    refreshTmdbPanel()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@SettingsActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
     private fun refreshTraktPanel() {
         val statusText = findViewById<TextView>(R.id.trakt_status_text)
         val authBtn = findViewById<Button>(R.id.trakt_auth_btn)
@@ -1323,7 +1455,7 @@ class SettingsActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
-                val traktAuth = py.getModule("trakt_auth")
+                val traktAuth = py.getModule("trakt.trakt_auth")
                 val username = traktAuth.callAttr("get_trakt_username").toString()
 
                 withContext(Dispatchers.Main) {
@@ -1365,7 +1497,7 @@ class SettingsActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
-                val traktAuth = py.getModule("trakt_auth")
+                val traktAuth = py.getModule("trakt.trakt_auth")
                 val codeData = traktAuth.callAttr("get_device_code").toString()
                 val json = JSONObject(codeData)
 
@@ -1379,8 +1511,16 @@ class SettingsActivity : AppCompatActivity() {
                     val dialogView = layoutInflater.inflate(R.layout.dialog_trakt_auth, null)
                     val codeTxt = dialogView.findViewById<TextView>(R.id.auth_code)
                     val urlTxt = dialogView.findViewById<TextView>(R.id.auth_url)
+                    val btnOpenBrowser = dialogView.findViewById<Button>(R.id.btn_open_browser)
                     codeTxt.text = userCode
                     urlTxt.text = verificationUrl
+
+                    btnOpenBrowser.setOnClickListener {
+                        val intent = Intent(this@SettingsActivity, MainActivity::class.java)
+                        intent.putExtra("open_url", verificationUrl)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        startActivity(intent)
+                    }
 
                     val dialog = AlertDialog.Builder(this@SettingsActivity)
                         .setTitle("Authorize Trakt.tv")
@@ -1394,10 +1534,10 @@ class SettingsActivity : AppCompatActivity() {
                         val startTime = System.currentTimeMillis()
                         while (System.currentTimeMillis() - startTime < expires * 1000) {
                             if (!dialog.isShowing) break
-                            
+
                             val pollResultStr = traktAuth.callAttr("poll_for_token", deviceCode).toString()
                             val pollResult = JSONObject(pollResultStr)
-                            
+
                             if (pollResult.getString("status") == "success") {
                                 withContext(Dispatchers.Main) {
                                     dialog.dismiss()
@@ -1412,7 +1552,7 @@ class SettingsActivity : AppCompatActivity() {
                                 }
                                 break
                             }
-                            
+
                             kotlinx.coroutines.delay(interval * 1000 + 500)
                         }
                     }

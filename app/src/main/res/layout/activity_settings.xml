@@ -43,6 +43,7 @@
                 <Button android:id="@+id/cat_sorting" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Source Sorting" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
                 <Button android:id="@+id/cat_blocked" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Blocked Elements" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
                 <Button android:id="@+id/cat_trakt" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Trakt.tv" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
+                <Button android:id="@+id/cat_tmdb" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="TMDb Account" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
                 <Button android:id="@+id/cat_sync" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Sync &amp; Backup" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:layout_marginBottom="10dp" android:gravity="start|center_vertical" android:paddingStart="20dp" android:textAllCaps="false"/>
 
             </LinearLayout>
@@ -270,6 +271,20 @@
                 <Button android:id="@+id/trakt_auth_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Authorize Trakt" android:layout_marginBottom="16dp" android:gravity="start" android:textAllCaps="false" android:nextFocusLeft="@+id/cat_trakt"/>
 
                 <Button android:id="@+id/trakt_sync_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Sync Library" android:layout_marginBottom="16dp" android:gravity="start" android:textAllCaps="false" android:visibility="gone" android:nextFocusLeft="@+id/cat_trakt"/>
+            </LinearLayout>
+
+            <!-- TMDB CATEGORY -->
+            <LinearLayout android:id="@+id/panel_tmdb" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="The Movie Database (TMDb)" android:textColor="#FFF" android:textSize="22sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Login with your TMDb account to manage favorites and watchlist." android:textColor="#888" android:textSize="14sp" android:layout_marginBottom="20dp"/>
+
+                <TextView android:id="@+id/tmdb_status_text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Not authorized." android:textColor="#AAA" android:textSize="16sp" android:layout_marginBottom="20dp"/>
+
+                <EditText android:id="@+id/tmdb_user_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="16dp" android:hint="TMDb Username" android:layout_marginBottom="10dp" android:nextFocusLeft="@+id/cat_tmdb"/>
+                <EditText android:id="@+id/tmdb_pass_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#333" android:textColor="#FFF" android:padding="16dp" android:hint="TMDb Password" android:inputType="textPassword" android:layout_marginBottom="16dp" android:nextFocusLeft="@+id/cat_tmdb"/>
+
+                <Button android:id="@+id/tmdb_auth_btn" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_focusable" android:textColor="#FFF" android:padding="16dp" android:text="Login to TMDb" android:layout_marginBottom="16dp" android:gravity="start" android:textAllCaps="false" android:nextFocusLeft="@+id/cat_tmdb"/>
             </LinearLayout>
 
             <!-- SYNC CATEGORY -->

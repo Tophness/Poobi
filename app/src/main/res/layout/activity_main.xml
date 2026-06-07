@@ -75,7 +75,8 @@
         android:orientation="vertical"
         android:paddingHorizontal="40dp"
         android:paddingTop="10dp"
-        android:layout_marginTop="70dp">
+        android:layout_marginTop="70dp"
+        android:nextFocusUp="@+id/btn_main_tab_browser">
 
         <!-- Search Bar -->
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="10dp">
@@ -183,7 +184,8 @@
         android:paddingHorizontal="40dp"
         android:paddingTop="10dp"
         android:layout_marginTop="70dp"
-        android:visibility="gone">
+        android:visibility="gone"
+        android:nextFocusUp="@+id/btn_main_tab_streams">
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="10dp">
             <ImageButton
@@ -195,7 +197,8 @@
                 app:tint="#FFF"
                 android:visibility="gone"
                 android:layout_marginEnd="10dp"
-                android:contentDescription="Back"/>
+                android:contentDescription="Back"
+                android:nextFocusUp="@id/btn_main_tab_streams"/>
             <Button
                 android:id="@+id/btn_streams_stop"
                 android:layout_width="wrap_content"
@@ -207,7 +210,8 @@
                 android:background="@drawable/bg_focusable"
                 android:textColor="#FFF"
                 android:visibility="gone"
-                android:textAllCaps="false"/>
+                android:textAllCaps="false"
+                android:nextFocusUp="@id/btn_main_tab_streams"/>
             <Button
                 android:id="@+id/btn_streams_sort"
                 android:layout_width="wrap_content"
@@ -220,7 +224,8 @@
                 android:textColor="#FFF"
                 android:layout_marginStart="10dp"
                 android:textAllCaps="false"
-                android:visibility="gone"/>
+                android:visibility="gone"
+                android:nextFocusUp="@id/btn_main_tab_streams"/>
         </LinearLayout>
 
         <LinearLayout
@@ -240,7 +245,8 @@
                 android:textColorHint="#888888"
                 android:inputType="text"
                 android:imeOptions="actionSearch"
-                android:maxLines="1"/>
+                android:maxLines="1"
+                android:nextFocusUp="@id/btn_main_tab_streams"/>
 
             <ImageButton
                 android:id="@+id/streams_search_btn"
@@ -250,7 +256,8 @@
                 android:src="@drawable/ic_go"
                 app:tint="#FFF"
                 android:layout_marginStart="10dp"
-                android:contentDescription="Search"/>
+                android:contentDescription="Search"
+                android:nextFocusUp="@id/btn_main_tab_streams"/>
         </LinearLayout>
 
         <!-- History and Recently Played Section -->
@@ -438,108 +445,210 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:layout_marginTop="20dp"
-            android:visibility="gone">
+            android:visibility="gone"
+            android:nextFocusUp="@id/btn_main_tab_streams">
             <LinearLayout
                 android:id="@+id/streams_results_container"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"/>
         </ScrollView>
+
+        <ScrollView
+            android:id="@+id/rich_media_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="10dp"
+            android:visibility="visible"
+            android:nextFocusUp="@id/btn_main_tab_streams">
+            <LinearLayout
+                android:id="@+id/rich_media_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"/>
+        </ScrollView>
     </LinearLayout>
 
-    <!-- TV SHOW SELECTION SCREEN -->
+    <!-- UNIFIED MEDIA DETAILS SCREEN -->
     <LinearLayout
-        android:id="@+id/tv_selection_layout"
+        android:id="@+id/media_details_layout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:paddingHorizontal="40dp"
         android:paddingTop="10dp"
         android:layout_marginTop="70dp"
-        android:visibility="gone">
+        android:visibility="gone"
+        android:nextFocusUp="@+id/btn_main_tab_streams">
 
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="10dp">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="15dp">
+
             <ImageButton
-                android:id="@+id/btn_tv_back"
-                android:layout_width="50dp"
-                android:layout_height="50dp"
+                android:id="@+id/btn_details_back"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:background="@drawable/bg_focusable"
                 android:src="@drawable/ic_back"
                 app:tint="#FFF"
-                android:layout_marginEnd="10dp"
-                android:contentDescription="Back"/>
+                android:layout_marginEnd="15dp"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:contentDescription="Back"
+                android:nextFocusUp="@id/btn_main_tab_streams"/>
+
             <TextView
-                android:id="@+id/tv_show_title"
+                android:id="@+id/details_title"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:textColor="#FFF"
-                android:textSize="22sp"
+                android:textSize="28sp"
                 android:textStyle="bold"
-                android:text="Show Title"/>
+                android:text="Media Title"
+                android:nextFocusUp="@id/btn_main_tab_streams"/>
+
+            <LinearLayout
+                android:id="@+id/tv_season_header_row"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/details_season_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Season:"
+                    android:textColor="#888"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:layout_marginEnd="10dp"/>
+
+                <Spinner
+                    android:id="@+id/details_season_spinner"
+                    android:layout_width="180dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_focusable"
+                    android:popupBackground="#222"
+                    android:textColor="#FFF"
+                    android:nextFocusUp="@id/btn_main_tab_streams"/>
+            </LinearLayout>
         </LinearLayout>
 
-        <LinearLayout
+        <ScrollView
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:orientation="horizontal">
+            android:nextFocusUp="@id/btn_main_tab_streams">
 
-            <!-- Left: Show Details and Season Selection -->
             <LinearLayout
-                android:layout_width="300dp"
-                android:layout_height="match_parent"
-                android:orientation="vertical"
-                android:paddingEnd="20dp">
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
 
-                <ImageView
-                    android:id="@+id/tv_show_poster"
-                    android:layout_width="match_parent"
-                    android:layout_height="400dp"
-                    android:scaleType="fitCenter"
-                    android:background="#222"
-                    android:layout_marginBottom="10dp"/>
-
-                <TextView
-                    android:id="@+id/tv_show_overview"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textColor="#CCC"
-                    android:textSize="14sp"
-                    android:maxLines="6"
-                    android:ellipsize="end"
-                    android:layout_marginBottom="20dp"/>
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Season"
-                    android:textColor="#888"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="5dp"/>
-
-                <Spinner
-                    android:id="@+id/tv_season_spinner"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:background="@drawable/bg_focusable"
-                    android:popupBackground="#222"
-                    android:textColor="#FFF"/>
-            </LinearLayout>
-
-            <!-- Right: Episode List -->
-            <ScrollView
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1">
+                <!-- Left Column: Metadata, Poster, Blurb (Width: 240dp) -->
                 <LinearLayout
-                    android:id="@+id/tv_episode_container"
-                    android:layout_width="match_parent"
+                    android:layout_width="240dp"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"/>
-            </ScrollView>
-        </LinearLayout>
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/details_meta"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="#00BCD4"
+                        android:textSize="16sp"
+                        android:text="2024 • Action • ⭐ 8.5"
+                        android:layout_marginBottom="15dp"/>
+
+                    <ImageView
+                        android:id="@+id/details_poster"
+                        android:layout_width="match_parent"
+                        android:layout_height="360dp"
+                        android:scaleType="centerCrop"
+                        android:background="#222"
+                        android:elevation="5dp"/>
+
+                    <TextView
+                        android:id="@+id/details_overview"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="#CCC"
+                        android:textSize="14sp"
+                        android:layout_marginTop="15dp"
+                        android:lineSpacingExtra="3dp"
+                        android:text="Media Overview..."/>
+                </LinearLayout>
+
+                <!-- Right Column: Episodes & Play Controls -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginStart="30dp">
+
+                    <Button
+                        android:id="@+id/btn_details_play"
+                        android:layout_width="200dp"
+                        android:layout_height="55dp"
+                        android:text="Play Movie"
+                        android:background="@drawable/bg_green_focusable"
+                        android:textColor="#FFF"
+                        android:visibility="gone"
+                        android:textAllCaps="false"
+                        android:textSize="18sp"
+                        android:drawableStart="@drawable/ic_go"
+                        android:drawablePadding="10dp"
+                        android:paddingHorizontal="20dp"
+                        android:layout_marginBottom="20dp"/>
+
+                    <LinearLayout
+                        android:id="@+id/tv_controls_layout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <!-- Independent Scrollable Box for Episodes -->
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="550dp"
+                            android:background="#0DFFFFFF"
+                            android:nextFocusUp="@id/btn_main_tab_streams">
+                            <ScrollView
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:padding="5dp"
+                                android:nextFocusUp="@id/btn_main_tab_streams">
+                                <LinearLayout
+                                    android:id="@+id/details_episodes_container"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="vertical"
+                                    android:nextFocusUp="@id/btn_main_tab_streams"/>
+                            </ScrollView>
+                        </FrameLayout>
+                    </LinearLayout>
+
+                    <!-- Recommendations and Cast go here in the dynamic container -->
+                    <LinearLayout
+                        android:id="@+id/details_dynamic_container"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginTop="20dp"/>
+                </LinearLayout>
+
+            </LinearLayout>
+        </ScrollView>
     </LinearLayout>
 
     <FrameLayout android:id="@+id/web_container" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone" />

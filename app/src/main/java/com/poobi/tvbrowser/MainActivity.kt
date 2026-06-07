@@ -60,9 +60,18 @@ data class AutoplayProfile(
     val useScript: Boolean = true,
     val selectors: List<String> = emptyList()
 )
+interface PythonDialogListener {
+    fun infoDialog(message: String, heading: String, sound: Boolean, icon: String)
+    fun okDialog(message: String, heading: String): Boolean
+    fun yesnoDialog(message: String, heading: String, nolabel: String, yeslabel: String): Boolean
+}
+
+fun String.cleanKodiText(): String = this.replace("[CR]", "\n").replace("[B]", "").replace("[/B]", "")
 
 @SuppressLint("SetTextI18n")
 class MainActivity : AppCompatActivity() {
+
+    private val pythonReady = CompletableDeferred<Unit>()
 
     private lateinit var webContainer: FrameLayout
     private lateinit var tabsContainer: LinearLayout
@@ -94,13 +103,21 @@ class MainActivity : AppCompatActivity() {
     private lateinit var streamsFavoritesLayout: LinearLayout
     private lateinit var streamsFavoritesContainer: LinearLayout
 
-    private lateinit var tvSelectionLayout: LinearLayout
-    private lateinit var btnTvBack: ImageButton
-    private lateinit var tvShowTitle: TextView
-    private lateinit var tvShowPoster: ImageView
-    private lateinit var tvShowOverview: TextView
-    private lateinit var tvSeasonSpinner: Spinner
-    private lateinit var tvEpisodeContainer: LinearLayout
+    private lateinit var richMediaScroll: ScrollView
+    private lateinit var richMediaContainer: LinearLayout
+
+    private lateinit var detailsLayout: LinearLayout
+    private lateinit var btnDetailsBack: ImageButton
+    private lateinit var detailsTitle: TextView
+    private lateinit var detailsPoster: ImageView
+    private lateinit var detailsMeta: TextView
+    private lateinit var detailsOverview: TextView
+    private lateinit var btnDetailsPlay: Button
+    private lateinit var tvControlsLayout: LinearLayout
+    private lateinit var detailsSeasonSpinner: Spinner
+    private lateinit var detailsDynamicContainer: LinearLayout
+    private lateinit var detailsEpisodesContainer: LinearLayout
+    private lateinit var seasonLabel: TextView
 
     private var lastSearchResults: JSONArray? = null
     private var lastScrapedItem: JSONObject? = null
@@ -163,6 +180,7 @@ class MainActivity : AppCompatActivity() {
     private val cachedTvDetails = mutableMapOf<Int, JSONObject>()
     private val cachedSeasons = mutableMapOf<Int, JSONArray>()
     private val cachedEpisodes = mutableMapOf<String, JSONArray>()
+    private val genreMap = mutableMapOf<Int, String>()
     private var isSelectionMode = false
     private var pendingNextEpisode = false
     private var lastSelectedSource: JSONObject? = null
@@ -289,13 +307,21 @@ class MainActivity : AppCompatActivity() {
         streamsFavoritesLayout = findViewById(R.id.streams_favorites_layout)
         streamsFavoritesContainer = findViewById(R.id.streams_favorites_container)
 
-        tvSelectionLayout = findViewById(R.id.tv_selection_layout)
-        btnTvBack = findViewById(R.id.btn_tv_back)
-        tvShowTitle = findViewById(R.id.tv_show_title)
-        tvShowPoster = findViewById(R.id.tv_show_poster)
-        tvShowOverview = findViewById(R.id.tv_show_overview)
-        tvSeasonSpinner = findViewById(R.id.tv_season_spinner)
-        tvEpisodeContainer = findViewById(R.id.tv_episode_container)
+        richMediaScroll = findViewById(R.id.rich_media_scroll)
+        richMediaContainer = findViewById(R.id.rich_media_container)
+
+        detailsLayout = findViewById(R.id.media_details_layout)
+        btnDetailsBack = findViewById(R.id.btn_details_back)
+        detailsTitle = findViewById(R.id.details_title)
+        detailsPoster = findViewById(R.id.details_poster)
+        detailsMeta = findViewById(R.id.details_meta)
+        detailsOverview = findViewById(R.id.details_overview)
+        btnDetailsPlay = findViewById(R.id.btn_details_play)
+        tvControlsLayout = findViewById(R.id.tv_controls_layout)
+        detailsSeasonSpinner = findViewById(R.id.details_season_spinner)
+        detailsEpisodesContainer = findViewById(R.id.details_episodes_container)
+        detailsDynamicContainer = findViewById(R.id.details_dynamic_container)
+        seasonLabel = findViewById(R.id.details_season_label)
 
         webContainer = findViewById(R.id.web_container)
         tabsContainer = findViewById(R.id.tabs_container)
@@ -355,15 +381,114 @@ class MainActivity : AppCompatActivity() {
         checkStartupTabs()
         setupMainTabs()
         btnTabBrowser.isSelected = true
-        initPython()
+
+        initPythonAsync()
+
         refreshStreamsHistory()
         showHomeScreen()
+
+        intent?.getStringExtra("open_url")?.let {
+            loadUrlAndBrowse(it)
+        }
+
         btnTabBrowser.post { btnTabBrowser.requestFocus() }
     }
 
-    private fun initPython() {
-        if (!Python.isStarted()) {
-            Python.start(AndroidPlatform(this))
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra("open_url")?.let {
+            loadUrlAndBrowse(it)
+        }
+    }
+
+    private fun initPythonAsync() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            if (!Python.isStarted()) {
+                Python.start(AndroidPlatform(this@MainActivity))
+            }
+            val py = Python.getInstance()
+
+            // Pre-load common modules on background thread to prevent UI stutter later
+            try {
+                py.getModule("modules.control")
+                py.getModule("tmdb.tmdb_api")
+                py.getModule("tmdb.tmdb_utils")
+                py.getModule("trakt.episode_check")
+                py.getModule("main")
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "Module pre-load failed: ${e.message}")
+            }
+
+            val control = py.getModule("modules.control")
+            control.callAttr("set_dialog_listener", object : PythonDialogListener {
+                override fun infoDialog(message: String, heading: String, sound: Boolean, icon: String) {
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "${heading.cleanKodiText()}: ${message.cleanKodiText()}", Toast.LENGTH_LONG).show()
+                    }
+                }
+
+                override fun okDialog(message: String, heading: String): Boolean {
+                    val future = CompletableDeferred<Boolean>()
+                    runOnUiThread {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle(heading.cleanKodiText().ifEmpty { "Notice" })
+                            .setMessage(message.cleanKodiText())
+                            .setPositiveButton("OK") { _, _ -> future.complete(true) }
+                            .setOnCancelListener { future.complete(true) }
+                            .show()
+                    }
+                    return runBlocking { future.await() }
+                }
+
+                override fun yesnoDialog(message: String, heading: String, nolabel: String, yeslabel: String): Boolean {
+                    val future = CompletableDeferred<Boolean>()
+                    runOnUiThread {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle(heading.cleanKodiText().ifEmpty { "Confirm" })
+                            .setMessage(message.cleanKodiText())
+                            .setPositiveButton(if (yeslabel.isEmpty()) "Yes" else yeslabel.cleanKodiText()) { _, _ -> future.complete(true) }
+                            .setNegativeButton(if (nolabel.isEmpty()) "No" else nolabel.cleanKodiText()) { _, _ -> future.complete(false) }
+                            .setOnCancelListener { future.complete(false) }
+                            .show()
+                    }
+                    return runBlocking { future.await() }
+                }
+            })
+
+            pythonReady.complete(Unit)
+
+            // Refresh TMDb state and load data
+            withContext(Dispatchers.Main) {
+                loadGenres()
+                loadRichMediaHome()
+            }
+        }
+    }
+
+    private fun loadGenres() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                pythonReady.await()
+                val py = Python.getInstance()
+                val tmdb = py.getModule("tmdb.tmdb_api")
+                val movieGenres = tmdb.callAttr("get_genres", "movie").toString()
+                val tvGenres = tmdb.callAttr("get_genres", "tv").toString()
+
+                val mArr = JSONObject(movieGenres).getJSONArray("genres")
+                val tArr = JSONObject(tvGenres).getJSONArray("genres")
+
+                withContext(Dispatchers.Main) {
+                    for (i in 0 until mArr.length()) {
+                        val g = mArr.getJSONObject(i)
+                        genreMap[g.getInt("id")] = g.getString("name")
+                    }
+                    for (i in 0 until tArr.length()) {
+                        val g = tArr.getJSONObject(i)
+                        genreMap[g.getInt("id")] = g.getString("name")
+                    }
+                }
+            } catch (e: Exception) {}
         }
     }
 
@@ -380,18 +505,18 @@ class MainActivity : AppCompatActivity() {
                 checkForNewEpisodes()
             }
         }
-        
+
         btnStreamsBack.setOnClickListener {
             if (streamsScreenLayout.visibility == View.VISIBLE) {
                 // If we are in the middle of a TV scrape or looking at TV sources, go back to TV selection
                 if (lastScrapedItem != null && lastScrapedItem!!.optString("media_type") == "tv" && lastScrapedSeason != null) {
                     streamsScreenLayout.visibility = View.GONE
-                    showTvSelectionScreen(lastScrapedItem!!)
+                    showMediaDetailsScreen(lastScrapedItem!!)
                     return@setOnClickListener
                 }
-                
+
                 // If we are looking at search results
-                if (lastSearchResults != null && streamsResultsContainer.childCount > 0 && 
+                if (lastSearchResults != null && streamsResultsContainer.childCount > 0 &&
                     streamsResultsContainer.getChildAt(0).findViewById<View>(R.id.card_detail) != null) {
                     goBackToHistory()
                 } else if (lastSearchResults != null) {
@@ -421,8 +546,8 @@ class MainActivity : AppCompatActivity() {
             streamsSearchInput.requestFocus()
         }
 
-        btnTvBack.setOnClickListener {
-            tvSelectionLayout.visibility = View.GONE
+        btnDetailsBack.setOnClickListener {
+            detailsLayout.visibility = View.GONE
             streamsScreenLayout.visibility = View.VISIBLE
             if (lastSearchResults != null) {
                 displayStreamResults(lastSearchResults!!)
@@ -442,25 +567,45 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun switchMainTab(isBrowser: Boolean) {
+
         btnTabBrowser.isSelected = isBrowser
         btnTabStreams.isSelected = !isBrowser
 
         btnTabBrowser.alpha = if (isBrowser) 1.0f else 0.5f
         btnTabStreams.alpha = if (!isBrowser) 1.0f else 0.5f
-        
+
         if (isBrowser) {
+            streamsScreenLayout.visibility = View.GONE
+            detailsLayout.visibility = View.GONE
             if (!isBrowsing) {
                 homeScreenLayout.visibility = View.VISIBLE
-                streamsScreenLayout.visibility = View.GONE
+                webContainer.visibility = View.GONE
+            } else {
+                homeScreenLayout.visibility = View.GONE
+                webContainer.visibility = View.VISIBLE
+                topBarLayout.visibility = View.GONE
             }
         } else {
             homeScreenLayout.visibility = View.GONE
-            streamsScreenLayout.visibility = View.VISIBLE
-            refreshStreamsHistory()
-            refreshStreamsFavorites()
             webContainer.visibility = View.GONE
             topBarLayout.visibility = View.GONE
+            
+            // Only hide details if we were actually browsing (WebView)
+            // This prevents "backing out" when simply moving focus up to the tab bar
+            if (isBrowsing) detailsLayout.visibility = View.GONE
+            
             isBrowsing = false
+            
+            // If details is visible, keep it; otherwise show the main streams list
+            if (detailsLayout.visibility != View.VISIBLE) {
+                streamsScreenLayout.visibility = View.VISIBLE
+                refreshStreamsHistory()
+                refreshStreamsFavorites()
+                if (richMediaContainer.childCount == 0) {
+                    loadRichMediaHome()
+                }
+            }
+
             cursor.visibility = View.GONE
 
             // Resume scraping when returning to streams tab
@@ -478,6 +623,7 @@ class MainActivity : AppCompatActivity() {
     private fun goBackToHistory() {
         streamsResultsContainer.removeAllViews()
         streamsResultsScroll.visibility = View.GONE
+        richMediaScroll.visibility = View.VISIBLE
         btnStreamsBack.visibility = View.GONE
         streamsSearchBarLayout.visibility = View.VISIBLE
         streamsCountText.visibility = View.GONE
@@ -485,6 +631,163 @@ class MainActivity : AppCompatActivity() {
         refreshStreamsHistory()
         refreshStreamsFavorites()
         streamsSearchInput.post { streamsSearchInput.requestFocus() }
+    }
+
+    private var isRichMediaLoading = false
+
+    private fun loadRichMediaHome() {
+        if (richMediaContainer.childCount > 0 || isRichMediaLoading) return
+        isRichMediaLoading = true
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                pythonReady.await()
+                // Explicitly passing unique media types to ensure different endpoints are hit correctly
+                loadRichRowSync("Trending Today", "get_trending", "all")
+                loadRichRowSync("In Cinemas Now", "get_movies_in_cinemas")
+                loadRichRowSync("Upcoming Movies", "get_upcoming_movies")
+                loadRichRowSync("Popular TV Shows", "get_popular", "tv")
+                loadRichRowSync("Top Rated Movies", "get_top_rated", "movie")
+                loadRichRowSync("Popular People", "get_popular_people", isPeople = true)
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "loadRichMediaHome failed: ${e.message}")
+            } finally {
+                isRichMediaLoading = false
+            }
+        }
+    }
+
+    private suspend fun loadRichRowSync(title: String, method: String, arg: String? = null, isPeople: Boolean = false) {
+        try {
+            val py = Python.getInstance()
+            val tmdb = py.getModule("tmdb.tmdb_api")
+
+            // Add a small delay between rows to allow UI to breathe
+            delay(300)
+
+            val resultJson = if (arg != null) {
+                tmdb.callAttr(method, arg).toString()
+            } else {
+                tmdb.callAttr(method).toString()
+            }
+            val items = JSONObject(resultJson).getJSONArray("results")
+            withContext(Dispatchers.Main) {
+                addRichMediaRow(title, items, isPeople)
+            }
+        } catch (e: Exception) {
+            Log.e("TVBrowser", "Failed to load rich row $title: ${e.message}")
+        }
+    }
+
+    private fun addRichMediaRow(title: String, items: JSONArray, isPeople: Boolean = false) {
+        val rowLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 40, 0, 20) // Increased top padding to prevent title cropping
+        }
+
+        val titleView = TextView(this).apply {
+            text = title
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 22f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(10, 0, 0, 15)
+        }
+        rowLayout.addView(titleView)
+
+        val scroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            clipToPadding = false
+            setPadding(10, 0, 10, 0)
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+
+        for (i in 0 until items.length()) {
+            val item = items.getJSONObject(i)
+            val card = if (isPeople) createPersonCard(item) else createRichMediaCard(item)
+            container.addView(card)
+        }
+
+        scroll.addView(container)
+        rowLayout.addView(scroll)
+        richMediaContainer.addView(rowLayout)
+    }
+
+    private fun createPersonCard(item: JSONObject): View {
+        val card = LayoutInflater.from(this).inflate(R.layout.item_stream, null)
+        val titleView = card.findViewById<TextView>(R.id.card_title)
+        val detailView = card.findViewById<TextView>(R.id.card_detail)
+        val thumbView = card.findViewById<ImageView>(R.id.card_thumb)
+        val favBtn = card.findViewById<ImageButton>(R.id.btn_favorite)
+
+        val name = item.optString("name")
+        val department = item.optString("known_for_department")
+
+        titleView.text = name
+        detailView.text = department
+        favBtn.visibility = View.GONE
+
+        val profilePath = item.optString("profile_path")
+        if (profilePath.isNotEmpty() && profilePath != "null") {
+            loadStreamThumb("https://image.tmdb.org/t/p/w185$profilePath", thumbView)
+        }
+
+        card.setOnClickListener {
+            // Future: Show person details/credits
+            Toast.makeText(this, "Profile: $name", Toast.LENGTH_SHORT).show()
+        }
+
+        card.layoutParams = LinearLayout.LayoutParams(160.dp(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(0, 0, 15.dp(), 0)
+        }
+        return card
+    }
+
+    private fun createRichMediaCard(item: JSONObject): View {
+        val card = LayoutInflater.from(this).inflate(R.layout.item_media_card, null)
+        val titleView = card.findViewById<TextView>(R.id.card_title)
+        val detailView = card.findViewById<TextView>(R.id.card_detail)
+        val thumbView = card.findViewById<ImageView>(R.id.card_thumb)
+
+        val title = item.optString("title").takeIf { it.isNotEmpty() } ?: item.optString("name")
+        val releaseDate = item.optString("release_date").takeIf { it.isNotEmpty() }
+            ?: item.optString("first_air_date").takeIf { it.isNotEmpty() }
+            ?: "0000"
+        val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else "0000"
+
+        val mediaType = if (item.has("title") || item.optString("media_type") == "movie") "movie" else "tv"
+
+        // Normalize item for later use
+        val normalizedItem = JSONObject(item.toString())
+        normalizedItem.put("media_type", mediaType)
+        normalizedItem.put("title", title)
+        normalizedItem.put("year", year)
+
+        titleView.text = title
+
+        val rating = item.optDouble("vote_average", 0.0)
+        val ratingStr = if (rating > 0) " ⭐ %.1f".format(rating) else ""
+
+        val genresArr = item.optJSONArray("genre_ids")
+        var genreStr = ""
+        if (genresArr != null && genresArr.length() > 0) {
+            val firstGenreId = genresArr.getInt(0)
+            genreMap[firstGenreId]?.let { genreStr = " • $it" }
+        }
+
+        detailView.text = "$year • ${mediaType.uppercase()}$genreStr$ratingStr"
+
+        val posterPath = item.optString("poster_path")
+        if (posterPath.isNotEmpty() && posterPath != "null") {
+            loadStreamThumb("https://image.tmdb.org/t/p/w342$posterPath", thumbView)
+        }
+
+        card.setOnClickListener {
+            showMediaDetailsScreen(normalizedItem)
+        }
+
+        return card
     }
 
     private fun performStreamSearch() {
@@ -497,9 +800,10 @@ class MainActivity : AppCompatActivity() {
         streamsCountText.visibility = View.GONE
         streamsCountText.text = ""
         streamsResultsScroll.visibility = View.VISIBLE
+        richMediaScroll.visibility = View.GONE
         btnStreamsBack.visibility = View.GONE
         streamsHistoryLayout.visibility = View.GONE
-        
+
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.hideSoftInputFromWindow(streamsSearchInput.windowToken, 0)
 
@@ -530,11 +834,11 @@ class MainActivity : AppCompatActivity() {
         val array = JSONArray(historyJson)
         val newList = mutableListOf<String>()
         for (i in 0 until array.length()) newList.add(array.getString(i))
-        
+
         newList.remove(query) // Remove if already exists to move to top
         newList.add(0, query)
         if (newList.size > 20) newList.removeAt(newList.size - 1)
-        
+
         val newArray = JSONArray()
         newList.forEach { newArray.put(it) }
         prefs.edit().putString("streams_search_history", newArray.toString()).apply()
@@ -554,13 +858,13 @@ class MainActivity : AppCompatActivity() {
                 if (progressValue >= 100) {
                     val parent = view.parent as? ViewGroup
                     val index = parent?.indexOfChild(view) ?: -1
-                    
+
                     if (isRecentPlayed) {
                         removeFromRecentlyPlayedStreams(query)
                     } else {
                         removeFromStreamsHistory(query)
                     }
-                    
+
                     // Focus reassignment
                     val newParent = if (isRecentPlayed) streamsRecentPlayedContainer else streamsHistoryContainer
                     if (newParent.childCount > 0) {
@@ -594,7 +898,7 @@ class MainActivity : AppCompatActivity() {
                     startTime = 0L
                     progressHandler.removeCallbacks(updateProgress)
                     progress.visibility = View.GONE
-                    
+
                     if (duration < 500) {
                         view.performClick()
                     }
@@ -609,29 +913,29 @@ class MainActivity : AppCompatActivity() {
         streamsHistoryContainer.removeAllViews()
         val historyJson = prefs.getString("streams_search_history", "[]") ?: "[]"
         val array = JSONArray(historyJson)
-        
-        if (array.length() == 0 && (prefs.getString("streams_recently_played", "[]") ?: "[]") == "[]" && 
+
+        if (array.length() == 0 && (prefs.getString("streams_recently_played", "[]") ?: "[]") == "[]" &&
             (prefs.getString("streams_favorites", "[]") ?: "[]") == "[]") {
             streamsHistoryLayout.visibility = View.GONE
             return
         }
         streamsHistoryLayout.visibility = View.VISIBLE
-        
+
         val inflater = LayoutInflater.from(this)
         for (i in 0 until array.length()) {
             val query = array.getString(i)
             val view = inflater.inflate(R.layout.item_search_history, streamsHistoryContainer, false)
             val text = view.findViewById<TextView>(R.id.history_text)
             val deleteProgress = view.findViewById<ProgressBar>(R.id.history_delete_progress)
-            
+
             text.text = query
             view.setOnClickListener {
                 streamsSearchInput.setText(query)
                 performStreamSearch()
             }
-            
+
             setupHistoryLongPress(view, deleteProgress, query)
-            
+
             streamsHistoryContainer.addView(view)
         }
         refreshRecentlyPlayedStreams()
@@ -642,6 +946,7 @@ class MainActivity : AppCompatActivity() {
         streamsFavoritesContainer.removeAllViews()
         val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
         val array = JSONArray(favsJson)
+        val newEpCounts = JSONObject(prefs.getString("new_episode_counts", "{}") ?: "{}")
 
         if (array.length() == 0) {
             streamsFavoritesLayout.visibility = View.GONE
@@ -655,15 +960,25 @@ class MainActivity : AppCompatActivity() {
             val view = inflater.inflate(R.layout.item_search_history, streamsFavoritesContainer, false)
             val textView = view.findViewById<TextView>(R.id.history_text)
             val deleteProgress = view.findViewById<ProgressBar>(R.id.history_delete_progress)
-            
+
             val title = item.optString("title")
-            textView.text = title
+            val id = item.optString("id")
+            val count = newEpCounts.optInt(id, 0)
+
+            textView.text = if (count > 0) "$title [$count New]" else title
+            if (count > 0) textView.setTextColor(android.graphics.Color.parseColor("#FFC107"))
 
             val iconView = (view as? ViewGroup)?.getChildAt(0) as? ImageView
             iconView?.setImageResource(R.drawable.ic_heart_filled)
             iconView?.imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#40C4FF"))
 
             view.setOnClickListener {
+                // Clear count when clicked
+                if (count > 0) {
+                    newEpCounts.remove(id)
+                    prefs.edit().putString("new_episode_counts", newEpCounts.toString()).apply()
+                    refreshStreamsFavorites()
+                }
                 performScrape(item)
             }
 
@@ -682,7 +997,7 @@ class MainActivity : AppCompatActivity() {
         val array = JSONArray(favsJson)
         val id = item.optString("id")
         val imdb = item.optString("imdb")
-        
+
         var foundIndex = -1
         for (i in 0 until array.length()) {
             val fav = array.getJSONObject(i)
@@ -699,7 +1014,7 @@ class MainActivity : AppCompatActivity() {
             array.put(item)
             Toast.makeText(this, "Added to Favorites", Toast.LENGTH_SHORT).show()
         }
-        
+
         prefs.edit().putString("streams_favorites", array.toString()).apply()
         refreshStreamsFavorites()
     }
@@ -709,7 +1024,7 @@ class MainActivity : AppCompatActivity() {
         val array = JSONArray(favsJson)
         val id = item.optString("id")
         val imdb = item.optString("imdb")
-        
+
         var isFav = false
         for (i in 0 until array.length()) {
             val fav = array.getJSONObject(i)
@@ -718,29 +1033,57 @@ class MainActivity : AppCompatActivity() {
                 break
             }
         }
-        
+
         btn.setImageResource(if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart_empty)
         btn.imageTintList = android.content.res.ColorStateList.valueOf(
             if (isFav) android.graphics.Color.parseColor("#40C4FF") else android.graphics.Color.WHITE
         )
     }
 
+    private var lastEpisodeCheckTime = 0L
     private fun checkForNewEpisodes() {
         val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
         if (favsJson == "[]") return
 
+        // Cooldown: Only check every 15 minutes to save resources and prevent UI lag
+        if (System.currentTimeMillis() - lastEpisodeCheckTime < 900000) return
+        lastEpisodeCheckTime = System.currentTimeMillis()
+
+        val lastCheckJson = prefs.getString("last_episode_check", "{}") ?: "{}"
+
         lifecycleScope.launch(Dispatchers.IO) {
             try {
+                pythonReady.await()
                 val py = Python.getInstance()
-                val checker = py.getModule("episode_check")
-                val resultsStr = checker.callAttr("check_new_episodes", favsJson).toString()
-                val results = JSONArray(resultsStr)
+                val checker = py.getModule("trakt.episode_check")
+                val resultsStr = checker.callAttr("check_new_episodes", favsJson, lastCheckJson).toString()
+                val resultObj = JSONObject(resultsStr)
+                val newEpisodes = resultObj.getJSONArray("new_episodes")
+                val updatedLastCheck = resultObj.getJSONObject("last_check")
 
-                if (results.length() > 0) {
+                // Update last check data
+                prefs.edit().putString("last_episode_check", updatedLastCheck.toString()).apply()
+
+                if (newEpisodes.length() > 0) {
                     withContext(Dispatchers.Main) {
-                        val first = results.getJSONObject(0)
-                        val msg = "New Episode: ${first.getString("show_title")} S${first.getInt("season")}E${first.getInt("number")}"
+                        val count = newEpisodes.length()
+                        val msg = if (count == 1) {
+                            val first = newEpisodes.getJSONObject(0)
+                            "New Episode: ${first.getString("show_title")} S${first.getInt("season")}E${first.getInt("number")}"
+                        } else {
+                            "$count New Episodes Available!"
+                        }
                         Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+
+                        // Store new episode counts for badge UI
+                        val epCounts = JSONObject()
+                        for (i in 0 until count) {
+                            val ep = newEpisodes.getJSONObject(i)
+                            val showId = ep.getString("show_id")
+                            epCounts.put(showId, epCounts.optInt(showId, 0) + 1)
+                        }
+                        prefs.edit().putString("new_episode_counts", epCounts.toString()).apply()
+                        refreshStreamsFavorites() // Refresh to show badges
                     }
                 }
             } catch (e: Exception) {
@@ -785,7 +1128,7 @@ class MainActivity : AppCompatActivity() {
                         headersObj.keys().forEach { k -> headers[k] = headersObj.getString(k) }
                         interceptedMediaUrls[cachedUrl] = headers
                     }
-                    
+
                     lastScrapedItem = itemData
                     lastScrapedSeason = season
                     lastScrapedEpisode = episode
@@ -801,7 +1144,7 @@ class MainActivity : AppCompatActivity() {
                             val infoObj = subObj.getJSONObject("info")
                             val info = mutableMapOf<String, String>()
                             infoObj.keys().forEach { k -> info[k] = infoObj.getString(k) }
-                            
+
                             if (subUrl.startsWith("file://")) {
                                 val file = File(Uri.parse(subUrl).path ?: "")
                                 if (file.exists()) {
@@ -868,13 +1211,13 @@ class MainActivity : AppCompatActivity() {
             put("item", item)
             if (season != null) put("season", season)
             if (episode != null) put("episode", episode)
-            
+
             val finalUrl = videoUrl ?: existing?.optString("video_url")
             if (!finalUrl.isNullOrEmpty()) put("video_url", finalUrl)
-            
+
             val finalHeaders = if (headers != null) JSONObject(headers) else existing?.optJSONObject("headers")
             if (finalHeaders != null) put("headers", finalHeaders)
-            
+
             if (interceptedSubtitleUrls.isNotEmpty()) {
                 val subsArray = JSONArray()
                 interceptedSubtitleUrls.forEach { (url, info) ->
@@ -908,10 +1251,10 @@ class MainActivity : AppCompatActivity() {
             if (obj.getString("display_title") != displayTitle) newArray.put(obj)
         }
         prefs.edit().putString("streams_recently_played", newArray.toString()).apply()
-        
+
         // Clear autoresume state for this title
         prefs.edit().remove("resume_stream_$displayTitle").apply()
-        
+
         refreshRecentlyPlayedStreams()
     }
 
@@ -930,6 +1273,7 @@ class MainActivity : AppCompatActivity() {
     private fun displayStreamResults(results: JSONArray) {
         val inflater = LayoutInflater.from(this)
         streamsResultsContainer.removeAllViews()
+        richMediaScroll.visibility = View.GONE
         streamsCountText.visibility = View.GONE
         streamsCountText.text = ""
         for (i in 0 until results.length()) {
@@ -940,14 +1284,14 @@ class MainActivity : AppCompatActivity() {
             val thumbView = view.findViewById<ImageView>(R.id.card_thumb)
             val favBtn = view.findViewById<ImageButton>(R.id.btn_favorite)
 
-            val title = item.optString("title")
+            val title = item.optString("title").takeIf { it.isNotEmpty() } ?: item.optString("name")
             val overview = item.optString("overview")
             val mediaType = item.optString("media_type")
             val posterPath = item.optString("poster_path")
 
             titleView.text = title
             detailView.text = "[${mediaType.uppercase()}] ${if (overview.isNotEmpty()) overview else "No description available."}"
-            
+
             if (posterPath.isNotEmpty() && posterPath != "null") {
                 val thumbUrl = "https://image.tmdb.org/t/p/w185$posterPath"
                 loadStreamThumb(thumbUrl, thumbView)
@@ -961,9 +1305,9 @@ class MainActivity : AppCompatActivity() {
                 toggleFavorite(item)
                 updateFavoriteIcon(favBtn, item)
             }
-            
+
             view.setOnClickListener {
-                performScrape(item)
+                showMediaDetailsScreen(item)
             }
             streamsResultsContainer.addView(view)
             if (i == 0) view.post { view.requestFocus() }
@@ -988,10 +1332,102 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showPersonDetails(item: JSONObject) {
+        val personId = item.optInt("id")
+        val personName = item.optString("title") ?: item.optString("name")
+
+        detailsLayout.visibility = View.VISIBLE
+        streamsScreenLayout.visibility = View.GONE
+
+        detailsTitle.text = personName
+
+        val profilePath = item.optString("poster_path") ?: item.optString("profile_path")
+        if (profilePath.isNotEmpty() && profilePath != "null") {
+            loadStreamThumb("https://image.tmdb.org/t/p/w500$profilePath", detailsPoster)
+        } else {
+            detailsPoster.setImageResource(R.drawable.ic_history)
+        }
+
+        detailsOverview.text = "Loading credits..."
+        detailsMeta.text = "PERSON"
+        seasonLabel.visibility = View.GONE
+        detailsSeasonSpinner.visibility = View.GONE
+        btnDetailsPlay.visibility = View.GONE
+        detailsDynamicContainer.removeAllViews()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val tmdb = py.getModule("tmdb.tmdb_api")
+                val detailsJson = tmdb.callAttr("get_person_details", personId).toString()
+                val details = JSONObject(detailsJson)
+
+                val bio = details.optString("biography")
+                val credits = details.optJSONObject("combined_credits")?.optJSONArray("cast") ?: JSONArray()
+
+                withContext(Dispatchers.Main) {
+                    detailsOverview.text = if (bio.isNotEmpty()) bio else "No biography available."
+
+                    val sortedCredits = mutableListOf<JSONObject>()
+                    for (i in 0 until credits.length()) sortedCredits.add(credits.getJSONObject(i))
+                    sortedCredits.sortByDescending { it.optString("release_date").takeIf { d -> d.isNotEmpty() } ?: it.optString("first_air_date") }
+
+                    val title = TextView(this@MainActivity).apply {
+                        text = "Credits"
+                        setTextColor(android.graphics.Color.WHITE)
+                        textSize = 20f
+                        setTypeface(null, android.graphics.Typeface.BOLD)
+                        setPadding(10, 30, 0, 15)
+                    }
+                    detailsDynamicContainer.addView(title)
+
+                    val inflater = LayoutInflater.from(this@MainActivity)
+                    for (i in 0 until sortedCredits.size) {
+                        val credit = sortedCredits[i]
+                        val view = inflater.inflate(R.layout.item_episode, detailsDynamicContainer, false)
+                        val titleText = view.findViewById<TextView>(R.id.episode_title)
+                        val overviewText = view.findViewById<TextView>(R.id.episode_overview)
+                        val thumb = view.findViewById<ImageView>(R.id.episode_thumb)
+                        val watchedIcon = view.findViewById<ImageView>(R.id.btn_watched)
+
+                        val cTitle = credit.optString("title") ?: credit.optString("name")
+                        val character = credit.optString("character")
+                        val cType = credit.optString("media_type")
+                        val cYear = (credit.optString("release_date").takeIf { it.isNotEmpty() } ?: credit.optString("first_air_date")).take(4)
+
+                        titleText.text = "$cTitle ($cYear)"
+                        overviewText.text = "As $character [$cType]"
+                        watchedIcon.visibility = View.GONE
+
+                        val poster = credit.optString("poster_path")
+                        if (poster.isNotEmpty() && poster != "null") {
+                            loadStreamThumb("https://image.tmdb.org/t/p/w185$poster", thumb)
+                        } else {
+                            thumb.setImageResource(R.drawable.ic_history)
+                        }
+
+                        view.setOnClickListener {
+                            performScrape(credit)
+                        }
+                        detailsDynamicContainer.addView(view)
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    detailsOverview.text = "Error loading details: ${e.message}"
+                }
+            }
+        }
+    }
+
     private fun performScrape(item: JSONObject, season: Int? = null, episode: Int? = null) {
         val mediaType = item.optString("media_type")
+        if (mediaType == "person") {
+            showPersonDetails(item)
+            return
+        }
         if (mediaType == "tv" && (season == null || episode == null)) {
-            showTvSelectionScreen(item)
+            showMediaDetailsScreen(item)
             return
         }
 
@@ -1003,7 +1439,7 @@ class MainActivity : AppCompatActivity() {
         lastScrapedSeason = season
         lastScrapedEpisode = episode
 
-        tvSelectionLayout.visibility = View.GONE
+        detailsLayout.visibility = View.GONE
         streamsScreenLayout.visibility = View.VISIBLE
 
         interceptedSubtitleUrls.clear()
@@ -1019,12 +1455,13 @@ class MainActivity : AppCompatActivity() {
         subtitlesStatus.visibility = View.GONE
         subtitlesStatus.text = ""
         streamsResultsScroll.visibility = View.VISIBLE
+        richMediaScroll.visibility = View.GONE
         btnStreamsBack.visibility = View.VISIBLE // Allow going back while scraping
         btnStreamsStop.visibility = View.VISIBLE
         btnStreamsStop.requestFocus()
         streamsHistoryLayout.visibility = View.GONE
         streamsSearchBarLayout.visibility = View.GONE
-        
+
         btnStreamsStop.setOnClickListener {
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -1047,25 +1484,45 @@ class MainActivity : AppCompatActivity() {
         }
 
         currentStreamingTitle = displayTitle
-        
+
+        // Load high-res artwork if available
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val tmdbUtils = py.getModule("tmdb.tmdb_utils")
+                val artwork = tmdbUtils.callAttr("get_tmdb_artwork", item.optString("id"), mediaType, season, episode)
+                val artworkList = artwork.asList()
+                val poster = artworkList[0].toString()
+                val fanart = artworkList[1].toString()
+
+                withContext(Dispatchers.Main) {
+                    if (fanart != "0") {
+                        Log.d("TVBrowser", "High-res Fanart: $fanart")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "Artwork load failed: ${e.message}")
+            }
+        }
+
         // Polling task for progress and incremental results
         val pollingJob = lifecycleScope.launch(Dispatchers.IO) {
             var lastTagValue = -1
             var lastUIUpdateTime = 0L
-            
+
             while (isActive) {
                 try {
                     val py = Python.getInstance()
                     val scraper = py.getModule("main")
                     val statusJson = scraper.callAttr("get_scrape_status").toString()
                     val status = JSONObject(statusJson)
-                    
+
                     val current = status.optInt("current", 0)
                     val total = status.optInt("total", 0)
                     val message = status.optString("message", "")
                     val sources = status.optJSONArray("sources")
                     val isFinished = message == "Finished!" || message == "Stopped!" || message == "Timeout reached!"
-                    
+
                     val currentTime = System.currentTimeMillis()
                     // Throttle UI updates and skip if user is interacting with a source
                     val shouldUpdateList = !isInteractingWithSources && sources != null && (isFinished || (currentTime - lastUIUpdateTime > 1500))
@@ -1087,8 +1544,8 @@ class MainActivity : AppCompatActivity() {
                         }
 
                         if (total > 0) {
-                            val statusMsg = if (message.contains("Paused")) "Paused: $displayTitle ($current/$total)" 
-                                            else "Scraping: $displayTitle ($current/$total)"
+                            val statusMsg = if (message.contains("Paused")) "Paused: $displayTitle ($current/$total)"
+                            else "Scraping: $displayTitle ($current/$total)"
                             subtitlesStatus.text = statusMsg
                             subtitlesStatus.visibility = View.VISIBLE
                             streamsProgress.visibility = View.VISIBLE
@@ -1164,197 +1621,236 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showTvSelectionScreen(item: JSONObject) {
-        val tvId = item.optInt("id")
-        tvSelectionLayout.visibility = View.VISIBLE
+
+    private fun showMediaDetailsScreen(item: JSONObject) {
+        val mediaType = item.optString("media_type")
+        val id = item.optInt("id")
+
+        detailsLayout.visibility = View.VISIBLE
         streamsScreenLayout.visibility = View.GONE
-        
-        tvShowTitle.text = item.optString("orig_title") ?: item.optString("title")
-        tvShowOverview.text = item.optString("overview")
-        
+
+        val title = item.optString("title").takeIf { it.isNotEmpty() } ?: item.optString("name")
+        detailsTitle.text = title
+        detailsOverview.text = item.optString("overview")
+
+        val year = item.optString("year").takeIf { it.isNotEmpty() } ?: "0000"
+        val rating = item.optDouble("vote_average", 0.0)
+        detailsMeta.text = "$year • ${mediaType.uppercase()} • ⭐ %.1f".format(rating)
+
+        // Load high-res poster
         val posterPath = item.optString("poster_path")
         if (posterPath.isNotEmpty() && posterPath != "null") {
-            loadStreamThumb("https://image.tmdb.org/t/p/w500$posterPath", tvShowPoster)
+            loadStreamThumb("https://image.tmdb.org/t/p/w780$posterPath", detailsPoster)
         } else {
-            tvShowPoster.setImageResource(R.drawable.ic_history)
+            detailsPoster.setImageResource(R.drawable.ic_history)
         }
 
-        // Fetch seasons if not cached
-        if (cachedSeasons.containsKey(tvId)) {
-            populateSeasons(item, cachedSeasons[tvId]!!)
-        } else {
-            val dialog = AlertDialog.Builder(this)
-                .setTitle("Loading Seasons...")
-                .setMessage("Please wait...")
-                .setNegativeButton("Cancel", null)
-                .create()
-            dialog.show()
+        btnDetailsPlay.visibility = if (mediaType == "movie") View.VISIBLE else View.GONE
+        btnDetailsPlay.setOnClickListener {
+            // Force it to skip details and scrape
+            val scrapeItem = JSONObject(item.toString())
+            scrapeItem.put("source_data", "true")
+            performScrape(scrapeItem)
+        }
 
-            lifecycleScope.launch(Dispatchers.IO) {
-                try {
-                    val py = Python.getInstance()
-                    val scraper = py.getModule("main")
-                    val seasonsJson = scraper.callAttr("get_tv_seasons", tvId).toString()
-                    val details = JSONObject(seasonsJson)
-                    val seasons = details.optJSONArray("seasons")
-                    withContext(Dispatchers.Main) {
-                        dialog.dismiss()
+        tvControlsLayout.visibility = if (mediaType == "tv") View.VISIBLE else View.GONE
+        val seasonHeaderRow = findViewById<View>(R.id.tv_season_header_row)
+        seasonHeaderRow.visibility = if (mediaType == "tv") View.VISIBLE else View.GONE
+
+        detailsDynamicContainer.removeAllViews()
+
+        // Fetch details including fanart for background
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val tmdb = py.getModule("tmdb.tmdb_api")
+                val detailsJson = tmdb.callAttr("get_details", id, mediaType).toString()
+                val details = JSONObject(detailsJson)
+
+                withContext(Dispatchers.Main) {
+                    val fullRating = details.optDouble("vote_average", rating)
+
+                    // Update meta with genres and accurate rating
+                    val genres = details.optJSONArray("genres")
+                    if (genres != null && genres.length() > 0) {
+                        val gNames = mutableListOf<String>()
+                        for (i in 0 until genres.length()) gNames.add(genres.getJSONObject(i).getString("name"))
+                        detailsMeta.text = "$year • ${gNames.joinToString(" / ")} • ⭐ %.1f".format(fullRating)
+                    } else {
+                        detailsMeta.text = "$year • ${mediaType.uppercase()} • ⭐ %.1f".format(fullRating)
+                    }
+
+                    // Backdrop/Fanart
+                    val backdrop = details.optString("backdrop_path")
+                    if (backdrop.isNotEmpty() && backdrop != "null") {
+                        // We could set it as a semi-transparent background for the details layout
+                        Log.d("TVBrowser", "Setting Backdrop: $backdrop")
+                    }
+
+                    if (mediaType == "tv") {
+                        val seasons = details.optJSONArray("seasons")
                         if (seasons != null) {
-                            cachedSeasons[tvId] = seasons
-                            populateSeasons(item, seasons)
+                            cachedSeasons[id] = seasons
+                            populateDetailsSeasons(item, seasons)
                         }
                     }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        dialog.dismiss()
-                        Toast.makeText(this@MainActivity, "Error fetching seasons", Toast.LENGTH_SHORT).show()
+
+                    // Lazily fetch recommendations after main details are shown
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        try {
+                            val recommendations = details.optJSONObject("recommendations")?.optJSONArray("results")
+                            if (recommendations != null && recommendations.length() > 0) {
+                                withContext(Dispatchers.Main) {
+                                    addDetailsRow("More Like This", recommendations)
+                                }
+                            }
+
+                            val cast = details.optJSONObject("credits")?.optJSONArray("cast")
+                            if (cast != null && cast.length() > 0) {
+                                withContext(Dispatchers.Main) {
+                                    addDetailsRow("Top Cast", cast, isPeople = true)
+                                }
+                            }
+                        } catch (e: Exception) {}
                     }
                 }
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "Details fetch failed: ${e.message}")
             }
         }
     }
 
-    private fun populateSeasons(item: JSONObject, seasons: JSONArray) {
+    private fun populateDetailsSeasons(item: JSONObject, seasons: JSONArray) {
         val seasonNames = mutableListOf<String>()
         val seasonNumbers = mutableListOf<Int>()
         for (i in 0 until seasons.length()) {
             val s = seasons.getJSONObject(i)
             val num = s.optInt("season_number")
             val name = s.optString("name") ?: "Season $num"
-            val epCount = s.optInt("episode_count")
-            seasonNames.add("$name ($epCount Episodes)")
+            seasonNames.add(name)
             seasonNumbers.add(num)
         }
 
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, seasonNames)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        tvSeasonSpinner.adapter = adapter
-        
-        // If we are returning from an episode and it was near the end, we might want to pre-select something.
-        // For now, let's just use the last scraped season if available.
-        if (lastScrapedSeason != null) {
-            val idx = seasonNumbers.indexOf(lastScrapedSeason!!)
-            if (idx != -1) {
-                tvSeasonSpinner.setSelection(idx)
-            }
-        }
+        detailsSeasonSpinner.adapter = adapter
 
-        tvSeasonSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+        detailsSeasonSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                loadEpisodes(item, seasonNumbers[position])
+                loadDetailsEpisodes(item, seasonNumbers[position])
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
     }
 
-    private fun loadEpisodes(item: JSONObject, seasonNumber: Int) {
-        val tvId = item.optInt("id")
-        val cacheKey = "${tvId}_$seasonNumber"
-        
-        tvEpisodeContainer.removeAllViews()
-        
-        if (cachedEpisodes.containsKey(cacheKey)) {
-            displayEpisodes(item, seasonNumber, cachedEpisodes[cacheKey]!!)
-        } else {
-            val progress = ProgressBar(this).apply {
-                isIndeterminate = true
-                layoutParams = LinearLayout.LayoutParams(100, 100).apply {
-                    gravity = android.view.Gravity.CENTER
-                    setMargins(0, 50, 0, 0)
-                }
-            }
-            tvEpisodeContainer.addView(progress)
+    private fun loadDetailsEpisodes(item: JSONObject, seasonNumber: Int) {
+        val id = item.optInt("id")
+        val cacheKey = "${id}_$seasonNumber"
 
-            lifecycleScope.launch(Dispatchers.IO) {
-                try {
-                    val py = Python.getInstance()
-                    val scraper = py.getModule("main")
-                    val episodesJson = scraper.callAttr("get_tv_episodes", tvId, seasonNumber).toString()
-                    val episodes = JSONArray(episodesJson)
-                    cachedEpisodes[cacheKey] = episodes
-                    withContext(Dispatchers.Main) {
-                        displayEpisodes(item, seasonNumber, episodes)
-                    }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        tvEpisodeContainer.removeAllViews()
-                        Toast.makeText(this@MainActivity, "Error fetching episodes", Toast.LENGTH_SHORT).show()
+        detailsEpisodesContainer.removeAllViews()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                val episodesJson = scraper.callAttr("get_tv_episodes", id, seasonNumber).toString()
+                val episodes = JSONArray(episodesJson)
+
+                val watchedStatus = try {
+                    val checker = py.getModule("trakt.episode_check")
+                    val statusJson = checker.callAttr("get_watched_status", id, seasonNumber, episodes.toString()).toString()
+                    JSONArray(statusJson)
+                } catch (e: Exception) { JSONArray() }
+
+                val lastEpCheck = JSONObject(prefs.getString("last_episode_check", "{}") ?: "{}")
+                val lastSeenEpId = lastEpCheck.optString(id.toString())
+
+                withContext(Dispatchers.Main) {
+                    val inflater = LayoutInflater.from(this@MainActivity)
+                    for (i in 0 until episodes.length()) {
+                        val ep = episodes.getJSONObject(i)
+                        val view = inflater.inflate(R.layout.item_episode, detailsEpisodesContainer, false)
+                        val titleText = view.findViewById<TextView>(R.id.episode_title)
+                        val overview = view.findViewById<TextView>(R.id.episode_overview)
+                        val thumb = view.findViewById<ImageView>(R.id.episode_thumb)
+                        val watchedIcon = view.findViewById<ImageView>(R.id.btn_watched)
+
+                        val num = ep.optInt("episode_number")
+                        val epId = ep.optString("id")
+                        val name = ep.optString("name") ?: "Episode $num"
+                        val airDate = ep.optString("air_date")
+
+                        val isNew = epId == lastSeenEpId
+                        val newLabel = if (isNew) " [NEW]" else ""
+
+                        titleText.text = if (airDate.isNotEmpty()) "E$num: $name ($airDate)$newLabel" else "E$num: $name$newLabel"
+                        if (isNew) titleText.setTextColor(android.graphics.Color.parseColor("#FFC107"))
+
+                        overview.text = ep.optString("overview")
+
+                        val isWatched = if (i < watchedStatus.length()) watchedStatus.getBoolean(i) else false
+                        watchedIcon.alpha = if (isWatched) 1.0f else 0.15f
+                        watchedIcon.imageTintList = android.content.res.ColorStateList.valueOf(
+                            if (isWatched) android.graphics.Color.parseColor("#40C4FF") else android.graphics.Color.WHITE
+                        )
+
+                        val stillPath = ep.optString("still_path")
+                        if (stillPath.isNotEmpty() && stillPath != "null") {
+                            loadStreamThumb("https://image.tmdb.org/t/p/w300$stillPath", thumb)
+                        } else {
+                            thumb.setImageResource(R.drawable.ic_history)
+                        }
+
+                        view.setOnClickListener { performScrape(item, seasonNumber, num) }
+                        detailsEpisodesContainer.addView(view)
                     }
                 }
-            }
+            } catch (e: Exception) {}
         }
     }
 
-    private fun displayEpisodes(item: JSONObject, seasonNumber: Int, episodes: JSONArray) {
-        tvEpisodeContainer.removeAllViews()
-        val inflater = LayoutInflater.from(this)
-        
-        var nextEpToSelect = -1
-        if (pendingNextEpisode && lastScrapedSeason == seasonNumber && lastScrapedEpisode != null) {
-            nextEpToSelect = lastScrapedEpisode!! + 1
-        } else if (lastScrapedSeason == seasonNumber && lastScrapedEpisode != null) {
-            nextEpToSelect = lastScrapedEpisode!!
+    private fun addDetailsRow(title: String, items: JSONArray, isPeople: Boolean = false) {
+        val rowTitle = TextView(this).apply {
+            text = title
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 18f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(10, 30, 0, 10)
+        }
+        detailsDynamicContainer.addView(rowTitle)
+
+        val scroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            clipToPadding = false
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
         }
 
-        var scrollToView: View? = null
-
-        for (i in 0 until episodes.length()) {
-            val ep = episodes.getJSONObject(i)
-            val view = inflater.inflate(R.layout.item_episode, tvEpisodeContainer, false)
-            val title = view.findViewById<TextView>(R.id.episode_title)
-            val overview = view.findViewById<TextView>(R.id.episode_overview)
-            val thumb = view.findViewById<ImageView>(R.id.episode_thumb)
-            
-            val num = ep.optInt("episode_number")
-            val name = ep.optString("name") ?: "Episode $num"
-            title.text = "E$num: $name"
-            overview.text = ep.optString("overview")
-            
-            val stillPath = ep.optString("still_path")
-            if (stillPath.isNotEmpty() && stillPath != "null") {
-                loadStreamThumb("https://image.tmdb.org/t/p/w300$stillPath", thumb)
-            } else {
-                thumb.setImageResource(R.drawable.ic_history)
+        for (i in 0 until items.length().coerceAtMost(20)) {
+            val item = items.getJSONObject(i)
+            val card = if (isPeople) createPersonCard(item) else createRichMediaCard(item)
+            // Shrink cards for details view
+            card.layoutParams = LinearLayout.LayoutParams(160.dp(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(0, 0, 15.dp(), 10.dp())
             }
-            
-            view.isFocusable = true
-            view.isClickable = true
-            view.setOnClickListener {
-                pendingNextEpisode = false
-                performScrape(item, seasonNumber, num)
-            }
-
-            if (num == nextEpToSelect) {
-                view.setBackgroundResource(R.drawable.bg_tab_nav) // Highlight
-                scrollToView = view
-            }
-
-            tvEpisodeContainer.addView(view)
+            container.addView(card)
         }
-        
-        if (scrollToView != null) {
-            scrollToView.post {
-                scrollToView.requestFocus()
-                // Also ensure it's visible in the ScrollView
-                val parent = tvEpisodeContainer.parent as? ScrollView
-                parent?.smoothScrollTo(0, scrollToView.top)
-            }
-            pendingNextEpisode = false // Reset once consumed
-        } else if (tvEpisodeContainer.childCount > 0) {
-            tvEpisodeContainer.getChildAt(0).requestFocus()
-        }
+        scroll.addView(container)
+        detailsDynamicContainer.addView(scroll)
     }
+
 
     private fun displaySources(sources: JSONArray, isFinished: Boolean = false, forceRefresh: Boolean = false) {
         currentSources = sources
         val inflater = LayoutInflater.from(this)
-        
+
         val currentTag = streamsResultsContainer.tag as? Int ?: 0
         if (!forceRefresh && sources.length() > 0 && sources.length() == currentTag) return
         streamsResultsContainer.tag = sources.length()
 
         streamsResultsContainer.removeAllViews()
-        
+
         if (sources.length() == 0) {
             if (isFinished) {
                 val emptyView = TextView(this).apply {
@@ -1532,7 +2028,7 @@ class MainActivity : AppCompatActivity() {
                 val subsJson = scraper.callAttr("search_subtitles", item.toString(), season, episode).toString()
                 val subs = JSONArray(subsJson)
                 cachedSubtitleResults[itemKey] = subs
-                
+
                 withContext(Dispatchers.Main) {
                     subtitlesStatus.visibility = View.GONE
                     subtitlesProgress.visibility = View.GONE
@@ -1553,26 +2049,26 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this@MainActivity, "No external subtitles found", Toast.LENGTH_SHORT).show()
             return
         }
-        
+
         val subNames = mutableListOf<String>()
         for (i in 0 until subs.length()) {
             val sub = subs.getJSONObject(i)
             subNames.add("[${sub.optString("service")}] ${sub.optString("lang")}: ${sub.optString("name")}")
         }
-        
+
         val inflater = LayoutInflater.from(this@MainActivity)
         val layout = inflater.inflate(R.layout.dialog_subtitle_picker, null)
         val listView = layout.findViewById<ListView>(R.id.sub_list)
         val btnDownload = layout.findViewById<Button>(R.id.btn_download)
         val btnCancel = layout.findViewById<Button>(R.id.btn_cancel)
-        
+
         val adapter = ArrayAdapter<String>(this@MainActivity, R.layout.item_subtitle_choice, subNames)
         listView.adapter = adapter
-        
+
         val dialog = AlertDialog.Builder(this@MainActivity)
             .setView(layout)
             .create()
-            
+
         btnCancel.setOnClickListener { dialog.dismiss() }
         btnDownload.setOnClickListener {
             val checkedPositions = listView.checkedItemPositions
@@ -1580,12 +2076,12 @@ class MainActivity : AppCompatActivity() {
             for (i in 0 until adapter.count) {
                 if (checkedPositions.get(i)) selectedIndices.add(i)
             }
-            
+
             if (selectedIndices.isEmpty()) {
                 Toast.makeText(this@MainActivity, "No subtitles selected", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            
+
             dialog.dismiss()
 
             val selectedCount = selectedIndices.size
@@ -1604,7 +2100,7 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this@MainActivity, "Finished downloading $downloadedCount subtitles", Toast.LENGTH_SHORT).show()
                     return
                 }
-                
+
                 subtitlesStatus.text = "Downloading ${idx + 1} / $selectedCount subtitles..."
                 downloadSubtitle(subs.getJSONObject(selectedIndices[idx]), silent = true) { path ->
                     if (path != null) downloadedCount++
@@ -1706,22 +2202,22 @@ class MainActivity : AppCompatActivity() {
         if (isDownloadingAutoSubs || lastSubtitledItemKey == itemKey) return
         isDownloadingAutoSubs = true
         lastSubtitledItemKey = itemKey
-        
+
         subtitlesStatus.text = "Searching automatic subtitles..."
         subtitlesStatus.visibility = View.VISIBLE
         subtitlesProgress.visibility = View.VISIBLE
         subtitlesProgress.isIndeterminate = true
-        
+
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
                 val subsJson = scraper.callAttr("search_subtitles", item.toString(), season, episode).toString()
                 val subs = JSONArray(subsJson)
-                
+
                 if (subs.length() > 0) {
                     val countToGet = if (autoSubCount == 0) subs.length() else autoSubCount.coerceAtMost(subs.length())
-                    
+
                     val prioritizedSubs = mutableListOf<JSONObject>()
                     for (i in 0 until subs.length()) {
                         val sub = subs.getJSONObject(i)
@@ -1833,19 +2329,19 @@ class MainActivity : AppCompatActivity() {
             try {
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
-                
+
                 // Pause scraping while resolving/playing
                 try { scraper.callAttr("pause_scrape") } catch (e: Exception) {}
 
                 val resolveResult = scraper.callAttr("resolve", sourceDataJson).toString()
-                
+
                 withContext(Dispatchers.Main) {
                     streamsProgress.visibility = View.GONE
                     try {
                         val json = JSONObject(resolveResult)
                         if (json.has("error")) {
                             // Resume if error
-                            lifecycleScope.launch(Dispatchers.IO) { 
+                            lifecycleScope.launch(Dispatchers.IO) {
                                 try { scraper.callAttr("resume_scrape") } catch (e: Exception) {}
                             }
                             Toast.makeText(this@MainActivity, "Resolve error: ${json.getString("error")}", Toast.LENGTH_LONG).show()
@@ -1871,7 +2367,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         } else {
                             // Resume if empty
-                            lifecycleScope.launch(Dispatchers.IO) { 
+                            lifecycleScope.launch(Dispatchers.IO) {
                                 try { scraper.callAttr("resume_scrape") } catch (e: Exception) {}
                             }
                             Toast.makeText(this@MainActivity, "Could not resolve stream URL", Toast.LENGTH_SHORT).show()
@@ -1889,7 +2385,7 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             // Resume if error
                             isInteractingWithSources = false
-                            lifecycleScope.launch(Dispatchers.IO) { 
+                            lifecycleScope.launch(Dispatchers.IO) {
                                 try { scraper.callAttr("resume_scrape") } catch (e: Exception) {}
                             }
                             Toast.makeText(this@MainActivity, "Resolve error: $resolveResult", Toast.LENGTH_LONG).show()
@@ -1900,7 +2396,7 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     // Resume if error
                     isInteractingWithSources = false
-                    lifecycleScope.launch(Dispatchers.IO) { 
+                    lifecycleScope.launch(Dispatchers.IO) {
                         try { Python.getInstance().getModule("main").callAttr("resume_scrape") } catch (e: Exception) {}
                     }
                     streamsProgress.visibility = View.GONE
@@ -2592,7 +3088,7 @@ class MainActivity : AppCompatActivity() {
     private fun showHomeScreen() {
         isBrowsing = false
         cursor.visibility = View.GONE
-        
+
         mainTabsLayout.visibility = View.VISIBLE
         // Default to browser tab if not already in streams
         if (streamsScreenLayout.visibility != View.VISIBLE) {
@@ -2603,7 +3099,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             homeScreenLayout.visibility = View.GONE
         }
-        
+
         webContainer.visibility = View.GONE
         topBarLayout.visibility = View.GONE
         contextMenu.visibility = View.GONE
@@ -3039,13 +3535,13 @@ class MainActivity : AppCompatActivity() {
                     } else if (pos >= dur - 10000L) { // If near end, clear it
                         prefs.edit().remove(resumeKey).apply()
                         pendingNextEpisode = true
-                        
+
                         // Scrobble to Trakt
                         lastScrapedItem?.let { item ->
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try {
                                     val py = Python.getInstance()
-                                    val scrobbler = py.getModule("trakt_scrobble")
+                                    val scrobbler = py.getModule("trakt.trakt_scrobble")
                                     scrobbler.callAttr("scrobble", item.toString(), lastScrapedSeason, lastScrapedEpisode, 100.0)
                                 } catch (e: Exception) {
                                     Log.e("TVBrowser", "Scrobble failed: ${e.message}")
@@ -3227,7 +3723,7 @@ class MainActivity : AppCompatActivity() {
                 val url = wv.url ?: return
                 val profilesJson = prefs.getString("autoplay_profiles", "[]") ?: "[]"
                 val profiles = JSONArray(profilesJson)
-                
+
                 var matchedAny = false
                 var executedAny = false
                 // Apply all matching and enabled profiles
@@ -3241,7 +3737,7 @@ class MainActivity : AppCompatActivity() {
                             break
                         }
                     }
-                    
+
                     if (matchesPattern) {
                         matchedAny = true
                         if (obj.optBoolean("enabled", true)) {
@@ -3271,7 +3767,7 @@ class MainActivity : AppCompatActivity() {
                 val handler = android.os.Handler(android.os.Looper.getMainLooper())
                 var attempts = 0
                 val maxAttempts = 8 // 8 * 2s = 16s total monitoring
-                
+
                 val extractionTask = object : Runnable {
                     override fun run() {
                         if (videoTriggerPref != 0 || !isBrowsing || nativeVideoView.visibility == View.VISIBLE || attempts >= maxAttempts) {
@@ -3386,7 +3882,7 @@ class MainActivity : AppCompatActivity() {
 
                 if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                     val isControllerVisible = nativeVideoView.isControllerFullyVisible
-                    
+
                     // If the popup is specifically FOCUSED, dismiss it
                     if (upNextPopup != null && upNextPopup!!.isFocused) {
                         customViewContainer.removeView(upNextPopup)
@@ -3395,13 +3891,13 @@ class MainActivity : AppCompatActivity() {
                         nativeVideoView.requestFocus()
                         return true
                     }
-                    
+
                     // If controller is visible, hide it
                     if (isControllerVisible) {
                         nativeVideoView.hideController()
                         return true
                     }
-                    
+
                     // Otherwise (popup focused or hidden, controller hidden), exit video player
                     hideFullscreenVideo()
                     return true
@@ -3416,9 +3912,9 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     val focusedView = nativeVideoView.findFocus() ?: currentFocus
                     val idName = try { focusedView?.id?.let { resources.getResourceEntryName(it) } ?: "" } catch (e: Exception) { "" }
-                    val isCenterButton = idName.contains("play") || idName.contains("pause") || 
-                                       idName.contains("rew") || idName.contains("ffwd") ||
-                                       idName.contains("prev") || idName.contains("next")
+                    val isCenterButton = idName.contains("play") || idName.contains("pause") ||
+                            idName.contains("rew") || idName.contains("ffwd") ||
+                            idName.contains("prev") || idName.contains("next")
                     val isButton = focusedView is ImageButton || focusedView is Button
 
                     if (!isButton || isCenterButton) {
@@ -3486,8 +3982,8 @@ class MainActivity : AppCompatActivity() {
                         wakeCursor()
                         isBackHandled = true
                         return true
-                    } else if (!isBrowsing && tvSelectionLayout.visibility == View.VISIBLE) {
-                        btnTvBack.performClick()
+                    } else if (!isBrowsing && detailsLayout.visibility == View.VISIBLE) {
+                        btnDetailsBack.performClick()
                         isBackHandled = true
                         return true
                     } else if (!isBrowsing && streamsScreenLayout.visibility == View.VISIBLE) {
@@ -3666,9 +4162,9 @@ class MainActivity : AppCompatActivity() {
         val relativeY = cursorY - location[1]
 
         val properties = arrayOf(MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_MOUSE })
-        val coords = arrayOf(MotionEvent.PointerCoords().apply { 
-            x = relativeX; y = relativeY; pressure = 1f; size = 1f 
-            setAxisValue(MotionEvent.AXIS_VSCROLL, -dy / 20f) 
+        val coords = arrayOf(MotionEvent.PointerCoords().apply {
+            x = relativeX; y = relativeY; pressure = 1f; size = 1f
+            setAxisValue(MotionEvent.AXIS_VSCROLL, -dy / 20f)
         })
 
         val event = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_SCROLL, 1, properties, coords, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_MOUSE, 0)
@@ -3715,7 +4211,7 @@ class MainActivity : AppCompatActivity() {
 
         cursorX = (cursorX + dx).coerceIn(0f, maxX)
         cursorY = (cursorY + dy).coerceIn(0f, maxY)
-        
+
         // Tip of the arrow in ic_cursor.xml is at (4,4) in a 24x24 viewport.
         // The ImageView is 32dp x 32dp. Tip offset is (4/24) * 32 = 5.33dp.
         val density = resources.displayMetrics.density
@@ -3731,7 +4227,7 @@ class MainActivity : AppCompatActivity() {
                 cursor.visibility = View.GONE
                 topUrlInput.requestFocus()
             }
-            
+
             // Only scroll if pushing against the extreme edge AND moving in that direction
             if (cursorY >= maxY - 1f && dy > 0) {
                 wv?.scrollBy(0, 15)
@@ -4105,7 +4601,7 @@ class MainActivity : AppCompatActivity() {
     private fun initDpadNav(showToast: Boolean = false) {
         val wv = currentWebView ?: return
         if (showToast) Toast.makeText(this, "D-pad Navigation: Select Element and Press OK", Toast.LENGTH_LONG).show()
-        
+
         val setupScript = """
             (function() {
                 if (!window.navHelper) {
@@ -4326,15 +4822,15 @@ class MainActivity : AppCompatActivity() {
             val tName = json.getString("tagName")
             val cIdx = json.optInt("candidateIndex", 0)
             val cCnt = json.optInt("candidatesCount", 1)
-            
+
             headerText.text = "Block Element ($tName) [${cIdx + 1}/$cCnt]"
             optionsContainer.removeAllViews()
-            
+
             for (i in 0 until opts.length()) {
                 val opt = opts.getJSONObject(i)
                 val type = opt.getString("type")
                 val value = opt.getString("value")
-                
+
                 val btn = Button(this).apply {
                     text = "$type: $value"
                     isAllCaps = false
@@ -4345,13 +4841,13 @@ class MainActivity : AppCompatActivity() {
                     val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 90)
                     params.setMargins(0, 0, 0, 10)
                     layoutParams = params
-                    
+
                     onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
                         if (hasFocus) {
                             wv.evaluateJavascript("window.blockerHelper.setHighlight('$value')", null)
                         }
                     }
-                    
+
                     setOnClickListener {
                         wv.evaluateJavascript("window.blockerHelper.clearHighlight()", null)
                         currentDialog?.dismiss()
@@ -4381,7 +4877,7 @@ class MainActivity : AppCompatActivity() {
             params.marginEnd = 10
             layoutParams = params
             visibility = if (candCount > 1) View.VISIBLE else View.GONE
-            
+
             setOnClickListener {
                 wv.evaluateJavascript("window.blockerHelper.nextCandidate()") { result ->
                     if (result == null || result == "null") return@evaluateJavascript
@@ -4403,7 +4899,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(20, 0, 20, 0)
             val params = LinearLayout.LayoutParams(0, 90, 1f)
             layoutParams = params
-            
+
             setOnClickListener {
                 wv.evaluateJavascript("window.blockerHelper.selectParent()") { result ->
                     if (result == null || result == "null") return@evaluateJavascript
@@ -4447,21 +4943,21 @@ class MainActivity : AppCompatActivity() {
             if (currentDialog == dialog) currentDialog = null
             rootLayout.requestFocus()
         }
-        
+
         currentDialog = dialog
         dialog.show()
     }
-    
+
     private var currentDialog: AlertDialog? = null
 
     private fun showSaveBlockedElementDialog(selector: String) {
         val url = currentWebView?.url ?: ""
         val host = Uri.parse(url).host ?: "Unknown Site"
-        val editText = EditText(this).apply { 
+        val editText = EditText(this).apply {
             setText(host)
             ViewUtils.applySmartDpadFocus(this)
         }
-        
+
         val dialog = AlertDialog.Builder(this)
             .setTitle("Save Blocked Element")
             .setMessage("Rule name for this site:")
@@ -4484,7 +4980,7 @@ class MainActivity : AppCompatActivity() {
         val host = Uri.parse(url).host ?: "*"
         val blockedJson = prefs.getString("blocked_elements", "[]") ?: "[]"
         val array = JSONArray(blockedJson)
-        
+
         var existingIndex = -1
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
@@ -4511,7 +5007,7 @@ class MainActivity : AppCompatActivity() {
             }
             array.put(newRule)
         }
-        
+
         prefs.edit().putString("blocked_elements", array.toString()).apply()
         Toast.makeText(this, "Element rule saved!", Toast.LENGTH_SHORT).show()
     }
@@ -4520,12 +5016,12 @@ class MainActivity : AppCompatActivity() {
         val url = wv.url ?: return
         val blockedJson = prefs.getString("blocked_elements", "[]") ?: "[]"
         val array = JSONArray(blockedJson)
-        
+
         val allSelectors = mutableListOf<String>()
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
             if (!obj.optBoolean("enabled", true)) continue
-            
+
             val patterns = obj.getJSONArray("urlPatterns")
             var matches = false
             for (j in 0 until patterns.length()) {
@@ -4533,7 +5029,7 @@ class MainActivity : AppCompatActivity() {
                     matches = true; break
                 }
             }
-            
+
             if (matches) {
                 val selectors = obj.getJSONArray("selectors")
                 for (j in 0 until selectors.length()) {
@@ -4630,7 +5126,7 @@ class MainActivity : AppCompatActivity() {
         isRecordingAutoplay = false
         topRecordBtn.setImageResource(R.drawable.ic_record)
         topRecordBtn.imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE)
-        
+
         val wv = currentWebView
         wv?.evaluateJavascript("document.removeEventListener('click', window.recordedClickCallback, true);", null)
 
@@ -4644,11 +5140,11 @@ class MainActivity : AppCompatActivity() {
     private fun showSaveProfileDialog() {
         val url = currentWebView?.url ?: ""
         val host = Uri.parse(url).host ?: "Unknown Site"
-        val editText = EditText(this).apply { 
+        val editText = EditText(this).apply {
             setText(host)
             ViewUtils.applySmartDpadFocus(this)
         }
-        
+
         AlertDialog.Builder(this)
             .setTitle("Save Autoplay Profile")
             .setMessage("Enter a name for this profile:")
@@ -4665,15 +5161,15 @@ class MainActivity : AppCompatActivity() {
         val host = Uri.parse(url).host ?: "*"
         val selectorsJson = JSONArray(selectors)
         val script = SettingsActivity.generateSelectorScript(selectorsJson)
-        
+
         val profile = AutoplayProfile(
-            name = name, 
-            urlPatterns = listOf("*$host*"), 
+            name = name,
+            urlPatterns = listOf("*$host*"),
             script = script,
             useScript = false,
             selectors = selectors
         )
-        
+
         val profilesJson = prefs.getString("autoplay_profiles", "[]") ?: "[]"
         val array = JSONArray(profilesJson)
         array.put(JSONObject().apply {
@@ -4692,8 +5188,8 @@ class MainActivity : AppCompatActivity() {
     private fun matchUrlPattern(pattern: String, url: String): Boolean {
         if (pattern == "*") return true
         val regex = pattern.replace(".", "\\.")
-                           .replace("*", ".*")
-                           .replace("?", ".")
+            .replace("*", ".*")
+            .replace("?", ".")
         return try {
             java.util.regex.Pattern.compile(regex, java.util.regex.Pattern.CASE_INSENSITIVE).matcher(url).find()
         } catch (e: Exception) {
@@ -4748,7 +5244,7 @@ class MainActivity : AppCompatActivity() {
         val item = lastScrapedItem ?: return
         val season = lastScrapedSeason ?: return
         val episode = lastScrapedEpisode ?: return
-        
+
         val nextEp = episode + 1
         val cacheKey = "${item.optInt("id")}_$season"
         val episodes = cachedEpisodes[cacheKey] ?: return
@@ -4759,7 +5255,7 @@ class MainActivity : AppCompatActivity() {
                 break
             }
         }
-        
+
         if (nextEpData == null) return
 
         val inflater = LayoutInflater.from(this)
@@ -4767,13 +5263,13 @@ class MainActivity : AppCompatActivity() {
         popup.id = View.generateViewId()
         val title = popup.findViewById<TextView>(R.id.up_next_title)
         val thumb = popup.findViewById<ImageView>(R.id.up_next_thumb)
-        
+
         title.text = "E$nextEp: ${nextEpData.optString("name")}"
         val stillPath = nextEpData.optString("still_path")
         if (stillPath.isNotEmpty() && stillPath != "null") {
             loadStreamThumb("https://image.tmdb.org/t/p/w300$stillPath", thumb)
         }
-        
+
         val params = FrameLayout.LayoutParams(300.dp(), FrameLayout.LayoutParams.WRAP_CONTENT).apply {
             gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
             setMargins(0, 0, 40.dp(), 100.dp())
@@ -4781,27 +5277,27 @@ class MainActivity : AppCompatActivity() {
         popup.layoutParams = params
         popup.elevation = 50.dp().toFloat()
         popup.translationZ = 50.dp().toFloat()
-        
+
         popup.setOnClickListener {
             customViewContainer.removeView(popup)
             upNextPopup = null
             isUpNextDismissed = true
             handleNextEpisodeAutoPlay()
         }
-        
+
         customViewContainer.addView(popup)
         upNextPopup = popup
         popup.bringToFront()
-        
+
         if (navigationModePref == 1) {
             popup.isFocusable = true
             popup.isFocusableInTouchMode = true
-            
+
             popup.post {
                 popup.requestFocus()
             }
         }
-        
+
         popup.postDelayed({
             if (upNextPopup == popup) {
                 customViewContainer.removeView(popup)
@@ -4814,19 +5310,19 @@ class MainActivity : AppCompatActivity() {
         val item = lastScrapedItem
         val season = lastScrapedSeason
         val episode = lastScrapedEpisode
-        
+
         if (item == null || season == null || episode == null) {
             Toast.makeText(this, "Missing episode info for auto-play", Toast.LENGTH_SHORT).show()
             hideFullscreenVideo()
             return
         }
-        
+
         val nextEp = episode + 1
         Toast.makeText(this, "Playing next: E$nextEp", Toast.LENGTH_SHORT).show()
-        
+
         val cfg = getPythonConfig()
         val autoplayMode = cfg.optString("autoplay_next_pref", "Closest Source")
-        
+
         if (autoplayMode == "Ask") {
             hideFullscreenVideo()
             performScrape(item, season, nextEp)
@@ -4838,11 +5334,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun performAutoPlayScrape(item: JSONObject, season: Int, episode: Int, mode: String) {
         hideFullscreenVideo()
-        
+
         val progressDialog = AlertDialog.Builder(this)
             .setTitle("Auto-playing Next Episode...")
             .setMessage("Finding best source for E$episode...")
-            .setNegativeButton("Cancel") { _, _ -> 
+            .setNegativeButton("Cancel") { _, _ ->
                 lifecycleScope.launch(Dispatchers.IO) {
                     try {
                         Python.getInstance().getModule("main").callAttr("stop_scrape")
@@ -4857,7 +5353,7 @@ class MainActivity : AppCompatActivity() {
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
                 scraper.callAttr("stop_scrape")
-                
+
                 // Start scrape in a separate job
                 launch {
                     try {
@@ -4867,51 +5363,51 @@ class MainActivity : AppCompatActivity() {
                         Log.e("AutoPlay", "Scrape failed: ${e.message}")
                     }
                 }
-                
+
                 var foundSource: JSONObject? = null
                 val startTime = System.currentTimeMillis()
                 val timeout = 45000L // 45s timeout for auto-play search
-                
+
                 delay(2000) // Give it a moment to start
-                
+
                 while (foundSource == null && System.currentTimeMillis() - startTime < timeout) {
                     val statusJson = scraper.callAttr("get_scrape_status").toString()
                     val status = JSONObject(statusJson)
                     val sources = status.optJSONArray("sources")
                     val message = status.optString("message", "")
                     val isFinished = message == "Finished!" || message == "Stopped!" || message == "Timeout reached!"
-                    
+
                     if (sources != null && sources.length() > 0) {
                         val rawSources = mutableListOf<JSONObject>()
                         for (i in 0 until sources.length()) {
                             rawSources.add(JSONObject(sources.getJSONObject(i).getString("source_data")))
                         }
-                        
+
                         if (mode == "Closest Source" && lastSelectedSource != null) {
                             val targetSource = lastSelectedSource!!.optString("source")
                             val targetProvider = lastSelectedSource!!.optString("provider")
                             val targetUrl = lastSelectedSource!!.optString("url")
                             val targetHost = if (targetUrl.contains("//")) targetUrl.split("//")[1].split("/")[0] else ""
 
-                            foundSource = rawSources.find { 
+                            foundSource = rawSources.find {
                                 val u = it.optString("url")
                                 val h = if (u.contains("//")) u.split("//")[1].split("/")[0] else ""
                                 h == targetHost && it.optString("provider") == targetProvider && it.optString("source") == targetSource
                             }
-                            
+
                             if (foundSource == null) {
-                                foundSource = rawSources.find { 
+                                foundSource = rawSources.find {
                                     it.optString("provider") == targetProvider && it.optString("source") == targetSource
                                 }
                             }
-                            
+
                             if (foundSource == null) {
-                                foundSource = rawSources.find { 
+                                foundSource = rawSources.find {
                                     it.optString("source") == targetSource
                                 }
                             }
                         }
-                        
+
                         if (foundSource == null && (isFinished || mode == "Best Source")) {
                             val priorities = getSortPriorities()
                             val sorted = SourceSorter(priorities).sort(sources)
@@ -4920,11 +5416,11 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     }
-                    
+
                     if (isFinished && foundSource == null) break
                     if (foundSource == null) delay(1000)
                 }
-                
+
                 if (foundSource == null) {
                     // Try one last time with whatever we have
                     val statusJson = scraper.callAttr("get_scrape_status").toString()

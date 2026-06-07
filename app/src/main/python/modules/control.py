@@ -30,24 +30,84 @@ def setting(id):
     if any(x in id for x in ['timeout', 'limit', 'count']):
         return '60'
     
-    return '0'
+    # TMDb and Trakt specific defaults
+    if id.startswith('tmdb.') or id.startswith('trakt.'):
+        return ''
 
-def setSetting(id, val):
-    _settings[id] = str(val)
+    return ''
+
+def setSetting(id, value=None, **kwargs):
+    # Support both 'value' and 'val' as passed by various scripts
+    if value is None:
+        value = kwargs.get('val') or kwargs.get('value')
+
+    _settings[id] = str(value)
     try:
         with open(settingsFile, 'w') as f: 
             json.dump(_settings, f)
     except: 
         pass
 
-def jsonrpc(*args, **kwargs): 
-    return "{}"
+_dialog_listener = None
 
-def makeFile(path): 
-    os.makedirs(path, exist_ok=True)
+def set_dialog_listener(listener):
+    global _dialog_listener
+    _dialog_listener = listener
 
-def openFile(path, mode='r'): 
-    return open(path, mode, encoding='utf-8')
+def infoDialog(message, heading=None, sound=False, icon=None, time=None):
+    _dialog_listener.infoDialog(str(message), str(heading or ""), bool(sound), str(icon or ""))
+
+infodialog = infoDialog
+
+def okDialog(message, heading=None):
+    return _dialog_listener.okDialog(str(message), str(heading or ""))
+
+okdialog = okDialog
+
+def yesnoDialog(message, heading=None, nolabel=None, yeslabel=None):
+    return _dialog_listener.yesnoDialog(str(message), str(heading or ""), str(nolabel or ""), str(yeslabel or ""))
+
+yesnodialog = yesnoDialog
+
+def lang(id):
+    return f"Lang_{id}"
+
+def condVisibility(expr):
+    return False
+
+def sleep(ms):
+    import time
+    time.sleep(ms / 1000.0)
+
+def item(label=None, path=None):
+    class ListItem:
+        def __init__(self, l, p):
+            self.label = l
+            self.path = p
+            self.properties = {}
+        def setProperty(self, k, v): self.properties[k] = v
+        def setInfo(self, type, infoLabels): pass
+    return ListItem(label, path)
+
+def resolve(handle=None, succeeded=True, listitem=None):
+    pass
+
+class Player:
+    def isPlayingVideo(self): return False
+player = Player()
+
+def getCurrentDialogId(): return 0
+
+def execute(command): pass
+
+def addon(id):
+    class Addon:
+        def getSetting(self, key): return "0"
+    return Addon()
+
+def infoLabel(id): return ""
+
+def apiLanguage(): return {"tmdb": "en", "youtube": "en"}
 
 def getKodiVersion(): return 20
 

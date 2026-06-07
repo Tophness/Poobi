@@ -46,13 +46,14 @@
             android:text="Episode overview text goes here..." />
     </LinearLayout>
 
-    <ImageButton
+    <ImageView
         android:id="@+id/btn_watched"
         android:layout_width="50dp"
         android:layout_height="50dp"
         android:src="@drawable/ic_watched"
-        android:background="@drawable/bg_focusable"
         android:padding="10dp"
         app:tint="#FFF"
-        android:contentDescription="Mark as Watched"/>
+        android:alpha="0.2"
+        android:duplicateParentState="true"
+        android:contentDescription="Watched Status"/>
 </LinearLayout>

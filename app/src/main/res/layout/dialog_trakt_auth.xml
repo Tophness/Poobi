@@ -49,11 +49,21 @@
         android:layout_height="40dp"
         android:layout_marginTop="10dp"/>
 
+    <Button
+        android:id="@+id/btn_open_browser"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Open in App Browser"
+        android:background="@drawable/bg_focusable"
+        android:textColor="#FFF"
+        android:layout_marginTop="20dp"
+        android:padding="15dp"/>
+
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Waiting for authorization..."
         android:textColor="#666"
         android:textSize="12sp"
-        android:layout_marginTop="10dp"/>
+        android:layout_marginTop="15dp"/>
 </LinearLayout>
