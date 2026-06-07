@@ -195,6 +195,32 @@
             android:gravity="bottom"
             android:layout_marginBottom="10dp">
 
+            <ImageButton
+                android:id="@+id/btn_streams_back"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:background="@drawable/bg_focusable"
+                android:src="@drawable/ic_back"
+                app:tint="#FFF"
+                android:visibility="gone"
+                android:layout_marginEnd="10dp"
+                android:contentDescription="Back"
+                android:nextFocusUp="@id/btn_main_tab_streams"/>
+            <Button
+                android:id="@+id/btn_streams_stop"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="Stop Scanning"
+                android:drawableStart="@drawable/ic_stop"
+                android:drawablePadding="10dp"
+                android:paddingHorizontal="20dp"
+                android:background="@drawable/bg_focusable"
+                android:textColor="#FFF"
+                android:visibility="gone"
+                android:textAllCaps="false"
+                android:layout_marginEnd="10dp"
+                android:nextFocusUp="@id/btn_main_tab_streams"/>
+
             <Button
                 android:id="@+id/btn_streams_tab_search"
                 android:layout_width="wrap_content"
@@ -225,30 +251,6 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"/>
 
-            <ImageButton
-                android:id="@+id/btn_streams_back"
-                android:layout_width="50dp"
-                android:layout_height="50dp"
-                android:background="@drawable/bg_focusable"
-                android:src="@drawable/ic_back"
-                app:tint="#FFF"
-                android:visibility="gone"
-                android:layout_marginEnd="10dp"
-                android:contentDescription="Back"
-                android:nextFocusUp="@id/btn_main_tab_streams"/>
-            <Button
-                android:id="@+id/btn_streams_stop"
-                android:layout_width="wrap_content"
-                android:layout_height="50dp"
-                android:text="Stop Scanning"
-                android:drawableStart="@drawable/ic_stop"
-                android:drawablePadding="10dp"
-                android:paddingHorizontal="20dp"
-                android:background="@drawable/bg_focusable"
-                android:textColor="#FFF"
-                android:visibility="gone"
-                android:textAllCaps="false"
-                android:nextFocusUp="@id/btn_main_tab_streams"/>
             <Button
                 android:id="@+id/btn_streams_sort"
                 android:layout_width="wrap_content"

@@ -126,6 +126,10 @@ class MainActivity : AppCompatActivity() {
     private var lastScrapedItem: JSONObject? = null
     private var lastScrapedSeason: Int? = null
     private var lastScrapedEpisode: Int? = null
+    private var scrapePollingJob: Job? = null
+    private var scrapeJob: Job? = null
+    private var detailsLoadJob: Job? = null
+    private var episodesLoadJob: Job? = null
     private var currentStreamingTitle: String? = null
     private var lastVideoTitle: String? = null
     private var currentSources: JSONArray? = null
@@ -517,6 +521,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnScrapeBack.setOnClickListener {
+            stopScrape()
             goBackToHistory()
         }
 
@@ -524,6 +529,7 @@ class MainActivity : AppCompatActivity() {
             if (streamsScreenLayout.visibility == View.VISIBLE) {
                 // 1. Handle Back from Scraping Panel
                 if (streamsPanelScraping.visibility == View.VISIBLE) {
+                    stopScrape()
                     if (lastScrapedItem != null && lastScrapedItem!!.optString("media_type") == "tv" && lastScrapedSeason != null) {
                         streamsScreenLayout.visibility = View.GONE
                         showMediaDetailsScreen(lastScrapedItem!!)
@@ -1633,6 +1639,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun stopScrape() {
+        scrapePollingJob?.cancel()
+        scrapePollingJob = null
+        scrapeJob?.cancel()
+        scrapeJob = null
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                scraper.callAttr("stop_scrape")
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "Error stopping scrape: ${e.message}")
+            }
+        }
+    }
+
     private fun performScrape(item: JSONObject, season: Int? = null, episode: Int? = null) {
         val mediaType = item.optString("media_type")
         if (mediaType == "person") {
@@ -1685,15 +1707,7 @@ class MainActivity : AppCompatActivity() {
         streamsSearchBarLayout.visibility = View.GONE
 
         btnStreamsStop.setOnClickListener {
-            lifecycleScope.launch(Dispatchers.IO) {
-                try {
-                    val py = Python.getInstance()
-                    val scraper = py.getModule("main")
-                    scraper.callAttr("stop_scrape")
-                } catch (e: Exception) {
-                    Log.e("TVBrowser", "Error stopping scrape: ${e.message}")
-                }
-            }
+            stopScrape()
             val hadFocus = btnStreamsStop.hasFocus()
             btnStreamsStop.visibility = View.GONE
             if (hadFocus) {
@@ -1728,7 +1742,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Polling task for progress and incremental results
-        val pollingJob = lifecycleScope.launch(Dispatchers.IO) {
+        scrapePollingJob?.cancel()
+        scrapePollingJob = lifecycleScope.launch(Dispatchers.IO) {
             var lastTagValue = -1
             var lastUIUpdateTime = 0L
 
@@ -1812,7 +1827,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        lifecycleScope.launch(Dispatchers.IO) {
+        scrapeJob?.cancel()
+        scrapeJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
@@ -1820,7 +1836,8 @@ class MainActivity : AppCompatActivity() {
                 val sources = JSONArray(sourcesJson)
 
                 withContext(Dispatchers.Main) {
-                    pollingJob.cancel()
+                    scrapePollingJob?.cancel()
+                    scrapePollingJob = null
                     streamsProgress.visibility = View.GONE
                     subtitlesStatus.visibility = View.GONE
                     btnStreamsBack.visibility = View.VISIBLE
@@ -1833,11 +1850,16 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    pollingJob.cancel()
+                    scrapePollingJob?.cancel()
+                    scrapePollingJob = null
                     streamsProgress.visibility = View.GONE
                     subtitlesStatus.visibility = View.GONE
                     btnStreamsStop.visibility = View.GONE
                     Toast.makeText(this@MainActivity, "Scrape error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    scrapeJob = null
                 }
             }
         }
@@ -1882,9 +1904,11 @@ class MainActivity : AppCompatActivity() {
         seasonHeaderRow.visibility = if (mediaType == "tv") View.VISIBLE else View.GONE
 
         detailsDynamicContainer.removeAllViews()
+        detailsEpisodesContainer.removeAllViews()
 
         // Fetch details including fanart for background
-        lifecycleScope.launch(Dispatchers.IO) {
+        detailsLoadJob?.cancel()
+        detailsLoadJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
                 val tmdb = py.getModule("tmdb.tmdb_api")
@@ -1971,9 +1995,10 @@ class MainActivity : AppCompatActivity() {
         val id = item.optInt("id")
         val cacheKey = "${id}_$seasonNumber"
 
+        episodesLoadJob?.cancel()
         detailsEpisodesContainer.removeAllViews()
 
-        lifecycleScope.launch(Dispatchers.IO) {
+        episodesLoadJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
