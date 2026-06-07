@@ -683,9 +683,8 @@ class MainActivity : AppCompatActivity() {
                 action()
             }
             btn.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    updateLibraryTabSelection(btn)
-                    action()
+                if (hasFocus && activeLibraryTab != btn) {
+                    btn.performClick()
                 }
             }
             libraryTabsContainer.addView(btn)
@@ -702,9 +701,27 @@ class MainActivity : AppCompatActivity() {
         activeLibraryTab = selected
     }
 
+    private var libraryLoadJob: Job? = null
+    private val libraryCache = mutableMapOf<String, String>()
     private fun loadLibraryCategory(title: String, method: String, arg: String? = null) {
+        val cacheKey = "$method|$arg"
+        libraryLoadJob?.cancel()
+
+        // Show cache immediately if available
+        libraryCache[cacheKey]?.let { json ->
+            try {
+                val items = JSONObject(json).getJSONArray("results")
+                libraryGridContainer.removeAllViews()
+                for (i in 0 until items.length()) {
+                    libraryGridContainer.addView(createRichMediaCard(items.getJSONObject(i)))
+                }
+                // Return to avoid reloading if cache exists
+                return
+            } catch (e: Exception) {}
+        }
+
         libraryGridContainer.removeAllViews()
-        lifecycleScope.launch(Dispatchers.IO) {
+        libraryLoadJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 pythonReady.await()
                 val py = Python.getInstance()
@@ -714,20 +731,27 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     tmdb.callAttr(method).toString()
                 }
+                
+                libraryCache[cacheKey] = resultJson
                 val items = JSONObject(resultJson).getJSONArray("results")
                 withContext(Dispatchers.Main) {
+                    libraryGridContainer.removeAllViews()
                     for (i in 0 until items.length()) {
                         libraryGridContainer.addView(createRichMediaCard(items.getJSONObject(i)))
                     }
                 }
             } catch (e: Exception) {
-                Log.e("TVBrowser", "Failed to load category $title: ${e.message}")
+                if (e !is CancellationException) {
+                    Log.e("TVBrowser", "Failed to load category $title: ${e.message}")
+                }
             }
         }
     }
 
     private fun refreshLibraryFavorites() {
+        libraryLoadJob?.cancel()
         libraryGridContainer.removeAllViews()
+        
         val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
         val array = JSONArray(favsJson)
         val newEpCounts = JSONObject(prefs.getString("new_episode_counts", "{}") ?: "{}")
@@ -737,19 +761,23 @@ class MainActivity : AppCompatActivity() {
             val id = item.optString("id")
             val count = newEpCounts.optInt(id, 0)
             
-            libraryGridContainer.addView(createRichMediaCard(item, isFav = true, newCount = count))
+            libraryGridContainer.addView(createRichMediaCard(item, isFav = true, newCount = count, isFavoriteList = true))
         }
     }
 
     private fun refreshLibraryRecentlyWatched() {
+        libraryLoadJob?.cancel()
         libraryGridContainer.removeAllViews()
+        
         val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
         val array = JSONArray(recentJson)
 
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
             val itemData = obj.getJSONObject("item")
-            libraryGridContainer.addView(createRichMediaCard(itemData))
+            val season = if (obj.has("season")) obj.getInt("season") else null
+            val episode = if (obj.has("episode")) obj.getInt("episode") else null
+            libraryGridContainer.addView(createRichMediaCard(itemData, season = season, episode = episode, isRecentList = true))
         }
     }
 
@@ -785,15 +813,39 @@ class MainActivity : AppCompatActivity() {
         return card
     }
 
-    private fun createRichMediaCard(item: JSONObject, isFav: Boolean = false, newCount: Int = 0): View {
+    private fun createRichMediaCard(
+        item: JSONObject,
+        isFav: Boolean = false,
+        newCount: Int = 0,
+        season: Int? = null,
+        episode: Int? = null,
+        isFavoriteList: Boolean = false,
+        isRecentList: Boolean = false
+    ): View {
         val card = LayoutInflater.from(this).inflate(R.layout.item_media_card, null)
         val titleView = card.findViewById<TextView>(R.id.card_title)
+        val episodeView = card.findViewById<TextView>(R.id.card_episode)
         val detailView = card.findViewById<TextView>(R.id.card_detail)
+        val genresView = card.findViewById<TextView>(R.id.card_genres)
+        val ratingView = card.findViewById<TextView>(R.id.card_rating)
+        val ratingContainer = card.findViewById<View>(R.id.card_rating_container)
         val thumbView = card.findViewById<ImageView>(R.id.card_thumb)
         val favIcon = card.findViewById<ImageView>(R.id.card_fav_icon)
         val newIcon = card.findViewById<ImageView>(R.id.card_new_episode_icon)
 
-        val title = item.optString("title").takeIf { it.isNotEmpty() } ?: item.optString("name")
+        val title = (item.optString("title").takeIf { it.isNotEmpty() } ?: item.optString("name"))
+            .replace(Regex("\\s\\(\\d{4}\\)$"), "") // Remove (Year) from title
+        titleView.text = title
+
+        if (season != null && episode != null) {
+            episodeView.text = "S${season} E$episode"
+            episodeView.visibility = View.VISIBLE
+            titleView.maxLines = 1
+        } else {
+            episodeView.visibility = View.GONE
+            titleView.maxLines = 2
+        }
+
         val releaseDate = item.optString("release_date").takeIf { it.isNotEmpty() }
             ?: item.optString("first_air_date").takeIf { it.isNotEmpty() }
             ?: "0000"
@@ -808,19 +860,41 @@ class MainActivity : AppCompatActivity() {
         normalizedItem.put("title", title)
         normalizedItem.put("year", year)
 
-        titleView.text = title
-
         val rating = item.optDouble("vote_average", 0.0)
-        val ratingStr = if (rating > 0) " ⭐ %.1f".format(rating) else ""
-
-        val genresArr = item.optJSONArray("genre_ids")
-        var genreStr = ""
-        if (genresArr != null && genresArr.length() > 0) {
-            val firstGenreId = genresArr.getInt(0)
-            genreMap[firstGenreId]?.let { genreStr = " • $it" }
+        if (rating > 0) {
+            ratingView.text = "%.1f".format(rating)
+            ratingContainer.visibility = View.VISIBLE
+        } else {
+            ratingContainer.visibility = View.GONE
         }
 
-        detailView.text = "$year • ${mediaType.uppercase()}$genreStr$ratingStr"
+        val genresArr = item.optJSONArray("genre_ids") ?: item.optJSONArray("genres")
+        if (genresArr != null && genresArr.length() > 0) {
+            val genreNames = mutableListOf<String>()
+            for (i in 0 until genresArr.length()) {
+                val obj = genresArr.get(i)
+                if (obj is Int) {
+                    genreMap[obj]?.let { genreNames.add(it) }
+                } else if (obj is JSONObject) {
+                    genreNames.add(obj.optString("name"))
+                }
+            }
+            if (genreNames.isNotEmpty()) {
+                genresView.text = genreNames.joinToString(" • ")
+                genresView.visibility = View.VISIBLE
+                genresView.isSelected = true
+            } else {
+                genresView.visibility = View.GONE
+            }
+        } else {
+            genresView.visibility = View.GONE
+        }
+
+        // Styled Detail text - Both Green as requested
+        val typeColor = "#4CAF50"
+        val yearColor = "#B0BEC5"
+        val detailHtml = "<font color='$typeColor'>${mediaType.uppercase()}</font> • <font color='$yearColor'>$year</font>"
+        detailView.text = android.text.Html.fromHtml(detailHtml, android.text.Html.FROM_HTML_MODE_LEGACY)
 
         val posterPath = item.optString("poster_path")
         if (posterPath.isNotEmpty() && posterPath != "null") {
@@ -855,6 +929,10 @@ class MainActivity : AppCompatActivity() {
             showMediaDetailsScreen(normalizedItem)
         }
 
+        if (isFavoriteList || isRecentList) {
+            setupLibraryItemLongPress(card, normalizedItem, isFavoriteList, isRecentList, season, episode)
+        }
+
         card.nextFocusDownId = R.id.library_tabs_scroll
 
         card.layoutParams = LinearLayout.LayoutParams(160.dp(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -862,6 +940,106 @@ class MainActivity : AppCompatActivity() {
         }
 
         return card
+    }
+
+    private fun setupLibraryItemLongPress(view: View, item: JSONObject, isFav: Boolean, isRecent: Boolean, season: Int?, episode: Int?) {
+        val progressHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        var startTime = 0L
+        val updateProgress = object : Runnable {
+            override fun run() {
+                if (startTime == 0L) return
+                val elapsed = System.currentTimeMillis() - startTime
+                val progressValue = (elapsed / 1000f).coerceIn(0f, 1f)
+
+                // Visual feedback: overlay turns red and fades to transparent
+                // Since we don't have an overlay in the XML, we can set card background color with alpha
+                val red = android.graphics.Color.RED
+                val alpha = (progressValue * 255).toInt()
+                val color = android.graphics.Color.argb(alpha, 255, 0, 0)
+                view.setBackgroundColor(color)
+                view.alpha = 1.0f - progressValue
+
+                if (progressValue >= 1f) {
+                    showLibraryRemoveDialog(item, isFav, isRecent, season, episode, view)
+                    startTime = 0L
+                    resetLibraryCardVisuals(view)
+                } else {
+                    progressHandler.postDelayed(this, 16)
+                }
+            }
+        }
+
+        view.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    if (event.repeatCount == 0) {
+                        startTime = System.currentTimeMillis()
+                        progressHandler.post(updateProgress)
+                    }
+                    return@setOnKeyListener true
+                } else if (event.action == KeyEvent.ACTION_UP) {
+                    val duration = System.currentTimeMillis() - startTime
+                    startTime = 0L
+                    progressHandler.removeCallbacks(updateProgress)
+                    resetLibraryCardVisuals(view)
+                    if (duration < 500) {
+                        view.performClick()
+                    }
+                    return@setOnKeyListener true
+                }
+            }
+            false
+        }
+    }
+
+    private fun resetLibraryCardVisuals(view: View) {
+        view.setBackgroundResource(R.drawable.bg_focusable)
+        view.alpha = 1.0f
+    }
+
+    private fun reassignLibraryFocus(index: Int) {
+        if (libraryGridContainer.childCount > 0) {
+            val nextToFocus = if (index >= libraryGridContainer.childCount) libraryGridContainer.childCount - 1 else index
+            if (nextToFocus >= 0) {
+                libraryGridContainer.getChildAt(nextToFocus).requestFocus()
+            } else {
+                activeLibraryTab?.requestFocus()
+            }
+        } else {
+            activeLibraryTab?.requestFocus()
+        }
+    }
+
+    private fun showLibraryRemoveDialog(item: JSONObject, isFav: Boolean, isRecent: Boolean, season: Int?, episode: Int?, view: View) {
+        val parent = view.parent as? ViewGroup
+        val index = parent?.indexOfChild(view) ?: -1
+        val title = item.optString("title")
+        val msg = if (isFav) "Remove '$title' from Favorites?" else "Remove '$title' from Recently Watched?"
+        
+        val builder = AlertDialog.Builder(this)
+            .setTitle("Manage Library")
+            .setMessage(msg)
+            .setPositiveButton("Remove") { _, _ ->
+                if (isFav) {
+                    toggleFavorite(item)
+                    reassignLibraryFocus(index)
+                } else if (isRecent) {
+                    val displayTitle = if (season != null && episode != null) "$title S${season}E$episode" else title
+                    removeFromRecentlyPlayedStreams(displayTitle)
+                    reassignLibraryFocus(index)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+
+        if (isRecent) {
+            builder.setNeutralButton("Clear All History") { _, _ ->
+                prefs.edit().putString("streams_recently_played", "[]").apply()
+                refreshLibraryRecentlyWatched()
+                reassignLibraryFocus(0)
+            }
+        }
+
+        builder.show()
     }
 
     private fun performStreamSearch() {
@@ -1116,8 +1294,23 @@ class MainActivity : AppCompatActivity() {
         val newList = mutableListOf<JSONObject>()
         for (i in 0 until array.length()) newList.add(array.getJSONObject(i))
 
-        val existing = newList.find { it.getString("display_title") == displayTitle }
-        newList.removeAll { it.getString("display_title") == displayTitle }
+        val id = item.optString("id")
+        val imdb = item.optString("imdb")
+
+        // Use ID + season + episode to remove existing duplicates (robust against title formatting changes)
+        val existingIndex = newList.indexOfFirst {
+            val itItem = it.optJSONObject("item")
+            val itId = itItem?.optString("id")
+            val itImdb = itItem?.optString("imdb")
+            val sameItem = (itId == id && id.isNotEmpty()) || (itImdb == imdb && imdb.isNotEmpty())
+            val sameEpisode = it.optInt("season", -1) == (season ?: -1) && it.optInt("episode", -1) == (episode ?: -1)
+            sameItem && sameEpisode
+        }
+
+        var existing: JSONObject? = null
+        if (existingIndex != -1) {
+            existing = newList.removeAt(existingIndex)
+        }
 
         val newEntry = JSONObject().apply {
             put("display_title", displayTitle)
