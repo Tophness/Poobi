@@ -695,6 +695,7 @@ class MainActivity : AppCompatActivity() {
             "Search" to {
                 streamsPanelSearch.visibility = View.VISIBLE
                 streamsPanelLibraries.visibility = View.GONE
+                streamsSearchBarLayout.visibility = View.VISIBLE
                 if (streamsScreenLayout.visibility == View.VISIBLE) {
                     streamsSearchInput.post { streamsSearchInput.requestFocus() }
                 }
@@ -1717,7 +1718,6 @@ class MainActivity : AppCompatActivity() {
         btnStreamsBack.visibility = View.VISIBLE // Allow going back while scraping
         btnStreamsStop.visibility = View.VISIBLE
         btnStreamsStop.requestFocus()
-        streamsSearchBarLayout.visibility = View.GONE
 
         btnStreamsStop.setOnClickListener {
             stopScrape()
