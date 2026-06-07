@@ -658,6 +658,8 @@ def search(query):
                     "release_date": item.get('release_date') or item.get('first_air_date'),
                     "overview": item.get('overview'),
                     "poster_path": item.get('poster_path'),
+                    "backdrop_path": item.get('backdrop_path'),
+                    "vote_average": item.get('vote_average'),
                     "orig_title": title,
                     "year": year
                 })

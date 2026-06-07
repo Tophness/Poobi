@@ -903,7 +903,6 @@ class MainActivity : AppCompatActivity() {
         if (rating > 0) {
             ratingView.text = "%.1f".format(rating)
             ratingContainer.visibility = View.VISIBLE
-            normalizedItem.put("vote_average", rating)
         } else {
             ratingContainer.visibility = View.GONE
         }
@@ -939,7 +938,6 @@ class MainActivity : AppCompatActivity() {
         val posterPath = item.optString("poster_path")
         if (posterPath.isNotEmpty() && posterPath != "null") {
             loadStreamThumb("https://image.tmdb.org/t/p/w342$posterPath", thumbView)
-            normalizedItem.put("poster_path", posterPath)
         }
 
         val id = item.optString("id")
