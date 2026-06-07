@@ -187,7 +187,44 @@
         android:visibility="gone"
         android:nextFocusUp="@+id/btn_main_tab_streams">
 
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="10dp">
+        <!-- Streams Top Navigation -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="bottom"
+            android:layout_marginBottom="10dp">
+
+            <Button
+                android:id="@+id/btn_streams_tab_search"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="Search"
+                android:background="@drawable/bg_tab_nav"
+                android:textColor="#FFF"
+                android:textAllCaps="false"
+                android:paddingHorizontal="35dp"
+                android:layout_marginEnd="2dp"
+                android:nextFocusUp="@id/btn_main_tab_streams"
+                android:nextFocusLeft="@id/btn_streams_tab_search"/>
+
+            <Button
+                android:id="@+id/btn_streams_tab_libraries"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="Libraries"
+                android:background="@drawable/bg_tab_nav"
+                android:textColor="#FFF"
+                android:textAllCaps="false"
+                android:paddingHorizontal="35dp"
+                android:nextFocusUp="@id/btn_main_tab_streams"
+                android:nextFocusRight="@id/btn_streams_tab_libraries"/>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"/>
+
             <ImageButton
                 android:id="@+id/btn_streams_back"
                 android:layout_width="50dp"
@@ -228,247 +265,215 @@
                 android:nextFocusUp="@id/btn_main_tab_streams"/>
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/streams_search_bar_layout"
+        <View
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-            <EditText
-                android:id="@+id/streams_search_input"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:background="@drawable/bg_focusable"
-                android:textColor="#FFFFFF"
-                android:padding="16dp"
-                android:hint="Search Movie or TV Show..."
-                android:textColorHint="#888888"
-                android:inputType="text"
-                android:imeOptions="actionSearch"
-                android:maxLines="1"
-                android:nextFocusUp="@id/btn_main_tab_streams"/>
+            android:layout_height="2dp"
+            android:background="#00BCD4"
+            android:layout_marginBottom="10dp"/>
 
-            <ImageButton
-                android:id="@+id/streams_search_btn"
-                android:layout_width="60dp"
-                android:layout_height="60dp"
-                android:background="@drawable/bg_focusable"
-                android:src="@drawable/ic_go"
-                app:tint="#FFF"
-                android:layout_marginStart="10dp"
-                android:contentDescription="Search"
-                android:nextFocusUp="@id/btn_main_tab_streams"/>
-        </LinearLayout>
-
-        <!-- History and Recently Played Section -->
-        <LinearLayout
-            android:id="@+id/streams_history_layout"
+        <FrameLayout
+            android:id="@+id/streams_content_frame"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="20dp">
+            android:layout_height="0dp"
+            android:layout_weight="1">
 
-            <!-- Recent Searches -->
+            <!-- SEARCH PANEL -->
             <LinearLayout
-                android:id="@+id/streams_recent_searches_layout"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
+                android:id="@+id/streams_panel_search"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:visibility="visible">
 
                 <LinearLayout
+                    android:id="@+id/streams_search_bar_layout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-
-                    <TextView
+                    android:orientation="horizontal">
+                    <EditText
+                        android:id="@+id/streams_search_input"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Recent Searches"
-                        android:textColor="#888"
-                        android:textSize="14sp"
-                        android:textStyle="bold"/>
-
-                    <Button
-                        android:id="@+id/btn_streams_clear_history"
-                        android:layout_width="wrap_content"
-                        android:layout_height="40dp"
-                        android:text="Clear"
+                        android:layout_height="60dp"
                         android:background="@drawable/bg_focusable"
-                        android:textColor="#FFF"
-                        android:textSize="12sp"
-                        android:textAllCaps="false"
-                        android:paddingHorizontal="15dp"/>
+                        android:textColor="#FFFFFF"
+                        android:padding="16dp"
+                        android:hint="Search Movie or TV Show..."
+                        android:textColorHint="#888888"
+                        android:inputType="text"
+                        android:imeOptions="actionSearch"
+                        android:maxLines="1"
+                        android:nextFocusUp="@id/btn_streams_tab_search"/>
+
+                    <ImageButton
+                        android:id="@+id/streams_search_btn"
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:background="@drawable/bg_focusable"
+                        android:src="@drawable/ic_go"
+                        app:tint="#FFF"
+                        android:layout_marginStart="10dp"
+                        android:contentDescription="Search"
+                        android:nextFocusUp="@id/btn_streams_tab_search"/>
                 </LinearLayout>
 
-                <HorizontalScrollView
+                <LinearLayout
+                    android:id="@+id/streams_recent_searches_layout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:scrollbars="none">
-                    <LinearLayout
-                        android:id="@+id/streams_history_container"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"/>
-                </HorizontalScrollView>
-            </LinearLayout>
+                    android:orientation="vertical"
+                    android:layout_marginTop="20dp">
 
-            <!-- Favorites -->
-            <LinearLayout
-                android:id="@+id/streams_favorites_layout"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:layout_marginStart="30dp"
-                android:visibility="gone">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Recent Searches"
+                            android:textColor="#888"
+                            android:textSize="14sp"
+                            android:textStyle="bold"/>
+                        <Button
+                            android:id="@+id/btn_streams_clear_history"
+                            android:layout_width="wrap_content"
+                            android:layout_height="40dp"
+                            android:text="Clear"
+                            android:background="@drawable/bg_focusable"
+                            android:textColor="#FFF"
+                            android:textSize="12sp"
+                            android:textAllCaps="false"
+                            android:paddingHorizontal="15dp"/>
+                    </LinearLayout>
+
+                    <HorizontalScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:scrollbars="none">
+                        <LinearLayout
+                            android:id="@+id/streams_history_container"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"/>
+                    </HorizontalScrollView>
+                </LinearLayout>
+
+                <ProgressBar
+                    android:id="@+id/streams_progress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:visibility="gone"
+                    android:progressTint="#00BCD4"
+                    android:progressBackgroundTint="#333"/>
 
                 <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="My Favorites"
-                    android:textColor="#888"
-                    android:textSize="14sp"
-                    android:textStyle="bold"/>
-
-                <HorizontalScrollView
+                    android:id="@+id/subtitles_status"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:scrollbars="none">
+                    android:textColor="#FFC107"
+                    android:textSize="12sp"
+                    android:visibility="gone"
+                    android:gravity="center_horizontal"/>
+
+                <TextView
+                    android:id="@+id/streams_count_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textColor="#00BCD4"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    android:gravity="center_horizontal"/>
+
+                <ProgressBar
+                    android:id="@+id/subtitles_progress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:visibility="gone"
+                    android:progressTint="#FFC107"
+                    android:progressBackgroundTint="#333"/>
+
+                <ScrollView
+                    android:id="@+id/streams_results_scroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_marginTop="10dp"
+                    android:visibility="gone">
                     <LinearLayout
-                        android:id="@+id/streams_favorites_container"
-                        android:layout_width="wrap_content"
+                        android:id="@+id/streams_results_container"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"/>
-                </HorizontalScrollView>
+                        android:orientation="vertical"/>
+                </ScrollView>
             </LinearLayout>
 
-            <!-- Recently Played Videos -->
+            <!-- LIBRARIES PANEL -->
             <LinearLayout
-                android:id="@+id/streams_recent_played_layout"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
+                android:id="@+id/streams_panel_libraries"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:orientation="vertical"
-                android:layout_marginStart="30dp"
                 android:visibility="gone">
 
-                <LinearLayout
+                <!-- Content Area for Libraries -->
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
                     android:gravity="center_vertical">
 
-                    <TextView
-                        android:layout_width="0dp"
+                    <HorizontalScrollView
+                        android:id="@+id/library_content_scroll"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Recently Played"
-                        android:textColor="#888"
-                        android:textSize="14sp"
-                        android:textStyle="bold"/>
+                        android:layout_gravity="center_vertical"
+                        android:scrollbars="none">
+                        <LinearLayout
+                            android:id="@+id/library_grid_container"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:paddingHorizontal="10dp"/>
+                    </HorizontalScrollView>
+                </FrameLayout>
 
-                    <Button
-                        android:id="@+id/btn_streams_clear_recent_played"
-                        android:layout_width="wrap_content"
-                        android:layout_height="40dp"
-                        android:text="Clear"
-                        android:background="@drawable/bg_focusable"
-                        android:textColor="#FFF"
-                        android:textSize="12sp"
-                        android:textAllCaps="false"
-                        android:paddingHorizontal="15dp"/>
-                </LinearLayout>
+                <!-- Library Sub-Tabs Bar (Bottom) -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="2dp"
+                    android:background="#00BCD4"
+                    android:layout_marginTop="10dp"/>
 
                 <HorizontalScrollView
+                    android:id="@+id/library_tabs_scroll"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:scrollbars="none">
+                    android:layout_height="70dp"
+                    android:scrollbars="none"
+                    android:background="#1A1A1D">
                     <LinearLayout
-                        android:id="@+id/streams_recent_played_container"
+                        android:id="@+id/library_tabs_container"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"/>
+                        android:layout_height="match_parent"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="10dp">
+                        <!-- Buttons added programmatically -->
+                    </LinearLayout>
                 </HorizontalScrollView>
             </LinearLayout>
-        </LinearLayout>
-
-        <ProgressBar
-            android:id="@+id/streams_progress"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:visibility="gone"
-            android:progressTint="#00BCD4"
-            android:progressBackgroundTint="#333"/>
-
-        <TextView
-            android:id="@+id/subtitles_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:textColor="#FFC107"
-            android:textSize="12sp"
-            android:visibility="gone"
-            android:gravity="center_horizontal"/>
-
-        <TextView
-            android:id="@+id/streams_count_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="#00BCD4"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:visibility="gone"
-            android:gravity="center_horizontal"/>
-
-        <ProgressBar
-            android:id="@+id/subtitles_progress"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:visibility="gone"
-            android:progressTint="#FFC107"
-            android:progressBackgroundTint="#333"/>
-
-        <ScrollView
-            android:id="@+id/streams_results_scroll"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:layout_marginTop="20dp"
-            android:visibility="gone"
-            android:nextFocusUp="@id/btn_main_tab_streams">
-            <LinearLayout
-                android:id="@+id/streams_results_container"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"/>
-        </ScrollView>
-
-        <ScrollView
-            android:id="@+id/rich_media_scroll"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:layout_marginTop="10dp"
-            android:visibility="visible"
-            android:nextFocusUp="@id/btn_main_tab_streams">
-            <LinearLayout
-                android:id="@+id/rich_media_container"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"/>
-        </ScrollView>
+        </FrameLayout>
     </LinearLayout>
+
 
     <!-- UNIFIED MEDIA DETAILS SCREEN -->
     <LinearLayout

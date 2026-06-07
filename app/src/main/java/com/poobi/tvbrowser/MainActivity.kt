@@ -96,15 +96,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnStreamsSort: Button
     private lateinit var streamsHistoryContainer: LinearLayout
     private lateinit var btnStreamsClearHistory: Button
-    private lateinit var streamsHistoryLayout: LinearLayout
-    private lateinit var streamsRecentPlayedLayout: LinearLayout
-    private lateinit var streamsRecentPlayedContainer: LinearLayout
-    private lateinit var btnStreamsClearRecentPlayed: Button
-    private lateinit var streamsFavoritesLayout: LinearLayout
-    private lateinit var streamsFavoritesContainer: LinearLayout
 
-    private lateinit var richMediaScroll: ScrollView
-    private lateinit var richMediaContainer: LinearLayout
+    private lateinit var btnStreamsTabSearch: Button
+    private lateinit var btnStreamsTabLibraries: Button
+    private lateinit var streamsPanelSearch: LinearLayout
+    private lateinit var streamsPanelLibraries: LinearLayout
+    private lateinit var libraryGridContainer: LinearLayout
+    private lateinit var libraryTabsContainer: LinearLayout
 
     private lateinit var detailsLayout: LinearLayout
     private lateinit var btnDetailsBack: ImageButton
@@ -300,15 +298,13 @@ class MainActivity : AppCompatActivity() {
         btnStreamsSort = findViewById(R.id.btn_streams_sort)
         streamsHistoryContainer = findViewById(R.id.streams_history_container)
         btnStreamsClearHistory = findViewById(R.id.btn_streams_clear_history)
-        streamsHistoryLayout = findViewById(R.id.streams_history_layout)
-        streamsRecentPlayedLayout = findViewById(R.id.streams_recent_played_layout)
-        streamsRecentPlayedContainer = findViewById(R.id.streams_recent_played_container)
-        btnStreamsClearRecentPlayed = findViewById(R.id.btn_streams_clear_recent_played)
-        streamsFavoritesLayout = findViewById(R.id.streams_favorites_layout)
-        streamsFavoritesContainer = findViewById(R.id.streams_favorites_container)
 
-        richMediaScroll = findViewById(R.id.rich_media_scroll)
-        richMediaContainer = findViewById(R.id.rich_media_container)
+        btnStreamsTabSearch = findViewById(R.id.btn_streams_tab_search)
+        btnStreamsTabLibraries = findViewById(R.id.btn_streams_tab_libraries)
+        streamsPanelSearch = findViewById(R.id.streams_panel_search)
+        streamsPanelLibraries = findViewById(R.id.streams_panel_libraries)
+        libraryGridContainer = findViewById(R.id.library_grid_container)
+        libraryTabsContainer = findViewById(R.id.library_tabs_container)
 
         detailsLayout = findViewById(R.id.media_details_layout)
         btnDetailsBack = findViewById(R.id.btn_details_back)
@@ -366,7 +362,9 @@ class MainActivity : AppCompatActivity() {
         setupHomeTabs()
 
         val filter = IntentFilter(android.app.DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            registerReceiver(downloadReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(downloadReceiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             registerReceiver(downloadReceiver, filter)
@@ -461,7 +459,6 @@ class MainActivity : AppCompatActivity() {
             // Refresh TMDb state and load data
             withContext(Dispatchers.Main) {
                 loadGenres()
-                loadRichMediaHome()
             }
         }
     }
@@ -540,11 +537,19 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putString("streams_search_history", "[]").apply()
             refreshStreamsHistory()
         }
-        btnStreamsClearRecentPlayed.setOnClickListener {
-            prefs.edit().putString("streams_recently_played", "[]").apply()
-            refreshStreamsHistory()
-            streamsSearchInput.requestFocus()
+
+        btnStreamsTabSearch.setOnClickListener { switchStreamsSubTab(true) }
+        btnStreamsTabLibraries.setOnClickListener { switchStreamsSubTab(false) }
+
+        btnStreamsTabSearch.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) switchStreamsSubTab(true)
         }
+        btnStreamsTabLibraries.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) switchStreamsSubTab(false)
+        }
+
+        // Default to Search tab
+        switchStreamsSubTab(true)
 
         btnDetailsBack.setOnClickListener {
             detailsLayout.visibility = View.GONE
@@ -599,12 +604,10 @@ class MainActivity : AppCompatActivity() {
             // If details is visible, keep it; otherwise show the main streams list
             if (detailsLayout.visibility != View.VISIBLE) {
                 streamsScreenLayout.visibility = View.VISIBLE
-                refreshStreamsHistory()
-                refreshStreamsFavorites()
-                if (richMediaContainer.childCount == 0) {
-                    loadRichMediaHome()
-                }
+                switchStreamsSubTab(true)
             }
+            refreshStreamsHistory()
+            streamsSearchInput.post { streamsSearchInput.requestFocus() }
 
             cursor.visibility = View.GONE
 
@@ -623,96 +626,134 @@ class MainActivity : AppCompatActivity() {
     private fun goBackToHistory() {
         streamsResultsContainer.removeAllViews()
         streamsResultsScroll.visibility = View.GONE
-        richMediaScroll.visibility = View.VISIBLE
         btnStreamsBack.visibility = View.GONE
         streamsSearchBarLayout.visibility = View.VISIBLE
         streamsCountText.visibility = View.GONE
         streamsCountText.text = ""
         refreshStreamsHistory()
-        refreshStreamsFavorites()
+        // refreshStreamsFavorites() // Now handled by Libraries tab
         streamsSearchInput.post { streamsSearchInput.requestFocus() }
     }
 
-    private var isRichMediaLoading = false
+    private var activeStreamsTab: Button? = null
+    private fun switchStreamsSubTab(isSearch: Boolean) {
+        btnStreamsTabSearch.isSelected = isSearch
+        btnStreamsTabLibraries.isSelected = !isSearch
+        
+        streamsPanelSearch.visibility = if (isSearch) View.VISIBLE else View.GONE
+        streamsPanelLibraries.visibility = if (isSearch) View.GONE else View.VISIBLE
 
-    private fun loadRichMediaHome() {
-        if (richMediaContainer.childCount > 0 || isRichMediaLoading) return
-        isRichMediaLoading = true
+        if (isSearch) {
+            activeStreamsTab = btnStreamsTabSearch
+        } else {
+            activeStreamsTab = btnStreamsTabLibraries
+            if (libraryTabsContainer.childCount == 0) {
+                setupLibraryTabs()
+            }
+        }
+    }
 
+    private fun setupLibraryTabs() {
+        libraryTabsContainer.removeAllViews()
+        val categories = listOf(
+            "Trending" to { loadLibraryCategory("Trending Today", "get_trending", "all") },
+            "In Cinemas" to { loadLibraryCategory("In Cinemas Now", "get_movies_in_cinemas") },
+            "Upcoming" to { loadLibraryCategory("Upcoming Movies", "get_upcoming_movies") },
+            "Popular TV" to { loadLibraryCategory("Popular TV Shows", "get_popular", "tv") },
+            "Top Rated" to { loadLibraryCategory("Top Rated Movies", "get_top_rated", "movie") },
+            "Favourites" to { refreshLibraryFavorites() },
+            "Recently Watched" to { refreshLibraryRecentlyWatched() }
+        )
+
+        for ((name, action) in categories) {
+            val btn = Button(this).apply {
+                text = name
+                background = getDrawable(R.drawable.bg_tab_nav)
+                setTextColor(android.graphics.Color.WHITE)
+                isAllCaps = false
+                setPadding(25.dp(), 0, 25.dp(), 0)
+                nextFocusUpId = R.id.library_content_scroll
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    50.dp()
+                ).apply { marginEnd = 5.dp() }
+            }
+            btn.setOnClickListener {
+                updateLibraryTabSelection(btn)
+                action()
+            }
+            btn.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    updateLibraryTabSelection(btn)
+                    action()
+                }
+            }
+            libraryTabsContainer.addView(btn)
+        }
+        
+        // Load first tab by default
+        (libraryTabsContainer.getChildAt(0) as? Button)?.performClick()
+    }
+
+    private var activeLibraryTab: Button? = null
+    private fun updateLibraryTabSelection(selected: Button) {
+        activeLibraryTab?.isSelected = false
+        selected.isSelected = true
+        activeLibraryTab = selected
+    }
+
+    private fun loadLibraryCategory(title: String, method: String, arg: String? = null) {
+        libraryGridContainer.removeAllViews()
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 pythonReady.await()
-                // Explicitly passing unique media types to ensure different endpoints are hit correctly
-                loadRichRowSync("Trending Today", "get_trending", "all")
-                loadRichRowSync("In Cinemas Now", "get_movies_in_cinemas")
-                loadRichRowSync("Upcoming Movies", "get_upcoming_movies")
-                loadRichRowSync("Popular TV Shows", "get_popular", "tv")
-                loadRichRowSync("Top Rated Movies", "get_top_rated", "movie")
-                loadRichRowSync("Popular People", "get_popular_people", isPeople = true)
+                val py = Python.getInstance()
+                val tmdb = py.getModule("tmdb.tmdb_api")
+                val resultJson = if (arg != null) {
+                    tmdb.callAttr(method, arg).toString()
+                } else {
+                    tmdb.callAttr(method).toString()
+                }
+                val items = JSONObject(resultJson).getJSONArray("results")
+                withContext(Dispatchers.Main) {
+                    for (i in 0 until items.length()) {
+                        libraryGridContainer.addView(createRichMediaCard(items.getJSONObject(i)))
+                    }
+                }
             } catch (e: Exception) {
-                Log.e("TVBrowser", "loadRichMediaHome failed: ${e.message}")
-            } finally {
-                isRichMediaLoading = false
+                Log.e("TVBrowser", "Failed to load category $title: ${e.message}")
             }
         }
     }
 
-    private suspend fun loadRichRowSync(title: String, method: String, arg: String? = null, isPeople: Boolean = false) {
-        try {
-            val py = Python.getInstance()
-            val tmdb = py.getModule("tmdb.tmdb_api")
+    private fun refreshLibraryFavorites() {
+        libraryGridContainer.removeAllViews()
+        val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+        val array = JSONArray(favsJson)
+        val newEpCounts = JSONObject(prefs.getString("new_episode_counts", "{}") ?: "{}")
 
-            // Add a small delay between rows to allow UI to breathe
-            delay(300)
-
-            val resultJson = if (arg != null) {
-                tmdb.callAttr(method, arg).toString()
-            } else {
-                tmdb.callAttr(method).toString()
-            }
-            val items = JSONObject(resultJson).getJSONArray("results")
-            withContext(Dispatchers.Main) {
-                addRichMediaRow(title, items, isPeople)
-            }
-        } catch (e: Exception) {
-            Log.e("TVBrowser", "Failed to load rich row $title: ${e.message}")
+        for (i in 0 until array.length()) {
+            val item = array.getJSONObject(i)
+            val id = item.optString("id")
+            val count = newEpCounts.optInt(id, 0)
+            
+            libraryGridContainer.addView(createRichMediaCard(item, isFav = true, newCount = count))
         }
     }
 
-    private fun addRichMediaRow(title: String, items: JSONArray, isPeople: Boolean = false) {
-        val rowLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 40, 0, 20) // Increased top padding to prevent title cropping
-        }
+    private fun refreshLibraryRecentlyWatched() {
+        libraryGridContainer.removeAllViews()
+        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+        val array = JSONArray(recentJson)
 
-        val titleView = TextView(this).apply {
-            text = title
-            setTextColor(android.graphics.Color.WHITE)
-            textSize = 22f
-            setTypeface(null, android.graphics.Typeface.BOLD)
-            setPadding(10, 0, 0, 15)
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            val itemData = obj.getJSONObject("item")
+            libraryGridContainer.addView(createRichMediaCard(itemData))
         }
-        rowLayout.addView(titleView)
-
-        val scroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            clipToPadding = false
-            setPadding(10, 0, 10, 0)
-        }
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-
-        for (i in 0 until items.length()) {
-            val item = items.getJSONObject(i)
-            val card = if (isPeople) createPersonCard(item) else createRichMediaCard(item)
-            container.addView(card)
-        }
-
-        scroll.addView(container)
-        rowLayout.addView(scroll)
-        richMediaContainer.addView(rowLayout)
     }
+
+    private var isRichMediaLoading = false
 
     private fun createPersonCard(item: JSONObject): View {
         val card = LayoutInflater.from(this).inflate(R.layout.item_stream, null)
@@ -744,11 +785,13 @@ class MainActivity : AppCompatActivity() {
         return card
     }
 
-    private fun createRichMediaCard(item: JSONObject): View {
+    private fun createRichMediaCard(item: JSONObject, isFav: Boolean = false, newCount: Int = 0): View {
         val card = LayoutInflater.from(this).inflate(R.layout.item_media_card, null)
         val titleView = card.findViewById<TextView>(R.id.card_title)
         val detailView = card.findViewById<TextView>(R.id.card_detail)
         val thumbView = card.findViewById<ImageView>(R.id.card_thumb)
+        val favIcon = card.findViewById<ImageView>(R.id.card_fav_icon)
+        val newIcon = card.findViewById<ImageView>(R.id.card_new_episode_icon)
 
         val title = item.optString("title").takeIf { it.isNotEmpty() } ?: item.optString("name")
         val releaseDate = item.optString("release_date").takeIf { it.isNotEmpty() }
@@ -756,7 +799,8 @@ class MainActivity : AppCompatActivity() {
             ?: "0000"
         val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else "0000"
 
-        val mediaType = if (item.has("title") || item.optString("media_type") == "movie") "movie" else "tv"
+        val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
+            ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
 
         // Normalize item for later use
         val normalizedItem = JSONObject(item.toString())
@@ -783,8 +827,38 @@ class MainActivity : AppCompatActivity() {
             loadStreamThumb("https://image.tmdb.org/t/p/w342$posterPath", thumbView)
         }
 
+        val id = item.optString("id")
+        val imdb = item.optString("imdb")
+        val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+        val favsArray = JSONArray(favsJson)
+        var isActuallyFav = isFav
+        if (!isActuallyFav) {
+            for (j in 0 until favsArray.length()) {
+                val f = favsArray.getJSONObject(j)
+                if (f.optString("id") == id || (imdb.isNotEmpty() && f.optString("imdb") == imdb)) {
+                    isActuallyFav = true
+                    break
+                }
+            }
+        }
+
+        if (isActuallyFav) favIcon.visibility = View.VISIBLE
+        
+        var actualNewCount = newCount
+        if (actualNewCount == 0 && isActuallyFav) {
+            val newEpCounts = JSONObject(prefs.getString("new_episode_counts", "{}") ?: "{}")
+            actualNewCount = newEpCounts.optInt(id, 0)
+        }
+        if (actualNewCount > 0) newIcon.visibility = View.VISIBLE
+
         card.setOnClickListener {
             showMediaDetailsScreen(normalizedItem)
+        }
+
+        card.nextFocusDownId = R.id.library_tabs_scroll
+
+        card.layoutParams = LinearLayout.LayoutParams(160.dp(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(5.dp(), 5.dp(), 5.dp(), 5.dp())
         }
 
         return card
@@ -797,12 +871,13 @@ class MainActivity : AppCompatActivity() {
         addToStreamsHistory(query)
         streamsProgress.visibility = View.VISIBLE
         streamsResultsContainer.removeAllViews()
+        streamsResultsScroll.visibility = View.VISIBLE
         streamsCountText.visibility = View.GONE
         streamsCountText.text = ""
         streamsResultsScroll.visibility = View.VISIBLE
-        richMediaScroll.visibility = View.GONE
+        // richMediaScroll.visibility = View.GONE
         btnStreamsBack.visibility = View.GONE
-        streamsHistoryLayout.visibility = View.GONE
+        // streamsHistoryLayout.visibility = View.GONE
 
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.hideSoftInputFromWindow(streamsSearchInput.windowToken, 0)
@@ -866,7 +941,7 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     // Focus reassignment
-                    val newParent = if (isRecentPlayed) streamsRecentPlayedContainer else streamsHistoryContainer
+                    val newParent = streamsHistoryContainer
                     if (newParent.childCount > 0) {
                         val nextToFocus = if (index >= newParent.childCount) newParent.childCount - 1 else index
                         if (nextToFocus >= 0) newParent.getChildAt(nextToFocus).requestFocus()
@@ -914,12 +989,7 @@ class MainActivity : AppCompatActivity() {
         val historyJson = prefs.getString("streams_search_history", "[]") ?: "[]"
         val array = JSONArray(historyJson)
 
-        if (array.length() == 0 && (prefs.getString("streams_recently_played", "[]") ?: "[]") == "[]" &&
-            (prefs.getString("streams_favorites", "[]") ?: "[]") == "[]") {
-            streamsHistoryLayout.visibility = View.GONE
-            return
-        }
-        streamsHistoryLayout.visibility = View.VISIBLE
+        if (array.length() == 0) return
 
         val inflater = LayoutInflater.from(this)
         for (i in 0 until array.length()) {
@@ -937,58 +1007,6 @@ class MainActivity : AppCompatActivity() {
             setupHistoryLongPress(view, deleteProgress, query)
 
             streamsHistoryContainer.addView(view)
-        }
-        refreshRecentlyPlayedStreams()
-        refreshStreamsFavorites()
-    }
-
-    private fun refreshStreamsFavorites() {
-        streamsFavoritesContainer.removeAllViews()
-        val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
-        val array = JSONArray(favsJson)
-        val newEpCounts = JSONObject(prefs.getString("new_episode_counts", "{}") ?: "{}")
-
-        if (array.length() == 0) {
-            streamsFavoritesLayout.visibility = View.GONE
-            return
-        }
-        streamsFavoritesLayout.visibility = View.VISIBLE
-
-        val inflater = LayoutInflater.from(this)
-        for (i in 0 until array.length()) {
-            val item = array.getJSONObject(i)
-            val view = inflater.inflate(R.layout.item_search_history, streamsFavoritesContainer, false)
-            val textView = view.findViewById<TextView>(R.id.history_text)
-            val deleteProgress = view.findViewById<ProgressBar>(R.id.history_delete_progress)
-
-            val title = item.optString("title")
-            val id = item.optString("id")
-            val count = newEpCounts.optInt(id, 0)
-
-            textView.text = if (count > 0) "$title [$count New]" else title
-            if (count > 0) textView.setTextColor(android.graphics.Color.parseColor("#FFC107"))
-
-            val iconView = (view as? ViewGroup)?.getChildAt(0) as? ImageView
-            iconView?.setImageResource(R.drawable.ic_heart_filled)
-            iconView?.imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#40C4FF"))
-
-            view.setOnClickListener {
-                // Clear count when clicked
-                if (count > 0) {
-                    newEpCounts.remove(id)
-                    prefs.edit().putString("new_episode_counts", newEpCounts.toString()).apply()
-                    refreshStreamsFavorites()
-                }
-                performScrape(item)
-            }
-
-            view.setOnLongClickListener {
-                toggleFavorite(item)
-                refreshStreamsFavorites()
-                true
-            }
-
-            streamsFavoritesContainer.addView(view)
         }
     }
 
@@ -1016,7 +1034,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         prefs.edit().putString("streams_favorites", array.toString()).apply()
-        refreshStreamsFavorites()
+        refreshLibraryFavorites()
     }
 
     private fun updateFavoriteIcon(btn: ImageButton, item: JSONObject) {
@@ -1083,117 +1101,12 @@ class MainActivity : AppCompatActivity() {
                             epCounts.put(showId, epCounts.optInt(showId, 0) + 1)
                         }
                         prefs.edit().putString("new_episode_counts", epCounts.toString()).apply()
-                        refreshStreamsFavorites() // Refresh to show badges
+                        refreshLibraryFavorites() // Refresh to show badges
                     }
                 }
             } catch (e: Exception) {
                 Log.e("TVBrowser", "Episode check failed: ${e.message}")
             }
-        }
-    }
-
-    private fun refreshRecentlyPlayedStreams() {
-        streamsRecentPlayedContainer.removeAllViews()
-        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
-        val array = JSONArray(recentJson)
-
-        if (array.length() == 0) {
-            streamsRecentPlayedLayout.visibility = View.GONE
-            return
-        }
-        streamsRecentPlayedLayout.visibility = View.VISIBLE
-
-        val inflater = LayoutInflater.from(this)
-        for (i in 0 until array.length()) {
-            val obj = array.getJSONObject(i)
-            val title = obj.getString("display_title")
-            val itemData = obj.getJSONObject("item")
-            val season = if (obj.has("season")) obj.getInt("season") else null
-            val episode = if (obj.has("episode")) obj.getInt("episode") else null
-
-            val view = inflater.inflate(R.layout.item_search_history, streamsRecentPlayedContainer, false)
-            val textView = view.findViewById<TextView>(R.id.history_text)
-            val deleteProgress = view.findViewById<ProgressBar>(R.id.history_delete_progress)
-            textView.text = title
-
-            val iconView = (view as? ViewGroup)?.getChildAt(0) as? ImageView
-            iconView?.setImageResource(R.drawable.ic_history)
-
-            view.setOnClickListener {
-                val cachedUrl = obj.optString("video_url")
-                if (cachedUrl.isNotEmpty()) {
-                    val headersObj = obj.optJSONObject("headers")
-                    if (headersObj != null) {
-                        val headers = mutableMapOf<String, String>()
-                        headersObj.keys().forEach { k -> headers[k] = headersObj.getString(k) }
-                        interceptedMediaUrls[cachedUrl] = headers
-                    }
-
-                    lastScrapedItem = itemData
-                    lastScrapedSeason = season
-                    lastScrapedEpisode = episode
-
-                    // Restore subtitles
-                    interceptedSubtitleUrls.clear()
-                    val subsArray = obj.optJSONArray("subtitles")
-                    var subsMissing = false
-                    if (subsArray != null && subsArray.length() > 0) {
-                        for (j in 0 until subsArray.length()) {
-                            val subObj = subsArray.getJSONObject(j)
-                            val subUrl = subObj.getString("url")
-                            val infoObj = subObj.getJSONObject("info")
-                            val info = mutableMapOf<String, String>()
-                            infoObj.keys().forEach { k -> info[k] = infoObj.getString(k) }
-
-                            if (subUrl.startsWith("file://")) {
-                                val file = File(Uri.parse(subUrl).path ?: "")
-                                if (file.exists()) {
-                                    interceptedSubtitleUrls[subUrl] = info
-                                } else {
-                                    subsMissing = true
-                                }
-                            } else {
-                                interceptedSubtitleUrls[subUrl] = info
-                            }
-                        }
-                    }
-
-                    if (subsMissing || (subsArray != null && subsArray.length() > 0 && interceptedSubtitleUrls.isEmpty())) {
-                        // Some or all previously loaded subs are missing
-                        if (autoSubPref == 1) { // Automatic
-                            // We will launch the video and then auto-search
-                            launchNativeVideoPlayer(cachedUrl, null, title) {
-                                performScrape(itemData, season, episode)
-                            }
-                            // Trigger auto subtitle search
-                            performAutoSubtitleSearch(itemData, season, episode)
-                        } else {
-                            // Ask or Never -> Bring up subtitle picker
-                            launchNativeVideoPlayer(cachedUrl, null, title) {
-                                performScrape(itemData, season, episode)
-                            }
-                            showSubtitlePicker(itemData, season, episode)
-                        }
-                    } else {
-                        launchNativeVideoPlayer(cachedUrl, null, title) {
-                            // On failure, fallback to scraping
-                            performScrape(itemData, season, episode)
-                        }
-                    }
-                } else {
-                    performScrape(itemData, season, episode)
-                }
-            }
-
-            setupHistoryLongPress(view, deleteProgress, title, true)
-
-            // Simple delete for now
-            view.findViewById<View>(R.id.btn_delete_history).setOnClickListener {
-                removeFromRecentlyPlayedStreams(title)
-                if (streamsRecentPlayedContainer.childCount == 0) streamsSearchInput.requestFocus()
-            }
-
-            streamsRecentPlayedContainer.addView(view)
         }
     }
 
@@ -1239,7 +1152,7 @@ class MainActivity : AppCompatActivity() {
         val newArray = JSONArray()
         newList.forEach { newArray.put(it) }
         prefs.edit().putString("streams_recently_played", newArray.toString()).apply()
-        refreshRecentlyPlayedStreams()
+        refreshLibraryRecentlyWatched()
     }
 
     private fun removeFromRecentlyPlayedStreams(displayTitle: String) {
@@ -1255,7 +1168,7 @@ class MainActivity : AppCompatActivity() {
         // Clear autoresume state for this title
         prefs.edit().remove("resume_stream_$displayTitle").apply()
 
-        refreshRecentlyPlayedStreams()
+        refreshLibraryRecentlyWatched()
     }
 
     private fun removeFromStreamsHistory(query: String) {
@@ -1273,7 +1186,6 @@ class MainActivity : AppCompatActivity() {
     private fun displayStreamResults(results: JSONArray) {
         val inflater = LayoutInflater.from(this)
         streamsResultsContainer.removeAllViews()
-        richMediaScroll.visibility = View.GONE
         streamsCountText.visibility = View.GONE
         streamsCountText.text = ""
         for (i in 0 until results.length()) {
@@ -1455,11 +1367,11 @@ class MainActivity : AppCompatActivity() {
         subtitlesStatus.visibility = View.GONE
         subtitlesStatus.text = ""
         streamsResultsScroll.visibility = View.VISIBLE
-        richMediaScroll.visibility = View.GONE
+        // richMediaScroll.visibility = View.GONE
         btnStreamsBack.visibility = View.VISIBLE // Allow going back while scraping
         btnStreamsStop.visibility = View.VISIBLE
         btnStreamsStop.requestFocus()
-        streamsHistoryLayout.visibility = View.GONE
+        // streamsHistoryLayout.visibility = View.GONE
         streamsSearchBarLayout.visibility = View.GONE
 
         btnStreamsStop.setOnClickListener {
@@ -1623,7 +1535,9 @@ class MainActivity : AppCompatActivity() {
 
 
     private fun showMediaDetailsScreen(item: JSONObject) {
-        val mediaType = item.optString("media_type")
+        val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
+            ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
+        lastScrapedItem = item
         val id = item.optInt("id")
 
         detailsLayout.visibility = View.VISIBLE
