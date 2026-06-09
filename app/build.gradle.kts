@@ -3,7 +3,6 @@ import com.android.build.api.dsl.ApplicationExtension
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.jetbrains.kotlin.android)
     alias(libs.plugins.chaquopy)
     alias(libs.plugins.kotlin.compose.compiler)
 }
@@ -49,8 +48,8 @@ extensions.configure<ApplicationExtension> {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildFeatures {
@@ -58,7 +57,6 @@ extensions.configure<ApplicationExtension> {
     }
 }
 
-// Third-party plugin configuration block placed at root level
 chaquopy {
     defaultConfig {
         buildPython("C:/Users/Chris/AppData/Local/Python/pythoncore-3.11-64/python.exe")
@@ -71,13 +69,6 @@ chaquopy {
             install("simplejson")
             install("trakt")
         }
-    }
-}
-
-// Correct root-level configuration for Kotlin 2.0+ Compiler Options
-kotlin {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_1_8)
     }
 }
 

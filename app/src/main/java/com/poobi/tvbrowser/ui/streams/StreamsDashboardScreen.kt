@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -23,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poobi.tvbrowser.R
+import com.poobi.tvbrowser.ui.browser.HoldToDeleteCloseButton
 import com.poobi.tvbrowser.ui.browser.TvFocusableHoldToDeleteBox
 import com.poobi.tvbrowser.ui.shared.TvFocusableBox
 import com.poobi.tvbrowser.ui.shared.TvSearchField
@@ -58,7 +60,6 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
         if (activeCategoryIndex == 0 && searchResults == null) {
-            // Interactive Search Bar
             Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 TvSearchField(
                     value = searchInput,
@@ -122,7 +123,6 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                     }
                 }
                 
-                // Search History Chips with Hold-to-delete integration
                 LazyRow(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(searchHistory) { index, query ->
                         TvFocusableHoldToDeleteBox(
@@ -137,9 +137,26 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                             },
                             onClick = { searchInput = query; viewModel.performSearch(query) }
                         ) { isFocused, progress ->
-                            Row(modifier = Modifier.padding(horizontal = 12.dp).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(painter = painterResource(id = R.drawable.ic_history), contentDescription = null, tint = Color.Gray, modifier = Modifier.size(20.dp))
-                                Text(query, color = Color.White, modifier = Modifier.padding(start = 8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp)
+                                    .fillMaxHeight(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_history),
+                                    contentDescription = null,
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = query,
+                                    color = Color.White
+                                )
+                                if (isFocused || progress > 0f) {
+                                    HoldToDeleteCloseButton(progress = progress)
+                                }
                             }
                         }
                     }
@@ -162,14 +179,13 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                             val sNum = if (wrapper.has("season")) wrapper.getInt("season") else null
                             val eNum = if (wrapper.has("episode")) wrapper.getInt("episode") else null
                             
-                            // Wrap in a deletion gesture container only if the tab is deletable (Favourites/Recents)
                             if (isDeletable) {
                                 TvFocusableHoldToDeleteBox(
                                     modifier = Modifier.wrapContentSize(),
                                     onTriggerDelete = {
-                                        if (activeCategoryIndex == 6) { // Favorites List removal (Instant sync)
+                                        if (activeCategoryIndex == 6) {
                                             viewModel.toggleFavorite(item, isCurrentlyViewingFavorites = true)
-                                        } else if (activeCategoryIndex == 7) { // Recently Watched removal
+                                        } else if (activeCategoryIndex == 7) {
                                             viewModel.removeFromRecentlyPlayed(index)
                                         }
                                     },
@@ -189,7 +205,6 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                                     )
                                 }
                             } else {
-                                // Default focusable box for non-deletable items
                                 TvFocusableBox(
                                     modifier = Modifier.wrapContentSize(),
                                     onClick = { viewModel.selectMediaItem(item) }
@@ -213,20 +228,61 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
 
         Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color(0xFF00BCD4)).padding(top = 10.dp))
 
-        // Dynamic footer tab row selector
-        LazyRow(modifier = Modifier.fillMaxWidth().height(70.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(70.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             itemsIndexed(categories) { index, pair ->
+                val isActive = activeCategoryIndex == index
                 TvFocusableBox(
                     modifier = Modifier.height(45.dp),
-                    onClick = { activeCategoryIndex = index; searchInput = ""; if (index > 0) pair.second() else viewModel.loadSearchHistory() },
-                    onFocus = { activeCategoryIndex = index; searchInput = ""; if (index > 0) pair.second() else viewModel.loadSearchHistory() }
+                    onClick = { 
+                        activeCategoryIndex = index
+                        searchInput = ""
+                        if (index > 0) pair.second() else viewModel.loadSearchHistory() 
+                    },
+                    onFocus = { 
+                        activeCategoryIndex = index
+                        searchInput = ""
+                        if (index > 0) pair.second() else viewModel.loadSearchHistory() 
+                    }
                 ) { isFocused ->
-                    Text(
-                        text = pair.first,
-                        color = Color.White,
-                        fontWeight = if (activeCategoryIndex == index || isFocused) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.padding(horizontal = 25.dp, vertical = 10.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                when {
+                                    isFocused -> Color.Transparent
+                                    isActive -> Color(0xFF2E2E35)
+                                    else -> Color(0xFF1F1F23)
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = pair.first,
+                            color = when {
+                                isFocused -> Color.Black
+                                isActive -> Color(0xFFFFB74D)
+                                else -> Color.LightGray
+                            },
+                            fontSize = 14.sp,
+                            fontWeight = if (isActive || isFocused) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                        )
+                        if (isActive && !isFocused) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth(0.5f) // Centered short accent line
+                                    .height(3.dp)
+                                    .background(Color(0xFFFFB74D), shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
+                            )
+                        }
+                    }
                 }
             }
         }

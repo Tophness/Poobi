@@ -15,6 +15,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -944,6 +945,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun performAutoPlayScrape(item: JSONObject, season: Int, episode: Int, mode: String) {
         lastScrapedSeason = season
         lastScrapedEpisode = episode

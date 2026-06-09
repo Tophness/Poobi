@@ -113,24 +113,8 @@ fun ModernTab(
         Modifier
     }
 
-    // Evaluate focusability strictly and synchronously to bypass recomposition latency
-    val finalCanFocus = remember(isFocused, currentIsSelected, keyTracker.lastKeyCode) {
-        val lastKey = keyTracker.lastKeyCode
-        val isStartup = lastKey == -1
-        val isDpadLeft = lastKey == KeyEvent.KEYCODE_DPAD_LEFT
-        val isDpadRight = lastKey == KeyEvent.KEYCODE_DPAD_RIGHT
-
-        val computedCanFocus = if (text == "Browser") {
-            currentIsSelected || isStartup || isDpadLeft
-        } else {
-            currentIsSelected || isStartup || isDpadRight
-        }
-        computedCanFocus || isFocused
-    }
-
     // Flawless focus trigger driven directly by the InteractionSource
     LaunchedEffect(isFocused) {
-        Log.d("PoobiFocus", "ModernTab '$text' isFocused state: $isFocused, finalCanFocus: $finalCanFocus, LastKey: ${keyTracker.lastKeyCode}")
         if (isFocused) {
             val keyCode = keyTracker.lastKeyCode
             val isUserInitiated = keyCode == KeyEvent.KEYCODE_DPAD_UP ||
@@ -138,7 +122,7 @@ fun ModernTab(
                                   keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
                                   keyCode == -1 // Startup bypass
 
-            Log.d("PoobiFocus", "LaunchedEffect focus trigger - ModernTab '$text' gained focus. [isUserInitiated: $isUserInitiated, LastKey: $keyCode]")
+            Log.d("PoobiFocus", "ModernTab '$text' gained focus. isUserInitiated=$isUserInitiated, LastKey=$keyCode")
 
             if (isUserInitiated) {
                 Log.d("PoobiFocus", "Tab switch ALLOWED for '$text'")
@@ -157,7 +141,19 @@ fun ModernTab(
             .background(backgroundColor)
             .then(borderModifier)
             .focusProperties {
-                this.canFocus = finalCanFocus
+                // Evaluated dynamically and synchronously by the focus engine to bypass Compose recomposition latency
+                val lastKey = keyTracker.lastKeyCode
+                val isStartup = lastKey == -1
+                val isDpadLeft = lastKey == KeyEvent.KEYCODE_DPAD_LEFT
+                val isDpadRight = lastKey == KeyEvent.KEYCODE_DPAD_RIGHT
+
+                val computedCanFocus = if (text == "Browser") {
+                    currentIsSelected || isStartup || isDpadLeft
+                } else {
+                    currentIsSelected || isStartup || isDpadRight
+                }
+
+                this.canFocus = computedCanFocus || isFocused
             }
             .clickable(
                 interactionSource = interactionSource,
@@ -257,8 +253,9 @@ fun MainApp(
                         .background(Color(0xFF1E1E24))
                         .padding(horizontal = 40.dp)
                         .focusProperties {
-                            enter = { direction ->
-                                Log.d("PoobiFocus", "Row focusProperties.enter triggered. Direction: $direction")
+                            onEnter = {
+                                val direction = requestedFocusDirection
+                                Log.d("PoobiFocus", "Row focusProperties.onEnter triggered. Direction: $direction")
                                 when (direction) {
                                     FocusDirection.Up -> {
                                         val target = if (currentTab == AppTab.Browser) browserTabFocusRequester else streamsTabFocusRequester
@@ -388,9 +385,16 @@ fun MainApp(
                     }
                     AppTab.Streams -> {
                         when {
-                            isScraping || scrapedSources != null -> ScrapeProgressScreen(streamsViewModel)
-                            selectedMedia != null -> MediaDetailsScreen(streamsViewModel)
-                            else -> StreamsDashboardScreen(streamsViewModel)
+                            // ONLY show ScrapeProgressScreen if we are actively scraping source links for a selected media item
+                            (isScraping && selectedMedia != null) || scrapedSources != null -> {
+                                ScrapeProgressScreen(streamsViewModel)
+                            }
+                            selectedMedia != null -> {
+                                MediaDetailsScreen(streamsViewModel)
+                            }
+                            else -> {
+                                StreamsDashboardScreen(streamsViewModel)
+                            }
                         }
                     }
                 }

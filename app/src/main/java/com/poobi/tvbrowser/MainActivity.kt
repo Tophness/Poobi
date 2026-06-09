@@ -12,6 +12,8 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.poobi.tvbrowser.ui.MainApp
@@ -25,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -100,17 +103,19 @@ class MainActivity : AppCompatActivity() {
 
         initPythonAsync()
 
-        lifecycleScope.launchWhenStarted {
-            streamsViewModel.itemEpisodes.collect { episodes ->
-                if (episodes != null) {
-                    val season = streamsViewModel.lastScrapedSeason
-                    val episode = streamsViewModel.lastScrapedEpisode
-                    if (season != null && episode != null) {
-                        for (i in 0 until episodes.length()) {
-                            val ep = episodes.getJSONObject(i)
-                            if (ep.optInt("episode_number") == episode + 1) {
-                                playerEngine.setNextEpisode(ep)
-                                break
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                streamsViewModel.itemEpisodes.collect { episodes ->
+                    if (episodes != null) {
+                        val season = streamsViewModel.lastScrapedSeason
+                        val episode = streamsViewModel.lastScrapedEpisode
+                        if (season != null && episode != null) {
+                            for (i in 0 until episodes.length()) {
+                                val ep = episodes.getJSONObject(i)
+                                if (ep.optInt("episode_number") == episode + 1) {
+                                    playerEngine.setNextEpisode(ep)
+                                    break
+                                }
                             }
                         }
                     }
@@ -118,46 +123,48 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        lifecycleScope.launchWhenStarted {
-            streamsViewModel.events.collect { event ->
-                when (event) {
-                    is StreamsEvent.PlayVideo -> {
-                        if (!event.isWebpage) {
-                            playerEngine.setNextEpisode(event.nextEpisode)
-                            playerEngine.launchVideo(
-                                videoUrl = event.url,
-                                title = event.title,
-                                headers = event.headers,
-                                subtitles = event.subtitles,
-                                item = event.item,
-                                season = event.season,
-                                episode = event.episode
-                            )
-                        } else {
-                            browserViewModel.loadUrlAndBrowse(this@MainActivity, event.url) 
-                            browserViewModel.currentAppTab.value = 0 
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                streamsViewModel.events.collect { event ->
+                    when (event) {
+                        is StreamsEvent.PlayVideo -> {
+                            if (!event.isWebpage) {
+                                playerEngine.setNextEpisode(event.nextEpisode)
+                                playerEngine.launchVideo(
+                                    videoUrl = event.url,
+                                    title = event.title,
+                                    headers = event.headers,
+                                    subtitles = event.subtitles,
+                                    item = event.item,
+                                    season = event.season,
+                                    episode = event.episode
+                                )
+                            } else {
+                                browserViewModel.loadUrlAndBrowse(this@MainActivity, event.url) 
+                                browserViewModel.currentAppTab.value = 0 
+                            }
+                            streamsViewModel.consumeEvent()
                         }
-                        streamsViewModel.consumeEvent()
-                    }
-                    is StreamsEvent.ShowToast -> {
-                        Toast.makeText(this@MainActivity, event.message, Toast.LENGTH_SHORT).show()
-                        streamsViewModel.consumeEvent()
-                    }
-                    is StreamsEvent.ShowSubtitlePicker -> {
-                        displaySubtitlePickerDialog(event.subs)
-                        streamsViewModel.consumeEvent()
-                    }
-                    is StreamsEvent.AskSubtitleWait -> {
-                        displaySubtitleWaitDialog(event.sourceDataJson)
-                        streamsViewModel.consumeEvent()
-                    }
-                    is StreamsEvent.AddSubtitlesBatch -> {
-                        if (playerEngine.isPlayerActive.value) {
-                            playerEngine.addSubtitlesBatch(event.subtitles)
+                        is StreamsEvent.ShowToast -> {
+                            Toast.makeText(this@MainActivity, event.message, Toast.LENGTH_SHORT).show()
+                            streamsViewModel.consumeEvent()
                         }
-                        streamsViewModel.consumeEvent()
+                        is StreamsEvent.ShowSubtitlePicker -> {
+                            displaySubtitlePickerDialog(event.subs)
+                            streamsViewModel.consumeEvent()
+                        }
+                        is StreamsEvent.AskSubtitleWait -> {
+                            displaySubtitleWaitDialog(event.sourceDataJson)
+                            streamsViewModel.consumeEvent()
+                        }
+                        is StreamsEvent.AddSubtitlesBatch -> {
+                            if (playerEngine.isPlayerActive.value) {
+                                playerEngine.addSubtitlesBatch(event.subtitles)
+                            }
+                            streamsViewModel.consumeEvent()
+                        }
+                        null -> {}
                     }
-                    null -> {}
                 }
             }
         }
