@@ -268,17 +268,26 @@ class UniversalScraper:
         self.status["message"] = f"Found {len(providers)} providers..."
 
         content = 'movie' if tvshowtitle is None else 'episode'
-        threads = []
-        # We pass aliases as a string representation of a list because many providers 
-        # use eval(data['aliases']) and would crash if the key is missing or not a string.
-        aliases_str = "[]" 
-        
+        compatible_providers = []
         for pack_name, name, provider in providers:
             if content == 'movie' and hasattr(provider, 'movie'):
+                compatible_providers.append((pack_name, name, provider))
+            elif content == 'episode' and hasattr(provider, 'tvshow'):
+                compatible_providers.append((pack_name, name, provider))
+
+        self.status["total"] = len(compatible_providers)
+        self.status["current"] = 0
+        self.status["message"] = f"Found {len(compatible_providers)} compatible providers..."
+
+        threads = []
+        aliases_str = "[]" 
+        
+        for pack_name, name, provider in compatible_providers:
+            if content == 'movie':
                 threads.append(threading.Thread(target=self.worker, args=(
                     provider, content, title, title, aliases_str, year, imdb, tmdb, None, None, None, None, name, pack_name
                 )))
-            elif content == 'episode' and hasattr(provider, 'tvshow'):
+            elif content == 'episode':
                 threads.append(threading.Thread(target=self.worker, args=(
                     provider, content, title, title, aliases_str, year, imdb, tmdb, tvdb, season, episode, premiered, name, pack_name
                 )))
@@ -660,6 +669,7 @@ def search(query):
                     "poster_path": item.get('poster_path'),
                     "backdrop_path": item.get('backdrop_path'),
                     "vote_average": item.get('vote_average'),
+                    "genre_ids": item.get('genre_ids', []),
                     "orig_title": title,
                     "year": year
                 })

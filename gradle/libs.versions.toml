@@ -14,6 +14,11 @@ playServicesAuth = "21.2.0"
 googleApiClientAndroid = "1.35.0"
 googleApiServicesDrive = "v3-rev20230822-2.0.0"
 googleHttpClientAndroid = "1.43.3"
+composeBom = "2024.06.00"
+androidxTvMaterial = "1.1.0"
+androidxTvFoundation = "1.0.0"
+androidxNavigation = "2.8.5"
+androidxLifecycle = "2.10.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -28,9 +33,20 @@ play-services-auth = { group = "com.google.android.gms", name = "play-services-a
 google-api-client-android = { group = "com.google.api-client", name = "google-api-client-android", version.ref = "googleApiClientAndroid" }
 google-api-services-drive = { group = "com.google.apis", name = "google-api-services-drive", version.ref = "googleApiServicesDrive" }
 google-http-client-android = { group = "com.google.http-client", name = "google-http-client-android", version.ref = "googleHttpClientAndroid" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activity" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "androidxTvMaterial" }
+androidx-tv-foundation = { group = "androidx.tv", name = "tv-foundation", version.ref = "androidxTvFoundation" }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "androidxNavigation" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 chaquopy = { id = "com.chaquo.python", version.ref = "chaquopy" }
-
+kotlin-compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

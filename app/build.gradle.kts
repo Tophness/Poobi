@@ -1,17 +1,21 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import com.android.build.api.dsl.ApplicationExtension
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
     alias(libs.plugins.chaquopy)
+    alias(libs.plugins.kotlin.compose.compiler)
 }
 
-android {
+extensions.configure<ApplicationExtension> {
     namespace = "com.poobi.tvbrowser"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.poobi.tvbrowser"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -19,21 +23,6 @@ android {
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-        }
-    }
-
-    chaquopy {
-        defaultConfig {
-            buildPython("C:/Users/Chris/AppData/Local/Python/pythoncore-3.11-64/python.exe")
-            version = "3.11"
-            extractPackages("sources", "modules", "resolveurl", "subtitles")
-            pip {
-                install("requests")
-                install("beautifulsoup4")
-                install("six")
-                install("simplejson")
-                install("trakt")
-            }
         }
     }
 
@@ -63,25 +52,62 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
-    kotlinOptions {
-        jvmTarget = "1.8"
+
+    buildFeatures {
+        compose = true
+    }
+}
+
+// Third-party plugin configuration block placed at root level
+chaquopy {
+    defaultConfig {
+        buildPython("C:/Users/Chris/AppData/Local/Python/pythoncore-3.11-64/python.exe")
+        version = "3.11"
+        extractPackages("sources", "modules", "resolveurl", "subtitles")
+        pip {
+            install("requests")
+            install("beautifulsoup4")
+            install("six")
+            install("simplejson")
+            install("trakt")
+        }
+    }
+}
+
+// Correct root-level configuration for Kotlin 2.0+ Compiler Options
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_1_8)
     }
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.activity)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.constraintlayout)
+
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.material3)
+    implementation(libs.androidx.tv.material)
+    implementation(libs.androidx.tv.foundation)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    debugImplementation(libs.androidx.ui.tooling)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    implementation("androidx.media3:media3-exoplayer:1.2.1")
-    implementation("androidx.media3:media3-exoplayer-hls:1.2.1")
-    implementation("androidx.media3:media3-ui:1.2.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
+    implementation("androidx.media3:media3-exoplayer:1.5.0")
+    implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
+    implementation("androidx.media3:media3-ui:1.5.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
 
     implementation(libs.play.services.auth)
     implementation(libs.google.api.client.android)
