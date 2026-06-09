@@ -13,6 +13,7 @@ import android.os.Message
 import android.util.Log
 import android.view.View
 import android.webkit.*
+import android.widget.Toast
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -35,7 +36,7 @@ import java.util.UUID
 
 sealed class BrowserDialogState {
     data class Download(val url: String, val fileName: String, val sizeMb: Float) : BrowserDialogState()
-    data class PopupBlocked(val transport: WebView.WebViewTransport) : BrowserDialogState()
+    data class PopupBlocked(val resultMsg: Message) : BrowserDialogState()
     data class StreamPicker(val streams: List<String>, val streamInfos: List<String>) : BrowserDialogState()
     data class AdvancedBlockElement(val data: JSONObject) : BrowserDialogState()
     data class SaveBlockRule(val url: String, val selector: String) : BrowserDialogState()
@@ -48,7 +49,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val appContext = application.applicationContext
     val prefs: SharedPreferences = appContext.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
 
-    // Using mutableStateListOf to guarantee instant Compose UI reactivity on Tab modifications
     private val _webViews = mutableStateListOf<WebView>()
     private val _webViewHosts = java.util.WeakHashMap<WebView, String>()
 
@@ -74,6 +74,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private val _currentDialog = MutableStateFlow<BrowserDialogState?>(null)
     val currentDialog: StateFlow<BrowserDialogState?> = _currentDialog.asStateFlow()
+
+    // Fullscreen HTML5 Website Player View state holding
+    private val _customView = MutableStateFlow<View?>(null)
+    val customView: StateFlow<View?> = _customView.asStateFlow()
+
+    private var pendingCustomView: View? = null
+    var customViewCallback: WebChromeClient.CustomViewCallback? = null
+    var onPlayNativeVideo: ((videoUrl: String, title: String?) -> Unit)? = null
 
     val currentWebView: WebView? get() = if (_currentTabIndex.value in _webViews.indices) _webViews[_currentTabIndex.value] else null
 
@@ -201,16 +209,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // Exposes current web tab collection
     fun getWebViewsList(): List<WebView> = _webViews
 
     // --- Tab Management ---
     fun createNewTab(context: Context, url: String? = null, switchTo: Boolean = true, title: String? = null): WebView {
-        
         val newWebView = WebView(context).apply {
-            // FIXED: Set background to TRANSPARENT to prevent uninitialized surface choosing flashes
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
-            
             layoutParams = android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -239,7 +243,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
         
         val oldWebView = currentWebView
-
         oldWebView?.visibility = View.GONE
         _currentTabIndex.value = index
         _isBrowsing.value = true
@@ -260,7 +263,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val wv = _webViews[index]
         
         if (isActiveTab) {
-            // Safely route focus and index transitions BEFORE destroying webview instance
             if (_webViews.size > 1) {
                 val newIndex = if (index == _webViews.size - 1) index - 1 else index
                 switchTab(newIndex)
@@ -280,18 +282,19 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // Explicitly requiring Context in loadUrlAndBrowse to prevent any Application fallback [1]!
-    fun loadUrlAndBrowse(context: Context, inputUrl: String) {
+    fun loadUrlAndBrowse(context: Context, inputUrl: String, newTab: Boolean = false) {
         var url = inputUrl.trim()
-        
         if (url.isNotEmpty()) {
             if (!url.startsWith("http://") && !url.startsWith("https://")) {
                 url = if (url.contains(".") && !url.contains(" ")) "https://$url" else "https://www.google.com/search?q=$url"
             }
-            if (_webViews.isEmpty()) {
-                Log.e("TVBrowser", "loadUrlAndBrowse error: Tab collection is empty. Calling Activity Context.")
-                createNewTab(context, url) // Passing the verified Activity Context [1]!
+            if (newTab || _webViews.isEmpty()) {
+                createNewTab(context, url)
             } else {
+                // If loading in place, guarantee Compose state is bound to a valid active WebView index
+                if (_currentTabIndex.value == -1) {
+                    _currentTabIndex.value = 0
+                }
                 currentWebView?.loadUrl(url)
                 _isBrowsing.value = true
                 currentWebView?.visibility = View.VISIBLE
@@ -350,7 +353,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // --- Context Menu Trigger (Correct tip coordinates) ---
+    // --- Context Menu Trigger ---
     fun triggerContextMenuAtCursor(cursorX: Float, cursorY: Float) {
         val wv = currentWebView ?: return
         val density = appContext.resources.displayMetrics.density
@@ -412,18 +415,21 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         wv.webChromeClient = object : WebChromeClient() {
             override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {
                 if (silentPopupBlock.value) return true
-                val transport = resultMsg?.obj as? WebView.WebViewTransport
-                if (transport != null) {
-                    _currentDialog.value = BrowserDialogState.PopupBlocked(transport)
+                if (resultMsg != null) {
+                    _currentDialog.value = BrowserDialogState.PopupBlocked(resultMsg)
                 }
                 return true
             }
 
             override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                customViewCallback = callback
+                pendingCustomView = view
                 attemptVideoExtraction(view, callback)
             }
 
-            override fun onHideCustomView() {}
+            override fun onHideCustomView() {
+                hideCustomViewInternal()
+            }
 
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 super.onReceivedTitle(view, title)
@@ -754,7 +760,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // --- Video Interception ---
+    // --- Dynamic Fullscreen extraction ---
     private fun attemptVideoExtraction(view: View?, callback: WebChromeClient.CustomViewCallback?) {
         if (isExtractionActive) return
         val wv = currentWebView ?: return
@@ -764,21 +770,28 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             val jsUrl = result?.replace("\"", "") ?: ""
             val candidates = mutableListOf<String>()
 
-            if (jsUrl.startsWith("http") && !jsUrl.contains("blob:")) candidates.add(jsUrl)
+            if (jsUrl.startsWith("http") && !jsUrl.contains("blob:")) {
+                candidates.add(jsUrl)
+            }
             candidates.addAll(interceptedMediaUrls.keys)
 
             val finalCandidates = candidates.distinct()
 
             if (finalCandidates.isNotEmpty()) {
-                if (extractVideoPref.value == 1 && finalCandidates.size == 1) {
-                    // Handled externally by player trigger in Activity
-                } else if (extractVideoPref.value == 2) {
+                val pref = extractVideoPref.value
+                if (pref == 1 && finalCandidates.size == 1) {
+                    playVideoInNativePlayer(finalCandidates[0], wv.title)
+                } else if (pref == 2) {
+                    _customView.value = view
                     isExtractionActive = false
                 } else {
                     parseHlsAndShowPicker(finalCandidates)
                 }
             } else {
                 isExtractionActive = false
+                if (view != null) {
+                    _customView.value = view
+                }
             }
         }
     }
@@ -797,19 +810,62 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         val content = connection.inputStream.bufferedReader().use { it.readText() }
                         
                         if (content.contains("#EXT-X-STREAM-INF")) {
-                            streamInfos.add("Auto (Adaptive Quality)")
-                            streamUrls.add(url)
+                            if (!streamUrls.contains(url)) {
+                                streamInfos.add("Auto (Adaptive Quality)")
+                                streamUrls.add(url)
+                            }
+
+                            val lines = content.lines()
+                            for (i in lines.indices) {
+                                val line = lines[i]
+                                if (line.startsWith("#EXT-X-STREAM-INF")) {
+                                    var info = "HLS Stream"
+                                    val resMatch = Regex("RESOLUTION=(\\d+x\\d+)").find(line)
+                                    if (resMatch != null) info += " (${resMatch.groupValues[1]})"
+                                    val nameMatch = Regex("NAME=\"([^\"]+)\"").find(line)
+                                    if (nameMatch != null) info = "${nameMatch.groupValues[1]} ($info)"
+
+                                    for (j in i + 1 until lines.size) {
+                                        val nextLine = lines[j].trim()
+                                        if (nextLine.isNotEmpty() && !nextLine.startsWith("#")) {
+                                            var fullUrl = nextLine
+                                            if (!fullUrl.startsWith("http")) {
+                                                try {
+                                                    fullUrl = java.net.URL(java.net.URL(url), nextLine).toString()
+                                                } catch (e: Exception) {
+                                                    Log.e("TVBrowser", "URL Resolution failed", e)
+                                                }
+                                            }
+
+                                            if (!streamUrls.contains(fullUrl)) {
+                                                streamInfos.add(info)
+                                                streamUrls.add(fullUrl)
+                                                if (!interceptedMediaUrls.containsKey(fullUrl)) {
+                                                    interceptedMediaUrls[fullUrl] = headers
+                                                }
+                                            }
+                                            break
+                                        }
+                                    }
+                                }
+                            }
                         } else {
-                            streamInfos.add("HLS Playlist (Single)")
-                            streamUrls.add(url)
+                            if (!streamUrls.contains(url)) {
+                                streamInfos.add("HLS Playlist (Single)")
+                                streamUrls.add(url)
+                            }
                         }
                     } catch (e: Exception) {
-                        streamInfos.add("HLS Playlist (Unreachable)")
-                        streamUrls.add(url)
+                        if (!streamUrls.contains(url)) {
+                            streamInfos.add("HLS Playlist (Unreachable)")
+                            streamUrls.add(url)
+                        }
                     }
                 } else {
-                    streamInfos.add(if (url.endsWith(".mp4")) "MP4 Video" else "Stream")
-                    streamUrls.add(url)
+                    if (!streamUrls.contains(url)) {
+                        streamInfos.add(if (url.endsWith(".mp4")) "MP4 Video" else "Stream")
+                        streamUrls.add(url)
+                    }
                 }
             }
 
@@ -823,7 +879,170 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // --- Helper Functions ---
+    // --- Helpers / Dialog integrations ---
+    fun playVideoInNativePlayer(url: String, title: String?) {
+        currentWebView?.apply {
+            onPause()
+            pauseTimers()
+            evaluateJavascript("""
+                (function() {
+                    var videos = document.getElementsByTagName('video');
+                    for (var i = 0; i < videos.length; i++) {
+                        videos[i].pause();
+                        videos[i].src = "";
+                        videos[i].load();
+                    }
+                })();
+            """.trimIndent(), null)
+        }
+        onPlayNativeVideo?.invoke(url, title)
+    }
+
+    fun dismissStreamPicker() {
+        isExtractionActive = false
+        _customView.value = pendingCustomView
+        dismissDialog()
+    }
+
+    fun hideCustomViewInternal() {
+        _customView.value = null
+        customViewCallback?.onCustomViewHidden()
+        customViewCallback = null
+        isExtractionActive = false
+        currentWebView?.apply {
+            onResume()
+            resumeTimers()
+        }
+    }
+
+    fun allowPopup(context: Context, resultMsg: Message, rememberDecision: Boolean) {
+        if (rememberDecision) {
+            prefs.edit().putBoolean("silent_popup_block", true).apply()
+            silentPopupBlock.value = true
+        }
+        val transport = resultMsg.obj as? WebView.WebViewTransport ?: return
+        val newWv = createNewTab(context)
+        transport.webView = newWv
+        resultMsg.sendToTarget()
+        dismissDialog()
+    }
+
+    fun denyPopup(rememberDecision: Boolean) {
+        if (rememberDecision) {
+            prefs.edit().putBoolean("silent_popup_block", true).apply()
+            silentPopupBlock.value = true
+        }
+        dismissDialog()
+    }
+
+    fun startDownload(context: Context, url: String, fileName: String) {
+        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+        try {
+            val request = android.app.DownloadManager.Request(Uri.parse(url))
+                .setTitle(fileName)
+                .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, fileName)
+
+            downloadManager.enqueue(request)
+            Toast.makeText(context, "Starting download: $fileName", Toast.LENGTH_SHORT).show()
+
+            saveToList("downloads", url, fileName, "")
+        } catch (e: Exception) {
+            Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun highlightElement(selector: String) {
+        currentWebView?.evaluateJavascript("window.blockerHelper.setHighlight('$selector')", null)
+    }
+
+    fun clearElementHighlight() {
+        currentWebView?.evaluateJavascript("window.blockerHelper.clearHighlight()", null)
+    }
+
+    fun selectNextElementCandidate(onResult: (JSONObject) -> Unit) {
+        currentWebView?.evaluateJavascript("window.blockerHelper.nextCandidate()") { result ->
+            if (result != null && result != "null") {
+                try {
+                    onResult(JSONObject(result))
+                } catch (e: Exception) {}
+            }
+        }
+    }
+
+    fun selectParentElementCandidate(onResult: (JSONObject) -> Unit) {
+        currentWebView?.evaluateJavascript("window.blockerHelper.selectParent()") { result ->
+            if (result != null && result != "null") {
+                try {
+                    onResult(JSONObject(result))
+                } catch (e: Exception) {}
+            }
+        }
+    }
+
+    fun showSaveBlockRuleDialog(selector: String) {
+        val url = currentWebView?.url ?: ""
+        _currentDialog.value = BrowserDialogState.SaveBlockRule(url, selector)
+    }
+
+    fun saveBlockedElementRule(name: String, url: String, selector: String) {
+        val host = Uri.parse(url).host ?: "*"
+        val blockedJson = prefs.getString("blocked_elements", "[]") ?: "[]"
+        val array = JSONArray(blockedJson)
+
+        var existingIndex = -1
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            if (obj.getString("name") == name) {
+                existingIndex = i; break
+            }
+        }
+
+        if (existingIndex != -1) {
+            val obj = array.getJSONObject(existingIndex)
+            val selectors = obj.getJSONArray("selectors")
+            var found = false
+            for (j in 0 until selectors.length()) {
+                if (selectors.getString(j) == selector) { found = true; break }
+            }
+            if (!found) selectors.put(selector)
+        } else {
+            val newRule = JSONObject().apply {
+                put("id", UUID.randomUUID().toString())
+                put("name", name)
+                put("enabled", true)
+                put("urlPatterns", JSONArray().put("*$host*"))
+                put("selectors", JSONArray().put(selector))
+            }
+            array.put(newRule)
+        }
+
+        prefs.edit().putString("blocked_elements", array.toString()).apply()
+        refreshLists()
+        dismissDialog()
+    }
+
+    fun saveAutoplayProfile(name: String, url: String, selectors: List<String>) {
+        val host = Uri.parse(url).host ?: "*"
+        val selectorsJson = JSONArray(selectors)
+        val script = generateSelectorScript(selectorsJson)
+
+        val profilesJson = prefs.getString("autoplay_profiles", "[]") ?: "[]"
+        val array = JSONArray(profilesJson)
+        array.put(JSONObject().apply {
+            put("id", UUID.randomUUID().toString())
+            put("name", name)
+            put("enabled", true)
+            put("urlPatterns", JSONArray().put("*$host*"))
+            put("script", script)
+            put("use_script", false)
+            put("selectors", selectorsJson)
+        })
+        prefs.edit().putString("autoplay_profiles", array.toString()).apply()
+        dismissDialog()
+    }
+
+    // --- Spatial Navigation API ---
     fun initDpadNav() {
         val script = """
             (function() {
@@ -843,7 +1062,39 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                             return Array.from(document.querySelectorAll('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"]), [onclick], [role="button"]')).filter(el => el.getBoundingClientRect().width > 0);
                         },
                         move: function(direction) {
-                            // Exact spatial navigation logic
+                            const elements = this.getFocusableElements();
+                            if (elements.length === 0) return;
+                            
+                            let currentRect = this.focusedEl ? this.focusedEl.getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0 };
+                            let bestCandidate = null;
+                            let minDistance = Infinity;
+                            
+                            const curX = (currentRect.left + currentRect.right) / 2;
+                            const curY = (currentRect.top + currentRect.bottom) / 2;
+
+                            elements.forEach(el => {
+                                if (el === this.focusedEl) return;
+                                const rect = el.getBoundingClientRect();
+                                const tgtX = (rect.left + rect.right) / 2;
+                                const tgtY = (rect.top + rect.bottom) / 2;
+                                
+                                let isCandidate = false;
+                                if (direction === 'up' && rect.bottom <= currentRect.top + 5) isCandidate = true;
+                                else if (direction === 'down' && rect.top >= currentRect.bottom - 5) isCandidate = true;
+                                else if (direction === 'left' && rect.right <= currentRect.left + 5) isCandidate = true;
+                                else if (direction === 'right' && rect.left >= currentRect.right - 5) isCandidate = true;
+                                
+                                if (isCandidate) {
+                                    const distance = Math.sqrt(Math.pow(curX - tgtX, 2) + Math.pow(curY - tgtY, 2));
+                                    if (distance < minDistance) {
+                                        minDistance = distance;
+                                        bestCandidate = el;
+                                    }
+                                }
+                            });
+                            
+                            if (bestCandidate) this.highlight(bestCandidate);
+                            else if (!this.focusedEl && elements.length > 0) this.highlight(elements[0]);
                         },
                         clickFocused: function() { if (this.focusedEl) this.focusedEl.click(); }
                     };
@@ -921,7 +1172,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             wv.draw(canvas)
             val thumb = Bitmap.createScaledBitmap(bitmap, 320, 180, true)
             val filename = "${url.hashCode()}.png"
-            val file = File(appContext.filesDir, filename) // Fix context receiver resolution mismatch!
+            val file = File(appContext.filesDir, filename)
             FileOutputStream(file).use { thumb.compress(Bitmap.CompressFormat.PNG, 80, it) }
             bitmap.recycle()
             saveToList("history", url, title, filename)

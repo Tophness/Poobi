@@ -40,7 +40,6 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
     val context = LocalContext.current
 
     var urlInput by remember { mutableStateOf("") }
-    // Explicit type specification <HomeTab> to resolve compiler ambiguity
     var activeTab by remember { mutableStateOf<HomeTab>(HomeTab.Tabs) }
 
     val historyArray by viewModel.historyList.collectAsState()
@@ -78,7 +77,6 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                         
                         if (isActionDown) {
                             when (nativeEvent.keyCode) {
-                                // FIXED: Intercept DOWN key to force focus shift down to "Open Tabs" instead of History
                                 KeyEvent.KEYCODE_DPAD_DOWN -> {
                                     openTabsFocusRequester.requestFocus()
                                     true
@@ -92,7 +90,7 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
             TvFocusableBox(
                 modifier = Modifier.size(60.dp).padding(start = 10.dp),
                 onClick = { 
-                    viewModel.loadUrlAndBrowse(context, urlInput) // Pass Activity Context [1]!
+                    viewModel.loadUrlAndBrowse(context, urlInput)
                 }
             ) { isFocused ->
                 Icon(
@@ -138,7 +136,6 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                         if (savedTabsArray.length() > 0) {
                             Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.End) {
                                 Button(
-                                    // FIXED: Passing context parameter explicitly into restoreAllTabs call [1]!
                                     onClick = { viewModel.restoreAllTabs(context) },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
                                 ) {
@@ -160,7 +157,7 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                         viewModel.prefs.edit().putString("saved_tabs", array.toString()).apply()
                                         viewModel.refreshLists()
                                     },
-                                    onClick = { viewModel.loadUrlAndBrowse(context, itemUrl) } // Pass Activity Context [1]!
+                                    onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true) }
                                 ) { isFocused, progress ->
                                     TabItemCard(
                                         title = item.optString("title", "Saved Tab"),
@@ -206,7 +203,7 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                     TvFocusableHoldToDeleteBox(
                                         modifier = Modifier.width(200.dp).height(160.dp),
                                         onTriggerDelete = { viewModel.removeFromList("favorites", itemUrl) },
-                                        onClick = { viewModel.loadUrlAndBrowse(context, itemUrl) } // Pass Activity Context [1]!
+                                        onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true) }
                                     ) { isFocused, progress ->
                                         BrowserCardItem(
                                             item = item,
@@ -242,7 +239,7 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                 TvFocusableHoldToDeleteBox(
                                     modifier = Modifier.width(200.dp).height(160.dp),
                                     onTriggerDelete = { viewModel.removeFromList("history", itemUrl) },
-                                    onClick = { viewModel.loadUrlAndBrowse(context, itemUrl) } // Pass Activity Context [1]!
+                                    onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true) }
                                 ) { isFocused, progress ->
                                     BrowserCardItem(
                                         item = item,

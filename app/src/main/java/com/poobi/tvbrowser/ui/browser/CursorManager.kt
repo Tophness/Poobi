@@ -57,7 +57,6 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
     private val LONG_PRESS_THRESHOLD = 600L
     var isLongPressing = false
 
-    // Single Handler instance to prevent garbage collection and thread sync bugs!
     private val handler = Handler(Looper.getMainLooper())
 
     private val frameCallback = object : Choreographer.FrameCallback {
@@ -77,7 +76,7 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
     }
 
     fun wakeCursor() {
-        if (viewModel.isBrowsing.value && !viewModel.topBarVisible.value) {
+        if (viewModel.isBrowsing.value && !viewModel.topBarVisible.value && viewModel.customView.value == null) {
             if (viewModel.navigationModePref.value == 1 || isSelectionMode) {
                 _cursorVisible.value = false
                 viewModel.initDpadNav()
@@ -91,7 +90,7 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
     }
 
     fun handleMovementKey(event: KeyEvent): Boolean {
-        if (!viewModel.isBrowsing.value || viewModel.topBarVisible.value || viewModel.currentDialog.value != null) {
+        if (!viewModel.isBrowsing.value || viewModel.topBarVisible.value || viewModel.currentDialog.value != null || viewModel.customView.value != null) {
             if (event.action == KeyEvent.ACTION_UP) {
                 keyStates[event.keyCode] = false
             }
@@ -134,7 +133,7 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
     }
 
     private fun updateMovement(): Boolean {
-        if (!viewModel.isBrowsing.value || viewModel.topBarVisible.value || viewModel.currentDialog.value != null || isLongPressing) {
+        if (!viewModel.isBrowsing.value || viewModel.topBarVisible.value || viewModel.currentDialog.value != null || viewModel.customView.value != null || isLongPressing) {
             cursorVelocityX = 0f
             cursorVelocityY = 0f
             scrollVelocityY = 0f
@@ -146,7 +145,6 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
             lastMovementTime = currentTime
             return true
         }
-        // Frame delta-time calculation against a 60Hz/16.6ms standard
         val dt = (currentTime - lastMovementTime) / 16.6f
         lastMovementTime = currentTime
 
@@ -210,7 +208,8 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
                 _cursorVisible.value = false
             }
 
-            if (_cursorY.value >= maxX - 1f && dy > 0) { 
+            // Fixed bounds check: vertical offset evaluated against maxY vertical limit!
+            if (_cursorY.value >= maxY - 1f && dy > 0) { 
                 wv?.scrollBy(0, 15)
             } else if (_cursorY.value <= 0f && (wv?.scrollY ?: 0) > 0 && dy < 0) {
                 wv?.scrollBy(0, -15)
@@ -289,7 +288,6 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
     }
 }
 
-// --- Smart Focus Modifier for TV-oriented InputBoxes ---
 fun Modifier.smartDpadFocus(
     context: android.content.Context,
     onImeAction: () -> Unit

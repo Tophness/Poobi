@@ -9,6 +9,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -21,12 +26,15 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.PlayerView
 import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.SettingsActivity
+import com.poobi.tvbrowser.MainActivity
 import com.poobi.tvbrowser.ui.browser.BrowserDialogState
 import com.poobi.tvbrowser.ui.browser.BrowserHomeScreen
 import com.poobi.tvbrowser.ui.browser.BrowserTopBar
@@ -36,10 +44,14 @@ import com.poobi.tvbrowser.ui.browser.CursorManager
 import com.poobi.tvbrowser.ui.player.PlayerEngine
 import com.poobi.tvbrowser.ui.player.UpNextOverlay
 import com.poobi.tvbrowser.ui.shared.TvFocusableBox
+import com.poobi.tvbrowser.ui.shared.TvInputField
 import com.poobi.tvbrowser.ui.streams.MediaDetailsScreen
 import com.poobi.tvbrowser.ui.streams.ScrapeProgressScreen
 import com.poobi.tvbrowser.ui.streams.StreamsDashboardScreen
 import com.poobi.tvbrowser.ui.streams.StreamsViewModel
+import org.json.JSONArray
+import org.json.JSONObject
+import android.net.Uri
 
 enum class AppTab { Browser, Streams }
 
@@ -63,6 +75,8 @@ fun MainApp(
     val isScraping by streamsViewModel.isScraping.collectAsState()
     val scrapedSources by streamsViewModel.scrapedSources.collectAsState()
     val selectedMedia by streamsViewModel.selectedItem.collectAsState()
+
+    val customView by browserViewModel.customView.collectAsState()
 
     val homeIconFocusRequester = remember { FocusRequester() }
 
@@ -158,7 +172,6 @@ fun MainApp(
                                     )
                                 }
                                 
-                                // Restored the highly dynamic, single-active AndroidView swap mechanics with LOGS!
                                 if (activeIndex in browserViewModel.getWebViewsList().indices) {
                                     key(activeIndex) {
                                         AndroidView(
@@ -216,13 +229,37 @@ fun MainApp(
         val cy by cursorManager.cursorY.collectAsState()
         val handStyle by cursorManager.cursorHandStyle.collectAsState()
 
-        if (cursorVisible && isBrowsing && !isPlayerActive && currentTab == AppTab.Browser) {
+        if (cursorVisible && isBrowsing && !isPlayerActive && customView == null && currentTab == AppTab.Browser) {
             Image(
                 painter = painterResource(id = if (handStyle) R.drawable.ic_hand else R.drawable.ic_cursor),
                 contentDescription = null,
                 modifier = Modifier.size(32.dp).offset { IntOffset(cx.toInt(), cy.toInt()) },
                 colorFilter = ColorFilter.tint(Color(0xFF40C4FF))
             )
+        }
+
+        // website custom fullscreen HTML5 video container
+        if (customView != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        customView!!.apply {
+                            val prevParent = parent as? ViewGroup
+                            prevParent?.removeView(this)
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        }
+                    },
+                    update = { view -> },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
         if (isPlayerActive) {
@@ -235,7 +272,6 @@ fun MainApp(
                             setShowSubtitleButton(true) // Display the subtitle track selector control
                             playerEngine.playerView = this
                             
-                            // Explicit type specification resolves the SAM conversion ambiguous overload candidates
                             setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
                                 if (visibility == android.view.View.VISIBLE) {
                                     post {
@@ -289,16 +325,351 @@ fun MainApp(
         // Floating Context Menu Dropdown Overlay positioned at the EXACT cursor tip
         if (dialogState is BrowserDialogState.SaveBlockRule) {
             val rule = dialogState as BrowserDialogState.SaveBlockRule
-            ContextMenuOverlay(
-                cursorX = cx,
-                cursorY = cy,
-                url = rule.url,
-                onOpenInNewTab = { 
-                    browserViewModel.createNewTab(context, rule.url) 
+            if (rule.selector == "context_menu_trigger") {
+                ContextMenuOverlay(
+                    cursorX = cx,
+                    cursorY = cy,
+                    url = rule.url,
+                    onOpenInNewTab = { 
+                        browserViewModel.createNewTab(context, rule.url) 
+                    },
+                    onRefresh = { browserViewModel.currentWebView?.reload() },
+                    onBlockElement = { browserViewModel.blockElementAtCursor(cx, cy) },
+                    onDismiss = { browserViewModel.dismissDialog() }
+                )
+            } else {
+                var ruleName by remember { mutableStateOf(Uri.parse(rule.url).host ?: "Custom Rule") }
+                AlertDialog(
+                    onDismissRequest = { browserViewModel.dismissDialog() },
+                    title = { Text("Save Blocked Element", color = Color.White) },
+                    containerColor = Color(0xFF222225),
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Rule name for this site:", color = Color.LightGray)
+                            TvInputField(
+                                value = ruleName,
+                                onValueChange = { ruleName = it },
+                                placeholder = "e.g. Blocker",
+                                onAction = {
+                                    browserViewModel.saveBlockedElementRule(ruleName, rule.url, rule.selector)
+                                }
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                browserViewModel.saveBlockedElementRule(ruleName, rule.url, rule.selector)
+                            }
+                        ) {
+                            Text("Save", color = Color.White)
+                        }
+                    },
+                    dismissButton = {
+                        Button(
+                            onClick = { browserViewModel.dismissDialog() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                        ) {
+                            Text("Cancel", color = Color.White)
+                        }
+                    }
+                )
+            }
+        }
+
+        // StreamPicker Dialog
+        if (dialogState is BrowserDialogState.StreamPicker) {
+            val picker = dialogState as BrowserDialogState.StreamPicker
+            val firstItemFocusRequester = remember { FocusRequester() }
+
+            // Instantly request focus on the first stream item when the dialog opens
+            LaunchedEffect(picker) {
+                try {
+                    firstItemFocusRequester.requestFocus()
+                } catch (_: Exception) {}
+            }
+
+            AlertDialog(
+                onDismissRequest = { browserViewModel.dismissStreamPicker() },
+                title = { Text("Select Video Stream", color = Color.White) },
+                containerColor = Color(0xFF222225),
+                text = {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(picker.streamInfos) { idx, info ->
+                            TvFocusableBox(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .let { if (idx == 0) it.focusRequester(firstItemFocusRequester) else it },
+                                onClick = {
+                                    val selectedStream = picker.streams[idx]
+                                    browserViewModel.playVideoInNativePlayer(selectedStream, browserViewModel.currentWebView?.title)
+                                    browserViewModel.dismissDialog()
+                                }
+                            ) { isFocused ->
+                                Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
+                                    Text(info, color = Color.White)
+                                }
+                            }
+                        }
+                    }
                 },
-                onRefresh = { browserViewModel.currentWebView?.reload() },
-                onBlockElement = { browserViewModel.blockElementAtCursor(cx, cy) },
-                onDismiss = { browserViewModel.dismissDialog() }
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            browserViewModel.dismissStreamPicker()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                    ) {
+                        Text("Use Website Player", color = Color.White)
+                    }
+                }
+            )
+        }
+
+        // Download Confirmation Dialog
+        if (dialogState is BrowserDialogState.Download) {
+            val download = dialogState as BrowserDialogState.Download
+            AlertDialog(
+                onDismissRequest = { browserViewModel.dismissDialog() },
+                title = { Text("Download File?", color = Color.White) },
+                containerColor = Color(0xFF222225),
+                text = {
+                    Text(
+                        text = "Do you want to download ${download.fileName}?\nSize: %.2f MB".format(download.sizeMb),
+                        color = Color.LightGray
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            browserViewModel.startDownload(context, download.url, download.fileName)
+                            browserViewModel.dismissDialog()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    ) {
+                        Text("Download", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = { browserViewModel.dismissDialog() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                    ) {
+                        Text("Cancel", color = Color.White)
+                    }
+                }
+            )
+        }
+
+        // PopupBlocked Dialog
+        if (dialogState is BrowserDialogState.PopupBlocked) {
+            val popup = dialogState as BrowserDialogState.PopupBlocked
+            var rememberDecision by remember { mutableStateOf(false) }
+
+            AlertDialog(
+                onDismissRequest = { browserViewModel.dismissDialog() },
+                title = { Text("Popup Blocked", color = Color.White) },
+                containerColor = Color(0xFF222225),
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Do you want to allow a popup from this site?", color = Color.LightGray)
+                        TvFocusableBox(
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            onClick = { rememberDecision = !rememberDecision }
+                        ) { isFocused ->
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.Checkbox(
+                                    checked = rememberDecision,
+                                    onCheckedChange = { rememberDecision = it },
+                                    colors = androidx.compose.material3.CheckboxDefaults.colors(
+                                        checkedColor = Color(0xFF00BCD4),
+                                        uncheckedColor = Color.Gray
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Never ask again (Silent Block)",
+                                    color = Color.White,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            browserViewModel.allowPopup(context, popup.resultMsg, rememberDecision)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    ) {
+                        Text("Allow", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = {
+                            browserViewModel.denyPopup(rememberDecision)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                    ) {
+                        Text("Block", color = Color.White)
+                    }
+                }
+            )
+        }
+
+        // AdvancedBlockElement Dialog
+        if (dialogState is BrowserDialogState.AdvancedBlockElement) {
+            val block = dialogState as BrowserDialogState.AdvancedBlockElement
+            var blockData by remember { mutableStateOf(block.data) }
+            val options = remember(blockData) {
+                val opts = blockData.optJSONArray("options") ?: JSONArray()
+                (0 until opts.length()).map { opts.getJSONObject(it) }
+            }
+            val tagName = remember(blockData) { blockData.optString("tagName", "unknown") }
+            val candCount = remember(blockData) { blockData.optInt("candidatesCount", 1) }
+            val candIndex = remember(blockData) { blockData.optInt("candidateIndex", 0) }
+
+            AlertDialog(
+                onDismissRequest = {
+                    browserViewModel.clearElementHighlight()
+                    browserViewModel.dismissDialog()
+                },
+                title = { Text("Block Element ($tagName) [${candIndex + 1}/$candCount]", color = Color.White) },
+                containerColor = Color(0xFF222225),
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Select selector to block:", color = Color.Gray, fontSize = 12.sp)
+                        LazyColumn(modifier = Modifier.height(180.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            itemsIndexed(options) { idx, opt ->
+                                val type = opt.optString("type")
+                                val value = opt.optString("value")
+                                TvFocusableBox(
+                                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                                    onFocus = {
+                                        browserViewModel.highlightElement(value)
+                                    },
+                                    onClick = {
+                                        browserViewModel.clearElementHighlight()
+                                        browserViewModel.dismissDialog()
+                                        browserViewModel.showSaveBlockRuleDialog(value)
+                                    }
+                                ) { isFocused ->
+                                    Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
+                                        Text("$type: $value", color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (candCount > 1) {
+                                Button(
+                                    onClick = {
+                                        browserViewModel.selectNextElementCandidate { nextData ->
+                                            blockData = nextData
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFC107)),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("↓ Select Underneath", color = Color.Black, fontSize = 11.sp)
+                                }
+                            }
+                            Button(
+                                onClick = {
+                                    browserViewModel.selectParentElementCandidate { nextData ->
+                                        blockData = nextData
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("↑ Select Parent", color = Color.White, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            browserViewModel.clearElementHighlight()
+                            browserViewModel.dismissDialog()
+                            (context as? MainActivity)?.startDpadSelectionMode()
+                        }
+                    ) {
+                        Text("D-pad Navigate & Select", color = Color.White)
+                    }
+                }
+            )
+        }
+
+        // SaveAutoplayProfile Dialog
+        if (dialogState is BrowserDialogState.SaveAutoplayProfile) {
+            val profile = dialogState as BrowserDialogState.SaveAutoplayProfile
+            var profileName by remember { mutableStateOf(Uri.parse(profile.url).host ?: "Custom Autoplay") }
+            AlertDialog(
+                onDismissRequest = { browserViewModel.dismissDialog() },
+                title = { Text("Save Autoplay Profile", color = Color.White) },
+                containerColor = Color(0xFF222225),
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Enter a name for this profile:", color = Color.LightGray)
+                        TvInputField(
+                            value = profileName,
+                            onValueChange = { profileName = it },
+                            placeholder = "e.g. My Autoplay",
+                            onAction = {
+                                browserViewModel.saveAutoplayProfile(profileName, profile.url, profile.selectors)
+                            }
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            browserViewModel.saveAutoplayProfile(profileName, profile.url, profile.selectors)
+                        }
+                    ) {
+                        Text("Save", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = { browserViewModel.dismissDialog() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                    ) {
+                        Text("Discard", color = Color.White)
+                    }
+                }
+            )
+        }
+
+        // Error Dialog
+        if (dialogState is BrowserDialogState.Error) {
+            val error = dialogState as BrowserDialogState.Error
+            AlertDialog(
+                onDismissRequest = { browserViewModel.dismissDialog() },
+                title = { Text("Error", color = Color.White) },
+                containerColor = Color(0xFF222225),
+                text = {
+                    Text(error.message, color = Color.LightGray)
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { browserViewModel.dismissDialog() }
+                    ) {
+                        Text("OK", color = Color.White)
+                    }
+                }
             )
         }
     }

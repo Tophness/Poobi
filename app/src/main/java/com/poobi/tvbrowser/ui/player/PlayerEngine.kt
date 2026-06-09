@@ -53,7 +53,6 @@ class PlayerEngine(
     var playerView: PlayerView? = null
     private var hasReachedReady = false
     
-    // Safety flag to prevent infinite loops when adding subtitles dynamically
     private var hasTriggeredPlaybackStarted = false
 
     private var lastSeekTime = 0L
@@ -122,7 +121,7 @@ class PlayerEngine(
         lastScrapedEpisode = episode
         isUpNextDismissed = false
         hasReachedReady = false
-        hasTriggeredPlaybackStarted = false // Reset play loop flag
+        hasTriggeredPlaybackStarted = false
         _showUpNext.value = false
         _isPlayerActive.value = true
         isReleasing = false
@@ -182,7 +181,7 @@ class PlayerEngine(
                 else -> MimeTypes.APPLICATION_SUBRIP
             }
             val label = infoMap["label"] ?: getLanguageInfo(subUrl).second
-            val lang = if (label.isEmpty()) (infoMap["lang"] ?: getLanguageInfo(subUrl).first) else null
+            val lang = if (label.isNotEmpty() && label != "Unknown") null else (infoMap["lang"] ?: getLanguageInfo(subUrl).first)
 
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
                 .setMimeType(mimeType)
@@ -320,13 +319,14 @@ class PlayerEngine(
         val langMap = mapOf(
             "en" to "English", "es" to "Spanish", "fr" to "French", "de" to "German",
             "it" to "Italian", "pt" to "Portuguese", "ru" to "Russian", "zh" to "Chinese",
-            "ja" to "Japanese", "ko" to "Korean", "ar" to "Arabic", "hi" to "Hindi"
+            "ja" to "Japanese", "ko" to "Korean", "ar" to "Arabic", "hi" to "Hindi",
+            "tr" to "Turkish", "vi" to "Vietnamese", "th" to "Thai", "id" to "Indonesian"
         )
         var code = "und"
         var label = "Unknown"
 
         for ((c, name) in langMap) {
-            if (fileName.contains(name.lowercase()) || fileName.contains("-$c.") || fileName.contains("_$c.")) {
+            if (fileName.contains(name.lowercase()) || fileName.contains("-$c.") || fileName.contains("_$c.") || fileName.contains(".$c.") || fileName.startsWith("$c.")) {
                 code = c
                 label = name
                 if (fileName.contains("sdh")) label += " (SDH)"

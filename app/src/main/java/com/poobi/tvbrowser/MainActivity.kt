@@ -79,9 +79,24 @@ class MainActivity : AppCompatActivity() {
                 }
             },
             onPlayerReleased = {
+                // Safely clear custom website fullscreen views and reset extraction locks
+                browserViewModel.hideCustomViewInternal()
                 streamsViewModel.resumeScrape()
             }
         )
+
+        // Web Extraction Play Video callback registered cleanly
+        browserViewModel.onPlayNativeVideo = { videoUrl, title ->
+            playerEngine.launchVideo(
+                videoUrl = videoUrl,
+                title = title,
+                headers = browserViewModel.interceptedMediaUrls[videoUrl] ?: emptyMap(),
+                subtitles = browserViewModel.interceptedSubtitleUrls,
+                item = null,
+                season = null,
+                episode = null
+            )
+        }
 
         initPythonAsync()
 
@@ -155,6 +170,8 @@ class MainActivity : AppCompatActivity() {
                 playerEngine = playerEngine
             )
         }
+
+        checkStartupTabs()
     }
 
     override fun onResume() {
@@ -268,6 +285,34 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    fun startDpadSelectionMode() {
+        browserViewModel.initDpadNav()
+        cursorManager.isSelectionMode = true
+        Toast.makeText(this, "D-pad Navigation: Select Element and Press OK", Toast.LENGTH_LONG).show()
+    }
+
+    private fun checkStartupTabs() {
+        val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
+        val pref = prefs.getInt("restore_tabs_pref", 0)
+        val savedTabs = prefs.getString("saved_tabs", "[]") ?: "[]"
+        if (savedTabs == "[]") return
+
+        when (pref) {
+            1 -> browserViewModel.restoreAllTabs(this)
+            0 -> {
+                AlertDialog.Builder(this)
+                    .setTitle("Restore Session?")
+                    .setMessage("Do you want to restore your previous tabs?")
+                    .setPositiveButton("Restore All") { _, _ -> browserViewModel.restoreAllTabs(this) }
+                    .setNegativeButton("New Session") { _, _ -> 
+                        prefs.edit().putString("saved_tabs", "[]").apply()
+                        browserViewModel.refreshLists()
+                    }
+                    .show()
+            }
+        }
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val isImeVisible = window.decorView.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true
@@ -286,13 +331,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        val isNativeVideoActive = playerEngine.isPlayerActive.value
+        val isCustomViewActive = browserViewModel.customView.value != null
+
         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_MENU) {
-            if (browserViewModel.topBarVisible.value) {
-                browserViewModel.hideTopBar()
-            } else {
-                browserViewModel.showTopBar()
+            if (!isNativeVideoActive && !isCustomViewActive) {
+                if (browserViewModel.topBarVisible.value) {
+                    browserViewModel.hideTopBar()
+                } else {
+                    browserViewModel.showTopBar()
+                }
+                return true
             }
-            return true
         }
 
         if (playerEngine.isPlayerActive.value) {
@@ -356,6 +406,10 @@ class MainActivity : AppCompatActivity() {
         if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_DOWN) {
             if (browserViewModel.currentDialog.value != null) {
                 browserViewModel.dismissDialog()
+                return true
+            }
+            if (browserViewModel.customView.value != null) {
+                browserViewModel.hideCustomViewInternal()
                 return true
             }
             if (browserViewModel.currentAppTab.value == 0 && browserViewModel.isBrowsing.value) {
