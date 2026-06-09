@@ -1,16 +1,25 @@
 package com.poobi.tvbrowser.ui
 
 import android.content.Intent
+import android.net.Uri
 import android.util.Log
+import android.view.KeyEvent
 import android.view.ViewGroup
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -18,11 +27,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -51,10 +67,117 @@ import com.poobi.tvbrowser.ui.streams.StreamsDashboardScreen
 import com.poobi.tvbrowser.ui.streams.StreamsViewModel
 import org.json.JSONArray
 import org.json.JSONObject
-import android.net.Uri
 
 enum class AppTab { Browser, Streams }
 
+// Synchronous, lag-proof key state tracking to prevent Compose state race conditions
+class KeyTracker {
+    var lastKeyCode: Int = -1
+    var lastKeyPressTime: Long = 0L
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun ModernTab(
+    text: String,
+    isSelected: Boolean,
+    onFocus: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester,
+    keyTracker: KeyTracker
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val currentOnFocus by rememberUpdatedState(onFocus)
+    val currentIsSelected by rememberUpdatedState(isSelected)
+
+    val backgroundColor = when {
+        isFocused -> Color(0xFF00BCD4) // Vibrant Cyan on focus
+        isSelected -> Color(0xFF00BCD4).copy(alpha = 0.25f) // Subtle Cyan background on selection
+        else -> Color.Transparent
+    }
+
+    val textColor = when {
+        isFocused -> Color.Black
+        isSelected -> Color(0xFF00BCD4)
+        else -> Color.Gray
+    }
+
+    val borderModifier = if (isFocused) {
+        Modifier.border(2.dp, Color.White, RoundedCornerShape(20.dp))
+    } else if (isSelected) {
+        Modifier.border(1.dp, Color(0xFF00BCD4).copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+    } else {
+        Modifier
+    }
+
+    // Evaluate focusability strictly and synchronously to bypass recomposition latency
+    val finalCanFocus = remember(isFocused, currentIsSelected, keyTracker.lastKeyCode) {
+        val lastKey = keyTracker.lastKeyCode
+        val isStartup = lastKey == -1
+        val isDpadLeft = lastKey == KeyEvent.KEYCODE_DPAD_LEFT
+        val isDpadRight = lastKey == KeyEvent.KEYCODE_DPAD_RIGHT
+
+        val computedCanFocus = if (text == "Browser") {
+            currentIsSelected || isStartup || isDpadLeft
+        } else {
+            currentIsSelected || isStartup || isDpadRight
+        }
+        computedCanFocus || isFocused
+    }
+
+    // Flawless focus trigger driven directly by the InteractionSource
+    LaunchedEffect(isFocused) {
+        Log.d("PoobiFocus", "ModernTab '$text' isFocused state: $isFocused, finalCanFocus: $finalCanFocus, LastKey: ${keyTracker.lastKeyCode}")
+        if (isFocused) {
+            val keyCode = keyTracker.lastKeyCode
+            val isUserInitiated = keyCode == KeyEvent.KEYCODE_DPAD_UP ||
+                                  keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+                                  keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                                  keyCode == -1 // Startup bypass
+
+            Log.d("PoobiFocus", "LaunchedEffect focus trigger - ModernTab '$text' gained focus. [isUserInitiated: $isUserInitiated, LastKey: $keyCode]")
+
+            if (isUserInitiated) {
+                Log.d("PoobiFocus", "Tab switch ALLOWED for '$text'")
+                currentOnFocus()
+            } else {
+                Log.d("PoobiFocus", "Tab switch BLOCKED for '$text'")
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .focusRequester(focusRequester)
+            .height(40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(backgroundColor)
+            .then(borderModifier)
+            .focusProperties {
+                this.canFocus = finalCanFocus
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .focusable(interactionSource = interactionSource),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 24.dp),
+            color = textColor,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MainApp(
     browserViewModel: BrowserViewModel,
@@ -79,6 +202,16 @@ fun MainApp(
     val customView by browserViewModel.customView.collectAsState()
 
     val homeIconFocusRequester = remember { FocusRequester() }
+    val browserTabFocusRequester = remember { FocusRequester() }
+    val streamsTabFocusRequester = remember { FocusRequester() }
+
+    // Synchronous track of physical key interactions
+    val keyTracker = remember { KeyTracker() }
+
+    // Log active layout transitions inside the streams tab
+    LaunchedEffect(currentTab, isScraping, scrapedSources, selectedMedia) {
+        Log.d("PoobiFocus", "Layout changed: currentTab=$currentTab, isScraping=$isScraping, hasSources=${scrapedSources != null}, hasSelectedMedia=${selectedMedia != null}")
+    }
 
     LaunchedEffect(topBarVisible) {
         if (topBarVisible) {
@@ -86,7 +219,29 @@ fun MainApp(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A1D))) {
+    LaunchedEffect(Unit) {
+        try {
+            if (currentTab == AppTab.Browser) {
+                browserTabFocusRequester.requestFocus()
+            } else {
+                streamsTabFocusRequester.requestFocus()
+            }
+        } catch (e: Exception) {}
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF1A1A1D))
+            .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    keyTracker.lastKeyCode = keyEvent.nativeKeyEvent.keyCode
+                    keyTracker.lastKeyPressTime = System.currentTimeMillis()
+                    Log.d("PoobiFocus", "Root onPreviewKeyEvent - Captured: ${keyTracker.lastKeyCode}")
+                }
+                false
+            }
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
             // Tab Bar - Completely Hidden during Active Browsing to isolate DPAD focus!
@@ -100,52 +255,71 @@ fun MainApp(
                         .fillMaxWidth()
                         .height(72.dp)
                         .background(Color(0xFF1E1E24))
-                        .padding(horizontal = 40.dp),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        .padding(horizontal = 40.dp)
+                        .focusProperties {
+                            enter = { direction ->
+                                Log.d("PoobiFocus", "Row focusProperties.enter triggered. Direction: $direction")
+                                when (direction) {
+                                    FocusDirection.Up -> {
+                                        val target = if (currentTab == AppTab.Browser) browserTabFocusRequester else streamsTabFocusRequester
+                                        Log.d("PoobiFocus", "DPAD Up received. Explicitly directing focus to: ${if (currentTab == AppTab.Browser) "Browser" else "Streams"}")
+                                        target
+                                    }
+                                    FocusDirection.Left, FocusDirection.Right -> {
+                                        FocusRequester.Default
+                                    }
+                                    else -> {
+                                        Log.d("PoobiFocus", "Row focus enter passed through with Default (non-blocking).")
+                                        FocusRequester.Default // Pass through to avoid aborting the global search chain
+                                    }
+                                }
+                            }
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    TvFocusableBox(
-                        modifier = Modifier.height(50.dp),
-                        isTabStyle = true,
+                    ModernTab(
+                        text = "Browser",
                         isSelected = currentTab == AppTab.Browser,
-                        onClick = { browserViewModel.currentAppTab.value = 0 }
-                    ) { isFocused ->
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxHeight()) {
-                            Text(
-                                text = "Browser",
-                                modifier = Modifier.padding(horizontal = 35.dp),
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                        onFocus = { browserViewModel.currentAppTab.value = 0 },
+                        onClick = { browserViewModel.currentAppTab.value = 0 },
+                        focusRequester = browserTabFocusRequester,
+                        keyTracker = keyTracker
+                    )
 
-                    TvFocusableBox(
-                        modifier = Modifier.height(50.dp),
-                        isTabStyle = true,
+                    ModernTab(
+                        text = "Streams",
                         isSelected = currentTab == AppTab.Streams,
-                        onClick = { browserViewModel.currentAppTab.value = 1 }
-                    ) { isFocused ->
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxHeight()) {
-                            Text(
-                                text = "Streams",
-                                modifier = Modifier.padding(horizontal = 35.dp),
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                        onFocus = { browserViewModel.currentAppTab.value = 1 },
+                        onClick = { browserViewModel.currentAppTab.value = 1 },
+                        focusRequester = streamsTabFocusRequester,
+                        keyTracker = keyTracker
+                    )
                     
                     Spacer(modifier = Modifier.weight(1f))
-                    TvFocusableBox(
-                        modifier = Modifier.size(50.dp).padding(bottom = 5.dp),
-                        onClick = { context.startActivity(Intent(context, SettingsActivity::class.java)) }
-                    ) { isFocused ->
+
+                    val settingsInteractionSource = remember { MutableInteractionSource() }
+                    val isSettingsFocused by settingsInteractionSource.collectIsFocusedAsState()
+
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (isSettingsFocused) Color(0xFF00BCD4) else Color.Transparent)
+                            .then(if (isSettingsFocused) Modifier.border(2.dp, Color.White, CircleShape) else Modifier)
+                            .clickable(
+                                interactionSource = settingsInteractionSource,
+                                indication = null,
+                                onClick = { context.startActivity(Intent(context, SettingsActivity::class.java)) }
+                            )
+                            .focusable(interactionSource = settingsInteractionSource),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_settings),
                             contentDescription = "Settings",
-                            tint = Color.White,
-                            modifier = Modifier.fillMaxSize().padding(10.dp)
+                            tint = if (isSettingsFocused) Color.Black else Color.White,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
