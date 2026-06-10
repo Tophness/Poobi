@@ -476,7 +476,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 // Better debugging/interception for pages that ARE the m3u8 (e.g. goodstream)
                 view.evaluateJavascript("(function() { return document.documentElement.innerText; })();") { content ->
                     if (content != null && content.contains("#EXTM3U")) {
-                        Log.d("TVBrowser", "Detected M3U8 content on page: $url")
                         val headers = mutableMapOf<String, String>()
                         CookieManager.getInstance().getCookie(url ?: "")?.let { headers["Cookie"] = it }
                         headers["User-Agent"] = view.settings.userAgentString
@@ -948,7 +947,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     // --- Helpers / Dialog integrations ---
     fun playVideoInNativePlayer(url: String, title: String?) {
-        Log.d("BrowserViewModel", "playVideoInNativePlayer called: $url")
         currentWebView?.apply {
             onPause()
             pauseTimers()

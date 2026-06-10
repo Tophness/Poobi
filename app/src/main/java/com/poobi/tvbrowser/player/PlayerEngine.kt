@@ -111,8 +111,6 @@ class PlayerEngine(
         episode: Int?,
         fromStreams: Boolean = true
     ) {
-        Log.d("PlayerEngine", "launchVideo: $videoUrl")
-        Log.d("PlayerEngine", "Headers: $headers")
         saveProgress()
 
         lastVideoUrl = videoUrl
