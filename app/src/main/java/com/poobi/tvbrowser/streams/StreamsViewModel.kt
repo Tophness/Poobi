@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import android.util.LruCache
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -104,7 +105,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     var lastScrapedEpisode: Int? = null
     var lastSelectedSource: JSONObject? = null
     val interceptedSubtitleUrls = mutableMapOf<String, Map<String, String>>()
-    val cachedEpisodes = mutableMapOf<String, JSONArray>()
+    private val detailsCache = LruCache<String, JSONObject>(30)
+    private val episodesCache = LruCache<String, JSONArray>(50)
+    private val searchCache = LruCache<String, JSONArray>(15)
+    private val libraryCache = LruCache<String, JSONArray>(15)
 
     private var scrapeJob: Job? = null
     private var scrapePollingJob: Job? = null
@@ -181,6 +185,14 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     fun performSearch(query: String) {
         if (query.isBlank()) return
         addToSearchHistory(query)
+        
+        val cached = searchCache.get(query)
+        if (cached != null) {
+            _searchResults.value = cached
+            _isScraping.value = false
+            return
+        }
+
         _scrapeStatusMsg.value = "Searching..."
         _isScraping.value = true
         _searchResults.value = null
@@ -190,8 +202,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
                 val resultsJson = scraper.callAttr("search", query).toString()
+                val results = JSONArray(resultsJson)
+                searchCache.put(query, results)
                 withContext(Dispatchers.Main) {
-                    _searchResults.value = JSONArray(resultsJson)
+                    _searchResults.value = results
                     _isScraping.value = false
                 }
             } catch (e: Exception) {
@@ -210,9 +224,21 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun loadLibraryCategory(title: String, method: String, arg: String? = null) {
+        val cacheKey = "${method}_${arg ?: ""}"
+        val cached = libraryCache.get(cacheKey)
+        if (cached != null) {
+            cancelLibraryJobs()
+            _libraryItems.value = cached
+            return
+        }
+
         cancelLibraryJobs()
         libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
+                // Small debounce to prevent rapid fire requests during fast scrolling
+                delay(150)
+                if (!isActive) return@launch
+
                 val py = Python.getInstance()
                 val tmdb = py.getModule("tmdb.tmdb_api")
                 val resultJson = if (arg != null) {
@@ -220,10 +246,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 } else {
                     tmdb.callAttr(method).toString()
                 }
-                withContext(Dispatchers.Main) { 
-                    _libraryItems.value = JSONObject(resultJson).getJSONArray("results") 
+                val results = JSONObject(resultJson).optJSONArray("results")
+                if (results != null) {
+                    libraryCache.put(cacheKey, results)
+                    withContext(Dispatchers.Main) { 
+                        _libraryItems.value = results 
+                    }
                 }
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
     }
 
@@ -452,12 +484,31 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
             ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
 
+        val cacheKey = "${mediaType}_$id"
+        val cached = detailsCache.get(cacheKey)
+        if (cached != null) {
+            _itemDetails.value = cached
+            _itemRecommendations.value = cached.optJSONObject("recommendations")?.optJSONArray("results")
+            _itemCast.value = cached.optJSONObject("credits")?.optJSONArray("cast")
+
+            if (mediaType == "tv") {
+                val seasons = cached.optJSONArray("seasons")
+                _itemSeasons.value = seasons
+                if (seasons != null && seasons.length() > 0) {
+                    val seasonToLoad = initialSeason ?: seasons.getJSONObject(0).optInt("season_number")
+                    loadEpisodes(item, seasonToLoad)
+                }
+            }
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
                 val tmdb = py.getModule("tmdb.tmdb_api")
                 val detailsJson = tmdb.callAttr("get_details", id, mediaType).toString()
                 val details = JSONObject(detailsJson)
+                detailsCache.put(cacheKey, details)
 
                 withContext(Dispatchers.Main) {
                     _itemDetails.value = details
@@ -480,13 +531,21 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     fun loadEpisodes(item: JSONObject, seasonNumber: Int) {
         val id = item.optInt("id")
         _itemEpisodes.value = null
+
+        val cacheKey = "${id}_$seasonNumber"
+        val cached = episodesCache.get(cacheKey)
+        if (cached != null) {
+            _itemEpisodes.value = cached
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
                 val episodesJson = scraper.callAttr("get_tv_episodes", id, seasonNumber).toString()
                 val episodes = JSONArray(episodesJson)
-                cachedEpisodes["${id}_$seasonNumber"] = episodes
+                episodesCache.put(cacheKey, episodes)
                 try {
                     val statusJson = py.getModule("trakt.episode_check").callAttr("get_watched_status", id, seasonNumber, episodes.toString()).toString()
                     val watchedStatus = JSONArray(statusJson)
@@ -565,6 +624,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     val total = status.optInt("total", 0)
                     val message = status.optString("message", "")
                     val sources = status.optJSONArray("sources")
+                    val sortedSources = if (sources != null && !isInteractingWithSources) sortSources(sources) else null
 
                     withContext(Dispatchers.Main) {
                         if (total > 0) {
@@ -580,7 +640,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                             else -> message
                         }
 
-                        if (sources != null && !isInteractingWithSources) _scrapedSources.value = sortSources(sources)
+                        if (sortedSources != null) _scrapedSources.value = sortedSources
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
@@ -854,7 +914,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                                 val item = _selectedItem.value
                                 if (item != null) {
                                     val cacheKey = "${item.optInt("id")}_$lastScrapedSeason"
-                                    val episodes = cachedEpisodes[cacheKey]
+                                    val episodes = episodesCache.get(cacheKey)
                                     if (episodes != null) {
                                         for (i in 0 until episodes.length()) {
                                             val ep = episodes.getJSONObject(i)
@@ -921,9 +981,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
-                val config = JSONObject(py.getModule("main").get("GLOBAL_CONFIG").toString())
-                val autoplayMode = config.optString("autoplay_next_pref", "Closest Source")
+                val autoplayMode = prefs.getString("autoplay_next_pref", "Closest Source") ?: "Closest Source"
 
                 if (autoplayMode == "Ask") {
                     withContext(Dispatchers.Main) {
@@ -997,6 +1055,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                                      (total > 0 && current >= total) ||
                                      (message == "No active scrape" && frameCount > 15)
 
+                    val sortedSources = if (isNewScrapeStarted && sources != null && sources.length() > 0) {
+                        sortSources(sources)
+                    } else null
+
                     withContext(Dispatchers.Main) {
                         if (total > 0) {
                             _scrapeProgress.value = current
@@ -1010,8 +1072,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                             else -> if (message.isNotEmpty() && message != "No active scrape") message else "Searching E$episode..."
                         }
 
-                        if (isNewScrapeStarted && sources != null && sources.length() > 0) {
-                             _scrapedSources.value = sortSources(sources)
+                        if (sortedSources != null) {
+                             _scrapedSources.value = sortedSources
                         }
                     }
 

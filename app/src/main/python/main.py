@@ -9,6 +9,7 @@ import importlib.util
 import types
 import inspect
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from com.chaquo.python import Python
@@ -279,20 +280,23 @@ class UniversalScraper:
         self.status["current"] = 0
         self.status["message"] = f"Found {len(compatible_providers)} compatible providers..."
 
-        threads = []
-        aliases_str = "[]" 
+        aliases_str = "[]"
         
+        # We limit the concurrency to 3 threads to prevent high context-switching and high memory pressure on low-RAM device
+        executor = ThreadPoolExecutor(max_workers=3)
+        futures = []
+
         for pack_name, name, provider in compatible_providers:
             if content == 'movie':
-                threads.append(threading.Thread(target=self.worker, args=(
+                args = (
                     provider, content, title, title, aliases_str, year, imdb, tmdb, None, None, None, None, name, pack_name
-                )))
+                )
             elif content == 'episode':
-                threads.append(threading.Thread(target=self.worker, args=(
+                args = (
                     provider, content, title, title, aliases_str, year, imdb, tmdb, tvdb, season, episode, premiered, name, pack_name
-                )))
+                )
+            futures.append(executor.submit(self.worker, *args))
 
-        [t.start() for t in threads]
         mode = GLOBAL_CONFIG.get('timeout_mode', 'Both')
         global_to = GLOBAL_CONFIG.get('global_timeout', 30)
         per_source_to = GLOBAL_CONFIG.get('per_source_timeout', 15)
@@ -301,7 +305,7 @@ class UniversalScraper:
         
         start_time = time.monotonic()
         paused_duration = 0
-        while any(t.is_alive() for t in threads):
+        while not all(f.done() for f in futures):
             if self.stop_event.is_set():
                 self.status["message"] = "Stopped!"
                 break
@@ -324,9 +328,14 @@ class UniversalScraper:
                 self.status["message"] = "Timeout reached!"
                 break
             
-            alive = len([t for t in threads if t.is_alive()])
+            alive = len([f for f in futures if not f.done()])
             self.status["message"] = f"Waiting for {alive} providers ({round(max_wait - elapsed)}s left)..."
             time.sleep(0.5)
+
+        # Cancel any pending futures that haven't run yet to save CPU and network resources
+        for f in futures:
+            f.cancel()
+        executor.shutdown(wait=False)
 
         if not self.stop_event.is_set():
             if self.status["message"] != "Timeout reached!":
@@ -597,19 +606,22 @@ def get_scrape_status():
         sources.sort(key=lambda x: x['q_sort'])
 
         for s in sources:
-            url = s.get('url', '')
-            is_video = s.get('direct', False)
-            if not is_video:
-                url_lower = url.lower()
-                if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
-                    is_video = True
-                elif any(k in url_lower for k in video_keywords):
-                    is_video = True
-                elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
-                    try:
-                        if resolveurl.HostedMediaFile(url):
-                            is_video = True
-                    except: pass
+            is_video = s.get('is_video')
+            if is_video is None:
+                is_video = s.get('direct', False)
+                if not is_video:
+                    url = s.get('url', '')
+                    url_lower = url.lower()
+                    if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
+                        is_video = True
+                    elif any(k in url_lower for k in video_keywords):
+                        is_video = True
+                    elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
+                        try:
+                            if resolveurl.HostedMediaFile(url):
+                                is_video = True
+                        except: pass
+                s['is_video'] = is_video
 
             title_prefix = "[BROWSER] " if not is_video else ""
             display_sources.append({
@@ -731,19 +743,22 @@ def scrape(item_json, season=None, episode=None):
         video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
         
         for s in sources:
-            url = s.get('url', '')
-            is_video = s.get('direct', False)
-            if not is_video:
-                url_lower = url.lower()
-                if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
-                    is_video = True
-                elif any(k in url_lower for k in video_keywords):
-                    is_video = True
-                elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
-                    try:
-                        if resolveurl.HostedMediaFile(url):
-                            is_video = True
-                    except: pass
+            is_video = s.get('is_video')
+            if is_video is None:
+                is_video = s.get('direct', False)
+                if not is_video:
+                    url = s.get('url', '')
+                    url_lower = url.lower()
+                    if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
+                        is_video = True
+                    elif any(k in url_lower for k in video_keywords):
+                        is_video = True
+                    elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
+                        try:
+                            if resolveurl.HostedMediaFile(url):
+                                is_video = True
+                        except: pass
+                s['is_video'] = is_video
 
             title_prefix = "[BROWSER] " if not is_video else ""
             display_sources.append({
@@ -774,345 +789,3 @@ def resolve(source_data_json):
         return json.dumps({"error": str(e)})
 
 # --- END ANDROID BRIDGE ---
-
-try:
-    from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                                 QHBoxLayout, QLineEdit, QPushButton, QListWidget, 
-                                 QListWidgetItem, QLabel, QProgressBar, QMessageBox, 
-                                 QSplitter, QDialog, QCheckBox, QScrollArea, QComboBox, 
-                                 QTimeEdit, QFormLayout, QFrame, QTabWidget)
-    from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QTime
-    from PyQt6.QtGui import QPixmap, QImage
-except ImportError:
-    # Define dummy classes to prevent NameError on Android where PyQt6 is missing
-    class QDialog: pass
-    class QMainWindow: pass
-    class QWidget: pass
-    class QThread: pass
-    class pyqtSignal:
-        def __init__(self, *args): pass
-        def emit(self, *args): pass
-    class QImage: pass
-    Qt = type('Qt', (), {'Orientation': type('Orientation', (), {'Horizontal': 1, 'Vertical': 2})})
-    pass
-
-def gather_all_hosts_dynamically():
-    hosts = set()
-
-    if resolveurl and hasattr(resolveurl, 'relevant_resolvers'):
-        try:
-            resolvers = resolveurl.relevant_resolvers(order_matters=True)
-            for r in resolvers:
-                if hasattr(r, 'domains') and r.domains:
-                    for dom in r.domains:
-                        if '*' not in dom:
-                            hosts.add(dom.lower())
-        except Exception:
-            pass
-
-    try:
-        scrape_sources_path = os.path.join(PROJECT_ROOT, 'modules', 'scrape_sources.py')
-        if os.path.exists(scrape_sources_path):
-            with open(scrape_sources_path, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-            matches = re.findall(r'(\w+(?:_domains|_working_domains|_redir_domains))\s*=\s*\[(.*?)\]', content, re.DOTALL)
-            for var_name, list_content in matches:
-                found = re.findall(r"['\"]([^'\"]+)['\"]", list_content)
-                for dom in found:
-                    hosts.add(dom.lower())
-    except Exception:
-        pass
-    
-    for h in gather_provider_pack_hosts():
-        hosts.add(h)
-
-    return sorted(list(hosts))
-
-class SettingsDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Engine & Provider Settings")
-        self.resize(500, 600)
-        self.layout = QVBoxLayout(self)
-        self.cfg = GLOBAL_CONFIG
-        self.tabs = QTabWidget()
-        self.layout.addWidget(self.tabs)
-        self.tab_general = QWidget()
-        self.layout_general = QVBoxLayout(self.tab_general)
-        self.form_layout = QFormLayout()
-        self.combo_mode = QComboBox()
-        self.combo_mode.addItems(["Global", "Per-Source", "Both"])
-        self.combo_mode.setCurrentText(self.cfg.get("timeout_mode", "Both"))
-        self.combo_mode.currentTextChanged.connect(self.update_ui_state)
-        self.time_global = QTimeEdit()
-        self.time_global.setDisplayFormat("mm:ss")
-        g_sec = self.cfg.get("global_timeout", 30)
-        self.time_global.setTime(QTime(0, g_sec // 60, g_sec % 60))
-        self.time_source = QTimeEdit()
-        self.time_source.setDisplayFormat("mm:ss")
-        s_sec = self.cfg.get("per_source_timeout", 15)
-        self.time_source.setTime(QTime(0, s_sec // 60, s_sec % 60))
-        self.form_layout.addRow("Timeout Mode:", self.combo_mode)
-        self.form_layout.addRow("Global Timeout:", self.time_global)
-        self.form_layout.addRow("Per-Source Timeout:", self.time_source)
-        self.layout_general.addLayout(self.form_layout)
-        self.update_ui_state(self.combo_mode.currentText())
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFrameShadow(QFrame.Shadow.Sunken)
-        self.layout_general.addWidget(line)
-        self.layout_general.addWidget(QLabel("<b>Provider Packs</b>"))
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        content = QWidget()
-        self.vbox = QVBoxLayout(content)
-        self.checkboxes = {}
-        packs = [d for d in os.listdir(SOURCES_PATH) if os.path.isdir(os.path.join(SOURCES_PATH, d))]
-        if not packs:
-            self.vbox.addWidget(QLabel("No provider packs found in sources/ directory."))
-        else:
-            for pack in packs:
-                cb = QCheckBox(f"Enable '{pack}'")
-                cb.setChecked(self.cfg.get(f"pack_{pack}", True))
-                self.checkboxes[f"pack_{pack}"] = cb
-                self.vbox.addWidget(cb)
-        self.vbox.addStretch()
-        scroll.setWidget(content)
-        self.layout_general.addWidget(scroll)
-        self.tabs.addTab(self.tab_general, "General Settings")
-        self.tab_hosts = QWidget()
-        self.layout_hosts = QVBoxLayout(self.tab_hosts)
-        self.cb_use_only = QCheckBox("Use only these hosts")
-        self.cb_use_only.setChecked(self.cfg.get("use_only_whitelisted_hosts", True))
-        self.cb_use_only.stateChanged.connect(self.update_hosts_enabled_state)
-        self.layout_hosts.addWidget(self.cb_use_only)
-        search_layout = QHBoxLayout()
-        self.host_search = QLineEdit()
-        self.host_search.setPlaceholderText("Search hosts...")
-        self.host_search.textChanged.connect(self.filter_hosts)
-        search_layout.addWidget(self.host_search)
-        self.btn_all = QPushButton("Select All")
-        self.btn_all.clicked.connect(self.select_all_hosts)
-        self.btn_none = QPushButton("Clear All")
-        self.btn_none.clicked.connect(self.clear_all_hosts)
-        self.btn_default = QPushButton("Reset to Defaults")
-        self.btn_default.clicked.connect(self.reset_hosts_to_default)
-        search_layout.addWidget(self.btn_all)
-        search_layout.addWidget(self.btn_none)
-        search_layout.addWidget(self.btn_default)
-        self.layout_hosts.addLayout(search_layout)
-        self.scroll_hosts = QScrollArea()
-        self.scroll_hosts.setWidgetResizable(True)
-        content_hosts = QWidget()
-        self.vbox_hosts = QVBoxLayout(content_hosts)
-        self.host_checkboxes = {}
-        self.all_dynamic_hosts = gather_all_hosts_dynamically()
-        whitelisted = self.cfg.get("whitelisted_hosts", [])
-        whitelisted_low = [w.lower() for w in whitelisted]
-        for h in self.all_dynamic_hosts:
-            cb = QCheckBox(h)
-            cb.setChecked(h in whitelisted_low)
-            cb.stateChanged.connect(self.on_host_checkbox_changed)
-            self.host_checkboxes[h] = cb
-            self.vbox_hosts.addWidget(cb)
-        self.vbox_hosts.addStretch()
-        self.scroll_hosts.setWidget(content_hosts)
-        self.layout_hosts.addWidget(self.scroll_hosts)
-        self.tabs.addTab(self.tab_hosts, "Provider Whitelist")
-        self.update_hosts_enabled_state()
-        btn_save = QPushButton("Save && Close")
-        btn_save.clicked.connect(self.save_and_close)
-        self.layout.addWidget(btn_save)
-
-    def update_hosts_enabled_state(self):
-        is_checked = self.cb_use_only.isChecked()
-        self.host_search.setEnabled(is_checked)
-        self.btn_all.setEnabled(is_checked)
-        self.btn_none.setEnabled(is_checked)
-        self.btn_default.setEnabled(is_checked)
-        self.scroll_hosts.setEnabled(is_checked)
-        if is_checked:
-            any_checked = any(cb.isChecked() for cb in self.host_checkboxes.values())
-            if not any_checked:
-                self.reset_hosts_to_default()
-
-    def filter_hosts(self, text):
-        text = text.lower().strip()
-        for h, cb in self.host_checkboxes.items():
-            cb.setVisible(not text or text in h)
-
-    def select_all_hosts(self):
-        for cb in self.host_checkboxes.values():
-            if cb.isVisible():
-                cb.setChecked(True)
-
-    def clear_all_hosts(self):
-        for cb in self.host_checkboxes.values():
-            cb.setChecked(False)
-
-    def reset_hosts_to_default(self):
-        default_hosts = get_default_whitelist()
-        default_hosts_low = [d.lower() for d in default_hosts]
-        for h, cb in self.host_checkboxes.items():
-            cb.setChecked(h in default_hosts_low)
-
-    def on_host_checkbox_changed(self):
-        any_checked = any(cb.isChecked() for cb in self.host_checkboxes.values())
-        self.cb_use_only.blockSignals(True)
-        self.cb_use_only.setChecked(any_checked)
-        self.cb_use_only.blockSignals(False)
-        is_checked = self.cb_use_only.isChecked()
-        self.host_search.setEnabled(is_checked)
-        self.btn_all.setEnabled(is_checked)
-        self.btn_none.setEnabled(is_checked)
-        self.btn_default.setEnabled(is_checked)
-        self.scroll_hosts.setEnabled(is_checked)
-
-    def update_ui_state(self, mode):
-        lbl_global = self.form_layout.labelForField(self.time_global)
-        lbl_source = self.form_layout.labelForField(self.time_source)
-
-        if mode == "Global":
-            self.time_global.setVisible(True)
-            if lbl_global: lbl_global.setVisible(True)
-            self.time_source.setVisible(False)
-            if lbl_source: lbl_source.setVisible(False)
-        elif mode == "Per-Source":
-            self.time_global.setVisible(False)
-            if lbl_global: lbl_global.setVisible(False)
-            self.time_source.setVisible(True)
-            if lbl_source: lbl_source.setVisible(True)
-        else:
-            self.time_global.setVisible(True)
-            if lbl_global: lbl_global.setVisible(True)
-            self.time_source.setVisible(True)
-            if lbl_source: lbl_source.setVisible(True)
-
-    def save_and_close(self):
-        self.cfg["timeout_mode"] = self.combo_mode.currentText()
-        g_time = self.time_global.time()
-        self.cfg["global_timeout"] = g_time.minute() * 60 + g_time.second()
-        s_time = self.time_source.time()
-        self.cfg["per_source_timeout"] = s_time.minute() * 60 + s_time.second()
-        for pack_key, cb in self.checkboxes.items():
-            self.cfg[pack_key] = cb.isChecked()
-
-        self.cfg["use_only_whitelisted_hosts"] = self.cb_use_only.isChecked()
-        self.cfg["whitelisted_hosts"] = [h for h, cb in self.host_checkboxes.items() if cb.isChecked()]
-        save_config(self.cfg)
-        global GLOBAL_CONFIG
-        GLOBAL_CONFIG = self.cfg
-        self.accept()
-
-class SearchWorker(QThread):
-    results_ready = pyqtSignal(list)
-    def __init__(self, query):
-        super().__init__()
-        self.query = query
-    def run(self):
-        try:
-            api_key = "f5608fba6ab49e9985828b35d5653321"
-            res = requests.get(f"https://api.themoviedb.org/3/search/movie?api_key={api_key}&query={self.query.replace(' ', '+')}").json().get('results', [])
-            self.results_ready.emit(res)
-        except: self.results_ready.emit([])
-
-class MovieItemWidget(QWidget):
-    def __init__(self, item, parent=None):
-        super().__init__(parent)
-        layout = QHBoxLayout(self); layout.setContentsMargins(5, 5, 5, 5)
-        self.poster = QLabel(); self.poster.setFixedSize(80, 120); self.poster.setStyleSheet("background: #2d2d2d; border-radius: 4px;"); self.poster.setScaledContents(True); layout.addWidget(self.poster)
-        info = QVBoxLayout(); info.addWidget(QLabel(f"<b style='color: #e0e0e0;'>{item.get('title') or item.get('name')} ({item.get('release_date', '0000')[:4]})</b>"))
-        blurb = QLabel(item.get('overview', '...')); blurb.setWordWrap(True); blurb.setStyleSheet("color: #999; font-size: 11px;"); info.addWidget(blurb); layout.addLayout(info)
-        if item.get('poster_path'):
-            self.dl = PosterDownloader(f"https://image.tmdb.org/t/p/w185{item['poster_path']}")
-            self.dl.finished.connect(lambda img: self.poster.setPixmap(QPixmap.fromImage(img))); self.dl.start()
-
-class PosterDownloader(QThread):
-    finished = pyqtSignal(QImage)
-    def __init__(self, url): super().__init__(); self.url = url
-    def run(self):
-        try: data = requests.get(self.url, timeout=5).content; img = QImage(); img.loadFromData(data); self.finished.emit(img)
-        except: pass
-
-class ScrapeWorker(QThread):
-    sources_ready = pyqtSignal(list)
-    def __init__(self, item, enabled_packs): 
-        super().__init__()
-        self.item = item
-        self.enabled_packs = enabled_packs
-
-    def run(self):
-        try:
-            tmdb_id = str(self.item['id'])
-            api_key = "f5608fba6ab49e9985828b35d5653321"
-            ext_url = f"https://api.themoviedb.org/3/movie/{tmdb_id}/external_ids?api_key={api_key}"
-            imdb_id = requests.get(ext_url).json().get('imdb_id', '0')
-            scraper = UniversalScraper(self.enabled_packs)
-            file_sources = scraper.getSources(
-                title=self.item['title'], 
-                year=self.item.get('release_date', '0000')[:4], 
-                imdb=imdb_id, 
-                tmdb=tmdb_id
-            )
-            self.sources_ready.emit(file_sources)
-        except Exception:
-            traceback.print_exc()
-            self.sources_ready.emit([])
-
-class UniversalApp(QMainWindow):
-    def __init__(self):
-        super().__init__()
-
-    def open_settings(self):
-        dlg = SettingsDialog(self)
-        dlg.exec()
-
-    def get_enabled_packs(self):
-        packs = [d for d in os.listdir(SOURCES_PATH) if os.path.isdir(os.path.join(SOURCES_PATH, d))]
-        return [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
-
-    def start_search(self):
-        self.results.clear(); self.sources_list.clear()
-        self.btn.setEnabled(False)
-        self.search_worker = SearchWorker(self.input.text())
-        self.search_worker.results_ready.connect(self.on_search_results)
-        self.search_worker.start()
-
-    def on_search_results(self, results):
-        self.movie_data = results
-        for item in results:
-            li = QListWidgetItem(self.results); li.setSizeHint(QSize(400, 130))
-            self.results.setItemWidget(li, MovieItemWidget(item))
-        self.btn.setEnabled(True)
-
-    def on_selected(self, li):
-        idx = self.results.row(li); self.sources_list.clear()
-        self.progress.setVisible(True); self.progress.setRange(0, 0)
-        enabled_packs = self.get_enabled_packs()
-        self.worker = ScrapeWorker(self.movie_data[idx], enabled_packs)
-        self.worker.sources_ready.connect(self.on_found)
-        self.worker.start()
-
-    def on_found(self, slist):
-        self.progress.setVisible(False); self.found_sources = slist
-        if not slist: self.sources_list.addItem("No sources found.")
-        for s in slist: 
-            self.sources_list.addItem(f"[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})")
-
-    def on_resolve(self, li):
-        idx = self.sources_list.row(li)
-        if idx >= len(self.found_sources): return
-        source_data = self.found_sources[idx]
-        try:
-            scraper = UniversalScraper(self.get_enabled_packs())
-            final_url, is_video = scraper.resolveSource(source_data)
-            
-            if final_url:
-                QApplication.clipboard().setText(final_url)
-            else:
-                pass
-        except Exception:
-            traceback.print_exc()
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv); window = UniversalApp(); window.show(); sys.exit(app.exec())

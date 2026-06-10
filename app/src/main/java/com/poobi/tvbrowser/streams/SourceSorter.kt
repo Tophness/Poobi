@@ -41,14 +41,16 @@ class SourceSorter(private val priorities: List<SortCriteria>) {
     }
 
     fun sort(sources: JSONArray): JSONArray {
-        val list = mutableListOf<JSONObject>()
+        val list = mutableListOf<Pair<JSONObject, JSONObject>>()
         for (i in 0 until sources.length()) {
-            list.add(sources.getJSONObject(i))
+            val wrapper = sources.getJSONObject(i)
+            val data = JSONObject(wrapper.getString("source_data"))
+            list.add(Pair(wrapper, data))
         }
 
-        list.sortWith { a, b ->
-            val dataA = JSONObject(a.getString("source_data"))
-            val dataB = JSONObject(b.getString("source_data"))
+        list.sortWith { pairA, pairB ->
+            val dataA = pairA.second
+            val dataB = pairB.second
 
             var result = 0
             for (criteria in priorities) {
@@ -64,7 +66,7 @@ class SourceSorter(private val priorities: List<SortCriteria>) {
         }
 
         val sortedArray = JSONArray()
-        list.forEach { sortedArray.put(it) }
+        list.forEach { sortedArray.put(it.first) }
         return sortedArray
     }
 
@@ -75,17 +77,13 @@ class SourceSorter(private val priorities: List<SortCriteria>) {
     }
 
     private fun isNativePlayable(data: JSONObject): Boolean {
-        // In Python main.py, title_prefix = "[BROWSER] " if not is_video else ""
-        // But source_data contains the original source dict.
-        // We consider it native if 'direct' is true OR if it's a known video type.
+        if (data.optBoolean("is_video", false)) return true
         if (data.optBoolean("direct", false)) return true
         
         val url = data.optString("url", "").lowercase()
         val videoExtensions = listOf(".m3u8", ".mp4", ".mkv", ".ts", ".webm", ".mpd", ".avi", ".flv", ".mov")
         if (videoExtensions.any { url.split("?")[0].endsWith(it) } || url.contains("/hls/")) return true
         
-        // Some hosts are always native if they go through resolveurl but we can't easily check that here 
-        // without mimicking Python's logic.
         return false
     }
 

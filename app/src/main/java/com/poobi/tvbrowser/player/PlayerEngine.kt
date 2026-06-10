@@ -86,9 +86,7 @@ class PlayerEngine(
 
     private fun getUpNextThreshold(): Long {
         return try {
-            val py = Python.getInstance()
-            val config = JSONObject(py.getModule("main").get("GLOBAL_CONFIG").toString())
-            config.optInt("up_next_time_pref", 20) * 1000L
+            prefs.getInt("up_next_time_pref", 20) * 1000L
         } catch (e: Exception) {
             20000L
         }
@@ -156,9 +154,7 @@ class PlayerEngine(
                 } else if (state == Player.STATE_ENDED) {
                     checkUpNextHandler.removeCallbacks(checkUpNextRunnable)
                     try {
-                        val py = Python.getInstance()
-                        val config = JSONObject(py.getModule("main").get("GLOBAL_CONFIG").toString())
-                        if (config.optString("up_next_popup_pref", "Ask") == "Always") {
+                        if (prefs.getString("up_next_popup_pref", "Ask") == "Always") {
                             onVideoEnded()
                         }
                     } catch (e: Exception) {}
