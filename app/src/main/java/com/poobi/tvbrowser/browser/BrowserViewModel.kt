@@ -392,6 +392,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         wv.isFocusable = true
         wv.isFocusableInTouchMode = true
 
+        val customUserAgent = prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+        
         wv.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -399,6 +401,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             setSupportMultipleWindows(true)
             javaScriptCanOpenWindowsAutomatically = false
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            userAgentString = customUserAgent
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                 isAlgorithmicDarkeningAllowed = !isLightTheme.value
             }
@@ -470,6 +473,22 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     initDpadNav()
                 }
 
+                // Better debugging/interception for pages that ARE the m3u8 (e.g. goodstream)
+                view.evaluateJavascript("(function() { return document.documentElement.innerText; })();") { content ->
+                    if (content != null && content.contains("#EXTM3U")) {
+                        Log.d("TVBrowser", "Detected M3U8 content on page: $url")
+                        val headers = mutableMapOf<String, String>()
+                        CookieManager.getInstance().getCookie(url ?: "")?.let { headers["Cookie"] = it }
+                        headers["User-Agent"] = view.settings.userAgentString
+                        if (url != null) {
+                            interceptedMediaUrls[url] = headers
+                            if (extractVideoPref.value != 0) {
+                                attemptVideoExtraction(null, null)
+                            }
+                        }
+                    }
+                }
+
                 view.postDelayed({ saveSnapshot(url, view.title ?: "Website", view) }, 2500)
             }
 
@@ -480,9 +499,45 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream("".toByteArray()))
                     }
 
-                    if (requestedUrl.contains(".m3u8") || requestedUrl.contains(".mp4") || requestedUrl.contains(".mkv")) {
+                    val isVideo = requestedUrl.contains(".m3u8") || 
+                                 requestedUrl.contains(".mp4") || 
+                                 requestedUrl.contains(".mkv") ||
+                                 requestedUrl.contains(".mpd") ||
+                                 requestedUrl.contains("/m3u8/")
+
+                    if (isVideo) {
                         val wasEmpty = interceptedMediaUrls.isEmpty()
-                        interceptedMediaUrls[requestedUrl] = request.requestHeaders
+                        val headers = request.requestHeaders.toMutableMap()
+                        
+                        // Capture Cookies
+                        CookieManager.getInstance().getCookie(requestedUrl)?.let {
+                            headers["Cookie"] = it
+                        }
+                        
+                        // Thread-safe access for Referer/Origin defaults
+                        val userAgent = prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36") ?: ""
+                        val viewUrl = _currentUrl.value // Use StateFlow instead of view.url to avoid thread crash
+
+                        // Ensure User-Agent is present
+                        if (!headers.containsKey("User-Agent")) {
+                            headers["User-Agent"] = userAgent
+                        }
+
+                        // Ensure Referer/Origin are present for cross-origin HLS segments
+                        if (!headers.containsKey("Referer")) {
+                            headers["Referer"] = viewUrl.ifEmpty { requestedUrl }
+                        }
+                        if (!headers.containsKey("Origin")) {
+                            val originUrl = viewUrl.ifEmpty { requestedUrl }
+                            Uri.parse(originUrl).let { uri ->
+                                if (uri.scheme != null && uri.host != null) {
+                                    headers["Origin"] = "${uri.scheme}://${uri.host}"
+                                }
+                            }
+                        }
+
+                        interceptedMediaUrls[requestedUrl] = headers
+                        
                         if (videoTriggerPref.value == 0 && _isBrowsing.value && wasEmpty) {
                             view?.post { attemptVideoExtraction(null, null) }
                         }
@@ -802,10 +857,16 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             for (url in streams) {
                 val headers = interceptedMediaUrls[url] ?: emptyMap()
-                if (url.contains(".m3u8")) {
+                if (url.contains(".m3u8") || url.contains("/streamsvr/")) {
                     try {
-                        val connection = java.net.URL(url).openConnection() as HttpURLConnection
+                        val connection = URL(url).openConnection() as HttpURLConnection
                         headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
+                        if (!headers.containsKey("User-Agent")) {
+                            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                        }
+                        connection.connectTimeout = 5000
+                        connection.readTimeout = 5000
+                        
                         val content = connection.inputStream.bufferedReader().use { it.readText() }
                         
                         if (content.contains("#EXT-X-STREAM-INF")) {
@@ -887,6 +948,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     // --- Helpers / Dialog integrations ---
     fun playVideoInNativePlayer(url: String, title: String?) {
+        Log.d("BrowserViewModel", "playVideoInNativePlayer called: $url")
         currentWebView?.apply {
             onPause()
             pauseTimers()

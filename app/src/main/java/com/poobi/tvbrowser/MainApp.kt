@@ -113,22 +113,17 @@ fun ModernTab(
         Modifier
     }
 
-    // Flawless focus trigger driven directly by the InteractionSource
     LaunchedEffect(isFocused) {
         if (isFocused) {
             val keyCode = keyTracker.lastKeyCode
             val isUserInitiated = keyCode == KeyEvent.KEYCODE_DPAD_UP ||
                                   keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
                                   keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
-                                  keyCode == -1 // Startup bypass
+                                  keyCode == -1
 
-            Log.d("PoobiFocus", "ModernTab '$text' gained focus. isUserInitiated=$isUserInitiated, LastKey=$keyCode")
 
             if (isUserInitiated) {
-                Log.d("PoobiFocus", "Tab switch ALLOWED for '$text'")
                 currentOnFocus()
-            } else {
-                Log.d("PoobiFocus", "Tab switch BLOCKED for '$text'")
             }
         }
     }
@@ -204,11 +199,6 @@ fun MainApp(
     // Synchronous track of physical key interactions
     val keyTracker = remember { KeyTracker() }
 
-    // Log active layout transitions inside the streams tab
-    LaunchedEffect(currentTab, isScraping, scrapedSources, selectedMedia) {
-        Log.d("PoobiFocus", "Layout changed: currentTab=$currentTab, isScraping=$isScraping, hasSources=${scrapedSources != null}, hasSelectedMedia=${selectedMedia != null}")
-    }
-
     LaunchedEffect(topBarVisible) {
         if (topBarVisible) {
             homeIconFocusRequester.requestFocus()
@@ -233,7 +223,6 @@ fun MainApp(
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
                     keyTracker.lastKeyCode = keyEvent.nativeKeyEvent.keyCode
                     keyTracker.lastKeyPressTime = System.currentTimeMillis()
-                    Log.d("PoobiFocus", "Root onPreviewKeyEvent - Captured: ${keyTracker.lastKeyCode}")
                 }
                 false
             }
@@ -255,19 +244,16 @@ fun MainApp(
                         .focusProperties {
                             onEnter = {
                                 val direction = requestedFocusDirection
-                                Log.d("PoobiFocus", "Row focusProperties.onEnter triggered. Direction: $direction")
                                 when (direction) {
                                     FocusDirection.Up -> {
                                         val target = if (currentTab == AppTab.Browser) browserTabFocusRequester else streamsTabFocusRequester
-                                        Log.d("PoobiFocus", "DPAD Up received. Explicitly directing focus to: ${if (currentTab == AppTab.Browser) "Browser" else "Streams"}")
                                         target
                                     }
                                     FocusDirection.Left, FocusDirection.Right -> {
                                         FocusRequester.Default
                                     }
                                     else -> {
-                                        Log.d("PoobiFocus", "Row focus enter passed through with Default (non-blocking).")
-                                        FocusRequester.Default // Pass through to avoid aborting the global search chain
+                                        FocusRequester.Default
                                     }
                                 }
                             }
@@ -562,6 +548,7 @@ fun MainApp(
 
             // Instantly request focus on the first stream item when the dialog opens
             LaunchedEffect(picker) {
+                Log.d("TVBrowser", "StreamPicker showing. URLs: ${picker.streams}, Infos: ${picker.streamInfos}")
                 try {
                     firstItemFocusRequester.requestFocus()
                 } catch (_: Exception) {}
