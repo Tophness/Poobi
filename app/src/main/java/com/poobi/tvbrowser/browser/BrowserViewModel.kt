@@ -878,6 +878,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun resumeTimersOnCurrent() {
+        currentWebView?.apply {
+            onResume()
+            resumeTimers()
+        }
+    }
+
     // --- Helpers / Dialog integrations ---
     fun playVideoInNativePlayer(url: String, title: String?) {
         currentWebView?.apply {

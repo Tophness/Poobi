@@ -108,7 +108,8 @@ class PlayerEngine(
         subtitles: Map<String, Map<String, String>>,
         item: JSONObject?,
         season: Int?,
-        episode: Int?
+        episode: Int?,
+        fromStreams: Boolean = true
     ) {
         saveProgress()
 
@@ -165,7 +166,7 @@ class PlayerEngine(
 
             override fun onPlayerError(error: PlaybackException) {
                 if (isReleasing || !_isPlayerActive.value) return
-                onPlaybackError(error, videoUrl)
+                onPlaybackError(error, videoUrl + (if (fromStreams) "|from_streams" else ""))
             }
         })
 

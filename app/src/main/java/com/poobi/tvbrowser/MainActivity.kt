@@ -55,8 +55,15 @@ class MainActivity : AppCompatActivity() {
         playerEngine = PlayerEngine(
             context = this,
             prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE),
-            onPlaybackError = { error, url ->
+            onPlaybackError = { error, rawUrl ->
                 playerEngine.stopAndRelease()
+                
+                val fromStreams = rawUrl.endsWith("|from_streams")
+                val url = if (fromStreams) rawUrl.removeSuffix("|from_streams") else rawUrl
+
+                val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
+                val fallbackPref = prefs.getInt("exo_fallback_pref", 0)
+
                 if (streamsViewModel.isPlayingFromSavedLink) {
                     streamsViewModel.isPlayingFromSavedLink = false
                     val item = streamsViewModel.selectedItem.value
@@ -65,8 +72,24 @@ class MainActivity : AppCompatActivity() {
                     if (item != null) {
                         streamsViewModel.performScrape(item, season, episode)
                     }
+                } else if (fromStreams) {
+                    when (fallbackPref) {
+                        1 -> { // Always
+                            browserViewModel.loadUrlAndBrowse(this, url, true)
+                            browserViewModel.currentAppTab.value = 0
+                        }
+                        2 -> { // Never
+                            Toast.makeText(this, "ExoPlayer Error: ${error.errorCodeName}", Toast.LENGTH_LONG).show()
+                            streamsViewModel.resumeScrape()
+                        }
+                        else -> { // Ask (0)
+                            showExoFallbackDialog(url, error.errorCodeName)
+                        }
+                    }
                 } else {
-                    streamsViewModel.resumeScrape()
+                    // Coming from browser originally, just return to browser or show toast
+                    Toast.makeText(this, "ExoPlayer Error: ${error.errorCodeName}", Toast.LENGTH_SHORT).show()
+                    browserViewModel.resumeTimersOnCurrent()
                 }
             },
             onPlaybackStarted = { url, title, item, season, episode, headers ->
@@ -91,14 +114,29 @@ class MainActivity : AppCompatActivity() {
 
         // Web Extraction Play Video callback registered cleanly
         browserViewModel.onPlayNativeVideo = { videoUrl, title ->
+            // If we are currently "in the middle" of a stream interaction, 
+            // associate this browser-extracted video with the selected media item.
+            val item = streamsViewModel.selectedItem.value
+            val season = streamsViewModel.lastScrapedSeason
+            val episode = streamsViewModel.lastScrapedEpisode
+            val isFromStreams = item != null && browserViewModel.currentAppTab.value == 0
+
+            val cleanTitle = item?.optString("title") ?: item?.optString("name")
+            val fullTitle = if (isFromStreams && cleanTitle != null && season != null && episode != null) {
+                "$cleanTitle S${season}E$episode"
+            } else {
+                title ?: cleanTitle
+            }
+
             playerEngine.launchVideo(
                 videoUrl = videoUrl,
-                title = title,
+                title = fullTitle,
                 headers = browserViewModel.interceptedMediaUrls[videoUrl] ?: emptyMap(),
                 subtitles = browserViewModel.interceptedSubtitleUrls,
-                item = null,
-                season = null,
-                episode = null
+                item = if (isFromStreams) item else null,
+                season = if (isFromStreams) season else null,
+                episode = if (isFromStreams) episode else null,
+                fromStreams = false // Never show fallback dialog for browser-originated hijacks
             )
         }
 
@@ -138,10 +176,12 @@ class MainActivity : AppCompatActivity() {
                                     subtitles = event.subtitles,
                                     item = event.item,
                                     season = event.season,
-                                    episode = event.episode
+                                    episode = event.episode,
+                                    fromStreams = true
                                 )
                             } else {
-                                browserViewModel.loadUrlAndBrowse(this@MainActivity, event.url) 
+                                playerEngine.stopAndRelease()
+                                browserViewModel.loadUrlAndBrowse(this@MainActivity, event.url, true) 
                                 browserViewModel.currentAppTab.value = 0 
                             }
                             streamsViewModel.consumeEvent()
@@ -204,6 +244,36 @@ class MainActivity : AppCompatActivity() {
                 registerPythonDialogListener()
             }
         }
+    }
+
+    private fun showExoFallbackDialog(url: String, errorName: String) {
+        val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
+        val checkBox = android.widget.CheckBox(this).apply {
+            text = "Never ask again (Remember choice)"
+            setPadding(50, 20, 50, 20)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Playback Error")
+            .setMessage("ExoPlayer failed to play this stream. Would you like to try opening it in the browser instead?\n\nError: $errorName")
+            .setView(checkBox)
+            .setPositiveButton("Open in Browser") { _, _ ->
+                if (checkBox.isChecked) {
+                    prefs.edit().putInt("exo_fallback_pref", 1).apply()
+                }
+                browserViewModel.loadUrlAndBrowse(this, url, true)
+                browserViewModel.currentAppTab.value = 0
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                if (checkBox.isChecked) {
+                    prefs.edit().putInt("exo_fallback_pref", 2).apply()
+                }
+                streamsViewModel.resumeScrape()
+            }
+            .setOnCancelListener {
+                streamsViewModel.resumeScrape()
+            }
+            .show()
     }
 
     private fun registerPythonDialogListener() {

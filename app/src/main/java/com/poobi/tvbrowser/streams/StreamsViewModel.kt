@@ -292,13 +292,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun onVideoPlaybackStarted(
         url: String, 
-        title: String, 
+        displayTitle: String, 
         item: JSONObject, 
         season: Int?, 
         episode: Int?, 
         headers: Map<String, String>
     ) {
-        val displayTitle = if (season != null && episode != null) "$title S${season}E$episode" else title
         addToRecentlyPlayed(displayTitle, item, season, episode, url, headers)
 
         val autoSubMode = prefs.getInt("auto_sub_pref", 0)
@@ -903,11 +902,19 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                         val streamUrl = json.optString("url")
                         val isVideo = json.optBoolean("is_video", false)
-                        val title = _selectedItem.value?.optString("title")?.takeIf { it.isNotBlank() } ?: _selectedItem.value?.optString("name") ?: "Unknown"
+                        val cleanTitle = _selectedItem.value?.optString("title")?.takeIf { it.isNotBlank() } ?: _selectedItem.value?.optString("name") ?: "Unknown"
+                        val fullTitle = if (lastScrapedSeason != null && lastScrapedEpisode != null) {
+                            "$cleanTitle S${lastScrapedSeason}E$lastScrapedEpisode"
+                        } else cleanTitle
 
                         if (streamUrl.isNotEmpty() && streamUrl.startsWith("http")) {
                             val headersMap = mutableMapOf<String, String>()
-                            
+                            try {
+                                val sourceData = JSONObject(sourceDataJson)
+                                val hObj = sourceData.optJSONObject("headers")
+                                hObj?.keys()?.forEach { headersMap[it] = hObj.getString(it) }
+                            } catch (e: Exception) {}
+
                             var nextEp: JSONObject? = null
                             if (lastScrapedSeason != null && lastScrapedEpisode != null) {
                                 val currentEp = lastScrapedEpisode!!
@@ -929,7 +936,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                             _events.value = StreamsEvent.PlayVideo(
                                 url = streamUrl, 
-                                title = title, 
+                                title = fullTitle,
                                 headers = headersMap,
                                 subtitles = interceptedSubtitleUrls,
                                 item = _selectedItem.value!!, 
