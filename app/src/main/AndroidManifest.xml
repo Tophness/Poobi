@@ -30,8 +30,6 @@
 
         <activity android:name="com.poobi.tvbrowser.SettingsActivity" android:exported="false" />
 
-        <activity android:name="com.poobi.tvbrowser.DownloadsActivity" android:exported="false" />
-
         <!-- FileProvider for sharing downloaded files with other apps -->
         <provider
             android:name="androidx.core.content.FileProvider"
