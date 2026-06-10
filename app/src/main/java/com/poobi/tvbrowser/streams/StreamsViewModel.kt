@@ -18,6 +18,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 sealed class StreamsEvent {
     data class PlayVideo(
@@ -60,6 +62,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _itemEpisodes = MutableStateFlow<JSONArray?>(null)
     val itemEpisodes: StateFlow<JSONArray?> = _itemEpisodes.asStateFlow()
 
+    private val _lastWatchedEpisode = MutableStateFlow<Int?>(null)
+    val lastWatchedEpisode: StateFlow<Int?> = _lastWatchedEpisode.asStateFlow()
+
     private val _itemSeasons = MutableStateFlow<JSONArray?>(null)
     val itemSeasons: StateFlow<JSONArray?> = _itemSeasons.asStateFlow()
 
@@ -97,6 +102,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     private val _isDownloadingSubs = MutableStateFlow(false)
     val isDownloadingSubs: StateFlow<Boolean> = _isDownloadingSubs.asStateFlow()
+
+    private val _isTryingAll = MutableStateFlow(false)
+    val isTryingAll: StateFlow<Boolean> = _isTryingAll.asStateFlow()
+
+    private var currentTryingIndex = -1
+    private var tryAllJob: Job? = null
     
     private val _subStatusMsg = MutableStateFlow("")
     val subStatusMsg: StateFlow<String> = _subStatusMsg.asStateFlow()
@@ -478,6 +489,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _itemSeasons.value = null
         _itemCast.value = null
         _itemRecommendations.value = null
+        _lastWatchedEpisode.value = null
         
         val id = item.optInt("id")
         val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
@@ -492,10 +504,11 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
             if (mediaType == "tv") {
                 val seasons = cached.optJSONArray("seasons")
-                _itemSeasons.value = seasons
-                if (seasons != null && seasons.length() > 0) {
-                    val seasonToLoad = initialSeason ?: seasons.getJSONObject(0).optInt("season_number")
-                    loadEpisodes(item, seasonToLoad)
+                val sortedSeasons = if (seasons != null) sortSeasons(seasons) else null
+                _itemSeasons.value = sortedSeasons
+                if (sortedSeasons != null && sortedSeasons.length() > 0) {
+                    val seasonToLoad = initialSeason ?: getLastWatchedSeason(item) ?: sortedSeasons.getJSONObject(0).optInt("season_number")
+                    loadEpisodes(item, seasonToLoad, isAutoSelect = true)
                 }
             }
             return
@@ -507,6 +520,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val tmdb = py.getModule("tmdb.tmdb_api")
                 val detailsJson = tmdb.callAttr("get_details", id, mediaType).toString()
                 val details = JSONObject(detailsJson)
+                
+                if (mediaType == "tv") {
+                    val seasons = details.optJSONArray("seasons")
+                    if (seasons != null) details.put("seasons", sortSeasons(seasons))
+                }
+                
                 detailsCache.put(cacheKey, details)
 
                 withContext(Dispatchers.Main) {
@@ -518,8 +537,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         val seasons = details.optJSONArray("seasons")
                         _itemSeasons.value = seasons
                         if (seasons != null && seasons.length() > 0) {
-                            val seasonToLoad = initialSeason ?: seasons.getJSONObject(0).optInt("season_number")
-                            loadEpisodes(item, seasonToLoad)
+                            val seasonToLoad = initialSeason ?: getLastWatchedSeason(item) ?: seasons.getJSONObject(0).optInt("season_number")
+                            loadEpisodes(item, seasonToLoad, isAutoSelect = true)
                         }
                     }
                 }
@@ -527,9 +546,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun loadEpisodes(item: JSONObject, seasonNumber: Int) {
+    fun loadEpisodes(item: JSONObject, seasonNumber: Int, isAutoSelect: Boolean = false) {
         val id = item.optInt("id")
         _itemEpisodes.value = null
+
+        if (isAutoSelect) {
+            val lastEp = getLastWatchedEpisode(item, seasonNumber)
+            _lastWatchedEpisode.value = if (lastEp != null) lastEp + 1 else null
+        } else {
+            _lastWatchedEpisode.value = null
+        }
 
         val cacheKey = "${id}_$seasonNumber"
         val cached = episodesCache.get(cacheKey)
@@ -552,12 +578,15 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         episodes.getJSONObject(i).put("is_watched", if (i < watchedStatus.length()) watchedStatus.getBoolean(i) else false)
                     }
                 } catch (e: Exception) {}
-                withContext(Dispatchers.Main) { _itemEpisodes.value = episodes }
+                withContext(Dispatchers.Main) { 
+                    if (isActive) _itemEpisodes.value = episodes 
+                }
             } catch (e: Exception) {}
         }
     }
 
     fun stopScrape() {
+        stopTryAll()
         scrapePollingJob?.cancel()
         scrapePollingJob = null
         scrapeJob?.cancel()
@@ -576,6 +605,341 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _isScraping.value = false
         _isResolving.value = false
         _scrapeStatusMsg.value = "Scraping Stopped"
+    }
+
+    private var filteredSourcesToTry: List<JSONObject>? = null
+
+    fun startTryAll() {
+        if (_isTryingAll.value) {
+            stopTryAll()
+            return
+        }
+
+        val sources = _scrapedSources.value ?: return
+        val list = mutableListOf<JSONObject>()
+        for (i in 0 until sources.length()) {
+            val s = sources.optJSONObject(i) ?: continue
+            val title = s.optString("title", "")
+            if (!title.startsWith("[BROWSER]")) {
+                list.add(s)
+            }
+        }
+
+        if (list.isEmpty()) {
+            _events.value = StreamsEvent.ShowToast("No non-browser sources to try.")
+            return
+        }
+
+        filteredSourcesToTry = list
+        _isTryingAll.value = true
+        currentTryingIndex = -1
+        isInteractingWithSources = true
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try { Python.getInstance().getModule("main").callAttr("pause_scrape") } catch (e: Exception) {}
+        }
+
+        tryNextSource()
+    }
+
+    fun stopTryAll(resume: Boolean = true) {
+        if (!_isTryingAll.value) return
+        _isTryingAll.value = false
+        tryAllJob?.cancel()
+        tryAllJob = null
+        currentTryingIndex = -1
+        filteredSourcesToTry = null
+        if (resume) resumeScrape()
+    }
+
+    private fun tryNextSource() {
+        if (!_isTryingAll.value) return
+
+        val sources = filteredSourcesToTry ?: run { 
+            stopTryAll()
+            return 
+        }
+        
+        currentTryingIndex++
+
+        if (currentTryingIndex >= sources.size) {
+            _events.value = StreamsEvent.ShowToast("Finished trying all sources. None found.")
+            _scrapeStatusMsg.value = "Finished trying all sources."
+            stopTryAll()
+            return
+        }
+
+        val s = sources[currentTryingIndex]
+        val sourceDataJson = s.optString("source_data")
+
+        _isResolving.value = true
+        _scrapeStatusMsg.value = "Trying source ${currentTryingIndex + 1}/${sources.size}..."
+
+        tryAllJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                val resolveResult = scraper.callAttr("resolve", sourceDataJson).toString()
+
+                val json = JSONObject(resolveResult)
+                if (json.has("error")) {
+                    withContext(Dispatchers.Main) { tryNextSource() }
+                    return@launch
+                }
+
+                val streamUrl = json.optString("url")
+                if (streamUrl.isEmpty() || !streamUrl.startsWith("http")) {
+                    withContext(Dispatchers.Main) { tryNextSource() }
+                    return@launch
+                }
+
+                val headersMap = mutableMapOf<String, String>()
+                try {
+                    val sourceData = JSONObject(sourceDataJson)
+                    val hObj = sourceData.optJSONObject("headers")
+                    hObj?.keys()?.forEach { headersMap[it] = hObj.getString(it) }
+                } catch (e: Exception) {}
+
+                if (checkUrlValidity(streamUrl, headersMap)) {
+                    withContext(Dispatchers.Main) {
+                        _isResolving.value = false
+                        _scrapeStatusMsg.value = "Valid source found! Playing..."
+                        playStream(streamUrl, json.optBoolean("is_video", false), sourceDataJson)
+                    }
+                } else {
+                    withContext(Dispatchers.Main) { tryNextSource() }
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                withContext(Dispatchers.Main) { tryNextSource() }
+            }
+        }
+    }
+
+    private suspend fun checkUrlValidity(url: String, headers: Map<String, String>): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.requestMethod = "HEAD"
+            headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
+            connection.connectTimeout = 8000
+            connection.readTimeout = 8000
+            
+            val responseCode = connection.responseCode
+            val contentType = connection.contentType ?: ""
+
+            if (responseCode in 200..299) {
+                if (contentType.contains("mpegurl", ignoreCase = true) || url.contains(".m3u8", ignoreCase = true)) {
+                    return@withContext verifyM3u8Content(url, headers)
+                }
+
+                val isValid = contentType.contains("video", ignoreCase = true) ||
+                        contentType.contains("mp4", ignoreCase = true) ||
+                        contentType.contains("octet-stream", ignoreCase = true)
+
+                return@withContext isValid
+            }
+
+            if (responseCode == 405 || responseCode == 403 || responseCode == 501 || responseCode == 404) {
+                val getConn = URL(url).openConnection() as HttpURLConnection
+                getConn.requestMethod = "GET"
+                headers.forEach { (k, v) -> getConn.setRequestProperty(k, v) }
+                getConn.setRequestProperty("Range", "bytes=0-8192")
+                getConn.connectTimeout = 8000
+                getConn.readTimeout = 8000
+                
+                val getResponseCode = getConn.responseCode
+                val getContentType = getConn.contentType ?: ""
+
+                if ((getResponseCode in 200..299) || getResponseCode == 206) {
+                    getConn.inputStream.use { input ->
+                        val buffer = ByteArray(8192)
+                        val read = input.read(buffer)
+                        if (read > 0) {
+                            val content = String(buffer, 0, read)
+                            if (content.contains("#EXTM3U")) {
+                                return@withContext verifyM3u8Segments(content, url, headers)
+                            }
+                            
+                            val isVideoType = getContentType.contains("video", ignoreCase = true) || 
+                                              getContentType.contains("octet-stream", ignoreCase = true)
+
+                            return@withContext isVideoType
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {}
+        false
+    }
+
+    private suspend fun verifyM3u8Content(url: String, headers: Map<String, String>): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
+            connection.connectTimeout = 8000
+            connection.readTimeout = 8000
+            connection.inputStream.use { input ->
+                val buffer = ByteArray(8192)
+                val read = input.read(buffer)
+                if (read > 0) {
+                    val content = String(buffer, 0, read)
+                    return@withContext verifyM3u8Segments(content, url, headers)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("StreamsViewModel", "Failed to verify M3U8 content: ${e.message}")
+        }
+        false
+    }
+
+    private suspend fun verifyM3u8Segments(content: String, baseUrl: String, headers: Map<String, String>, depth: Int = 0): Boolean = withContext(Dispatchers.IO) {
+        if (!content.contains("#EXTM3U") || depth > 2) return@withContext false
+        
+        val lines = content.lines()
+        var firstSegmentUrl: String? = null
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) continue
+            firstSegmentUrl = trimmed
+            break
+        }
+
+        if (firstSegmentUrl == null) {
+            return@withContext false
+        }
+
+        val fullSegmentUrl = if (firstSegmentUrl.startsWith("http")) {
+            firstSegmentUrl
+        } else {
+            try {
+                val uri = java.net.URI(baseUrl)
+                uri.resolve(firstSegmentUrl).toString()
+            } catch (e: Exception) {
+                Log.e("StreamsViewModel", "Failed to resolve relative segment URL: $firstSegmentUrl")
+                return@withContext false
+            }
+        }
+
+        try {
+            val connection = URL(fullSegmentUrl).openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
+            connection.setRequestProperty("Range", "bytes=0-8192")
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
+            
+            val responseCode = connection.responseCode
+            val contentType = connection.contentType ?: ""
+
+            if ((responseCode in 200..299) || responseCode == 206) {
+                if (contentType.contains("mpegurl", ignoreCase = true) || fullSegmentUrl.contains(".m3u8", ignoreCase = true)) {
+                    connection.inputStream.use { input ->
+                        val buffer = ByteArray(8192)
+                        val read = input.read(buffer)
+                        if (read > 0) {
+                            val nestedContent = String(buffer, 0, read)
+                            return@withContext verifyM3u8Segments(nestedContent, fullSegmentUrl, headers, depth + 1)
+                        }
+                    }
+                    return@withContext false
+                }
+
+                val lowerUrl = fullSegmentUrl.lowercase()
+                val isSuspicious = lowerUrl.run {
+                    endsWith(".png") || endsWith(".svg") || endsWith(".css") || 
+                    endsWith(".js") || endsWith(".woff") || endsWith(".csv") || 
+                    endsWith(".json") || endsWith(".ttf") || endsWith(".otf") || 
+                    endsWith(".txt") || endsWith(".php") || endsWith(".html")
+                } || contentType.contains("image", ignoreCase = true) || 
+                   contentType.contains("text/", ignoreCase = true) ||
+                   contentType.contains("application/javascript", ignoreCase = true) ||
+                   contentType.contains("font", ignoreCase = true)
+
+                if (isSuspicious) {
+                    connection.inputStream.use { input ->
+                        val buffer = ByteArray(32)
+                        val read = input.read(buffer)
+                        if (read >= 4) {
+                            // PNG Signature: 89 50 4E 47
+                            if (buffer[0] == 0x89.toByte() && buffer[1] == 0x50.toByte() && 
+                                buffer[2] == 0x4E.toByte() && buffer[3] == 0x47.toByte()) {
+                                return@withContext false
+                            }
+                            
+                            val head = String(buffer, 0, read)
+                            // SVG / HTML / XML Signatures
+                            if (head.contains("<svg", true) || head.contains("<?xml", true) || 
+                                head.contains("<!DOCTYPE", true) || head.contains("<html", true)) {
+                                return@withContext false
+                            }
+                            
+                            // Common text-based signatures (JSON, CSS, JS comments)
+                            if (head.startsWith("{") || head.startsWith("[") || head.startsWith("/*") || head.startsWith("//")) {
+                                return@withContext false
+                            }
+                        }
+                    }
+                }
+                return@withContext true
+            }
+        } catch (e: Exception) {
+            Log.e("StreamsViewModel", "Segment verification failed: ${e.message}")
+        }
+
+        false
+    }
+
+    private fun playStream(streamUrl: String, isVideo: Boolean, sourceDataJson: String) {
+        val cleanTitle = _selectedItem.value?.optString("title")?.takeIf { it.isNotBlank() } ?: _selectedItem.value?.optString("name") ?: "Unknown"
+        val fullTitle = if (lastScrapedSeason != null && lastScrapedEpisode != null) {
+            "$cleanTitle S${lastScrapedSeason}E$lastScrapedEpisode"
+        } else cleanTitle
+
+        val headersMap = mutableMapOf<String, String>()
+        try {
+            val sourceData = JSONObject(sourceDataJson)
+            val hObj = sourceData.optJSONObject("headers")
+            hObj?.keys()?.forEach { headersMap[it] = hObj.getString(it) }
+        } catch (e: Exception) {}
+
+        var nextEp: JSONObject? = null
+        if (lastScrapedSeason != null && lastScrapedEpisode != null) {
+            val currentEp = lastScrapedEpisode!!
+            val item = _selectedItem.value
+            if (item != null) {
+                val cacheKey = "${item.optInt("id")}_$lastScrapedSeason"
+                val episodes = episodesCache.get(cacheKey)
+                if (episodes != null) {
+                    for (i in 0 until episodes.length()) {
+                        val ep = episodes.getJSONObject(i)
+                        if (ep.optInt("episode_number") == currentEp + 1) {
+                            nextEp = ep
+                            break
+                        }
+                    }
+                }
+            }
+        }
+
+        _events.value = StreamsEvent.PlayVideo(
+            url = streamUrl,
+            title = fullTitle,
+            headers = headersMap,
+            subtitles = interceptedSubtitleUrls,
+            item = _selectedItem.value!!,
+            season = lastScrapedSeason,
+            episode = lastScrapedEpisode,
+            nextEpisode = nextEp,
+            isWebpage = !isVideo
+        )
+    }
+
+    fun onPlaybackError() {
+        if (_isTryingAll.value) {
+            viewModelScope.launch(Dispatchers.Main) {
+                tryNextSource()
+            }
+        }
     }
 
     private fun onScrapeFinished(item: JSONObject, season: Int?, episode: Int?, sources: JSONArray?) {
@@ -854,6 +1218,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun resolveAndPlay(sourceDataJson: String, rawItem: JSONObject) {
+        stopTryAll()
         isPlayingFromSavedLink = false
         lastSelectedSource = try { JSONObject(sourceDataJson) } catch (e: Exception) { rawItem }
         isInteractingWithSources = true
@@ -902,49 +1267,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                         val streamUrl = json.optString("url")
                         val isVideo = json.optBoolean("is_video", false)
-                        val cleanTitle = _selectedItem.value?.optString("title")?.takeIf { it.isNotBlank() } ?: _selectedItem.value?.optString("name") ?: "Unknown"
-                        val fullTitle = if (lastScrapedSeason != null && lastScrapedEpisode != null) {
-                            "$cleanTitle S${lastScrapedSeason}E$lastScrapedEpisode"
-                        } else cleanTitle
-
+                        
                         if (streamUrl.isNotEmpty() && streamUrl.startsWith("http")) {
-                            val headersMap = mutableMapOf<String, String>()
-                            try {
-                                val sourceData = JSONObject(sourceDataJson)
-                                val hObj = sourceData.optJSONObject("headers")
-                                hObj?.keys()?.forEach { headersMap[it] = hObj.getString(it) }
-                            } catch (e: Exception) {}
-
-                            var nextEp: JSONObject? = null
-                            if (lastScrapedSeason != null && lastScrapedEpisode != null) {
-                                val currentEp = lastScrapedEpisode!!
-                                val item = _selectedItem.value
-                                if (item != null) {
-                                    val cacheKey = "${item.optInt("id")}_$lastScrapedSeason"
-                                    val episodes = episodesCache.get(cacheKey)
-                                    if (episodes != null) {
-                                        for (i in 0 until episodes.length()) {
-                                            val ep = episodes.getJSONObject(i)
-                                            if (ep.optInt("episode_number") == currentEp + 1) {
-                                                nextEp = ep
-                                                break
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            _events.value = StreamsEvent.PlayVideo(
-                                url = streamUrl, 
-                                title = fullTitle,
-                                headers = headersMap,
-                                subtitles = interceptedSubtitleUrls,
-                                item = _selectedItem.value!!, 
-                                season = lastScrapedSeason, 
-                                episode = lastScrapedEpisode, 
-                                nextEpisode = nextEp,
-                                isWebpage = !isVideo
-                            )
+                            playStream(streamUrl, isVideo, sourceDataJson)
                         } else {
                             resumeScrape()
                             _events.value = StreamsEvent.ShowToast("Could not resolve stream URL")
@@ -1137,6 +1462,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 withContext(Dispatchers.Main) {
                     performScrape(item, season, episode)
                 }
@@ -1201,10 +1527,63 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     Log.e("TVBrowser", "Trakt episode sync task error: ${e.message}")
                 }
                 delay(900000)
             }
         }
+    }
+
+    private fun getLastWatchedSeason(item: JSONObject): Int? {
+        val id = item.optString("id")
+        val imdb = item.optString("imdb")
+        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+        val array = JSONArray(recentJson)
+        for (i in 0 until array.length()) {
+            val entry = array.getJSONObject(i)
+            val itItem = entry.optJSONObject("item")
+            if (itItem?.optString("id") == id || (imdb.isNotEmpty() && itItem?.optString("imdb") == imdb)) {
+                if (entry.has("season")) return entry.getInt("season")
+            }
+        }
+        return null
+    }
+
+    private fun getLastWatchedEpisode(item: JSONObject, season: Int): Int? {
+        val id = item.optString("id")
+        val imdb = item.optString("imdb")
+        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+        val array = JSONArray(recentJson)
+        for (i in 0 until array.length()) {
+            val entry = array.getJSONObject(i)
+            val itItem = entry.optJSONObject("item")
+            if (itItem?.optString("id") == id || (imdb.isNotEmpty() && itItem?.optString("imdb") == imdb)) {
+                if (entry.has("season") && entry.getInt("season") == season) {
+                    if (entry.has("episode")) return entry.getInt("episode")
+                }
+            }
+        }
+        return null
+    }
+
+    private fun sortSeasons(seasons: JSONArray): JSONArray {
+        val list = mutableListOf<JSONObject>()
+        for (i in 0 until seasons.length()) {
+            list.add(seasons.getJSONObject(i))
+        }
+        list.sortWith { a, b ->
+            val numA = a.optInt("season_number")
+            val numB = b.optInt("season_number")
+            when {
+                numA == 0 && numB == 0 -> 0
+                numA == 0 -> 1
+                numB == 0 -> -1
+                else -> numA.compareTo(numB)
+            }
+        }
+        val result = JSONArray()
+        list.forEach { result.put(it) }
+        return result
     }
 }

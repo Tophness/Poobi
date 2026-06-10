@@ -28,6 +28,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
 
     val subStatus by viewModel.subStatusMsg.collectAsState()
     val isDownloadingSubs by viewModel.isDownloadingSubs.collectAsState()
+    val isTryingAll by viewModel.isTryingAll.collectAsState()
 
     var showSortDialog by remember { mutableStateOf(false) }
 
@@ -54,6 +55,21 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
             Spacer(modifier = Modifier.weight(1f))
 
             if (sources != null && sources!!.length() > 0) {
+                Button(
+                    onClick = { viewModel.startTryAll() },
+                    colors = ButtonDefaults.buttonColors(containerColor = if (isTryingAll) Color(0xFFE91E63) else Color(0xFF4CAF50)),
+                    modifier = Modifier.height(50.dp)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            painter = painterResource(id = if (isTryingAll) R.drawable.ic_stop else R.drawable.ic_auto_play),
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                        Text(if (isTryingAll) "Stop Trying" else "Try All", color = Color.White)
+                    }
+                }
+                Spacer(modifier = Modifier.width(10.dp))
                 Button(onClick = { showSortDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)), modifier = Modifier.height(50.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(painter = painterResource(id = R.drawable.ic_sort), contentDescription = null, tint = Color.White)

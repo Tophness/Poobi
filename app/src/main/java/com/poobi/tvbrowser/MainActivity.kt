@@ -57,42 +57,47 @@ class MainActivity : AppCompatActivity() {
             prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE),
             onPlaybackError = { error, rawUrl ->
                 playerEngine.stopAndRelease()
-                
-                val fromStreams = rawUrl.endsWith("|from_streams")
-                val url = if (fromStreams) rawUrl.removeSuffix("|from_streams") else rawUrl
 
-                val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
-                val fallbackPref = prefs.getInt("exo_fallback_pref", 0)
-
-                if (streamsViewModel.isPlayingFromSavedLink) {
-                    streamsViewModel.isPlayingFromSavedLink = false
-                    val item = streamsViewModel.selectedItem.value
-                    val season = streamsViewModel.lastScrapedSeason
-                    val episode = streamsViewModel.lastScrapedEpisode
-                    if (item != null) {
-                        streamsViewModel.performScrape(item, season, episode)
-                    }
-                } else if (fromStreams) {
-                    when (fallbackPref) {
-                        1 -> { // Always
-                            browserViewModel.loadUrlAndBrowse(this, url, true)
-                            browserViewModel.currentAppTab.value = 0
-                        }
-                        2 -> { // Never
-                            Toast.makeText(this, "ExoPlayer Error: ${error.errorCodeName}", Toast.LENGTH_LONG).show()
-                            streamsViewModel.resumeScrape()
-                        }
-                        else -> { // Ask (0)
-                            showExoFallbackDialog(url, error.errorCodeName)
-                        }
-                    }
+                if (streamsViewModel.isTryingAll.value) {
+                    streamsViewModel.onPlaybackError()
                 } else {
-                    // Coming from browser originally, just return to browser or show toast
-                    Toast.makeText(this, "ExoPlayer Error: ${error.errorCodeName}", Toast.LENGTH_SHORT).show()
-                    browserViewModel.resumeTimersOnCurrent()
+                    val fromStreams = rawUrl.endsWith("|from_streams")
+                    val url = if (fromStreams) rawUrl.removeSuffix("|from_streams") else rawUrl
+
+                    val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
+                    val fallbackPref = prefs.getInt("exo_fallback_pref", 0)
+
+                    if (streamsViewModel.isPlayingFromSavedLink) {
+                        streamsViewModel.isPlayingFromSavedLink = false
+                        val item = streamsViewModel.selectedItem.value
+                        val season = streamsViewModel.lastScrapedSeason
+                        val episode = streamsViewModel.lastScrapedEpisode
+                        if (item != null) {
+                            streamsViewModel.performScrape(item, season, episode)
+                        }
+                    } else if (fromStreams) {
+                        when (fallbackPref) {
+                            1 -> { // Always
+                                browserViewModel.loadUrlAndBrowse(this, url, true)
+                                browserViewModel.currentAppTab.value = 0
+                            }
+                            2 -> { // Never
+                                Toast.makeText(this, "ExoPlayer Error: ${error.errorCodeName}", Toast.LENGTH_LONG).show()
+                                streamsViewModel.resumeScrape()
+                            }
+                            else -> { // Ask (0)
+                                showExoFallbackDialog(url, error.errorCodeName)
+                            }
+                        }
+                    } else {
+                        // Coming from browser originally, just return to browser or show toast
+                        Toast.makeText(this, "ExoPlayer Error: ${error.errorCodeName}", Toast.LENGTH_SHORT).show()
+                        browserViewModel.resumeTimersOnCurrent()
+                    }
                 }
             },
             onPlaybackStarted = { url, title, item, season, episode, headers ->
+                streamsViewModel.stopTryAll(resume = false)
                 streamsViewModel.onVideoPlaybackStarted(url, title, item, season, episode, headers)
             },
             onUpNextTriggered = { },

@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.RemoteImage
 import com.poobi.tvbrowser.shared.TvFocusableBox
@@ -53,15 +54,19 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
     // Smart-cast workaround for Kotlin delegated properties
     val localEpisodes = episodes
+    val lastWatchedEpisode by viewModel.lastWatchedEpisode.collectAsState()
+    var autoFocusCancelled by remember(item) { mutableStateOf(false) }
 
     val targetEpisodeFocusRequester = remember { FocusRequester() }
     val playButtonFocusRequester = remember { FocusRequester() }
+    val seasonSelectorFocusRequester = remember { FocusRequester() }
     val firstCastFocusRequester = remember { FocusRequester() }
 
-    val title = details?.optString("title")?.takeIf { it.isNotBlank() } 
+    val titleRaw = details?.optString("title")?.takeIf { it.isNotBlank() } 
         ?: item?.optString("title")?.takeIf { it.isNotBlank() } 
         ?: details?.optString("name")?.takeIf { it.isNotBlank() } 
         ?: item?.optString("name") ?: "Unknown"
+    val title = titleRaw.replace(Regex("\\s\\(\\d{4}\\)$"), "")
 
     val overview = details?.optString("overview")?.takeIf { it.isNotBlank() } 
         ?: item?.optString("overview") ?: "No description available."
@@ -101,13 +106,39 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
         if (genreNames.isNotEmpty()) genresStr = genreNames.joinToString(" • ")
     }
 
-    var selectedSeasonIndex by remember { mutableStateOf(0) }
+    var selectedSeasonIndex by remember(seasons) { mutableStateOf(0) }
     var spinnerExpanded by remember { mutableStateOf(false) }
+
+    // Synchronize local selectedSeasonIndex with what's actually loaded in the ViewModel
+    LaunchedEffect(localEpisodes, seasons) {
+        if (seasons != null && localEpisodes != null && localEpisodes.length() > 0) {
+            val currentSeasonNum = localEpisodes.getJSONObject(0).optInt("season_number", -1)
+            for (i in 0 until seasons!!.length()) {
+                if (seasons!!.getJSONObject(i).optInt("season_number") == currentSeasonNum) {
+                    selectedSeasonIndex = i
+                    break
+                }
+            }
+        }
+    }
 
     val leftColumnScrollState = rememberScrollState()
 
-    val targetEpisodeToFocus = remember(localEpisodes, viewModel.lastScrapedSeason, viewModel.lastScrapedEpisode) {
+    val targetEpisodeToFocus = remember(localEpisodes, lastWatchedEpisode, viewModel.lastScrapedSeason, viewModel.lastScrapedEpisode) {
         if (localEpisodes != null) {
+            // Priority 1: History-based "next" episode from ViewModel
+            if (lastWatchedEpisode != null) {
+                var exists = false
+                for (i in 0 until localEpisodes.length()) {
+                    if (localEpisodes.getJSONObject(i).optInt("episode_number") == lastWatchedEpisode) {
+                        exists = true
+                        break
+                    }
+                }
+                if (exists) return@remember lastWatchedEpisode
+            }
+
+            // Priority 2: Just-watched-session-based next episode logic
             if (viewModel.lastScrapedSeason != null && viewModel.lastScrapedEpisode != null) {
                 val activeSeasonNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number")
                 if (activeSeasonNum == viewModel.lastScrapedSeason) {
@@ -122,7 +153,6 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     if (savedPos > 0L) {
                         viewModel.lastScrapedEpisode
                     } else {
-                        // Completed, advance to next episode if it exists in the active list
                         val nextEp = viewModel.lastScrapedEpisode!! + 1
                         var nextExists = false
                         for (i in 0 until localEpisodes.length()) {
@@ -142,15 +172,24 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
         } else null
     }
 
-    LaunchedEffect(targetEpisodeToFocus, item) {
+    LaunchedEffect(item) {
+        autoFocusCancelled = false
         if (mediaType == "movie") {
-            try {
-                playButtonFocusRequester.requestFocus()
-            } catch (e: Exception) {}
-        } else if (mediaType == "tv" && targetEpisodeToFocus != null) {
-            try {
-                targetEpisodeFocusRequester.requestFocus()
-            } catch (e: Exception) {}
+            try { playButtonFocusRequester.requestFocus() } catch (e: Exception) {}
+        } else if (mediaType == "tv") {
+            try { seasonSelectorFocusRequester.requestFocus() } catch (e: Exception) {}
+        }
+    }
+
+    LaunchedEffect(targetEpisodeToFocus, autoFocusCancelled) {
+        if (!autoFocusCancelled && mediaType == "tv" && targetEpisodeToFocus != null && localEpisodes != null) {
+            delay(800)
+            if (!autoFocusCancelled) {
+                try {
+                    targetEpisodeFocusRequester.requestFocus()
+                    autoFocusCancelled = true // Mark as finished so it doesn't jump again if list recomposes
+                } catch (e: Exception) {}
+            }
         }
     }
 
@@ -169,12 +208,13 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                 Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             
-            Text(
-                text = "$year • ${mediaType.uppercase()} • ⭐ %.1f".format(rating),
-                color = Color(0xFF00BCD4),
-                fontSize = 16.sp,
-                modifier = Modifier.padding(top = 4.dp)
-            )
+            Row(modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(text = year, color = Color(0xFFB0BEC5), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(text = " • ", color = Color.DarkGray, fontSize = 15.sp)
+                Text(text = mediaType.uppercase(), color = Color(0xFF90A4AE), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(text = " • ", color = Color.DarkGray, fontSize = 15.sp)
+                Text(text = "⭐ %.1f".format(rating), color = Color(0xFF00BCD4), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
 
             if (genresStr.isNotEmpty()) {
                 TvMarqueeText(
@@ -182,7 +222,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     color = Color(0xFFFFB74D),
                     fontSize = 14.sp,
                     maxLines = 1,
-                    isFocused = false,
+                    isFocused = true,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -233,7 +273,20 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     Text("Season:", color = Color.Gray, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
                     
                     TvFocusableBox(
-                        modifier = Modifier.width(200.dp).height(50.dp),
+                        modifier = Modifier
+                            .width(200.dp)
+                            .height(50.dp)
+                            .focusRequester(seasonSelectorFocusRequester)
+                            .onPreviewKeyEvent { keyEvent ->
+                                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                                    val code = keyEvent.nativeKeyEvent.keyCode
+                                    if (code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER) {
+                                        // User is navigating manually, cancel the auto-jump to episode
+                                        autoFocusCancelled = true
+                                    }
+                                }
+                                false
+                            },
                         onClick = { spinnerExpanded = true }
                     ) {
                         val activeSeasonName = seasons!!.getJSONObject(selectedSeasonIndex).optString("name", "Season ${selectedSeasonIndex + 1}")
