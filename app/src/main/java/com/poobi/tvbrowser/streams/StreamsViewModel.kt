@@ -165,6 +165,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private fun loadGenres() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                delay(3000)
                 val py = getPythonInstance()
                 val tmdb = py.getModule("tmdb.tmdb_api")
                 val movieGenres = JSONObject(tmdb.callAttr("get_genres", "movie").toString()).getJSONArray("genres")
@@ -184,25 +185,39 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun loadSearchHistory() {
-        val historyJson = prefs.getString("streams_search_history", "[]") ?: "[]"
-        val array = JSONArray(historyJson)
-        val list = mutableListOf<String>()
-        for (i in 0 until array.length()) list.add(array.getString(i))
-        _searchHistory.value = list
+        viewModelScope.launch(Dispatchers.IO) {
+            val historyJson = prefs.getString("streams_search_history", "[]") ?: "[]"
+            val array = JSONArray(historyJson)
+            val list = mutableListOf<String>()
+            for (i in 0 until array.length()) list.add(array.getString(i))
+            
+            withContext(Dispatchers.Main) {
+                _searchHistory.value = list
+            }
+        }
     }
 
     fun addToSearchHistory(query: String) {
-        val list = _searchHistory.value.toMutableList()
-        list.remove(query)
-        list.add(0, query)
-        if (list.size > 20) list.removeAt(list.size - 1)
-        _searchHistory.value = list
-        prefs.edit().putString("streams_search_history", JSONArray(list).toString()).apply()
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = _searchHistory.value.toMutableList()
+            list.remove(query)
+            list.add(0, query)
+            if (list.size > 20) list.removeAt(list.size - 1)
+            
+            prefs.edit().putString("streams_search_history", JSONArray(list).toString()).apply()
+            withContext(Dispatchers.Main) {
+                _searchHistory.value = list
+            }
+        }
     }
 
     fun clearSearchHistory() {
-        prefs.edit().putString("streams_search_history", "[]").apply()
-        _searchHistory.value = emptyList()
+        viewModelScope.launch(Dispatchers.IO) {
+            prefs.edit().putString("streams_search_history", "[]").apply()
+            withContext(Dispatchers.Main) {
+                _searchHistory.value = emptyList()
+            }
+        }
     }
 
     fun performSearch(query: String) {
@@ -258,7 +273,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         cancelLibraryJobs()
         libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Small debounce to prevent rapid fire requests during fast scrolling
                 delay(150)
                 if (!isActive) return@launch
 
@@ -284,25 +298,34 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun loadFavorites() { 
         cancelLibraryJobs()
-        _libraryItems.value = JSONArray(prefs.getString("streams_favorites", "[]") ?: "[]") 
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = JSONArray(prefs.getString("streams_favorites", "[]") ?: "[]")
+            withContext(Dispatchers.Main) {
+                _libraryItems.value = list
+            }
+        }
     }
     
     fun loadRecentlyPlayed() { 
         cancelLibraryJobs()
-        _libraryItems.value = JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
+            withContext(Dispatchers.Main) {
+                _libraryItems.value = list
+            }
+        }
     }
     
     fun removeFromRecentlyPlayed(index: Int) {
-        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
-        val array = JSONArray(recentJson)
-        if (index >= 0 && index < array.length()) {
-            val entry = array.getJSONObject(index)
-            val displayTitle = entry.optString("display_title")
-            
-            // Delete associated downloaded subtitle files on disk
-            val subtitlesArr = entry.optJSONArray("subtitles")
-            if (subtitlesArr != null) {
-                viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+            val array = JSONArray(recentJson)
+            if (index >= 0 && index < array.length()) {
+                val entry = array.getJSONObject(index)
+                val displayTitle = entry.optString("display_title")
+                
+                val subtitlesArr = entry.optJSONArray("subtitles")
+                if (subtitlesArr != null) {
                     for (i in 0 until subtitlesArr.length()) {
                         try {
                             val subObj = subtitlesArr.getJSONObject(i)
@@ -324,29 +347,30 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
                 }
-            }
 
-            // Remove subtitles mapping from cache_mapping.json
-            val item = entry.optJSONObject("item")
-            if (item != null) {
-                val itemId = item.optInt("id")
-                val season = if (entry.has("season")) entry.getInt("season") else 0
-                val episode = if (entry.has("episode")) entry.getInt("episode") else 0
-                val itemKey = "${itemId}_${season}_${episode}"
-                removeSubtitlesFromCacheMap(itemKey)
+                val item = entry.optJSONObject("item")
+                if (item != null) {
+                    val itemId = item.optInt("id")
+                    val season = if (entry.has("season")) entry.getInt("season") else 0
+                    val episode = if (entry.has("episode")) entry.getInt("episode") else 0
+                    val itemKey = "${itemId}_${season}_${episode}"
+                    removeSubtitlesFromCacheMap(itemKey)
+                }
+                
+                val newList = JSONArray()
+                for (i in 0 until array.length()) {
+                    if (i != index) newList.put(array.get(i))
+                }
+                prefs.edit().putString("streams_recently_played", newList.toString()).apply()
+                
+                if (displayTitle.isNotEmpty()) {
+                    prefs.edit().remove("resume_stream_$displayTitle").apply()
+                }
+                
+                withContext(Dispatchers.Main) {
+                    loadRecentlyPlayed()
+                }
             }
-            
-            val newList = JSONArray()
-            for (i in 0 until array.length()) {
-                if (i != index) newList.put(array.get(i))
-            }
-            prefs.edit().putString("streams_recently_played", newList.toString()).apply()
-            
-            if (displayTitle.isNotEmpty()) {
-                prefs.edit().remove("resume_stream_$displayTitle").apply()
-            }
-            
-            loadRecentlyPlayed()
         }
     }
 
@@ -359,7 +383,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         headers: Map<String, String>,
         subtitles: Map<String, Map<String, String>>
     ) {
-        // If subtitles are provided (e.g. from browser hijack), update our local map
         if (subtitles.isNotEmpty()) {
             interceptedSubtitleUrls.clear()
             interceptedSubtitleUrls.putAll(subtitles)
@@ -383,61 +406,63 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         videoUrl: String? = null, 
         headers: Map<String, String>? = null
     ) {
-        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
-        val array = JSONArray(recentJson)
-        val newList = mutableListOf<JSONObject>()
-        for (i in 0 until array.length()) newList.add(array.getJSONObject(i))
+        viewModelScope.launch(Dispatchers.IO) {
+            val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+            val array = JSONArray(recentJson)
+            val newList = mutableListOf<JSONObject>()
+            for (i in 0 until array.length()) newList.add(array.getJSONObject(i))
 
-        val id = item.optString("id")
-        val imdb = item.optString("imdb")
+            val id = item.optString("id")
+            val imdb = item.optString("imdb")
 
-        val existingIndex = newList.indexOfFirst {
-            val itItem = it.optJSONObject("item")
-            val itId = itItem?.optString("id")
-            val itIdValue = itId ?: ""
-            val itImdb = itItem?.optString("imdb")
-            val itImdbValue = itImdb ?: ""
-            val sameItem = (itIdValue == id && id.isNotEmpty()) || (itImdbValue == imdb && imdb.isNotEmpty())
-            val sameEpisode = it.optInt("season", -1) == (season ?: -1) && it.optInt("episode", -1) == (episode ?: -1)
-            sameItem && sameEpisode
-        }
-
-        var existing: JSONObject? = null
-        if (existingIndex != -1) {
-            existing = newList.removeAt(existingIndex)
-        }
-
-        val newEntry = JSONObject().apply {
-            put("display_title", displayTitle)
-            put("item", item)
-            if (season != null) put("season", season)
-            if (episode != null) put("episode", episode)
-
-            val finalUrl = videoUrl ?: existing?.optString("video_url")
-            if (!finalUrl.isNullOrEmpty()) put("video_url", finalUrl)
-
-            val finalHeaders = if (headers != null) JSONObject(headers) else existing?.optJSONObject("headers")
-            if (finalHeaders != null) put("headers", finalHeaders)
-
-            if (interceptedSubtitleUrls.isNotEmpty()) {
-                val subsArray = JSONArray()
-                interceptedSubtitleUrls.forEach { (url, info) ->
-                    val subObj = JSONObject()
-                    subObj.put("url", url)
-                    val infoObj = JSONObject()
-                    info.forEach { (k, v) -> infoObj.put(k, v) }
-                    subObj.put("info", infoObj)
-                    subsArray.put(subObj)
-                }
-                put("subtitles", subsArray)
-            } else if (existing?.has("subtitles") == true) {
-                put("subtitles", existing.getJSONArray("subtitles"))
+            val existingIndex = newList.indexOfFirst {
+                val itItem = it.optJSONObject("item")
+                val itId = itItem?.optString("id")
+                val itIdValue = itId ?: ""
+                val itImdb = itItem?.optString("imdb")
+                val itImdbValue = itImdb ?: ""
+                val sameItem = (itIdValue == id && id.isNotEmpty()) || (itImdbValue == imdb && imdb.isNotEmpty())
+                val sameEpisode = it.optInt("season", -1) == (season ?: -1) && it.optInt("episode", -1) == (episode ?: -1)
+                sameItem && sameEpisode
             }
-        }
-        newList.add(0, newEntry)
-        if (newList.size > 20) newList.removeAt(newList.size - 1)
 
-        prefs.edit().putString("streams_recently_played", JSONArray(newList).toString()).apply()
+            var existing: JSONObject? = null
+            if (existingIndex != -1) {
+                existing = newList.removeAt(existingIndex)
+            }
+
+            val newEntry = JSONObject().apply {
+                put("display_title", displayTitle)
+                put("item", item)
+                if (season != null) put("season", season)
+                if (episode != null) put("episode", episode)
+
+                val finalUrl = videoUrl ?: existing?.optString("video_url")
+                if (!finalUrl.isNullOrEmpty()) put("video_url", finalUrl)
+
+                val finalHeaders = if (headers != null) JSONObject(headers) else existing?.optJSONObject("headers")
+                if (finalHeaders != null) put("headers", finalHeaders)
+
+                if (interceptedSubtitleUrls.isNotEmpty()) {
+                    val subsArray = JSONArray()
+                    interceptedSubtitleUrls.forEach { (url, info) ->
+                        val subObj = JSONObject()
+                        subObj.put("url", url)
+                        val infoObj = JSONObject()
+                        info.forEach { (k, v) -> infoObj.put(k, v) }
+                        subObj.put("info", infoObj)
+                        subsArray.put(subObj)
+                    }
+                    put("subtitles", subsArray)
+                } else if (existing?.has("subtitles") == true) {
+                    put("subtitles", existing.getJSONArray("subtitles"))
+                }
+            }
+            newList.add(0, newEntry)
+            if (newList.size > 20) newList.removeAt(newList.size - 1)
+
+            prefs.edit().putString("streams_recently_played", JSONArray(newList).toString()).apply()
+        }
     }
 
     fun selectRecentlyPlayedItem(entry: JSONObject) {
@@ -492,51 +517,59 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun refreshFavoritesSet() {
-        val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
-        val array = JSONArray(favsJson)
-        val set = mutableSetOf<String>()
-        for (i in 0 until array.length()) {
-            val item = array.getJSONObject(i)
-            val id = item.optString("id")
-            val imdb = item.optString("imdb")
-            if (id.isNotEmpty()) set.add(id)
-            if (imdb.isNotEmpty()) set.add(imdb)
+        viewModelScope.launch(Dispatchers.IO) {
+            val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+            val array = JSONArray(favsJson)
+            val set = mutableSetOf<String>()
+            for (i in 0 until array.length()) {
+                val item = array.getJSONObject(i)
+                val id = item.optString("id")
+                val imdb = item.optString("imdb")
+                if (id.isNotEmpty()) set.add(id)
+                if (imdb.isNotEmpty()) set.add(imdb)
+            }
+            withContext(Dispatchers.Main) {
+                _favoritesSet.value = set
+            }
         }
-        _favoritesSet.value = set
     }
 
     fun toggleFavorite(item: JSONObject, isCurrentlyViewingFavorites: Boolean = false) {
-        val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
-        val array = JSONArray(favsJson)
-        val id = item.optString("id")
-        val imdb = item.optString("imdb")
-        var foundIndex = -1
-        for (i in 0 until array.length()) {
-            val fav = array.getJSONObject(i)
-            if (fav.optString("id") == id || (imdb.isNotEmpty() && fav.optString("imdb") == imdb)) {
-                foundIndex = i; break
-            }
-        }
-        if (foundIndex != -1) {
-            array.remove(foundIndex)
-            _events.value = StreamsEvent.ShowToast("Removed from Favorites")
-        } else {
-            if (!item.has("genre_ids") && !item.has("genres")) {
-                _itemDetails.value?.let { details ->
-                    if (details.optInt("id") == item.optInt("id")) {
-                        val genres = details.optJSONArray("genres")
-                        if (genres != null) item.put("genres", genres)
-                    }
+        viewModelScope.launch(Dispatchers.IO) {
+            val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+            val array = JSONArray(favsJson)
+            val id = item.optString("id")
+            val imdb = item.optString("imdb")
+            var foundIndex = -1
+            for (i in 0 until array.length()) {
+                val fav = array.getJSONObject(i)
+                if (fav.optString("id") == id || (imdb.isNotEmpty() && fav.optString("imdb") == imdb)) {
+                    foundIndex = i; break
                 }
             }
-            array.put(item)
-            _events.value = StreamsEvent.ShowToast("Added to Favorites")
-        }
-        prefs.edit().putString("streams_favorites", array.toString()).apply()
-        refreshFavoritesSet()
+            if (foundIndex != -1) {
+                array.remove(foundIndex)
+                _events.value = StreamsEvent.ShowToast("Removed from Favorites")
+            } else {
+                if (!item.has("genre_ids") && !item.has("genres")) {
+                    _itemDetails.value?.let { details ->
+                        if (details.optInt("id") == item.optInt("id")) {
+                            val genres = details.optJSONArray("genres")
+                            if (genres != null) item.put("genres", genres)
+                        }
+                    }
+                }
+                array.put(item)
+                _events.value = StreamsEvent.ShowToast("Added to Favorites")
+            }
+            prefs.edit().putString("streams_favorites", array.toString()).apply()
+            refreshFavoritesSet()
 
-        if (isCurrentlyViewingFavorites) {
-            loadFavorites()
+            if (isCurrentlyViewingFavorites) {
+                withContext(Dispatchers.Main) {
+                    loadFavorites()
+                }
+            }
         }
     }
 
@@ -923,20 +956,17 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         val buffer = ByteArray(32)
                         val read = input.read(buffer)
                         if (read >= 4) {
-                            // PNG Signature: 89 50 4E 47
                             if (buffer[0] == 0x89.toByte() && buffer[1] == 0x50.toByte() && 
                                 buffer[2] == 0x4E.toByte() && buffer[3] == 0x47.toByte()) {
                                 return@withContext false
                             }
                             
                             val head = String(buffer, 0, read)
-                            // SVG / HTML / XML Signatures
                             if (head.contains("<svg", true) || head.contains("<?xml", true) || 
                                 head.contains("<!DOCTYPE", true) || head.contains("<html", true)) {
                                 return@withContext false
                             }
                             
-                            // Common text-based signatures (JSON, CSS, JS comments)
                             if (head.startsWith("{") || head.startsWith("[") || head.startsWith("/*") || head.startsWith("//")) {
                                 return@withContext false
                             }
@@ -1032,7 +1062,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         lastScrapedSeason = season
         lastScrapedEpisode = episode
         interceptedSubtitleUrls.clear()
-        lastSubtitledItemKey = null // Clear this to allow subtitle search on re-scrape
+        lastSubtitledItemKey = null
         _subStatusMsg.value = ""
 
         _isScraping.value = true
@@ -1072,7 +1102,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
-                    Log.e("StreamsViewModel", "Polling loop experienced an error: ${e.message}")
+                    Log.e("StreamsViewModel", "Polling loop error: ${e.message}")
                 }
                 delay(1000)
             }
@@ -1204,7 +1234,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val itemKey = "${item.optInt("id")}_${season ?: 0}_${episode ?: 0}"
         if (_isDownloadingSubs.value || lastSubtitledItemKey == itemKey) return
         
-        // Check persistent cache first
         val cached = loadSubtitlesFromCache(itemKey)
         if (cached.isNotEmpty()) {
             lastSubtitledItemKey = itemKey
@@ -1220,7 +1249,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             viewModelScope.launch(Dispatchers.Main) {
                 _events.value = StreamsEvent.AddSubtitlesBatch(cached)
                 
-                // If we were waiting for subtitles to play
                 pendingPlayVideoSourceData?.let { pendingSource ->
                     resolveAndPlayInternal(pendingSource)
                     pendingPlayVideoSourceData = null
@@ -1312,13 +1340,11 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         _isDownloadingSubs.value = false 
                         _showSubProgressBar.value = false
                         
-                        // Progressive Loading (Mode 2): inject all subtitles at once as a batch
                         if (newlyDownloadedSubs.isNotEmpty()) {
                             saveSubtitlesToCache(itemKey, newlyDownloadedSubs)
                             _events.value = StreamsEvent.AddSubtitlesBatch(newlyDownloadedSubs)
                         }
 
-                        // Wait Loading (Mode 1): resolve and play held video once finished
                         pendingPlayVideoSourceData?.let { pendingSource ->
                             resolveAndPlayInternal(pendingSource)
                             pendingPlayVideoSourceData = null
@@ -1627,7 +1653,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val subRetentionDays = prefs.getInt("sub_retention_days", 3)
-                if (subRetentionDays == 0) return@launch // 0 means Keep Indefinitely
+                if (subRetentionDays == 0) return@launch
 
                 val subDir = File(context.filesDir, "userdata/subtitles")
                 if (!subDir.exists()) return@launch
@@ -1647,7 +1673,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 if (deletedCount > 0) {
-                    // Refresh cache mapping to remove deleted files
                     val cacheFile = File(subDir, "cache_mapping.json")
                     if (cacheFile.exists()) {
                         try {
@@ -1683,6 +1708,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     private fun startBackgroundTraktCheck() {
         viewModelScope.launch(Dispatchers.IO) {
+            delay(6000)
             while (isActive) {
                 try {
                     val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
@@ -1768,7 +1794,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val results = mutableListOf<SubtitleData>()
                 for (i in 0 until array.length()) {
                     val obj = array.getJSONObject(i)
-                    // Verify file still exists before returning it
                     val filePath = android.net.Uri.parse(obj.getString("url")).path
                     if (filePath != null && File(filePath).exists()) {
                         results.add(SubtitleData(

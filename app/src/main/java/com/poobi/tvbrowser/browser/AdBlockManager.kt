@@ -12,21 +12,19 @@ object AdBlockManager {
     private val clientLock = ReentrantReadWriteLock()
 
     fun init(context: Context) {
-        // Initial client creation
-        clientLock.writeLock().lock()
-        try {
-            if (client == null) {
-                client = AdBlockClient()
-            }
-        } finally {
-            clientLock.writeLock().unlock()
-        }
-
-        // Load rules in background to avoid blocking Main Thread (the "halt")
         CoroutineScope(Dispatchers.IO).launch {
+            delay(2500)
+            clientLock.writeLock().lock()
+            try {
+                if (client == null) {
+                    client = AdBlockClient()
+                }
+            } finally {
+                clientLock.writeLock().unlock()
+            }
+
             loadAllRules(context)
             
-            // Check for DNS filter if missing
             val dnsFile = File(context.filesDir, "dns_rules.txt")
             if (!dnsFile.exists()) {
                 updateRules(context, "https://raw.githubusercontent.com/AdguardTeam/FiltersRegistry/master/filters/filter_15_DnsFilter/filter.txt", "dns_rules.txt")
@@ -38,9 +36,6 @@ object AdBlockManager {
         val adblockFile = File(context.filesDir, "adblock_rules.txt")
         val dnsFile = File(context.filesDir, "dns_rules.txt")
 
-        // We use a write lock when parsing files to ensure no one is matching during this time
-        // However, parseFile itself is usually slow. 
-        // A better way is to parse into a NEW client and then swap.
         val newClient = AdBlockClient()
         if (adblockFile.exists()) {
             newClient.parseFile(adblockFile.absolutePath)
@@ -52,20 +47,17 @@ object AdBlockManager {
         clientLock.writeLock().lock()
         try {
             client = newClient
-            // The old client will be cleaned up by GC/finalize
         } finally {
             clientLock.writeLock().unlock()
         }
     }
 
-    // Fetches rules on a background thread
     suspend fun updateRules(context: Context, urlString: String, fileName: String = "adblock_rules.txt"): Boolean = withContext(Dispatchers.IO) {
         try {
             val rules = URL(urlString).readText()
             val file = File(context.filesDir, fileName)
             file.writeText(rules)
             
-            // Reload all rules into a new client instance
             loadAllRules(context)
             true
         } catch (e: Exception) {

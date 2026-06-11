@@ -13,22 +13,21 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/tv_banner"
         android:label="Poobi"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
-        android:theme="@style/Theme.AppCompat.NoActionBar"> <!-- Fullscreen theme -->
+        android:theme="@style/Theme.AppCompat.NoActionBar">
 
-		<service
-			android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
-			android:enabled="false"
-			android:exported="false">
-			<intent-filter>
-				<action android:name="androidx.appcompat.app.AppLocalesMetadataHolderService" />
-			</intent-filter>
-			<meta-data
-				android:name="autoStoreLocales"
-				android:value="false" />
-		</service>
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <intent-filter>
+            <action android:name="androidx.appcompat.app.AppLocalesMetadataHolderService" />
+            </intent-filter>
+            <meta-data android:name="autoStoreLocales" android:value="false" />
+        </service>
 
         <activity
             android:name="com.poobi.tvbrowser.MainActivity"

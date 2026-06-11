@@ -27,6 +27,7 @@ import com.poobi.tvbrowser.streams.StreamsEvent
 import com.poobi.tvbrowser.streams.StreamsViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -114,16 +115,12 @@ class MainActivity : AppCompatActivity() {
                 }
             },
             onPlayerReleased = {
-                // Safely clear custom website fullscreen views and reset extraction locks
                 browserViewModel.hideCustomViewInternal()
                 streamsViewModel.resumeScrape()
             }
         )
 
-        // Web Extraction Play Video callback registered cleanly
         browserViewModel.onPlayNativeVideo = { videoUrl, title ->
-            // If we are currently "in the middle" of a stream interaction, 
-            // associate this browser-extracted video with the selected media item.
             val item = streamsViewModel.selectedItem.value
             val season = streamsViewModel.lastScrapedSeason
             val episode = streamsViewModel.lastScrapedEpisode
@@ -150,7 +147,7 @@ class MainActivity : AppCompatActivity() {
                 item = if (isFromStreams) item else null,
                 season = if (isFromStreams) season else null,
                 episode = if (isFromStreams) episode else null,
-                fromStreams = false // Never show fallback dialog for browser-originated hijacks
+                fromStreams = false
             )
         }
 
@@ -242,11 +239,13 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         browserViewModel.refreshLists()
         streamsViewModel.refreshFavoritesSet()
-        registerPythonDialogListener()
+        registerPythonDialogListenerAsync()
     }
 
     private fun initPythonAsync() {
         lifecycleScope.launch(Dispatchers.IO) {
+            // Stagger Python engine start by 1.5 seconds to ensure Compose initializes and draws without I/O blocking
+            delay(1500)
             if (!Python.isStarted()) {
                 Python.start(AndroidPlatform(this@MainActivity))
             }
@@ -258,9 +257,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e("TVBrowser", "Error warming up Python modules", e)
             }
-            withContext(Dispatchers.Main) {
-                registerPythonDialogListener()
-            }
+            registerPythonDialogListenerAsync()
         }
     }
 
@@ -294,95 +291,100 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun registerPythonDialogListener() {
-        try {
-            val py = Python.getInstance()
-            val control = py.getModule("modules.control")
-            control.callAttr("set_dialog_listener", object : PythonDialogListener {
-                override fun infoDialog(message: String, heading: String, sound: Boolean, icon: String) {
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, "${heading.cleanKodiText()}: ${message.cleanKodiText()}", Toast.LENGTH_LONG).show()
-                    }
-                }
-
-                override fun okDialog(message: String, heading: String): Boolean {
-                    val future = CompletableDeferred<Boolean>()
-                    runOnUiThread {
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle(heading.cleanKodiText().ifEmpty { "Notice" })
-                            .setMessage(message.cleanKodiText())
-                            .setPositiveButton("OK") { _, _ -> future.complete(true) }
-                            .setOnCancelListener { future.complete(true) }
-                            .show()
-                    }
-                    return runBlocking { future.await() }
-                }
-
-                override fun yesnoDialog(message: String, heading: String, nolabel: String, yeslabel: String): Boolean {
-                    val future = CompletableDeferred<Boolean>()
-                    runOnUiThread {
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle(heading.cleanKodiText().ifEmpty { "Confirm" })
-                            .setMessage(message.cleanKodiText())
-                            .setPositiveButton(if (yeslabel.isEmpty()) "Yes" else yeslabel.cleanKodiText()) { _, _ -> future.complete(true) }
-                            .setNegativeButton(if (nolabel.isEmpty()) "No" else nolabel.cleanKodiText()) { _, _ -> future.complete(false) }
-                            .setOnCancelListener { future.complete(false) }
-                            .show()
-                    }
-                    return runBlocking { future.await() }
-                }
-
-                override fun captchaDialog(imageBytes: ByteArray, heading: String): String? {
-                    val future = CompletableDeferred<String?>()
-                    runOnUiThread {
-                        val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-                        val imageView = android.widget.ImageView(this@MainActivity).apply {
-                            setImageBitmap(bitmap)
-                            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-                            adjustViewBounds = true
+    private fun registerPythonDialogListenerAsync() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                if (!Python.isStarted()) return@launch
+                val py = Python.getInstance()
+                val control = py.getModule("modules.control")
+                control.callAttr("set_dialog_listener", object : PythonDialogListener {
+                    override fun infoDialog(message: String, heading: String, sound: Boolean, icon: String) {
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "${heading.cleanKodiText()}: ${message.cleanKodiText()}", Toast.LENGTH_LONG).show()
                         }
-                        
-                        val input = android.widget.EditText(this@MainActivity).apply {
-                            hint = "Enter solution or click on image"
+                    }
+
+                    override fun okDialog(message: String, heading: String): Boolean {
+                        val future = CompletableDeferred<Boolean>()
+                        runOnUiThread {
+                            AlertDialog.Builder(this@MainActivity)
+                                .setTitle(heading.cleanKodiText().ifEmpty { "Notice" })
+                                .setMessage(message.cleanKodiText())
+                                .setPositiveButton("OK") { _, _ -> future.complete(true) }
+                                .setOnCancelListener { future.complete(true) }
+                                .show()
                         }
-                        
-                        val layout = android.widget.LinearLayout(this@MainActivity).apply {
-                            orientation = android.widget.LinearLayout.VERTICAL
-                            setPadding(40, 20, 40, 20)
-                            addView(imageView)
-                            addView(input)
+                        return runBlocking { future.await() }
+                    }
+
+                    override fun yesnoDialog(message: String, heading: String, nolabel: String, yeslabel: String): Boolean {
+                        val future = CompletableDeferred<Boolean>()
+                        runOnUiThread {
+                            AlertDialog.Builder(this@MainActivity)
+                                .setTitle(heading.cleanKodiText().ifEmpty { "Confirm" })
+                                .setMessage(message.cleanKodiText())
+                                .setPositiveButton(if (yeslabel.isEmpty()) "Yes" else yeslabel.cleanKodiText()) { _, _ -> future.complete(true) }
+                                .setNegativeButton(if (nolabel.isEmpty()) "No" else nolabel.cleanKodiText()) { _, _ -> future.complete(false) }
+                                .setOnCancelListener { future.complete(false) }
+                                .show()
                         }
-                        
-                        val dialog = AlertDialog.Builder(this@MainActivity)
-                            .setTitle(heading.cleanKodiText())
-                            .setView(layout)
-                            .setPositiveButton("Submit") { _, _ -> 
-                                future.complete(input.text.toString())
+                        return runBlocking { future.await() }
+                    }
+
+                    override fun captchaDialog(imageBytes: ByteArray, heading: String): String? {
+                        val future = CompletableDeferred<String?>()
+                        runOnUiThread {
+                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                            val imageView = android.widget.ImageView(this@MainActivity).apply {
+                                setImageBitmap(bitmap)
+                                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                                adjustViewBounds = true
                             }
-                            .setNegativeButton("Cancel") { _, _ -> 
-                                future.complete(null)
-                            }
-                            .setOnCancelListener { 
-                                future.complete(null)
-                            }
-                            .create()
                             
-                        imageView.setOnTouchListener { v, event ->
-                            if (event.action == android.view.MotionEvent.ACTION_DOWN) {
-                                val x = (event.x * bitmap.width / v.width).toInt()
-                                val y = (event.y * bitmap.height / v.height).toInt()
-                                future.complete("COORD:$x,$y")
-                                dialog.dismiss()
-                                true
-                            } else false
+                            val input = android.widget.EditText(this@MainActivity).apply {
+                                hint = "Enter solution or click on image"
+                            }
+                            
+                            val layout = android.widget.LinearLayout(this@MainActivity).apply {
+                                orientation = android.widget.LinearLayout.VERTICAL
+                                setPadding(40, 20, 40, 20)
+                                addView(imageView)
+                                addView(input)
+                            }
+                            
+                            val dialog = AlertDialog.Builder(this@MainActivity)
+                                .setTitle(heading.cleanKodiText())
+                                .setView(layout)
+                                .setPositiveButton("Submit") { _, _ -> 
+                                    future.complete(input.text.toString())
+                                }
+                                .setNegativeButton("Cancel") { _, _ -> 
+                                    future.complete(null)
+                                }
+                                .setOnCancelListener { 
+                                    future.complete(null)
+                                }
+                                .create()
+                                
+                            imageView.setOnTouchListener { v, event ->
+                                if (event.action == android.view.MotionEvent.ACTION_DOWN) {
+                                    val x = (event.x * bitmap.width / v.width).toInt()
+                                    val y = (event.y * bitmap.height / v.height).toInt()
+                                    future.complete("COORD:$x,$y")
+                                    dialog.dismiss()
+                                    true
+                                } else false
+                            }
+                            
+                            dialog.show()
                         }
-                        
-                        dialog.show()
+                        return runBlocking { future.await() }
                     }
-                    return runBlocking { future.await() }
-                }
-            })
-        } catch (e: Exception) {}
+                })
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "Error registering background Python dialog listener", e)
+            }
+        }
     }
 
     private fun displaySubtitlePickerDialog(subs: JSONArray) {
@@ -438,23 +440,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkStartupTabs() {
-        val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
-        val pref = prefs.getInt("restore_tabs_pref", 0)
-        val savedTabs = prefs.getString("saved_tabs", "[]") ?: "[]"
-        if (savedTabs == "[]") return
+        lifecycleScope.launch {
+            delay(1000)
+            val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
+            val pref = prefs.getInt("restore_tabs_pref", 0)
+            val savedTabs = prefs.getString("saved_tabs", "[]") ?: "[]"
+            if (savedTabs == "[]") return@launch
 
-        when (pref) {
-            1 -> browserViewModel.restoreAllTabs(this)
-            0 -> {
-                AlertDialog.Builder(this)
-                    .setTitle("Restore Session?")
-                    .setMessage("Do you want to restore your previous tabs?")
-                    .setPositiveButton("Restore All") { _, _ -> browserViewModel.restoreAllTabs(this) }
-                    .setNegativeButton("New Session") { _, _ -> 
-                        prefs.edit().putString("saved_tabs", "[]").apply()
-                        browserViewModel.refreshLists()
-                    }
-                    .show()
+            when (pref) {
+                1 -> browserViewModel.restoreAllTabs(this@MainActivity)
+                0 -> {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Restore Session?")
+                        .setMessage("Do you want to restore your previous tabs?")
+                        .setPositiveButton("Restore All") { _, _ -> browserViewModel.restoreAllTabs(this@MainActivity) }
+                        .setNegativeButton("New Session") { _, _ -> 
+                            prefs.edit().putString("saved_tabs", "[]").apply()
+                            browserViewModel.refreshLists()
+                        }
+                        .show()
+                }
             }
         }
     }

@@ -74,7 +74,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val _currentDialog = MutableStateFlow<BrowserDialogState?>(null)
     val currentDialog: StateFlow<BrowserDialogState?> = _currentDialog.asStateFlow()
 
-    // Fullscreen HTML5 Website Player View state holding
     private val _customView = MutableStateFlow<View?>(null)
     val customView: StateFlow<View?> = _customView.asStateFlow()
 
@@ -84,7 +83,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     val currentWebView: WebView? get() = if (_currentTabIndex.value in _webViews.indices) _webViews[_currentTabIndex.value] else null
 
-    // Preferences mapped as reactive States
     val isLightTheme = MutableStateFlow(prefs.getBoolean("light_theme", false))
     val silentPopupBlock = MutableStateFlow(prefs.getBoolean("silent_popup_block", true))
     val extractVideoPref = MutableStateFlow(prefs.getInt("extract_video_pref", 0))
@@ -93,7 +91,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val navigationModePref = MutableStateFlow(prefs.getInt("navigation_mode_pref", 0))
     val scrollTopbarEnabled = MutableStateFlow(prefs.getBoolean("scroll_topbar_enabled", true))
 
-    // UI State lists
     private val _historyList = MutableStateFlow<JSONArray>(JSONArray())
     val historyList: StateFlow<JSONArray> = _historyList.asStateFlow()
 
@@ -190,10 +187,19 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun refreshLists() {
-        _historyList.value = JSONArray(prefs.getString("history", "[]"))
-        _favoritesList.value = JSONArray(prefs.getString("favorites", "[]"))
-        _downloadsList.value = JSONArray(prefs.getString("downloads", "[]"))
-        _savedTabsList.value = JSONArray(prefs.getString("saved_tabs", "[]"))
+        viewModelScope.launch(Dispatchers.IO) {
+            val history = JSONArray(prefs.getString("history", "[]") ?: "[]")
+            val favorites = JSONArray(prefs.getString("favorites", "[]") ?: "[]")
+            val downloads = JSONArray(prefs.getString("downloads", "[]") ?: "[]")
+            val savedTabs = JSONArray(prefs.getString("saved_tabs", "[]") ?: "[]")
+            
+            withContext(Dispatchers.Main) {
+                _historyList.value = history
+                _favoritesList.value = favorites
+                _downloadsList.value = downloads
+                _savedTabsList.value = savedTabs
+            }
+        }
     }
 
     fun showTopBar() { _topBarVisible.value = true }
@@ -210,7 +216,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun getWebViewsList(): List<WebView> = _webViews
 
-    // --- Tab Management ---
     fun createNewTab(context: Context, url: String? = null, switchTo: Boolean = true, title: String? = null): WebView {
         val newWebView = WebView(context).apply {
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
@@ -261,10 +266,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val isActiveTab = (index == _currentTabIndex.value)
         val wv = _webViews[index]
         
-        // Detach WebView from its parent layout first to prevent native renderer crashes
         (wv.parent as? android.view.ViewGroup)?.removeView(wv)
         
-        // Clean up WebView resources before destroying
         try {
             wv.stopLoading()
             wv.loadUrl("about:blank")
@@ -302,7 +305,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             if (newTab || _webViews.isEmpty()) {
                 createNewTab(context, url)
             } else {
-                // If loading in place, guarantee Compose state is bound to a valid active WebView index
                 if (_currentTabIndex.value == -1) {
                     _currentTabIndex.value = 0
                 }
@@ -340,7 +342,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _currentTabIndex.value = -1
     }
 
-    // --- Favorites Operations ---
     fun isFavorited(url: String): Boolean {
         val favoritesJson = prefs.getString("favorites", "[]") ?: "[]"
         try {
@@ -364,7 +365,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // --- Context Menu Trigger ---
     fun triggerContextMenuAtCursor(cursorX: Float, cursorY: Float) {
         val wv = currentWebView ?: return
         val density = appContext.resources.displayMetrics.density
@@ -398,7 +398,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // --- WebView Core Configuration ---
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView(wv: WebView) {
         wv.isFocusable = true
@@ -484,7 +483,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     initDpadNav()
                 }
 
-                // Better debugging/interception for pages that ARE the m3u8 (e.g. goodstream)
                 view.evaluateJavascript("(function() { return document.documentElement.innerText; })();") { content ->
                     if (content != null && content.contains("#EXTM3U")) {
                         val headers = mutableMapOf<String, String>()
@@ -519,21 +517,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         val wasEmpty = interceptedMediaUrls.isEmpty()
                         val headers = request.requestHeaders.toMutableMap()
                         
-                        // Capture Cookies
                         CookieManager.getInstance().getCookie(requestedUrl)?.let {
                             headers["Cookie"] = it
                         }
                         
-                        // Thread-safe access for Referer/Origin defaults
                         val userAgent = prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36") ?: ""
-                        val viewUrl = _currentUrl.value // Use StateFlow instead of view.url to avoid thread crash
+                        val viewUrl = _currentUrl.value
 
-                        // Ensure User-Agent is present
                         if (!headers.containsKey("User-Agent")) {
                             headers["User-Agent"] = userAgent
                         }
 
-                        // Ensure Referer/Origin are present for cross-origin HLS segments
                         if (!headers.containsKey("Referer")) {
                             headers["Referer"] = viewUrl.ifEmpty { requestedUrl }
                         }
@@ -574,7 +568,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // --- Scripts & Injections ---
     private fun injectClickjackPrevention(wv: WebView) {
         if (!clickjackPref.value) return
         val script = """
@@ -616,23 +609,23 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val profiles = JSONArray(profilesJson)
         var executedAny = false
 
-        for (i in 0 until profiles.length()) {
-            val obj = profiles.getJSONObject(i)
-            val patterns = obj.getJSONArray("urlPatterns")
-            var matchesPattern = false
-            for (j in 0 until patterns.length()) {
-                val pattern = patterns.getString(j).replace(".", "\\.").replace("*", ".*").replace("?", ".")
-                if (java.util.regex.Pattern.compile(pattern, java.util.regex.Pattern.CASE_INSENSITIVE).matcher(url).find()) {
-                    matchesPattern = true; break
-                }
-            }
+		for (i in 0 until profiles.length()) {
+			val obj = profiles.getJSONObject(i)
+			val patterns = obj.getJSONArray("urlPatterns")
+			var matchesPattern = false
+			for (j in 0 until patterns.length()) {
+				val pattern = patterns.getString(j).replace(".", "\\.").replace("*", ".*").replace("?", ".")
+				if (java.util.regex.Pattern.compile(pattern, java.util.regex.Pattern.CASE_INSENSITIVE).matcher(url).find()) {
+					matchesPattern = true; break
+				}
+			}
 
-            if (matchesPattern && obj.optBoolean("enabled", true)) {
-                executedAny = true
-                val scriptToRun = obj.getString("script")
-                wv.evaluateJavascript(scriptToRun, null)
-            }
-        }
+			if (matchesPattern && obj.optBoolean("enabled", true)) {
+				executedAny = true
+				val scriptToRun = obj.getString("script")
+				wv.evaluateJavascript(scriptToRun, null)
+			}
+		}
 
         if (!executedAny) {
             wv.evaluateJavascript(DEFAULT_AUTOPLAY_SCRIPT, null)
@@ -694,7 +687,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // --- Block Element & Advanced Rules ---
     fun blockElementAtCursor(cursorX: Float, cursorY: Float) {
         val wv = currentWebView ?: return
         val density = appContext.resources.displayMetrics.density
@@ -824,7 +816,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // --- Dynamic Fullscreen extraction ---
     private fun attemptVideoExtraction(view: View?, callback: WebChromeClient.CustomViewCallback?) {
         if (isExtractionActive) return
         val wv = currentWebView ?: return
@@ -956,7 +947,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // --- Helpers / Dialog integrations ---
     fun playVideoInNativePlayer(url: String, title: String?) {
         currentWebView?.apply {
             onPause()
@@ -1119,7 +1109,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         dismissDialog()
     }
 
-    // --- Spatial Navigation API ---
     fun initDpadNav() {
         val script = """
             (function() {
@@ -1257,35 +1246,39 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun saveToList(key: String, url: String, title: String, thumbFile: String) {
-        val jsonString = prefs.getString(key, "[]")
-        val array = JSONArray(jsonString)
-        var existingIndex = -1
-        for (i in 0 until array.length()) {
-            if (array.getJSONObject(i).getString("url") == url) {
-                existingIndex = i; break
+        viewModelScope.launch(Dispatchers.IO) {
+            val jsonString = prefs.getString(key, "[]") ?: "[]"
+            val array = JSONArray(jsonString)
+            var existingIndex = -1
+            for (i in 0 until array.length()) {
+                if (array.getJSONObject(i).getString("url") == url) {
+                    existingIndex = i; break
+                }
             }
-        }
-        if (existingIndex != -1) array.remove(existingIndex)
+            if (existingIndex != -1) array.remove(existingIndex)
 
-        val obj = JSONObject().apply {
-            put("url", url)
-            put("title", title.ifEmpty { url })
-            put("thumb", thumbFile)
+            val obj = JSONObject().apply {
+                put("url", url)
+                put("title", title.ifEmpty { url })
+                put("thumb", thumbFile)
+            }
+            array.put(obj)
+            prefs.edit().putString(key, array.toString()).apply()
+            refreshLists()
         }
-        array.put(obj)
-        prefs.edit().putString(key, array.toString()).apply()
-        refreshLists()
     }
 
     fun removeFromList(key: String, url: String) {
-        val array = JSONArray(prefs.getString(key, "[]"))
-        val newArray = JSONArray()
-        for (i in 0 until array.length()) {
-            val obj = array.getJSONObject(i)
-            if (obj.getString("url") != url) newArray.put(obj)
+        viewModelScope.launch(Dispatchers.IO) {
+            val array = JSONArray(prefs.getString(key, "[]") ?: "[]")
+            val newArray = JSONArray()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                if (obj.getString("url") != url) newArray.put(obj)
+            }
+            prefs.edit().putString(key, newArray.toString()).apply()
+            refreshLists()
         }
-        prefs.edit().putString(key, newArray.toString()).apply()
-        refreshLists()
     }
 
     private fun saveTabs() {

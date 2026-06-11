@@ -1459,9 +1459,9 @@ class SettingsActivity : AppCompatActivity() {
                                     }
                                     return runBlocking { future.await() }
                                 }
-								override fun captchaDialog(imageBytes: ByteArray, heading: String): String? {
-									return null
-								}
+                                override fun captchaDialog(imageBytes: ByteArray, heading: String): String? {
+                                    return null
+                                }
                             })
 
                             py.getModule("tmdb.tmdb_utils").callAttr("authTMDb")
