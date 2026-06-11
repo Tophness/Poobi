@@ -113,17 +113,6 @@ class PlayerEngine(
         fromStreams: Boolean = true
     ) {
         saveProgress()
-		Log.d("PoobiSubs", "launchVideo CALLED. Incoming subtitle count: ${subtitles.size}")
-		subtitles.forEach { (subUrl, infoMap) ->
-			val path = Uri.parse(subUrl).path ?: ""
-			val file = java.io.File(path)
-			Log.d("PoobiSubs", "  - Video Player Subtitle track:")
-			Log.d("PoobiSubs", "    * Target URI: $subUrl")
-			Log.d("PoobiSubs", "    * Label: ${infoMap["label"]}")
-			Log.d("PoobiSubs", "    * Lang Code: ${infoMap["lang"]}")
-			Log.d("PoobiSubs", "    * File Size: ${file.length()} bytes")
-			Log.d("PoobiSubs", "    * File Exists: ${file.exists()}")
-		}
 
         lastVideoUrl = videoUrl
         lastVideoTitle = title
@@ -201,12 +190,6 @@ class PlayerEngine(
 				.setRoleFlags(C.ROLE_FLAG_SUBTITLE)
 				.build()
 
-			// --- ADD DIAGNOSTIC LOGS HERE ---
-			Log.d("PoobiSubs", "  - Built MediaItem.SubtitleConfiguration:")
-			Log.d("PoobiSubs", "    * URI: ${config.uri}")
-			Log.d("PoobiSubs", "    * Label: ${config.label}")
-			Log.d("PoobiSubs", "    * Language: ${config.language}")
-			// ---------------------------------
 			config
 		}
 
