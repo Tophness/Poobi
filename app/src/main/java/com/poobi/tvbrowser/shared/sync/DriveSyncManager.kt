@@ -1,6 +1,7 @@
 package com.poobi.tvbrowser.shared.sync
 
 import android.content.Context
+import android.util.Base64
 import android.util.Log
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
@@ -36,17 +37,23 @@ class DriveSyncManager(private val context: Context) {
     suspend fun uploadSettings(): Boolean = withContext(Dispatchers.IO) {
         val service = driveService ?: return@withContext false
         try {
+            val payload = JSONObject()
             val prefs = context.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
             val allEntries = prefs.all
-            val json = JSONObject()
+            val prefsJson = JSONObject()
             for ((key, value) in allEntries) {
-                json.put(key, value)
+                prefsJson.put(key, value)
             }
-
+            payload.put("shared_preferences", prefsJson)
+            val userdataJson = JSONObject()
+            val userdataDir = File(context.filesDir, "userdata")
+            if (userdataDir.exists() && userdataDir.isDirectory) {
+                collectUserdataFiles(userdataDir, userdataDir, userdataJson)
+            }
+            payload.put("userdata_files", userdataJson)
             val tempFile = File(context.cacheDir, "settings_backup.json")
-            FileOutputStream(tempFile).use { it.write(json.toString().toByteArray()) }
+            FileOutputStream(tempFile).use { it.write(payload.toString().toByteArray()) }
 
-            // Check if file already exists
             val files = service.files().list()
                 .setSpaces("appDataFolder")
                 .setFields("files(id, name)")
@@ -86,28 +93,83 @@ class DriveSyncManager(private val context: Context) {
 
             val outputStream = ByteArrayOutputStream()
             service.files().get(driveFile.id).executeMediaAndDownloadTo(outputStream)
-            val jsonStr = outputStream.toString()
-            val json = JSONObject(jsonStr)
-
-            val prefs = context.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
-            val editor = prefs.edit()
             
-            val keys = json.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                when (val value = json.get(key)) {
-                    is Boolean -> editor.putBoolean(key, value)
-                    is Int -> editor.putInt(key, value)
-                    is Long -> editor.putLong(key, value)
-                    is Float -> editor.putFloat(key, value)
-                    is String -> editor.putString(key, value)
+            val payload = JSONObject(outputStream.toString())
+            if (payload.has("shared_preferences")) {
+                val prefsJson = payload.getJSONObject("shared_preferences")
+                val prefs = context.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
+                val editor = prefs.edit()
+                
+                val keys = prefsJson.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val value = prefsJson.get(key)
+                    when (value) {
+                        is Boolean -> editor.putBoolean(key, value)
+                        is Int -> editor.putInt(key, value)
+                        is Long -> editor.putLong(key, value)
+                        is Double -> editor.putFloat(key, value.toFloat())
+                        is Float -> editor.putFloat(key, value)
+                        else -> {
+                            if (value != JSONObject.NULL) {
+                                // Gracefully falls back to stringifying arrays/objects/raw text
+                                editor.putString(key, value.toString())
+                            }
+                        }
+                    }
                 }
+                editor.apply()
             }
-            editor.apply()
+
+            if (payload.has("userdata_files")) {
+                val userdataJson = payload.getJSONObject("userdata_files")
+                val userdataDir = File(context.filesDir, "userdata")
+                if (!userdataDir.exists()) {
+                    userdataDir.mkdirs()
+                }
+                restoreUserdataFiles(userdataDir, userdataJson)
+            }
+
             true
         } catch (e: Exception) {
             Log.e("DriveSync", "Download failed", e)
             false
+        }
+    }
+
+    private fun collectUserdataFiles(dir: File, baseDir: File, filesMap: JSONObject) {
+        val files = dir.listFiles() ?: return
+        for (file in files) {
+            if (file.isDirectory) {
+                if (file.name == "subtitles") continue
+                collectUserdataFiles(file, baseDir, filesMap)
+            } else if (file.isFile) {
+                try {
+                    val relativePath = file.relativeTo(baseDir).path
+                    val bytes = file.readBytes()
+                    val base64Data = Base64.encodeToString(bytes, Base64.DEFAULT)
+                    filesMap.put(relativePath, base64Data)
+                } catch (e: Exception) {
+                    Log.e("DriveSync", "Failed to package userdata file: ${file.name}", e)
+                }
+            }
+        }
+    }
+
+    private fun restoreUserdataFiles(baseDir: File, filesMap: JSONObject) {
+        val keys = filesMap.keys()
+        while (keys.hasNext()) {
+            val relativePath = keys.next()
+            try {
+                val base64Data = filesMap.getString(relativePath)
+                val targetFile = File(baseDir, relativePath)
+                targetFile.parentFile?.mkdirs()
+                
+                val bytes = Base64.decode(base64Data, Base64.DEFAULT)
+                targetFile.writeBytes(bytes)
+            } catch (e: Exception) {
+                Log.e("DriveSync", "Failed to restore userdata file: $relativePath", e)
+            }
         }
     }
 }
