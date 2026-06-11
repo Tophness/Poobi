@@ -73,7 +73,10 @@ class source:
     def _scrape_host(self, host, media_type, tmdb_id, season, episode, imdb_id):
         embed_url = self._build_embed_url(host, media_type, tmdb_id, season, episode, imdb_id)
         try:
-            r = requests.get(embed_url, headers={'User-Agent': UA, 'Referer': f'https://{host}/'}, timeout=10).text
+            r = requests.get(embed_url, headers={'User-Agent': UA, 'Referer': f'https://{host}/'}, timeout=10)
+            if not r.ok:
+                return []
+            r_text = r.text
             streams = []
             # Extract direct links
             pats = [r'file\s*:\s*["\']([^"\']+\.(?:m3u8|mp4)[^"\']*)["\']', r'["\'](https?://[^"\']+\.m3u8[^"\']*)["\']']

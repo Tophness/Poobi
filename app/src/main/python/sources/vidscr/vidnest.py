@@ -59,6 +59,8 @@ class source:
         path = f"{prov}/movie/{tmdb_id}" if is_movie else f"{prov}/tv/{tmdb_id}/{season}/{episode}"
         try:
             r = requests.get(f"{API}/{path}", headers={'User-Agent': UA, 'Origin': SITE, 'Referer': SITE + '/'}, timeout=10)
+            if not r.ok:
+                return []
             data = self._decode(r.json())
             streams = []
             

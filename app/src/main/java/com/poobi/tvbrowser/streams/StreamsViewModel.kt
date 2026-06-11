@@ -103,6 +103,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _isDownloadingSubs = MutableStateFlow(false)
     val isDownloadingSubs: StateFlow<Boolean> = _isDownloadingSubs.asStateFlow()
 
+    private val _showSubProgressBar = MutableStateFlow(false)
+    val showSubProgressBar: StateFlow<Boolean> = _showSubProgressBar.asStateFlow()
+
+    private val _subProgress = MutableStateFlow(0f)
+    val subProgress: StateFlow<Float> = _subProgress.asStateFlow()
+
     private val _isTryingAll = MutableStateFlow(false)
     val isTryingAll: StateFlow<Boolean> = _isTryingAll.asStateFlow()
 
@@ -287,6 +293,43 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             val entry = array.getJSONObject(index)
             val displayTitle = entry.optString("display_title")
             
+            // Delete associated downloaded subtitle files on disk
+            val subtitlesArr = entry.optJSONArray("subtitles")
+            if (subtitlesArr != null) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    for (i in 0 until subtitlesArr.length()) {
+                        try {
+                            val subObj = subtitlesArr.getJSONObject(i)
+                            val subUrl = subObj.optString("url")
+                            if (subUrl.isNotEmpty()) {
+                                val uri = android.net.Uri.parse(subUrl)
+                                if (uri.scheme == "file") {
+                                    val path = uri.path
+                                    if (path != null) {
+                                        val file = File(path)
+                                        if (file.exists() && file.isFile) {
+                                            file.delete()
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("StreamsViewModel", "Failed to delete subtitle file: ${e.message}")
+                        }
+                    }
+                }
+            }
+
+            // Remove subtitles mapping from cache_mapping.json
+            val item = entry.optJSONObject("item")
+            if (item != null) {
+                val itemId = item.optInt("id")
+                val season = if (entry.has("season")) entry.getInt("season") else 0
+                val episode = if (entry.has("episode")) entry.getInt("episode") else 0
+                val itemKey = "${itemId}_${season}_${episode}"
+                removeSubtitlesFromCacheMap(itemKey)
+            }
+            
             val newList = JSONArray()
             for (i in 0 until array.length()) {
                 if (i != index) newList.put(array.get(i))
@@ -307,8 +350,15 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         item: JSONObject, 
         season: Int?, 
         episode: Int?, 
-        headers: Map<String, String>
+        headers: Map<String, String>,
+        subtitles: Map<String, Map<String, String>>
     ) {
+        // If subtitles are provided (e.g. from browser hijack), update our local map
+        if (subtitles.isNotEmpty()) {
+            interceptedSubtitleUrls.clear()
+            interceptedSubtitleUrls.putAll(subtitles)
+        }
+
         addToRecentlyPlayed(displayTitle, item, season, episode, url, headers)
 
         val autoSubMode = prefs.getInt("auto_sub_pref", 0)
@@ -338,8 +388,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val existingIndex = newList.indexOfFirst {
             val itItem = it.optJSONObject("item")
             val itId = itItem?.optString("id")
+            val itIdValue = itId ?: ""
             val itImdb = itItem?.optString("imdb")
-            val sameItem = (itId == id && id.isNotEmpty()) || (itImdb == imdb && imdb.isNotEmpty())
+            val itImdbValue = itImdb ?: ""
+            val sameItem = (itIdValue == id && id.isNotEmpty()) || (itImdbValue == imdb && imdb.isNotEmpty())
             val sameEpisode = it.optInt("season", -1) == (season ?: -1) && it.optInt("episode", -1) == (episode ?: -1)
             sameItem && sameEpisode
         }
@@ -487,8 +539,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _itemDetails.value = null
         _itemEpisodes.value = null
         _itemSeasons.value = null
-        _itemCast.value = null
-        _itemRecommendations.value = null
         _lastWatchedEpisode.value = null
         
         val id = item.optInt("id")
@@ -585,7 +635,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun stopScrape() {
+    fun stopScrape(triggerSubtitles: Boolean = false) {
         stopTryAll()
         scrapePollingJob?.cancel()
         scrapePollingJob = null
@@ -605,6 +655,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _isScraping.value = false
         _isResolving.value = false
         _scrapeStatusMsg.value = "Scraping Stopped"
+
+        if (triggerSubtitles) {
+            val item = _selectedItem.value
+            if (item != null && prefs.getInt("auto_sub_pref", 0) == 1) {
+                performAutoSubtitleSearch(item, lastScrapedSeason, lastScrapedEpisode)
+            }
+        }
     }
 
     private var filteredSourcesToTry: List<JSONObject>? = null
@@ -969,6 +1026,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         lastScrapedSeason = season
         lastScrapedEpisode = episode
         interceptedSubtitleUrls.clear()
+        lastSubtitledItemKey = null // Clear this to allow subtitle search on re-scrape
+        _subStatusMsg.value = ""
 
         _isScraping.value = true
         _isResolving.value = false
@@ -1034,6 +1093,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun fetchManualSubtitles(item: JSONObject, season: Int?, episode: Int?) {
         _isDownloadingSubs.value = true
+        _showSubProgressBar.value = true
+        _subProgress.value = 0f
         _subStatusMsg.value = "Searching external subtitles..."
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -1044,11 +1105,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 
                 withContext(Dispatchers.Main) {
                     _isDownloadingSubs.value = false
+                    _showSubProgressBar.value = false
                     _events.value = StreamsEvent.ShowSubtitlePicker(JSONArray(subsJson))
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     _isDownloadingSubs.value = false
+                    _showSubProgressBar.value = false
                     _events.value = StreamsEvent.ShowToast("Subtitle search failed")
                 }
             }
@@ -1058,7 +1121,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     fun downloadSubtitles(subs: List<JSONObject>, silent: Boolean = false) {
         if (subs.isEmpty()) return
         _isDownloadingSubs.value = true
-        _subStatusMsg.value = "Downloading subtitles..."
+        _showSubProgressBar.value = true
+        _subProgress.value = 0f
+        _subStatusMsg.value = "Downloading subtitles: 0 / ${subs.size}"
 
         viewModelScope.launch(Dispatchers.IO) {
             var count = 0
@@ -1067,24 +1132,46 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
                 for (sub in subs) {
+                    if (!_isDownloadingSubs.value) break
                     val serviceName = sub.getString("service")
                     val actionArgs = sub.getString("action_args")
                     val filePath = scraper.callAttr("get_subtitle_file", serviceName, actionArgs).toString()
 
                     if (filePath.isNotEmpty()) {
-                        val subUri = android.net.Uri.fromFile(java.io.File(filePath)).toString()
-                        val source = sub.optString("service", "Unknown")
-                        val name = sub.optString("name", "Subtitle")
-                        val label = "[$source] $name"
-                        val lang = sub.optString("lang", "und")
+                        val originalFile = java.io.File(filePath)
+                        if (originalFile.exists()) {
+                            val dir = originalFile.parentFile
+                            val ext = originalFile.extension
+                            val baseName = originalFile.nameWithoutExtension
+                            val uniqueFileName = "${baseName}_${java.util.UUID.randomUUID()}.$ext"
+                            val uniqueFile = java.io.File(dir, uniqueFileName)
+                            
+                            try {
+                                originalFile.copyTo(uniqueFile, overwrite = true)
+                                val subUri = android.net.Uri.fromFile(uniqueFile).toString()
+                                val source = sub.optString("service", "Unknown")
+                                val name = sub.optString("name", "Subtitle")
+                                val label = "[$source] $name"
+                                val lang = sub.optString("lang", "und")
 
-                        interceptedSubtitleUrls[subUri] = mapOf("label" to label, "lang" to lang)
-                        newlyDownloadedSubs.add(SubtitleData(subUri, label, lang))
-                        count++
+                                interceptedSubtitleUrls[subUri] = mapOf("label" to label, "lang" to lang)
+                                newlyDownloadedSubs.add(SubtitleData(subUri, label, lang))
+                                count++
+
+                                withContext(Dispatchers.Main) {
+                                    _subProgress.value = count.toFloat() / subs.size.toFloat()
+                                    _subStatusMsg.value = "Downloading subtitles: $count / ${subs.size}"
+                                }
+                            } catch (e: Exception) {
+                                Log.e("TVBrowser", "Failed to copy subtitle to unique path: ${e.message}")
+                            }
+                        }
                     }
                 }
                 withContext(Dispatchers.Main) {
+                    _subProgress.value = 1f
                     _isDownloadingSubs.value = false
+                    _showSubProgressBar.value = false
                     if (newlyDownloadedSubs.isNotEmpty()) {
                         _events.value = StreamsEvent.AddSubtitlesBatch(newlyDownloadedSubs)
                     }
@@ -1093,6 +1180,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     _isDownloadingSubs.value = false
+                    _showSubProgressBar.value = false
                     if (!silent) _events.value = StreamsEvent.ShowToast("Subtitle download failed")
                 }
             }
@@ -1101,6 +1189,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun cancelSubtitleDownloads() { 
         _isDownloadingSubs.value = false 
+        _showSubProgressBar.value = false
+        _subProgress.value = 0f
         pendingPlayVideoSourceData = null
     }
 
@@ -1108,8 +1198,38 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val itemKey = "${item.optInt("id")}_${season ?: 0}_${episode ?: 0}"
         if (_isDownloadingSubs.value || lastSubtitledItemKey == itemKey) return
         
+        // Check persistent cache first
+        val cached = loadSubtitlesFromCache(itemKey)
+        if (cached.isNotEmpty()) {
+            lastSubtitledItemKey = itemKey
+            _subStatusMsg.value = "Using cached subtitles..."
+            _isDownloadingSubs.value = true
+            _showSubProgressBar.value = false
+            _subProgress.value = 1.0f
+            
+            cached.forEach { sub ->
+                interceptedSubtitleUrls[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
+            }
+            
+            viewModelScope.launch(Dispatchers.Main) {
+                _events.value = StreamsEvent.AddSubtitlesBatch(cached)
+                
+                // If we were waiting for subtitles to play
+                pendingPlayVideoSourceData?.let { pendingSource ->
+                    resolveAndPlayInternal(pendingSource)
+                    pendingPlayVideoSourceData = null
+                }
+                
+                delay(3000)
+                _isDownloadingSubs.value = false
+            }
+            return
+        }
+
         lastSubtitledItemKey = itemKey
         _isDownloadingSubs.value = true
+        _showSubProgressBar.value = true
+        _subProgress.value = 0f
         _subStatusMsg.value = "Searching automatic subtitles..."
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -1136,36 +1256,59 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     var downloadedCount = 0
                     val newlyDownloadedSubs = mutableListOf<SubtitleData>()
 
+                    withContext(Dispatchers.Main) {
+                        _subStatusMsg.value = "Downloading subtitles: 0 / $countToGet"
+                        _subProgress.value = 0f
+                    }
+
                     for (i in 0 until prioritizedSubs.size) {
                         if (downloadedCount >= countToGet || !_isDownloadingSubs.value) break
                         
                         val sub = prioritizedSubs[i]
-                        withContext(Dispatchers.Main) { 
-                            _subStatusMsg.value = "Downloading subtitle ${downloadedCount + 1} / $countToGet..." 
-                        }
-                        
                         val serviceName = sub.getString("service")
                         val actionArgs = sub.getString("action_args")
                         val filePath = scraper.callAttr("get_subtitle_file", serviceName, actionArgs).toString()
 
                         if (filePath.isNotEmpty()) {
-                            val subUri = android.net.Uri.fromFile(java.io.File(filePath)).toString()
-                            val source = sub.optString("service", "Unknown")
-                            val name = sub.optString("name", "Subtitle")
-                            val label = "[$source] $name"
-                            val lang = sub.optString("lang", "und")
-                            interceptedSubtitleUrls[subUri] = mapOf("label" to label, "lang" to lang)
-                            
-                            newlyDownloadedSubs.add(SubtitleData(subUri, label, lang))
-                            downloadedCount++
+                            val originalFile = java.io.File(filePath)
+                            if (originalFile.exists()) {
+                                val dir = originalFile.parentFile
+                                val ext = originalFile.extension
+                                val baseName = originalFile.nameWithoutExtension
+                                val uniqueFileName = "${baseName}_${java.util.UUID.randomUUID()}.$ext"
+                                val uniqueFile = java.io.File(dir, uniqueFileName)
+                                
+                                try {
+                                    originalFile.copyTo(uniqueFile, overwrite = true)
+                                    val subUri = android.net.Uri.fromFile(uniqueFile).toString()
+                                    val source = sub.optString("service", "Unknown")
+                                    val name = sub.optString("name", "Subtitle")
+                                    val label = "[$source] $name"
+                                    val lang = sub.optString("lang", "und")
+
+                                    interceptedSubtitleUrls[subUri] = mapOf("label" to label, "lang" to lang)
+                                    newlyDownloadedSubs.add(SubtitleData(subUri, label, lang))
+                                    downloadedCount++
+
+                                    withContext(Dispatchers.Main) { 
+                                        _subStatusMsg.value = "Downloading subtitles: $downloadedCount / $countToGet" 
+                                        _subProgress.value = downloadedCount.toFloat() / countToGet.toFloat()
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("TVBrowser", "Failed to copy subtitle to unique path: ${e.message}")
+                                }
+                            }
                         }
                     }
                     
                     withContext(Dispatchers.Main) { 
+                        _subProgress.value = 1f
                         _isDownloadingSubs.value = false 
+                        _showSubProgressBar.value = false
                         
                         // Progressive Loading (Mode 2): inject all subtitles at once as a batch
                         if (newlyDownloadedSubs.isNotEmpty()) {
+                            saveSubtitlesToCache(itemKey, newlyDownloadedSubs)
                             _events.value = StreamsEvent.AddSubtitlesBatch(newlyDownloadedSubs)
                         }
 
@@ -1177,7 +1320,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     }
                 } else {
                     withContext(Dispatchers.Main) { 
+                        _subStatusMsg.value = "No subtitles found."
+                        delay(2000)
                         _isDownloadingSubs.value = false
+                        _showSubProgressBar.value = false
                         pendingPlayVideoSourceData?.let { pendingSource ->
                             resolveAndPlayInternal(pendingSource)
                             pendingPlayVideoSourceData = null
@@ -1187,6 +1333,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { 
                     _isDownloadingSubs.value = false
+                    _showSubProgressBar.value = false
                     pendingPlayVideoSourceData?.let { pendingSource ->
                         resolveAndPlayInternal(pendingSource)
                         pendingPlayVideoSourceData = null
@@ -1474,19 +1621,51 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val subRetentionDays = prefs.getInt("sub_retention_days", 3)
-                if (subRetentionDays == 0) return@launch
+                if (subRetentionDays == 0) return@launch // 0 means Keep Indefinitely
 
-                val filesDir = context.filesDir
+                val subDir = File(context.filesDir, "userdata/subtitles")
+                if (!subDir.exists()) return@launch
+
                 val thresholdMs = System.currentTimeMillis() - (subRetentionDays * 24L * 60L * 60L * 1000L)
-                val appFiles = filesDir.listFiles() ?: return@launch
+                val subFiles = subDir.listFiles() ?: return@launch
                 
                 var deletedCount = 0
-                for (file in appFiles) {
+                for (file in subFiles) {
                     if (file.isFile && (file.name.endsWith(".srt") || file.name.endsWith(".vtt") || file.name.endsWith(".ass"))) {
                         if (file.lastModified() < thresholdMs) {
                             if (file.delete()) {
                                 deletedCount++
                             }
+                        }
+                    }
+                }
+
+                if (deletedCount > 0) {
+                    // Refresh cache mapping to remove deleted files
+                    val cacheFile = File(subDir, "cache_mapping.json")
+                    if (cacheFile.exists()) {
+                        try {
+                            val json = JSONObject(cacheFile.readText())
+                            val keys = json.keys()
+                            val keysToRemove = mutableListOf<String>()
+                            while (keys.hasNext()) {
+                                val key = keys.next()
+                                val array = json.getJSONArray(key)
+                                val newArray = JSONArray()
+                                for (i in 0 until array.length()) {
+                                    val obj = array.getJSONObject(i)
+                                    val path = android.net.Uri.parse(obj.getString("url")).path
+                                    if (path != null && File(path).exists()) {
+                                        newArray.put(obj)
+                                    }
+                                }
+                                if (newArray.length() == 0) keysToRemove.add(key)
+                                else json.put(key, newArray)
+                            }
+                            keysToRemove.forEach { json.remove(it) }
+                            cacheFile.writeText(json.toString())
+                        } catch (e: Exception) {
+                            Log.e("TVBrowser", "Failed to clean subtitle cache mapping: ${e.message}")
                         }
                     }
                 }
@@ -1565,6 +1744,75 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         return null
+    }
+
+    private fun getSubtitleCacheFile(): File {
+        val dir = File(context.filesDir, "userdata/subtitles")
+        if (!dir.exists()) dir.mkdirs()
+        return File(dir, "cache_mapping.json")
+    }
+
+    private fun loadSubtitlesFromCache(itemKey: String): List<SubtitleData> {
+        val file = getSubtitleCacheFile()
+        if (!file.exists()) return emptyList()
+        try {
+            val json = JSONObject(file.readText())
+            if (json.has(itemKey)) {
+                val array = json.getJSONArray(itemKey)
+                val results = mutableListOf<SubtitleData>()
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    // Verify file still exists before returning it
+                    val filePath = android.net.Uri.parse(obj.getString("url")).path
+                    if (filePath != null && File(filePath).exists()) {
+                        results.add(SubtitleData(
+                            obj.getString("url"),
+                            obj.getString("label"),
+                            obj.getString("lang")
+                        ))
+                    }
+                }
+                return results
+            }
+        } catch (e: Exception) {
+            Log.e("StreamsViewModel", "Failed to load subtitle cache: ${e.message}")
+        }
+        return emptyList()
+    }
+
+    private fun saveSubtitlesToCache(itemKey: String, subs: List<SubtitleData>) {
+        val file = getSubtitleCacheFile()
+        try {
+            val json = if (file.exists()) JSONObject(file.readText()) else JSONObject()
+            val array = JSONArray()
+            subs.forEach { sub ->
+                array.put(JSONObject().apply {
+                    put("url", sub.url)
+                    put("label", sub.label)
+                    put("lang", sub.lang)
+                })
+            }
+            json.put(itemKey, array)
+            file.writeText(json.toString())
+        } catch (e: Exception) {
+            Log.e("StreamsViewModel", "Failed to save subtitle cache: ${e.message}")
+        }
+    }
+
+    private fun removeSubtitlesFromCacheMap(itemKey: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val file = getSubtitleCacheFile()
+            if (!file.exists()) return@launch
+            try {
+                val json = JSONObject(file.readText())
+                if (json.has(itemKey)) {
+                    json.remove(itemKey)
+                    file.writeText(json.toString())
+                }
+            } catch (e: Exception) {
+                Log.e("StreamsViewModel", "Failed to remove subtitles from cache mapping: ${e.message}")
+            }
+        }
     }
 
     private fun sortSeasons(seasons: JSONArray): JSONArray {

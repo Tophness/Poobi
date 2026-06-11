@@ -96,9 +96,9 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             },
-            onPlaybackStarted = { url, title, item, season, episode, headers ->
+            onPlaybackStarted = { url, title, item, season, episode, headers, subtitles ->
                 streamsViewModel.stopTryAll(resume = false)
-                streamsViewModel.onVideoPlaybackStarted(url, title, item, season, episode, headers)
+                streamsViewModel.onVideoPlaybackStarted(url, title, item, season, episode, headers, subtitles)
             },
             onUpNextTriggered = { },
             onVideoEnded = {
@@ -133,11 +133,17 @@ class MainActivity : AppCompatActivity() {
                 title ?: cleanTitle
             }
 
+            val combinedSubtitles = mutableMapOf<String, Map<String, String>>()
+            combinedSubtitles.putAll(browserViewModel.interceptedSubtitleUrls)
+            if (isFromStreams) {
+                combinedSubtitles.putAll(streamsViewModel.interceptedSubtitleUrls)
+            }
+
             playerEngine.launchVideo(
                 videoUrl = videoUrl,
                 title = fullTitle,
                 headers = browserViewModel.interceptedMediaUrls[videoUrl] ?: emptyMap(),
-                subtitles = browserViewModel.interceptedSubtitleUrls,
+                subtitles = combinedSubtitles,
                 item = if (isFromStreams) item else null,
                 season = if (isFromStreams) season else null,
                 episode = if (isFromStreams) episode else null,

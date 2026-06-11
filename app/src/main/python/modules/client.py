@@ -360,6 +360,11 @@ def scrapePage(url, referer=None, headers=None, post=None, cookie=None, timeout=
                 page = session.post(url, data=post, timeout=int(timeout))
             else:
                 page = session.get(url, timeout=int(timeout))
+
+            if page.status_code in [404, 403, 500, 502, 503, 504]:
+                log_utils.log('scrapePage - Skipping due to unreachable status %s for url: %s' % (page.status_code, url))
+                return None
+
             ###################################################################
             """## A ghetto fix for blockage that could probably be coded better.
             resp_code = str(page.status_code)

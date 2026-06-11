@@ -28,7 +28,7 @@ class PlayerEngine(
     private val context: Context,
     private val prefs: SharedPreferences,
     private val onPlaybackError: (PlaybackException, String) -> Unit,
-    private val onPlaybackStarted: (String, String, JSONObject, Int?, Int?, Map<String, String>) -> Unit = { _, _, _, _, _, _ -> },
+    private val onPlaybackStarted: (String, String, JSONObject, Int?, Int?, Map<String, String>, Map<String, Map<String, String>>) -> Unit = { _, _, _, _, _, _, _ -> },
     private val onUpNextTriggered: () -> Unit,
     private val onVideoEnded: () -> Unit,
     private val onPlayerReleased: () -> Unit = {}
@@ -50,6 +50,7 @@ class PlayerEngine(
     private var lastScrapedItem: JSONObject? = null
     private var lastScrapedSeason: Int? = null
     private var lastScrapedEpisode: Int? = null
+    private var lastSubtitles: Map<String, Map<String, String>> = emptyMap()
     var playerView: PlayerView? = null
     private var hasReachedReady = false
     
@@ -112,12 +113,24 @@ class PlayerEngine(
         fromStreams: Boolean = true
     ) {
         saveProgress()
+		Log.d("PoobiSubs", "launchVideo CALLED. Incoming subtitle count: ${subtitles.size}")
+		subtitles.forEach { (subUrl, infoMap) ->
+			val path = Uri.parse(subUrl).path ?: ""
+			val file = java.io.File(path)
+			Log.d("PoobiSubs", "  - Video Player Subtitle track:")
+			Log.d("PoobiSubs", "    * Target URI: $subUrl")
+			Log.d("PoobiSubs", "    * Label: ${infoMap["label"]}")
+			Log.d("PoobiSubs", "    * Lang Code: ${infoMap["lang"]}")
+			Log.d("PoobiSubs", "    * File Size: ${file.length()} bytes")
+			Log.d("PoobiSubs", "    * File Exists: ${file.exists()}")
+		}
 
         lastVideoUrl = videoUrl
         lastVideoTitle = title
         lastScrapedItem = item
         lastScrapedSeason = season
         lastScrapedEpisode = episode
+        lastSubtitles = subtitles
         isUpNextDismissed = false
         hasReachedReady = false
         hasTriggeredPlaybackStarted = false
@@ -149,7 +162,7 @@ class PlayerEngine(
                     if (!hasTriggeredPlaybackStarted) {
                         hasTriggeredPlaybackStarted = true
                         lastScrapedItem?.let { item ->
-                            onPlaybackStarted(videoUrl, title, item, lastScrapedSeason, lastScrapedEpisode, headers)
+                            onPlaybackStarted(videoUrl, title, item, lastScrapedSeason, lastScrapedEpisode, headers, lastSubtitles)
                         }
                     }
                 } else if (state == Player.STATE_ENDED) {
@@ -171,23 +184,31 @@ class PlayerEngine(
         })
 
         val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
-        val subtitleConfigs = subtitles.map { (subUrl, infoMap) ->
-            val mimeType = when {
-                subUrl.contains(".vtt") -> MimeTypes.TEXT_VTT
-                subUrl.contains(".ass") -> MimeTypes.TEXT_SSA
-                else -> MimeTypes.APPLICATION_SUBRIP
-            }
-            val label = infoMap["label"] ?: getLanguageInfo(subUrl).second
-            val lang = if (label.isNotEmpty() && label != "Unknown") null else (infoMap["lang"] ?: getLanguageInfo(subUrl).first)
+		val subtitleConfigs = subtitles.map { (subUrl, infoMap) ->
+			val mimeType = when {
+				subUrl.contains(".vtt") -> MimeTypes.TEXT_VTT
+				subUrl.contains(".ass") -> MimeTypes.TEXT_SSA
+				else -> MimeTypes.APPLICATION_SUBRIP
+			}
+			val label = infoMap["label"] ?: getLanguageInfo(subUrl).second
+			val lang = if (label.isNotEmpty() && label != "Unknown") null else (infoMap["lang"] ?: getLanguageInfo(subUrl).first)
 
-            MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
-                .setMimeType(mimeType)
-                .setLanguage(lang)
-                .setLabel(label)
-                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                .setRoleFlags(C.ROLE_FLAG_SUBTITLE)
-                .build()
-        }
+			val config = MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
+				.setMimeType(mimeType)
+				.setLanguage(lang)
+				.setLabel(label)
+				.setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+				.setRoleFlags(C.ROLE_FLAG_SUBTITLE)
+				.build()
+
+			// --- ADD DIAGNOSTIC LOGS HERE ---
+			Log.d("PoobiSubs", "  - Built MediaItem.SubtitleConfiguration:")
+			Log.d("PoobiSubs", "    * URI: ${config.uri}")
+			Log.d("PoobiSubs", "    * Label: ${config.label}")
+			Log.d("PoobiSubs", "    * Language: ${config.language}")
+			// ---------------------------------
+			config
+		}
 
         mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
         exoPlayer?.setMediaItem(mediaItemBuilder.build())
@@ -230,6 +251,10 @@ class PlayerEngine(
         val currentConfigs = currentMediaItem.localConfiguration?.subtitleConfigurations.orEmpty().toMutableList()
 
         for (sub in newSubs) {
+            if (currentConfigs.any { it.uri.toString() == sub.url }) {
+                continue
+            }
+
             val mimeType = when {
                 sub.url.contains(".vtt") -> MimeTypes.TEXT_VTT
                 sub.url.contains(".ass") -> MimeTypes.TEXT_SSA

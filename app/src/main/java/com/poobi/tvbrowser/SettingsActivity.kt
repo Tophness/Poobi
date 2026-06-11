@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -36,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -49,6 +52,7 @@ import com.poobi.tvbrowser.streams.SourceSorter
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvInputField
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -89,6 +93,56 @@ class SettingsActivity : AppCompatActivity() {
     private var googleSignInStatusState = mutableStateOf("Not signed in.")
     private var isGoogleSignedInState = mutableStateOf(false)
 
+    // Lifted Class-level settings variables
+    // General Panel
+    private var lightTheme by mutableStateOf(false)
+    private var restoreOption by mutableStateOf(0)
+    private var histLimit by mutableStateOf(20)
+    private var historyIconOption by mutableStateOf(0)
+    private var bookmarkIconOption by mutableStateOf(0)
+
+    // Web Panel
+    private var silentBlock by mutableStateOf(true)
+    private var clickjack by mutableStateOf(true)
+    private var adblockUrl by mutableStateOf("")
+
+    // Player Panel
+    private var extractPref by mutableStateOf(0)
+    private var fallbackPref by mutableStateOf(0)
+    private var embeddedSubs by mutableStateOf(true)
+    private var upNextMode by mutableStateOf("Ask")
+    private var upNextTime by mutableStateOf(20)
+    private var upNextTimeStr by mutableStateOf("20")
+    private var autoplayNext by mutableStateOf("Closest Source")
+
+    // Interface Panel
+    private var scrollTopbar by mutableStateOf(true)
+    private var navMode by mutableStateOf(0)
+
+    // Streaming Panel
+    private var timeoutMode by mutableStateOf("Both")
+    private var globalTimeout by mutableStateOf(30)
+    private var globalTimeoutStr by mutableStateOf("30")
+    private var sourceTimeout by mutableStateOf(15)
+    private var sourceTimeoutStr by mutableStateOf("15")
+    private var enforceWhitelist by mutableStateOf(true)
+    private val whitelistedHosts = mutableStateListOf<String>()
+
+    // Subtitles Panel
+    private var autoSubPref by mutableStateOf(0)
+    private var countPref by mutableStateOf(1)
+    private var waitPref by mutableStateOf(0)
+    private var retentionDays by mutableStateOf(3)
+    private var subsLanguages by mutableStateOf("English")
+    private var subtitlesLimit by mutableStateOf(20)
+    private var subtitlesLimitStr by mutableStateOf("20")
+    private var opensubUser by mutableStateOf("")
+    private var opensubPass by mutableStateOf("")
+    private var opensubOrgUser by mutableStateOf("")
+    private var opensubOrgPass by mutableStateOf("")
+    private var subdlApikey by mutableStateOf("")
+    private var subsourceApikey by mutableStateOf("")
+
     enum class Category {
         General, Web, Player, Interface, Streaming, Autoplay, Subtitles, Sorting, Blocked, Trakt, TMDb, Sync
     }
@@ -110,7 +164,12 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
         driveSyncManager = DriveSyncManager(this)
+        
+        initPython()
+        prepopulatePreferences()
+        loadSettingsFromPrefs()
         syncDefaultAutoplayProfile()
+        
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             .requestScopes(Scope(DriveScopes.DRIVE_APPDATA))
@@ -184,6 +243,92 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun initPython() {
+        if (!Python.isStarted()) {
+            Python.start(AndroidPlatform(this))
+        }
+    }
+
+    private fun prepopulatePreferences() {
+        if (!prefs.contains("whitelisted_hosts")) {
+            try {
+                val py = Python.getInstance()
+                val main = py.getModule("main")
+                val defaultWhitelist = main.callAttr("get_default_whitelist").toString()
+                prefs.edit().putString("whitelisted_hosts", defaultWhitelist).apply()
+            } catch (e: Exception) {
+                Log.e("Settings", "Failed to prepopulate default whitelist", e)
+            }
+        }
+        if (!prefs.contains("enabled_packs")) {
+            try {
+                val py = Python.getInstance()
+                val main = py.getModule("main")
+                val defaultPacks = main.callAttr("get_enabled_packs").toString()
+                prefs.edit().putString("enabled_packs", defaultPacks).apply()
+            } catch (e: Exception) {
+                Log.e("Settings", "Failed to prepopulate default enabled packs", e)
+            }
+        }
+    }
+
+    private fun loadSettingsFromPrefs() {
+        // General Panel
+        lightTheme = prefs.getBoolean("light_theme", false)
+        restoreOption = prefs.getInt("restore_tabs_pref", 0)
+        histLimit = prefs.getInt("history_limit", 20)
+        historyIconOption = prefs.getInt("history_icon_pref", 0)
+        bookmarkIconOption = prefs.getInt("bookmark_icon_pref", 0)
+
+        // Web Panel
+        silentBlock = prefs.getBoolean("silent_popup_block", true)
+        clickjack = prefs.getBoolean("clickjack_prevention", true)
+        adblockUrl = prefs.getString("custom_adblock_url", "https://easylist.to/easylist/easylist.txt") ?: ""
+
+        // Player Panel
+        extractPref = prefs.getInt("extract_video_pref", 0)
+        fallbackPref = prefs.getInt("exo_fallback_pref", 0)
+        embeddedSubs = prefs.getBoolean("embedded_subs_enabled", true)
+        upNextMode = prefs.getString("up_next_popup_pref", "Ask") ?: "Ask"
+        upNextTime = prefs.getInt("up_next_time_pref", 20)
+        upNextTimeStr = upNextTime.toString()
+        autoplayNext = prefs.getString("autoplay_next_pref", "Closest Source") ?: "Closest Source"
+
+        // Interface Panel
+        scrollTopbar = prefs.getBoolean("scroll_topbar_enabled", true)
+        navMode = prefs.getInt("navigation_mode_pref", 0)
+
+        // Streaming Panel
+        timeoutMode = prefs.getString("timeout_mode", "Both") ?: "Both"
+        globalTimeout = prefs.getInt("global_timeout", 30)
+        globalTimeoutStr = globalTimeout.toString()
+        sourceTimeout = prefs.getInt("per_source_timeout", 15)
+        sourceTimeoutStr = sourceTimeout.toString()
+        enforceWhitelist = prefs.getBoolean("use_only_whitelisted_hosts", true)
+        
+        whitelistedHosts.clear()
+        val hostsJson = prefs.getString("whitelisted_hosts", "[]") ?: "[]"
+        val hostsArr = JSONArray(hostsJson)
+        for (i in 0 until hostsArr.length()) {
+            whitelistedHosts.add(hostsArr.getString(i))
+        }
+
+        // Subtitles Panel
+        autoSubPref = prefs.getInt("auto_sub_pref", 0)
+        countPref = prefs.getInt("auto_sub_count", 1)
+        waitPref = prefs.getInt("auto_sub_wait_pref", 0)
+        retentionDays = prefs.getInt("sub_retention_days", 3)
+        subsLanguages = prefs.getString("subtitles_languages", "English") ?: "English"
+        subtitlesLimit = prefs.getInt("subtitles_limit", 20)
+        subtitlesLimitStr = subtitlesLimit.toString()
+        opensubUser = prefs.getString("opensubtitles_username", "") ?: ""
+        opensubPass = prefs.getString("opensubtitles_password", "") ?: ""
+        opensubOrgUser = prefs.getString("opensubtitles_org_username", "") ?: ""
+        opensubOrgPass = prefs.getString("opensubtitles_org_password", "") ?: ""
+        subdlApikey = prefs.getString("subdl_apikey", "") ?: ""
+        subsourceApikey = prefs.getString("subsource_apikey", "") ?: ""
     }
 
     private fun handleSignInSuccess(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount) {
@@ -348,37 +493,27 @@ class SettingsActivity : AppCompatActivity() {
 
     @Composable
     fun GeneralPanel() {
-        var lightTheme by remember { mutableStateOf(prefs.getBoolean("light_theme", false)) }
-        var restoreOption by remember { mutableStateOf(prefs.getInt("restore_tabs_pref", 0)) }
-        var histLimit by remember { mutableStateOf(prefs.getInt("history_limit", 20)) }
-        var historyIconOption by remember { mutableStateOf(prefs.getInt("history_icon_pref", 0)) }
-        var bookmarkIconOption by remember { mutableStateOf(prefs.getInt("bookmark_icon_pref", 0)) }
-
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             PanelHeader("General Settings")
-            ToggleSettingRow("Use Light Theme", lightTheme) { lightTheme = it; prefs.edit().putBoolean("light_theme", it).apply() }
-            DropdownSettingRow("Restore Session Mode", listOf("Ask to Restore", "Always Restore", "Never Restore"), restoreOption) { restoreOption = it; prefs.edit().putInt("restore_tabs_pref", it).apply() }
+            ToggleSettingRow("Use Light Theme", lightTheme) { lightTheme = it }
+            DropdownSettingRow("Restore Session Mode", listOf("Ask to Restore", "Always Restore", "Never Restore"), restoreOption) { restoreOption = it }
             DropdownSettingRow("History Retention Limit", listOf("10 Entries", "20 Entries", "50 Entries", "Unlimited"), when (histLimit) { 10 -> 0; 20 -> 1; 50 -> 2; else -> 3 }) {
-                histLimit = when (it) { 0 -> 10; 1 -> 20; 2 -> 50; else -> 0 }; prefs.edit().putInt("history_limit", histLimit).apply()
+                histLimit = when (it) { 0 -> 10; 1 -> 20; 2 -> 50; else -> 0 }
             }
-            DropdownSettingRow("History Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), historyIconOption) { historyIconOption = it; prefs.edit().putInt("history_icon_pref", it).apply() }
-            DropdownSettingRow("Bookmark Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), bookmarkIconOption) { bookmarkIconOption = it; prefs.edit().putInt("bookmark_icon_pref", it).apply() }
+            DropdownSettingRow("History Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), historyIconOption) { historyIconOption = it }
+            DropdownSettingRow("Bookmark Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), bookmarkIconOption) { bookmarkIconOption = it }
         }
     }
 
     @Composable
     fun WebPanel() {
-        var silentBlock by remember { mutableStateOf(prefs.getBoolean("silent_popup_block", true)) }
-        var clickjack by remember { mutableStateOf(prefs.getBoolean("clickjack_prevention", true)) }
-        var adblockUrl by remember { mutableStateOf(prefs.getString("custom_adblock_url", "https://easylist.to/easylist/easylist.txt") ?: "") }
-
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             PanelHeader("Web & AdBlocker Settings")
-            ToggleSettingRow("Block Popups Silently", silentBlock) { silentBlock = it; prefs.edit().putBoolean("silent_popup_block", it).apply() }
-            ToggleSettingRow("Prevent Clickjacking", clickjack) { clickjack = it; prefs.edit().putBoolean("clickjack_prevention", it).apply() }
+            ToggleSettingRow("Block Popups Silently", silentBlock) { silentBlock = it }
+            ToggleSettingRow("Prevent Clickjacking", clickjack) { clickjack = it }
             TvInputField(
                 value = adblockUrl, 
-                onValueChange = { adblockUrl = it; prefs.edit().putString("custom_adblock_url", it).apply() }, 
+                onValueChange = { adblockUrl = it }, 
                 label = "Custom AdBlock Rules URL (EasyList Format)", 
                 placeholder = "https://...",
                 containerColor = Color(0xFF222225),
@@ -389,20 +524,12 @@ class SettingsActivity : AppCompatActivity() {
 
     @Composable
     fun PlayerPanel() {
-        var extractPref by remember { mutableStateOf(prefs.getInt("extract_video_pref", 0)) }
-        var fallbackPref by remember { mutableStateOf(prefs.getInt("exo_fallback_pref", 0)) }
-        var embeddedSubs by remember { mutableStateOf(prefs.getBoolean("embedded_subs_enabled", true)) }
-
-        var upNextMode by remember { mutableStateOf(prefs.getString("up_next_popup_pref", "Ask") ?: "Ask") }
-        var upNextTime by remember { mutableStateOf(prefs.getInt("up_next_time_pref", 20)) }
-        var autoplayNext by remember { mutableStateOf(prefs.getString("autoplay_next_pref", "Closest Source") ?: "Closest Source") }
-
         Column(modifier = Modifier.fillMaxSize().padding(bottom = 16.dp)) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item { PanelHeader("Native Player Preferences") }
-                item { DropdownSettingRow("Video Extraction Hijack", listOf("Ask to Play", "Always Play in Native Player", "Never Play (Use Site Browser)"), extractPref) { extractPref = it; prefs.edit().putInt("extract_video_pref", it).apply() } }
-                item { DropdownSettingRow("Fallback on Playback Error", listOf("Ask user to switch", "Always fall back to Browser", "Never fall back"), fallbackPref) { fallbackPref = it; prefs.edit().putInt("exo_fallback_pref", it).apply() } }
-                item { ToggleSettingRow("Embedded Player Subtitles", embeddedSubs) { embeddedSubs = it; prefs.edit().putBoolean("embedded_subs_enabled", it).apply() } }
+                item { DropdownSettingRow("Video Extraction Hijack", listOf("Ask to Play", "Always Play in Native Player", "Never Play (Use Site Browser)"), extractPref) { extractPref = it } }
+                item { DropdownSettingRow("Fallback on Playback Error", listOf("Ask user to switch", "Always fall back to Browser", "Never fall back"), fallbackPref) { fallbackPref = it } }
+                item { ToggleSettingRow("Embedded Player Subtitles", embeddedSubs) { embeddedSubs = it } }
 
                 item { Spacer(modifier = Modifier.height(8.dp)) }
                 item { PanelHeader("Binge Watching & Autoplay") }
@@ -414,14 +541,19 @@ class SettingsActivity : AppCompatActivity() {
                         selectedIndex = when(upNextMode) { "Always" -> 1; "Never" -> 2; else -> 0 }
                     ) { index ->
                         upNextMode = when(index) { 1 -> "Always"; 2 -> "Never"; else -> "Ask" }
-                        prefs.edit().putString("up_next_popup_pref", upNextMode).apply()
                     }
                 }
 
                 item {
                     TvInputField(
-                        value = upNextTime.toString(),
-                        onValueChange = { upNextTime = it.toIntOrNull() ?: 20; prefs.edit().putInt("up_next_time_pref", upNextTime).apply() },
+                        value = upNextTimeStr,
+                        onValueChange = { newValue ->
+                            val filtered = newValue.filter { it.isDigit() }
+                            upNextTimeStr = filtered
+                            if (filtered.isNotEmpty()) {
+                                upNextTime = filtered.toInt()
+                            }
+                        },
                         label = "Show Overlay Seconds Before End",
                         placeholder = "20",
                         containerColor = Color(0xFF222225),
@@ -436,7 +568,6 @@ class SettingsActivity : AppCompatActivity() {
                         selectedIndex = when(autoplayNext) { "Best Source" -> 1; "Ask" -> 2; else -> 0 }
                     ) { index ->
                         autoplayNext = when(index) { 1 -> "Best Source"; 2 -> "Ask"; else -> "Closest Source" }
-                        prefs.edit().putString("autoplay_next_pref", autoplayNext).apply()
                     }
                 }
             }
@@ -445,28 +576,18 @@ class SettingsActivity : AppCompatActivity() {
 
     @Composable
     fun InterfacePanel() {
-        var scrollTopbar by remember { mutableStateOf(prefs.getBoolean("scroll_topbar_enabled", true)) }
-        var navMode by remember { mutableStateOf(prefs.getInt("navigation_mode_pref", 0)) }
-
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             PanelHeader("Interface Navigation Settings")
-            ToggleSettingRow("Scroll up for Navigation Bar", scrollTopbar) { scrollTopbar = it; prefs.edit().putBoolean("scroll_topbar_enabled", it).apply() }
-            DropdownSettingRow("Default Pointer Navigation Mode", listOf("Simulated Pointer (Cursor)", "Physical target navigation (D-pad selection)"), navMode) { navMode = it; prefs.edit().putInt("navigation_mode_pref", it).apply() }
+            ToggleSettingRow("Scroll up for Navigation Bar", scrollTopbar) { scrollTopbar = it }
+            DropdownSettingRow("Default Pointer Navigation Mode", listOf("Simulated Pointer (Cursor)", "Physical target navigation (D-pad selection)"), navMode) { navMode = it }
         }
     }
 
     @Composable
     fun StreamingPanel() {
-        var timeoutMode by remember { mutableStateOf(prefs.getString("timeout_mode", "Both") ?: "Both") }
-        var globalTimeout by remember { mutableStateOf(prefs.getInt("global_timeout", 30)) }
-        var sourceTimeout by remember { mutableStateOf(prefs.getInt("per_source_timeout", 15)) }
-        var enforceWhitelist by remember { mutableStateOf(prefs.getBoolean("use_only_whitelisted_hosts", true)) }
-
         var hostSearchQuery by remember { mutableStateOf("") }
         var providerHosts by remember { mutableStateOf(emptyList<String>()) }
         var resolveurlHosts by remember { mutableStateOf(emptyList<String>()) }
-        val whitelistedHosts = remember { mutableStateListOf<String>().apply { addAll(prefs.getString("whitelisted_hosts", "[]")?.let { val arr = JSONArray(it); (0 until arr.length()).map { arr.getString(it) } } ?: emptyList()) } }
-
         var providerPacksList by remember { mutableStateOf(emptyList<String>()) }
 
         LaunchedEffect(Unit) {
@@ -505,8 +626,12 @@ class SettingsActivity : AppCompatActivity() {
 
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        DropdownSettingRow("Timeout Logic", listOf("Global Timeout Only", "Per-Source Only", "Both Engines Active"), when (timeoutMode) { "Global" -> 0; "Per-Source" -> 1; else -> 2 }, modifier = Modifier.weight(1f)) { timeoutMode = when (it) { 0 -> "Global"; 1 -> "Per-Source"; else -> "Both" }; prefs.edit().putString("timeout_mode", timeoutMode).apply() }
-                        ToggleSettingRow("Enforce Host Whitelist", enforceWhitelist, modifier = Modifier.weight(1f)) { enforceWhitelist = it; prefs.edit().putBoolean("use_only_whitelisted_hosts", it).apply() }
+                        DropdownSettingRow("Timeout Logic", listOf("Global Timeout Only", "Per-Source Only", "Both Engines Active"), when (timeoutMode) { "Global" -> 0; "Per-Source" -> 1; else -> 2 }, modifier = Modifier.weight(1f)) { 
+                            timeoutMode = when (it) { 0 -> "Global"; 1 -> "Per-Source"; else -> "Both" }
+                        }
+                        ToggleSettingRow("Enforce Host Whitelist", enforceWhitelist, modifier = Modifier.weight(1f)) { 
+                            enforceWhitelist = it
+                        }
                     }
                 }
 
@@ -514,8 +639,14 @@ class SettingsActivity : AppCompatActivity() {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Box(modifier = Modifier.weight(1f)) {
                             TvInputField(
-                                value = globalTimeout.toString(), 
-                                onValueChange = { globalTimeout = it.toIntOrNull() ?: 30; prefs.edit().putInt("global_timeout", globalTimeout).apply() }, 
+                                value = globalTimeoutStr, 
+                                onValueChange = { newValue ->
+                                    val filtered = newValue.filter { it.isDigit() }
+                                    globalTimeoutStr = filtered
+                                    if (filtered.isNotEmpty()) {
+                                        globalTimeout = filtered.toInt()
+                                    }
+                                }, 
                                 label = "Global Engine Timeout (Seconds)",
                                 placeholder = "30",
                                 containerColor = Color(0xFF222225),
@@ -524,8 +655,14 @@ class SettingsActivity : AppCompatActivity() {
                         }
                         Box(modifier = Modifier.weight(1f)) {
                             TvInputField(
-                                value = sourceTimeout.toString(), 
-                                onValueChange = { sourceTimeout = it.toIntOrNull() ?: 15; prefs.edit().putInt("per_source_timeout", sourceTimeout).apply() }, 
+                                value = sourceTimeoutStr, 
+                                onValueChange = { newValue ->
+                                    val filtered = newValue.filter { it.isDigit() }
+                                    sourceTimeoutStr = filtered
+                                    if (filtered.isNotEmpty()) {
+                                        sourceTimeout = filtered.toInt()
+                                    }
+                                }, 
                                 label = "Per-Source Timeout Limit (Seconds)",
                                 placeholder = "15",
                                 containerColor = Color(0xFF222225),
@@ -553,7 +690,14 @@ class SettingsActivity : AppCompatActivity() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(pack, color = Color.LightGray, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                            Checkbox(checked = isChecked, onCheckedChange = { isChecked = it; prefs.edit().putBoolean("pack_$pack", it).apply() }, modifier = Modifier.scale(0.85f))
+                            Checkbox(
+                                checked = isChecked, 
+                                onCheckedChange = { 
+                                    isChecked = it
+                                    prefs.edit().putBoolean("pack_$pack", it).apply()
+                                }, 
+                                modifier = Modifier.scale(0.85f)
+                            )
                         }
                     }
                 }
@@ -588,7 +732,6 @@ class SettingsActivity : AppCompatActivity() {
                                     val filteredR = resolveurlHosts.filter { it.contains(hostSearchQuery, true) }
                                     filteredP.forEach { if (!whitelistedHosts.contains(it)) whitelistedHosts.add(it) }
                                     filteredR.forEach { if (!whitelistedHosts.contains(it)) whitelistedHosts.add(it) }
-                                    prefs.edit().putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString()).apply()
                                 },
                                 modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
                             ) { Text("Select All", fontSize = 12.sp) }
@@ -597,7 +740,6 @@ class SettingsActivity : AppCompatActivity() {
                                 enabled = enforceWhitelist,
                                 onClick = {
                                     whitelistedHosts.clear()
-                                    prefs.edit().putString("whitelisted_hosts", "[]").apply()
                                 },
                                 modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
                             ) { Text("Clear All", fontSize = 12.sp) }
@@ -620,7 +762,6 @@ class SettingsActivity : AppCompatActivity() {
                                                 .clickable(enabled = enforceWhitelist) {
                                                     val isCurrentlyWhitelisted = whitelistedHosts.contains(host)
                                                     if (isCurrentlyWhitelisted) whitelistedHosts.remove(host) else whitelistedHosts.add(host)
-                                                    prefs.edit().putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString()).apply()
                                                 }
                                                 .tvSettingsFocus()
                                                 .padding(horizontal = 4.dp),
@@ -632,7 +773,6 @@ class SettingsActivity : AppCompatActivity() {
                                                 enabled = enforceWhitelist,
                                                 onCheckedChange = { checked ->
                                                     if (checked) whitelistedHosts.add(host) else whitelistedHosts.remove(host)
-                                                    prefs.edit().putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString()).apply()
                                                 },
                                                 modifier = Modifier.scale(0.75f)
                                             )
@@ -657,7 +797,6 @@ class SettingsActivity : AppCompatActivity() {
                                                 .clickable(enabled = enforceWhitelist) {
                                                     val isCurrentlyWhitelisted = whitelistedHosts.contains(host)
                                                     if (isCurrentlyWhitelisted) whitelistedHosts.remove(host) else whitelistedHosts.add(host)
-                                                    prefs.edit().putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString()).apply()
                                                 }
                                                 .tvSettingsFocus()
                                                 .padding(horizontal = 4.dp),
@@ -669,7 +808,6 @@ class SettingsActivity : AppCompatActivity() {
                                                 enabled = enforceWhitelist,
                                                 onCheckedChange = { checked ->
                                                     if (checked) whitelistedHosts.add(host) else whitelistedHosts.remove(host)
-                                                    prefs.edit().putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString()).apply()
                                                 },
                                                 modifier = Modifier.scale(0.75f)
                                             )
@@ -703,10 +841,11 @@ class SettingsActivity : AppCompatActivity() {
             LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed((0 until profilesList.length()).toList()) { index, _ ->
                     val profile = profilesList.getJSONObject(index)
+                    val isEnabled = profile.optBoolean("enabled", true)
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(profile.optString("name"), color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            Checkbox(checked = profile.optBoolean("enabled", true), onCheckedChange = { profile.put("enabled", it); prefs.edit().putString("autoplay_profiles", profilesList.toString()).apply(); profilesList = JSONArray(profilesList.toString()) })
+                            Checkbox(checked = isEnabled, onCheckedChange = { profile.put("enabled", it); prefs.edit().putString("autoplay_profiles", profilesList.toString()).apply(); profilesList = JSONArray(profilesList.toString()) })
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(onClick = { editProfileIndex = index; editProfileData = JSONObject(profile.toString()); showEditDialog = true }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Edit") }
                             Spacer(modifier = Modifier.width(4.dp))
@@ -717,7 +856,7 @@ class SettingsActivity : AppCompatActivity() {
 
                 item {
                     Spacer(modifier = Modifier.height(10.dp))
-                    Button(onClick = { editProfileIndex = -1; editProfileData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New Profile"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("script", ""); put("use_script", true); put("selectors", JSONArray()) }; showEditDialog = true }, modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Add New Autoplay Profile") }
+                    Button(onClick = { editProfileIndex = -1; editProfileData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New Profile"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("script", ""); put("use_script", true); put("selectors", JSONArray()) }; showEditDialog = true }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Add New Autoplay Profile") }
                 }
             }
         }
@@ -785,19 +924,6 @@ class SettingsActivity : AppCompatActivity() {
 
     @Composable
     fun SubtitlesPanel() {
-        var autoSubPref by remember { mutableStateOf(prefs.getInt("auto_sub_pref", 0)) }
-        var countPref by remember { mutableStateOf(prefs.getInt("auto_sub_count", 1)) }
-        var waitPref by remember { mutableStateOf(prefs.getInt("auto_sub_wait_pref", 0)) }
-        var retentionDays by remember { mutableStateOf(prefs.getInt("sub_retention_days", 3)) }
-        var subsLanguages by remember { mutableStateOf(prefs.getString("subtitles_languages", "English") ?: "English") }
-        var subtitlesLimit by remember { mutableStateOf(prefs.getInt("subtitles_limit", 20)) }
-        var opensubUser by remember { mutableStateOf(prefs.getString("opensubtitles_username", "") ?: "") }
-        var opensubPass by remember { mutableStateOf(prefs.getString("opensubtitles_password", "") ?: "") }
-        var opensubOrgUser by remember { mutableStateOf(prefs.getString("opensubtitles_org_username", "") ?: "") }
-        var opensubOrgPass by remember { mutableStateOf(prefs.getString("opensubtitles_org_password", "") ?: "") }
-        var subdlApikey by remember { mutableStateOf(prefs.getString("subdl_apikey", "") ?: "") }
-        var subsourceApikey by remember { mutableStateOf(prefs.getString("subsource_apikey", "") ?: "") }
-
         var showCustomSubCountDialog by remember { mutableStateOf(false) }
         var customSubCountInput by remember { mutableStateOf("") }
 
@@ -815,7 +941,9 @@ class SettingsActivity : AppCompatActivity() {
         LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item { PanelHeader("Subtitle Search Preferences") }
 
-            item { DropdownSettingRow("Auto-search Behavior", listOf("Ask me to search", "Search Automatically", "Never Search"), autoSubPref) { autoSubPref = it; prefs.edit().putInt("auto_sub_pref", it).apply() } }
+            item { DropdownSettingRow("Auto-search Behavior", listOf("Ask me to search", "Search Automatically", "Never Search"), autoSubPref) { 
+                autoSubPref = it
+            } }
             if (autoSubPref == 1) {
                 item {
                     DropdownSettingRow("Subtitles To Download", autoSubCountOptions, selectedSubCountIndex) { index ->
@@ -832,30 +960,97 @@ class SettingsActivity : AppCompatActivity() {
                                 6 -> 0
                                 else -> 1
                             }
-                            prefs.edit().putInt("auto_sub_count", countPref).apply()
                         }
                     }
                 }
-                item { DropdownSettingRow("When Video Launches", listOf("Stop downloading immediately", "Ask if I want to wait", "Keep downloading in background"), waitPref) { waitPref = it; prefs.edit().putInt("auto_sub_wait_pref", it).apply() } }
+                item { DropdownSettingRow("When Video Launches", listOf("Stop downloading immediately", "Ask if I want to wait", "Keep downloading in background"), waitPref) { 
+                    waitPref = it
+                } }
             }
 
-            item { DropdownSettingRow("Subtitle File Retention", listOf("Keep Indefinitely", "1 Day", "3 Days", "7 Days", "14 Days", "30 Days"), when (retentionDays) { 0 -> 0; 1 -> 1; 3 -> 2; 7 -> 3; 14 -> 4; 30 -> 5; else -> 2 }) { retentionDays = when (it) { 0 -> 0; 1 -> 1; 2 -> 3; 3 -> 7; 4 -> 14; 5 -> 30; else -> 3 }; prefs.edit().putInt("sub_retention_days", retentionDays).apply() } }
+            item { DropdownSettingRow("Subtitle File Retention", listOf("Keep Indefinitely", "1 Day", "3 Days", "7 Days", "14 Days", "30 Days"), when (retentionDays) { 0 -> 0; 1 -> 1; 3 -> 2; 7 -> 3; 14 -> 4; 30 -> 5; else -> 2 }) { 
+                retentionDays = when (it) { 0 -> 0; 1 -> 1; 2 -> 3; 3 -> 7; 4 -> 14; 5 -> 30; else -> 3 }
+            } }
 
-            item { TvInputField(value = subsLanguages, onValueChange = { subsLanguages = it; prefs.edit().putString("subtitles_languages", it).apply() }, label = "Preferred Languages (Comma-separated ISO codes)", placeholder = "English", containerColor = Color(0xFF222225), imeAction = ImeAction.Done) }
+            item { TvInputField(
+                value = subsLanguages, 
+                onValueChange = { subsLanguages = it }, 
+                label = "Preferred Languages (Comma-separated ISO codes)", 
+                placeholder = "English", 
+                containerColor = Color(0xFF222225), 
+                imeAction = ImeAction.Done
+            ) }
 
-            item { TvInputField(value = subtitlesLimit.toString(), onValueChange = { subtitlesLimit = it.toIntOrNull() ?: 20; prefs.edit().putInt("subtitles_limit", subtitlesLimit).apply() }, label = "Subtitles Search Limit", placeholder = "20", containerColor = Color(0xFF222225), imeAction = ImeAction.Done) }
+            item { TvInputField(
+                value = subtitlesLimitStr, 
+                onValueChange = { newValue ->
+                    val filtered = newValue.filter { it.isDigit() }
+                    subtitlesLimitStr = filtered
+                    if (filtered.isNotEmpty()) {
+                        subtitlesLimit = filtered.toInt()
+                    }
+                }, 
+                label = "Subtitles Search Limit", 
+                placeholder = "20", 
+                containerColor = Color(0xFF222225), 
+                imeAction = ImeAction.Done
+            ) }
 
             item { Spacer(modifier = Modifier.height(10.dp)) }
             item { Text("Subtitle Accounts & API Keys", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
 
-            item { TvInputField(value = opensubUser, onValueChange = { opensubUser = it; prefs.edit().putString("opensubtitles_username", it).apply() }, label = "OpenSubtitles Username", placeholder = "Username", containerColor = Color(0xFF222225), imeAction = ImeAction.Done) }
-            item { TvInputField(value = opensubPass, onValueChange = { opensubPass = it; prefs.edit().putString("opensubtitles_password", it).apply() }, label = "OpenSubtitles Password", placeholder = "Password", isPassword = true, containerColor = Color(0xFF222225), imeAction = ImeAction.Done) }
+            item { TvInputField(
+                value = opensubUser, 
+                onValueChange = { opensubUser = it }, 
+                label = "OpenSubtitles Username", 
+                placeholder = "Username", 
+                containerColor = Color(0xFF222225), 
+                imeAction = ImeAction.Done
+            ) }
+            item { TvInputField(
+                value = opensubPass, 
+                onValueChange = { opensubPass = it }, 
+                label = "OpenSubtitles Password", 
+                placeholder = "Password", 
+                isPassword = true, 
+                containerColor = Color(0xFF222225), 
+                imeAction = ImeAction.Done
+            ) }
 
-            item { TvInputField(value = opensubOrgUser, onValueChange = { opensubOrgUser = it; prefs.edit().putString("opensubtitles_org_username", it).apply() }, label = "OpenSubtitles.org Username", placeholder = "Username", containerColor = Color(0xFF222225), imeAction = ImeAction.Done) }
-            item { TvInputField(value = opensubOrgPass, onValueChange = { opensubOrgPass = it; prefs.edit().putString("opensubtitles_org_password", it).apply() }, label = "OpenSubtitles.org Password", placeholder = "Password", isPassword = true, containerColor = Color(0xFF222225), imeAction = ImeAction.Done) }
+            item { TvInputField(
+                value = opensubOrgUser, 
+                onValueChange = { opensubOrgUser = it }, 
+                label = "OpenSubtitles.org Username", 
+                placeholder = "Username", 
+                containerColor = Color(0xFF222225), 
+                imeAction = ImeAction.Done
+            ) }
+            item { TvInputField(
+                value = opensubOrgPass, 
+                onValueChange = { opensubOrgPass = it }, 
+                label = "OpenSubtitles.org Password", 
+                placeholder = "Password", 
+                isPassword = true, 
+                containerColor = Color(0xFF222225), 
+                imeAction = ImeAction.Done
+            ) }
 
-            item { TvInputField(value = subdlApikey, onValueChange = { subdlApikey = it; prefs.edit().putString("subdl_apikey", it).apply() }, label = "SubDL API Key", placeholder = "API Key", containerColor = Color(0xFF222225), imeAction = ImeAction.Done) }
-            item { TvInputField(value = subsourceApikey, onValueChange = { subsourceApikey = it; prefs.edit().putString("subsource_apikey", it).apply() }, label = "SubSource API Key", placeholder = "API Key", containerColor = Color(0xFF222225), imeAction = ImeAction.Done) }
+            item { TvInputField(
+                value = subdlApikey, 
+                onValueChange = { subdlApikey = it }, 
+                label = "SubDL API Key", 
+                placeholder = "API Key", 
+                containerColor = Color(0xFF222225), 
+                imeAction = ImeAction.Done
+            ) }
+            item { TvInputField(
+                value = subsourceApikey, 
+                onValueChange = { subsourceApikey = it }, 
+                label = "SubSource API Key", 
+                placeholder = "API Key", 
+                containerColor = Color(0xFF222225), 
+                imeAction = ImeAction.Done
+            ) }
 
             item { Spacer(modifier = Modifier.height(10.dp)) }
             item { Text("Subtitle Scraper Engines", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
@@ -877,7 +1072,14 @@ class SettingsActivity : AppCompatActivity() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(key.replace("_", " ").replaceFirstChar { it.uppercase() }, color = Color.LightGray, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                    Checkbox(checked = isEnabled, onCheckedChange = { isEnabled = it; prefs.edit().putBoolean("${key}_enabled", it).apply() }, modifier = Modifier.scale(0.85f))
+                    Checkbox(
+                        checked = isEnabled, 
+                        onCheckedChange = { checked -> 
+                            isEnabled = checked
+                            prefs.edit().putBoolean("${key}_enabled", checked).apply()
+                        }, 
+                        modifier = Modifier.scale(0.85f)
+                    )
                 }
             }
         }
@@ -904,7 +1106,6 @@ class SettingsActivity : AppCompatActivity() {
                         onClick = {
                             val intValue = customSubCountInput.toIntOrNull() ?: 5
                             countPref = intValue
-                            prefs.edit().putInt("auto_sub_count", countPref).apply()
                             showCustomSubCountDialog = false
                         },
                         modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
@@ -979,10 +1180,11 @@ class SettingsActivity : AppCompatActivity() {
             LazyColumn(modifier = Modifier.fillMaxWidth().height(260.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed((0 until rulesList.length()).toList()) { index, _ ->
                     val rule = rulesList.getJSONObject(index)
+                    val isEnabled = rule.optBoolean("enabled", true)
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))) {
                         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(rule.optString("name"), color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            Checkbox(checked = rule.optBoolean("enabled", true), onCheckedChange = { rule.put("enabled", it); prefs.edit().putString("blocked_elements", rulesList.toString()).apply(); rulesList = JSONArray(rulesList.toString()) })
+                            Checkbox(checked = isEnabled, onCheckedChange = { rule.put("enabled", it); prefs.edit().putString("blocked_elements", rulesList.toString()).apply(); rulesList = JSONArray(rulesList.toString()) })
                             Button(onClick = { editRuleIndex = index; editRuleData = JSONObject(rule.toString()); showEditDialog = true }, modifier = Modifier.padding(start = 8.dp).tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Edit") }
                             Button(
                                 onClick = {
@@ -1004,7 +1206,7 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
             }
-            Button(onClick = { editRuleIndex = -1; editRuleData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New CSS Rule"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("selectors", JSONArray()) }; showEditDialog = true }, modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Add New CSS Block Rule") }
+            Button(onClick = { editRuleIndex = -1; editRuleData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New CSS Rule"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("selectors", JSONArray()) }; showEditDialog = true }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Add New CSS Block Rule") }
         }
 
         if (showEditDialog) {
@@ -1404,47 +1606,137 @@ class SettingsActivity : AppCompatActivity() {
     private fun saveAndExit() {
         val newAdblockUrl = prefs.getString("custom_adblock_url", "https://easylist.to/easylist/easylist.txt") ?: ""
 
-        lifecycleScope.launch(Dispatchers.IO) {
+        // Use a persistent CoroutineScope bound to global Dispatchers rather than the Activity lifecycle.
+        // This ensures saving completes even if the activity's lifecyclescope gets cancelled prematurely.
+        CoroutineScope(Dispatchers.IO).launch {
             try {
-                AdBlockManager.updateRules(applicationContext, newAdblockUrl)
-
                 val py = Python.getInstance()
                 val main = py.getModule("main")
+
+                // Re-compile enabled_packs dynamically based on individual pack_ boolean flags from memory
+                val allPacksJson = main.callAttr("get_enabled_packs").toString()
+                val allPacksArr = JSONArray(allPacksJson)
+                val enabledPacksList = mutableListOf<String>()
+                for (i in 0 until allPacksArr.length()) {
+                    val pack = allPacksArr.getString(i)
+                    if (prefs.getBoolean("pack_$pack", true)) {
+                        enabledPacksList.add(pack)
+                    }
+                }
+
+                // Write ALL states to SharedPreferences at once
+                prefs.edit().apply {
+                    // General
+                    putBoolean("light_theme", lightTheme)
+                    putInt("restore_tabs_pref", restoreOption)
+                    putInt("history_limit", histLimit)
+                    putInt("history_icon_pref", historyIconOption)
+                    putInt("bookmark_icon_pref", bookmarkIconOption)
+
+                    // Web
+                    putBoolean("silent_popup_block", silentBlock)
+                    putBoolean("clickjack_prevention", clickjack)
+                    putString("custom_adblock_url", adblockUrl)
+
+                    // Player
+                    putInt("extract_video_pref", extractPref)
+                    putInt("exo_fallback_pref", fallbackPref)
+                    putBoolean("embedded_subs_enabled", embeddedSubs)
+                    putString("up_next_popup_pref", upNextMode)
+                    putInt("up_next_time_pref", upNextTime)
+                    putString("autoplay_next_pref", autoplayNext)
+
+                    // Interface
+                    putBoolean("scroll_topbar_enabled", scrollTopbar)
+                    putInt("navigation_mode_pref", navMode)
+
+                    // Streaming
+                    putString("timeout_mode", timeoutMode)
+                    putInt("global_timeout", globalTimeout)
+                    putInt("per_source_timeout", sourceTimeout)
+                    putBoolean("use_only_whitelisted_hosts", enforceWhitelist)
+                    putString("enabled_packs", JSONArray(enabledPacksList).toString())
+                    putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString())
+
+                    // Subtitles
+                    putInt("auto_sub_pref", autoSubPref)
+                    putInt("auto_sub_count", countPref)
+                    putInt("auto_sub_wait_pref", waitPref)
+                    putInt("sub_retention_days", retentionDays)
+                    putString("subtitles_languages", subsLanguages)
+                    putInt("subtitles_limit", subtitlesLimit)
+                    putString("opensubtitles_username", opensubUser)
+                    putString("opensubtitles_password", opensubPass)
+                    putString("opensubtitles_org_username", opensubOrgUser)
+                    putString("opensubtitles_org_password", opensubOrgPass)
+                    putString("subdl_apikey", subdlApikey)
+                    putString("subsource_apikey", subsourceApikey)
+                }.apply()
+
+                // Launch EasyList adblock download in a detached, separate coroutine.
+                // This prevents rules downloading from blocking the immediate Save & Exit workflow.
+                val appContext = applicationContext
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        AdBlockManager.updateRules(appContext, newAdblockUrl)
+                    } catch (e: Exception) {
+                        Log.e("Settings", "Failed background rules download update", e)
+                    }
+                }
+
+                // Sync whole configuration to Python
                 val cfg = JSONObject().apply {
-                    put("timeout_mode", prefs.getString("timeout_mode", "Both"))
-                    put("global_timeout", prefs.getInt("global_timeout", 30))
-                    put("per_source_timeout", prefs.getInt("per_source_timeout", 15))
-                    put("use_only_whitelisted_hosts", prefs.getBoolean("use_only_whitelisted_hosts", true))
-                    put("whitelisted_hosts", JSONArray(prefs.getString("whitelisted_hosts", "[]")))
-                    put("enabled_packs", JSONArray(prefs.getString("enabled_packs", "[]")))
-                    put("subtitles_languages", prefs.getString("subtitles_languages", "English"))
-                    put("subtitles_limit", prefs.getInt("subtitles_limit", 20))
-                    put("sub_retention_days", prefs.getInt("sub_retention_days", 3))
-                    put("up_next_popup_pref", prefs.getString("up_next_popup_pref", "Ask"))
-                    put("up_next_time_pref", prefs.getInt("up_next_time_pref", 20))
-                    put("autoplay_next_pref", prefs.getString("autoplay_next_pref", "Closest Source"))
+                    put("timeout_mode", timeoutMode)
+                    put("global_timeout", globalTimeout)
+                    put("per_source_timeout", sourceTimeout)
+                    put("use_only_whitelisted_hosts", enforceWhitelist)
+                    put("whitelisted_hosts", JSONArray(whitelistedHosts))
+                    put("enabled_packs", JSONArray(enabledPacksList))
+                    put("subtitles_languages", subsLanguages)
+                    put("subtitles_limit", subtitlesLimit)
+                    put("sub_retention_days", retentionDays)
+                    put("up_next_popup_pref", upNextMode)
+                    put("up_next_time_pref", upNextTime)
+                    put("autoplay_next_pref", autoplayNext)
 
                     val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
-                    serviceKeys.forEach { put("${it}_enabled", prefs.getBoolean("${it}_enabled", it != "bsplayer" && it != "opensubtitles_org" && it != "podnadpisi")) }
+                    serviceKeys.forEach { key ->
+                        put("${key}_enabled", prefs.getBoolean("${key}_enabled", key != "bsplayer" && key != "opensubtitles_org" && key != "podnadpisi"))
+                    }
 
-                    put("opensubtitles_username", prefs.getString("opensubtitles_username", ""))
-                    put("opensubtitles_password", prefs.getString("opensubtitles_password", ""))
-                    put("opensubtitles_org_username", prefs.getString("opensubtitles_org_username", ""))
-                    put("opensubtitles_org_password", prefs.getString("opensubtitles_org_password", ""))
-                    put("subdl_apikey", prefs.getString("subdl_apikey", ""))
-                    put("subsource_apikey", prefs.getString("subsource_apikey", ""))
+                    put("opensubtitles_username", opensubUser)
+                    put("opensubtitles_password", opensubPass)
+                    put("opensubtitles_org_username", opensubOrgUser)
+                    put("opensubtitles_org_password", opensubOrgPass)
+                    put("subdl_apikey", subdlApikey)
+                    put("subsource_apikey", subsourceApikey)
                 }
                 main.callAttr("set_config", cfg.toString())
+
+                // Cloud Drive Sync is launched in an independent background coroutine
+                // to prevent network delays from delaying the UI transition.
                 val account = GoogleSignIn.getLastSignedInAccount(this@SettingsActivity)
                 if (account != null) {
-                    driveSyncManager.initService(account)
-                    driveSyncManager.uploadSettings()
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            driveSyncManager.initService(account)
+                            driveSyncManager.uploadSettings()
+                        } catch (e: Exception) {
+                            Log.e("Settings", "Failed background Google Drive upload", e)
+                        }
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@SettingsActivity, "Settings Saved Successfully", Toast.LENGTH_SHORT).show()
+                    finish()
                 }
             } catch (e: Exception) {
                 Log.e("Settings", "Failed during save configuration actions", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@SettingsActivity, "Error saving settings", Toast.LENGTH_LONG).show()
+                }
             }
         }
-        Toast.makeText(this, "Settings Saved Successfully", Toast.LENGTH_SHORT).show()
-        finish()
     }
 }

@@ -28,6 +28,8 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
 
     val subStatus by viewModel.subStatusMsg.collectAsState()
     val isDownloadingSubs by viewModel.isDownloadingSubs.collectAsState()
+    val showSubProgressBar by viewModel.showSubProgressBar.collectAsState()
+    val subProgress by viewModel.subProgress.collectAsState()
     val isTryingAll by viewModel.isTryingAll.collectAsState()
 
     var showSortDialog by remember { mutableStateOf(false) }
@@ -41,7 +43,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
 
             if (isScraping && !isResolving) {
                 Spacer(modifier = Modifier.width(10.dp))
-                Button(onClick = { viewModel.stopScrape() }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray), modifier = Modifier.height(50.dp)) {
+                Button(onClick = { viewModel.stopScrape(triggerSubtitles = true) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray), modifier = Modifier.height(50.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(painter = painterResource(id = R.drawable.ic_stop), contentDescription = null, tint = Color.White)
                         Text("Stop Scanning", color = Color.White)
@@ -93,12 +95,15 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
         
         if (isDownloadingSubs) {
             Text(subStatus, color = Color(0xFFFFC107), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(6.dp))
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth().height(6.dp),
-                color = Color(0xFFFFC107),
-                trackColor = Color(0xFF333333)
-            )
+            if (showSubProgressBar) {
+                Spacer(modifier = Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = { subProgress },
+                    modifier = Modifier.fillMaxWidth().height(6.dp),
+                    color = Color(0xFFFFC107),
+                    trackColor = Color(0xFF333333)
+                )
+            }
             Spacer(modifier = Modifier.height(15.dp))
         }
 
