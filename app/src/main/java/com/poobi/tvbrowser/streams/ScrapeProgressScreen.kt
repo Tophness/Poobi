@@ -43,10 +43,17 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
 
             if (isScraping && !isResolving) {
                 Spacer(modifier = Modifier.width(10.dp))
-                Button(onClick = { viewModel.stopScrape(triggerSubtitles = true) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray), modifier = Modifier.height(50.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(painter = painterResource(id = R.drawable.ic_stop), contentDescription = null, tint = Color.White)
-                        Text("Stop Scanning", color = Color.White)
+                TvFocusableBox(
+                    modifier = Modifier.height(50.dp).wrapContentWidth(),
+                    onClick = { viewModel.stopScrape(triggerSubtitles = true) }
+                ) { isFocused ->
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp).fillMaxHeight(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(painter = painterResource(id = R.drawable.ic_stop), contentDescription = null, tint = if (isFocused) Color.Black else Color.White)
+                        Text("Stop Scanning", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -57,25 +64,35 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
             Spacer(modifier = Modifier.weight(1f))
 
             if (sources != null && sources!!.length() > 0) {
-                Button(
-                    onClick = { viewModel.startTryAll() },
-                    colors = ButtonDefaults.buttonColors(containerColor = if (isTryingAll) Color(0xFFE91E63) else Color(0xFF4CAF50)),
-                    modifier = Modifier.height(50.dp)
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                TvFocusableBox(
+                    modifier = Modifier.height(50.dp).wrapContentWidth(),
+                    onClick = { viewModel.startTryAll() }
+                ) { isFocused ->
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp).fillMaxHeight(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
                             painter = painterResource(id = if (isTryingAll) R.drawable.ic_stop else R.drawable.ic_auto_play),
                             contentDescription = null,
-                            tint = Color.White
+                            tint = if (isFocused) Color.Black else Color.White
                         )
-                        Text(if (isTryingAll) "Stop Trying" else "Try All", color = Color.White)
+                        Text(if (isTryingAll) "Stop Trying" else "Try All", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
                 Spacer(modifier = Modifier.width(10.dp))
-                Button(onClick = { showSortDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)), modifier = Modifier.height(50.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(painter = painterResource(id = R.drawable.ic_sort), contentDescription = null, tint = Color.White)
-                        Text("Sort", color = Color.White)
+                TvFocusableBox(
+                    modifier = Modifier.height(50.dp).wrapContentWidth(),
+                    onClick = { showSortDialog = true }
+                ) { isFocused ->
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp).fillMaxHeight(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(painter = painterResource(id = R.drawable.ic_sort), contentDescription = null, tint = if (isFocused) Color.Black else Color.White)
+                        Text("Sort", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -121,7 +138,8 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                     item {
                         val autoSubPref = viewModel.prefs.getInt("auto_sub_pref", 0)
                         if (autoSubPref == 2) {
-                            Button(
+                            TvFocusableBox(
+                                modifier = Modifier.fillMaxWidth().height(48.dp).padding(bottom = 8.dp),
                                 onClick = { 
                                     viewModel.selectedItem.value?.let { item ->
                                         viewModel.fetchManualSubtitles(
@@ -130,12 +148,14 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                             episode = viewModel.lastScrapedEpisode
                                         )
                                     }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)),
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                            ) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("🔍 Search External Subtitles", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            ) { isFocused ->
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("🔍 Search External Subtitles", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }

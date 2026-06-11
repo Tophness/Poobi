@@ -40,7 +40,6 @@ fun BrowserTopBar(
     val isRecording by viewModel.isRecordingAutoplay.collectAsState()
     val videoTriggerPref by viewModel.videoTriggerPref.collectAsState()
 
-    // Favorites state tracking to trigger instant heart updates
     val favorites by viewModel.favoritesList.collectAsState()
     val isFav = remember(favorites, currentUrl) { viewModel.isFavorited(currentUrl) }
 
@@ -48,10 +47,20 @@ fun BrowserTopBar(
 
     val addressBarFocusRequester = remember { FocusRequester() }
 
-    // Set address bar focus trigger when tab list increases
-    LaunchedEffect(viewModel.getWebViewsList().size) {
+    val tabCount = viewModel.getWebViewsList().size
+    val tabFocusRequesters = remember(tabCount) { List(tabCount) { FocusRequester() } }
+
+    LaunchedEffect(viewModel.getWebViewsList().size, activeIndex) {
         if (viewModel.getWebViewsList().size > 0 && viewModel.isBrowsing.value) {
-            addressBarFocusRequester.requestFocus()
+            if (activeIndex in tabFocusRequesters.indices) {
+                try {
+                    tabFocusRequesters[activeIndex].requestFocus()
+                } catch (e: Exception) {
+                    addressBarFocusRequester.requestFocus()
+                }
+            } else {
+                addressBarFocusRequester.requestFocus()
+            }
         }
     }
 
@@ -72,8 +81,13 @@ fun BrowserTopBar(
             LazyRow(modifier = Modifier.weight(1f)) {
                 itemsIndexed(viewModel.getWebViewsList()) { index, wv ->
                     val title = wv.title ?: wv.url ?: "New Tab"
+                    val itemFocusRequester = tabFocusRequesters.getOrNull(index) ?: remember { FocusRequester() }
+                    
                     TvFocusableHoldToDeleteBox(
-                        modifier = Modifier.width(240.dp).height(50.dp),
+                        modifier = Modifier
+                            .width(240.dp)
+                            .height(50.dp)
+                            .focusRequester(itemFocusRequester),
                         isTabStyle = true,
                         isSelected = index == activeIndex,
                         onTriggerDelete = { viewModel.closeTab(index) },
@@ -100,7 +114,6 @@ fun BrowserTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // First item with focusRequester
             TvFocusableBox(
                 modifier = Modifier
                     .size(40.dp)
@@ -138,7 +151,7 @@ fun BrowserTopBar(
             )
 
             TopBarIconButton(R.drawable.ic_go) { 
-                viewModel.loadUrlAndBrowse(context, urlInput) // Pass Activity Context [1]!
+                viewModel.loadUrlAndBrowse(context, urlInput)
             }
             TopBarIconButton(R.drawable.ic_refresh) { viewModel.currentWebView?.reload() }
 
