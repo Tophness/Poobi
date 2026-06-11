@@ -20,6 +20,7 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
 
 sealed class StreamsEvent {
     data class PlayVideo(
@@ -121,7 +122,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     var lastScrapedSeason: Int? = null
     var lastScrapedEpisode: Int? = null
     var lastSelectedSource: JSONObject? = null
-    val interceptedSubtitleUrls = mutableMapOf<String, Map<String, String>>()
+
+    val interceptedSubtitleUrls = ConcurrentHashMap<String, Map<String, String>>()
+    
     private val detailsCache = LruCache<String, JSONObject>(30)
     private val episodesCache = LruCache<String, JSONArray>(50)
     private val searchCache = LruCache<String, JSONArray>(15)
@@ -384,8 +387,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         subtitles: Map<String, Map<String, String>>
     ) {
         if (subtitles.isNotEmpty()) {
+            val copiedSubtitles = subtitles.toMap()
             interceptedSubtitleUrls.clear()
-            interceptedSubtitleUrls.putAll(subtitles)
+            interceptedSubtitleUrls.putAll(copiedSubtitles)
         }
 
         addToRecentlyPlayed(displayTitle, item, season, episode, url, headers)
@@ -504,7 +508,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 url = videoUrl,
                 title = title,
                 headers = headersMap,
-                subtitles = subtitleUrls,
+                subtitles = subtitleUrls.toMap(),
                 item = item,
                 season = season,
                 episode = episode,
@@ -1018,7 +1022,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             url = streamUrl,
             title = fullTitle,
             headers = headersMap,
-            subtitles = interceptedSubtitleUrls,
+            subtitles = interceptedSubtitleUrls.toMap(),
             item = _selectedItem.value!!,
             season = lastScrapedSeason,
             episode = lastScrapedEpisode,

@@ -32,6 +32,7 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 sealed class BrowserDialogState {
     data class Download(val url: String, val fileName: String, val sizeMb: Float) : BrowserDialogState()
@@ -51,8 +52,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val _webViews = mutableStateListOf<WebView>()
     private val _webViewHosts = java.util.WeakHashMap<WebView, String>()
 
-    val interceptedMediaUrls = mutableMapOf<String, Map<String, String>>()
-    val interceptedSubtitleUrls = mutableMapOf<String, Map<String, String>>()
+    val interceptedMediaUrls = ConcurrentHashMap<String, Map<String, String>>()
+    val interceptedSubtitleUrls = ConcurrentHashMap<String, Map<String, String>>()
 
     val currentAppTab = MutableStateFlow(0) // 0 = Browser, 1 = Streams
 
