@@ -155,11 +155,17 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun clearSelectedMedia() { _selectedItem.value = null }
     fun clearSearchResults() { _searchResults.value = null }
+    private suspend fun getPythonInstance(): Python {
+        while (!Python.isStarted()) {
+            delay(100)
+        }
+        return Python.getInstance()
+    }
 
     private fun loadGenres() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val tmdb = py.getModule("tmdb.tmdb_api")
                 val movieGenres = JSONObject(tmdb.callAttr("get_genres", "movie").toString()).getJSONArray("genres")
                 val tvGenres = JSONObject(tmdb.callAttr("get_genres", "tv").toString()).getJSONArray("genres")
@@ -1682,7 +1688,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
                     if (favsJson != "[]") {
                         val lastCheckJson = prefs.getString("last_episode_check", "{}") ?: "{}"
-                        val py = Python.getInstance()
+                        val py = getPythonInstance()
                         val checker = py.getModule("trakt.episode_check")
                         val resultsStr = checker.callAttr("check_new_episodes", favsJson, lastCheckJson).toString()
                         

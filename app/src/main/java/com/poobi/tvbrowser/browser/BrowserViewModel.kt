@@ -261,6 +261,18 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val isActiveTab = (index == _currentTabIndex.value)
         val wv = _webViews[index]
         
+        // Detach WebView from its parent layout first to prevent native renderer crashes
+        (wv.parent as? android.view.ViewGroup)?.removeView(wv)
+        
+        // Clean up WebView resources before destroying
+        try {
+            wv.stopLoading()
+            wv.loadUrl("about:blank")
+            wv.clearHistory()
+        } catch (e: Exception) {
+            Log.e("TVBrowser", "Error clearing WebView state", e)
+        }
+        
         if (isActiveTab) {
             if (_webViews.size > 1) {
                 val newIndex = if (index == _webViews.size - 1) index - 1 else index
@@ -391,7 +403,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private fun setupWebView(wv: WebView) {
         wv.isFocusable = true
         wv.isFocusableInTouchMode = true
-
         val customUserAgent = prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
         
         wv.settings.apply {

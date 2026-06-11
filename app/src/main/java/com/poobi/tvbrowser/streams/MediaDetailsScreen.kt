@@ -174,6 +174,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
     LaunchedEffect(item) {
         autoFocusCancelled = false
+        kotlinx.coroutines.delay(500)
         if (mediaType == "movie") {
             try { playButtonFocusRequester.requestFocus() } catch (e: Exception) {}
         } else if (mediaType == "tv") {

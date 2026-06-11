@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+-dontwarn androidx.**
+-dontwarn com.google.android.**
+-dontwarn dalvik.system.**
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod

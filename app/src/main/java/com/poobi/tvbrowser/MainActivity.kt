@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import android.util.Log
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.poobi.tvbrowser.browser.AdBlockManager
@@ -31,6 +32,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalAutofill
 
 class MainActivity : AppCompatActivity() {
 
@@ -151,8 +154,6 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        initPythonAsync()
-
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 streamsViewModel.itemEpisodes.collect { episodes ->
@@ -222,15 +223,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         setContent {
-            MainApp(
-                browserViewModel = browserViewModel,
-                streamsViewModel = streamsViewModel,
-                cursorManager = cursorManager,
-                playerEngine = playerEngine
-            )
+            CompositionLocalProvider(
+                LocalAutofill provides null
+            ) {
+                MainApp(
+                    browserViewModel = browserViewModel,
+                    streamsViewModel = streamsViewModel,
+                    cursorManager = cursorManager,
+                    playerEngine = playerEngine
+                )
+            }
         }
-
         checkStartupTabs()
+        initPythonAsync()
     }
 
     override fun onResume() {
@@ -245,12 +250,14 @@ class MainActivity : AppCompatActivity() {
             if (!Python.isStarted()) {
                 Python.start(AndroidPlatform(this@MainActivity))
             }
-            val py = Python.getInstance()
             try {
+                val py = Python.getInstance()
                 py.getModule("modules.control")
                 py.getModule("tmdb.tmdb_api")
                 py.getModule("main")
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "Error warming up Python modules", e)
+            }
             withContext(Dispatchers.Main) {
                 registerPythonDialogListener()
             }
@@ -321,6 +328,56 @@ class MainActivity : AppCompatActivity() {
                             .setNegativeButton(if (nolabel.isEmpty()) "No" else nolabel.cleanKodiText()) { _, _ -> future.complete(false) }
                             .setOnCancelListener { future.complete(false) }
                             .show()
+                    }
+                    return runBlocking { future.await() }
+                }
+
+                override fun captchaDialog(imageBytes: ByteArray, heading: String): String? {
+                    val future = CompletableDeferred<String?>()
+                    runOnUiThread {
+                        val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                        val imageView = android.widget.ImageView(this@MainActivity).apply {
+                            setImageBitmap(bitmap)
+                            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                            adjustViewBounds = true
+                        }
+                        
+                        val input = android.widget.EditText(this@MainActivity).apply {
+                            hint = "Enter solution or click on image"
+                        }
+                        
+                        val layout = android.widget.LinearLayout(this@MainActivity).apply {
+                            orientation = android.widget.LinearLayout.VERTICAL
+                            setPadding(40, 20, 40, 20)
+                            addView(imageView)
+                            addView(input)
+                        }
+                        
+                        val dialog = AlertDialog.Builder(this@MainActivity)
+                            .setTitle(heading.cleanKodiText())
+                            .setView(layout)
+                            .setPositiveButton("Submit") { _, _ -> 
+                                future.complete(input.text.toString())
+                            }
+                            .setNegativeButton("Cancel") { _, _ -> 
+                                future.complete(null)
+                            }
+                            .setOnCancelListener { 
+                                future.complete(null)
+                            }
+                            .create()
+                            
+                        imageView.setOnTouchListener { v, event ->
+                            if (event.action == android.view.MotionEvent.ACTION_DOWN) {
+                                val x = (event.x * bitmap.width / v.width).toInt()
+                                val y = (event.y * bitmap.height / v.height).toInt()
+                                future.complete("COORD:$x,$y")
+                                dialog.dismiss()
+                                true
+                            } else false
+                        }
+                        
+                        dialog.show()
                     }
                     return runBlocking { future.await() }
                 }

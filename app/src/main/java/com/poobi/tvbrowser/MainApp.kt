@@ -201,11 +201,15 @@ fun MainApp(
 
     LaunchedEffect(topBarVisible) {
         if (topBarVisible) {
-            homeIconFocusRequester.requestFocus()
+            kotlinx.coroutines.delay(50)
+            try {
+                homeIconFocusRequester.requestFocus()
+            } catch (e: Exception) {}
         }
     }
 
     LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(50)
         try {
             if (currentTab == AppTab.Browser) {
                 browserTabFocusRequester.requestFocus()

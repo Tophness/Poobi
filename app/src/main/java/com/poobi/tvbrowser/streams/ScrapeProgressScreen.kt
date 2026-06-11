@@ -170,6 +170,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
 
                         val rawTitle = s.optString("title", "")
                         val isBrowser = rawTitle.startsWith("[BROWSER]")
+                        val isCaptcha = rawData.optBoolean("requires_captcha", false) || rawTitle.contains("[CAPTCHA]")
 
                         TvFocusableBox(modifier = Modifier.fillMaxWidth(), onClick = { viewModel.resolveAndPlay(s.optString("source_data"), s) }) {
                             Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -178,6 +179,8 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                     Text("[$quality] $sourceName ($providerName)", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                                     if (isBrowser) {
                                         Text("> Open in browser", color = Color.Gray, fontSize = 14.sp)
+                                    } else if (isCaptcha) {
+                                        Text("> Requires captcha interaction", color = Color(0xFFFFC107), fontSize = 14.sp)
                                     } else {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(

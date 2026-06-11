@@ -5,9 +5,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
-import android.text.Editable
-import android.text.TextWatcher
-import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -164,11 +161,15 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
         driveSyncManager = DriveSyncManager(this)
-        
-        initPython()
-        prepopulatePreferences()
         loadSettingsFromPrefs()
-        syncDefaultAutoplayProfile()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            initPython()
+            prepopulatePreferences()
+            withContext(Dispatchers.Main) {
+                syncDefaultAutoplayProfile()
+            }
+        }
         
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
@@ -1458,6 +1459,9 @@ class SettingsActivity : AppCompatActivity() {
                                     }
                                     return runBlocking { future.await() }
                                 }
+								override fun captchaDialog(imageBytes: ByteArray, heading: String): String? {
+									return null
+								}
                             })
 
                             py.getModule("tmdb.tmdb_utils").callAttr("authTMDb")
