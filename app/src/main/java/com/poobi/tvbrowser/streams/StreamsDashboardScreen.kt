@@ -123,7 +123,11 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                     }
                 }
                 
-                LazyRow(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp), 
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
+                ) {
                     itemsIndexed(searchHistory) { index, query ->
                         TvFocusableHoldToDeleteBox(
                             modifier = Modifier
@@ -173,7 +177,12 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                 val itemsToShow = if (activeCategoryIndex == 0) searchResults else libraryItems
                 if (itemsToShow != null) {
                     val objList = (0 until itemsToShow.length()).map { itemsToShow.getJSONObject(it) }
-                    LazyRow(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxSize(), 
+                        horizontalArrangement = Arrangement.spacedBy(10.dp), 
+                        verticalAlignment = Alignment.CenterVertically,
+                        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
+                    ) {
                         itemsIndexed(objList) { index, wrapper ->
                             val item = if (wrapper.has("item")) wrapper.getJSONObject("item") else wrapper
                             val sNum = if (wrapper.has("season")) wrapper.getInt("season") else null
@@ -231,9 +240,10 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(70.dp),
+                .height(80.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
         ) {
             itemsIndexed(categories) { index, pair ->
                 val isActive = activeCategoryIndex == index

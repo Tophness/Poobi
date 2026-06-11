@@ -143,7 +143,10 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                 }
                             }
                         }
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
+                        ) {
                             items(savedTabsArray.length()) { index ->
                                 val item = savedTabsArray.getJSONObject(index)
                                 val itemUrl = item.optString("url")
@@ -194,7 +197,10 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                             }
                         }
 
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
+                        ) {
                             items(endIdx - startIdx) { offset ->
                                 val index = bookmarksArray.length() - 1 - (startIdx + offset)
                                 if (index >= 0) {
@@ -232,7 +238,11 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                             }
                         }
 
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp), 
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
+                        ) {
                             items(historyArray.length()) { index ->
                                 val item = historyArray.getJSONObject(historyArray.length() - 1 - index)
                                 val itemUrl = item.optString("url")
@@ -267,7 +277,11 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                             }
                         }
 
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp), 
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
+                        ) {
                             items(downloadsArray.length()) { index ->
                                 val item = downloadsArray.getJSONObject(downloadsArray.length() - 1 - index)
                                 val itemTitle = item.optString("title")

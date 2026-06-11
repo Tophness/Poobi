@@ -1,9 +1,10 @@
 package com.poobi.tvbrowser.browser
 
 import android.view.KeyEvent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -15,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -40,6 +42,12 @@ fun TvFocusableHoldToDeleteBox(
     var holdProgress by remember { mutableStateOf(0f) }
     var holdJob by remember { mutableStateOf<Job?>(null) }
 
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.03f else 1.0f,
+        animationSpec = tween(durationMillis = 150),
+        label = "DeleteFocusScale"
+    )
+
     val backgroundColor = when {
         isFocused -> Color(0xFF40C4FF)
         isSelected && isTabStyle -> Color(0xFF40C4FF)
@@ -59,6 +67,7 @@ fun TvFocusableHoldToDeleteBox(
 
     Box(
         modifier = modifier
+            .scale(scale)
             .clip(shape)
             .background(backgroundColor)
             .border(if (isFocused) 2.dp else 0.dp, borderColor, shape)

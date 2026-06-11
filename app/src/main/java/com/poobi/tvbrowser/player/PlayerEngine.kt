@@ -63,6 +63,8 @@ class PlayerEngine(
 
     private var isReleasing = false
 
+    private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val checkUpNextRunnable = object : Runnable {
         override fun run() {
             val player = exoPlayer ?: return
@@ -173,25 +175,25 @@ class PlayerEngine(
         })
 
         val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
-		val subtitleConfigs = subtitles.map { (subUrl, infoMap) ->
-			val mimeType = when {
-				subUrl.contains(".vtt") -> MimeTypes.TEXT_VTT
-				subUrl.contains(".ass") -> MimeTypes.TEXT_SSA
-				else -> MimeTypes.APPLICATION_SUBRIP
-			}
-			val label = infoMap["label"] ?: getLanguageInfo(subUrl).second
-			val lang = if (label.isNotEmpty() && label != "Unknown") null else (infoMap["lang"] ?: getLanguageInfo(subUrl).first)
+        val subtitleConfigs = subtitles.map { (subUrl, infoMap) ->
+            val mimeType = when {
+                subUrl.contains(".vtt") -> MimeTypes.TEXT_VTT
+                subUrl.contains(".ass") -> MimeTypes.TEXT_SSA
+                else -> MimeTypes.APPLICATION_SUBRIP
+            }
+            val label = infoMap["label"] ?: getLanguageInfo(subUrl).second
+            val lang = if (label.isNotEmpty() && label != "Unknown") null else (infoMap["lang"] ?: getLanguageInfo(subUrl).first)
 
-			val config = MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
-				.setMimeType(mimeType)
-				.setLanguage(lang)
-				.setLabel(label)
-				.setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-				.setRoleFlags(C.ROLE_FLAG_SUBTITLE)
-				.build()
+            val config = MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
+                .setMimeType(mimeType)
+                .setLanguage(lang)
+                .setLabel(label)
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .setRoleFlags(C.ROLE_FLAG_SUBTITLE)
+                .build()
 
-			config
-		}
+            config
+        }
 
         mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
         exoPlayer?.setMediaItem(mediaItemBuilder.build())
@@ -273,6 +275,7 @@ class PlayerEngine(
         isReleasing = true
         saveProgress()
         checkUpNextHandler.removeCallbacks(checkUpNextRunnable)
+        playerScope.coroutineContext.cancelChildren() // Cancel active progress tasks
         try {
             exoPlayer?.stop()
             exoPlayer?.release()
@@ -302,7 +305,7 @@ class PlayerEngine(
                         prefs.edit().remove(resumeKey).apply()
                         lastScrapedItem?.let { item ->
                             @Suppress("OPT_IN_USAGE")
-                            GlobalScope.launch(Dispatchers.IO) {
+                            playerScope.launch {
                                 try {
                                     val py = Python.getInstance()
                                     val scrobbler = py.getModule("trakt.trakt_scrobble")

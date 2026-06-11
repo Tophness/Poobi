@@ -443,14 +443,20 @@ class SettingsActivity : AppCompatActivity() {
                     put("is_custom", false)
                 }
                 array.put(defaultProfile)
-                prefs.edit().putString("autoplay_profiles", array.toString()).apply()
+                val listString = array.toString()
+                lifecycleScope.launch(Dispatchers.IO) {
+                    prefs.edit().putString("autoplay_profiles", listString).apply()
+                }
             } else {
                 val defaultProfile = array.getJSONObject(defaultProfileIndex)
                 if (!defaultProfile.optBoolean("is_custom", false)) {
                     val currentScript = defaultProfile.optString("script")
                     if (currentScript != defaultAutoplayScript) {
                         defaultProfile.put("script", defaultAutoplayScript)
-                        prefs.edit().putString("autoplay_profiles", array.toString()).apply()
+                        val listString = array.toString()
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            prefs.edit().putString("autoplay_profiles", listString).apply()
+                        }
                     }
                 }
             }
@@ -684,7 +690,9 @@ class SettingsActivity : AppCompatActivity() {
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable {
                                     isChecked = !isChecked
-                                    prefs.edit().putBoolean("pack_$pack", isChecked).apply()
+                                    lifecycleScope.launch(Dispatchers.IO) {
+                                        prefs.edit().putBoolean("pack_$pack", isChecked).apply()
+                                    }
                                 }
                                 .tvSettingsFocus()
                                 .padding(horizontal = 8.dp),
@@ -693,9 +701,11 @@ class SettingsActivity : AppCompatActivity() {
                             Text(pack, color = Color.LightGray, fontSize = 14.sp, modifier = Modifier.weight(1f))
                             Checkbox(
                                 checked = isChecked, 
-                                onCheckedChange = { 
-                                    isChecked = it
-                                    prefs.edit().putBoolean("pack_$pack", it).apply()
+                                onCheckedChange = { checked -> 
+                                    isChecked = checked
+                                    lifecycleScope.launch(Dispatchers.IO) {
+                                        prefs.edit().putBoolean("pack_$pack", checked).apply()
+                                    }
                                 }, 
                                 modifier = Modifier.scale(0.85f)
                             )
@@ -836,7 +846,9 @@ class SettingsActivity : AppCompatActivity() {
 
             ToggleSettingRow("Auto-play Video globally", autoplayMaster) {
                 autoplayMaster = it
-                prefs.edit().putInt("video_trigger_pref", if (it) 0 else 1).apply()
+                lifecycleScope.launch(Dispatchers.IO) {
+                    prefs.edit().putInt("video_trigger_pref", if (it) 0 else 1).apply()
+                }
             }
 
             LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -846,11 +858,35 @@ class SettingsActivity : AppCompatActivity() {
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(profile.optString("name"), color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            Checkbox(checked = isEnabled, onCheckedChange = { profile.put("enabled", it); prefs.edit().putString("autoplay_profiles", profilesList.toString()).apply(); profilesList = JSONArray(profilesList.toString()) })
+                            Checkbox(
+                                checked = isEnabled, 
+                                onCheckedChange = { checked -> 
+                                    profile.put("enabled", checked)
+                                    val listString = profilesList.toString()
+                                    lifecycleScope.launch(Dispatchers.IO) {
+                                        prefs.edit().putString("autoplay_profiles", listString).apply()
+                                    }
+                                    profilesList = JSONArray(listString) 
+                                }
+                            )
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(onClick = { editProfileIndex = index; editProfileData = JSONObject(profile.toString()); showEditDialog = true }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Edit") }
                             Spacer(modifier = Modifier.width(4.dp))
-                            Button(onClick = { val arr = JSONArray(); for(i in 0 until profilesList.length()) { if (i != index) arr.put(profilesList.getJSONObject(i)) }; prefs.edit().putString("autoplay_profiles", arr.toString()).apply(); profilesList = arr }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Delete") }
+                            Button(
+                                onClick = { 
+                                    val arr = JSONArray()
+                                    for(i in 0 until profilesList.length()) { 
+                                        if (i != index) arr.put(profilesList.getJSONObject(i)) 
+                                    }
+                                    val listString = arr.toString()
+                                    lifecycleScope.launch(Dispatchers.IO) {
+                                        prefs.edit().putString("autoplay_profiles", listString).apply()
+                                    }
+                                    profilesList = arr 
+                                }, 
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red), 
+                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                            ) { Text("Delete") }
                         }
                     }
                 }
@@ -913,8 +949,11 @@ class SettingsActivity : AppCompatActivity() {
                         editProfileData.put("selectors", JSONArray(selectors.toList()))
 
                         if (editProfileIndex >= 0) profilesList.put(editProfileIndex, editProfileData) else profilesList.put(editProfileData)
-                        prefs.edit().putString("autoplay_profiles", profilesList.toString()).apply()
-                        profilesList = JSONArray(profilesList.toString())
+                        val listString = profilesList.toString()
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            prefs.edit().putString("autoplay_profiles", listString).apply()
+                        }
+                        profilesList = JSONArray(listString)
                         showEditDialog = false
                     }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Save") }
                 },
@@ -1066,7 +1105,9 @@ class SettingsActivity : AppCompatActivity() {
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
                             isEnabled = !isEnabled
-                            prefs.edit().putBoolean("${key}_enabled", isEnabled).apply()
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                prefs.edit().putBoolean("${key}_enabled", isEnabled).apply()
+                            }
                         }
                         .tvSettingsFocus()
                         .padding(horizontal = 8.dp),
@@ -1077,7 +1118,9 @@ class SettingsActivity : AppCompatActivity() {
                         checked = isEnabled, 
                         onCheckedChange = { checked -> 
                             isEnabled = checked
-                            prefs.edit().putBoolean("${key}_enabled", checked).apply()
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                prefs.edit().putBoolean("${key}_enabled", checked).apply()
+                            }
                         }, 
                         modifier = Modifier.scale(0.85f)
                     )
@@ -1145,7 +1188,10 @@ class SettingsActivity : AppCompatActivity() {
                                 list[index] = list[index - 1]
                                 list[index - 1] = temp
                                 prioritiesList = list
-                                prefs.edit().putString("sort_priorities", JSONArray(list).toString()).apply()
+                                val prioritiesStr = JSONArray(list).toString()
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    prefs.edit().putString("sort_priorities", prioritiesStr).apply()
+                                }
                             }) {
                                 Icon(painter = painterResource(id = R.drawable.ic_arrow_up), contentDescription = "Move Up", tint = Color.White, modifier = Modifier.fillMaxSize().padding(4.dp))
                             }
@@ -1158,7 +1204,10 @@ class SettingsActivity : AppCompatActivity() {
                                 list[index] = list[index + 1]
                                 list[index + 1] = temp
                                 prioritiesList = list
-                                prefs.edit().putString("sort_priorities", JSONArray(list).toString()).apply()
+                                val prioritiesStr = JSONArray(list).toString()
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    prefs.edit().putString("sort_priorities", prioritiesStr).apply()
+                                }
                             }) {
                                 Icon(painter = painterResource(id = R.drawable.ic_arrow_down), contentDescription = "Move Down", tint = Color.White, modifier = Modifier.fillMaxSize().padding(4.dp))
                             }
@@ -1185,7 +1234,17 @@ class SettingsActivity : AppCompatActivity() {
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))) {
                         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(rule.optString("name"), color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            Checkbox(checked = isEnabled, onCheckedChange = { rule.put("enabled", it); prefs.edit().putString("blocked_elements", rulesList.toString()).apply(); rulesList = JSONArray(rulesList.toString()) })
+                            Checkbox(
+                                checked = isEnabled, 
+                                onCheckedChange = { checked -> 
+                                    rule.put("enabled", checked)
+                                    val rulesStr = rulesList.toString()
+                                    lifecycleScope.launch(Dispatchers.IO) {
+                                        prefs.edit().putString("blocked_elements", rulesStr).apply()
+                                    }
+                                    rulesList = JSONArray(rulesStr) 
+                                }
+                            )
                             Button(onClick = { editRuleIndex = index; editRuleData = JSONObject(rule.toString()); showEditDialog = true }, modifier = Modifier.padding(start = 8.dp).tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Edit") }
                             Button(
                                 onClick = {
@@ -1193,7 +1252,10 @@ class SettingsActivity : AppCompatActivity() {
                                     for (i in 0 until rulesList.length()) {
                                         if (i != index) arr.put(rulesList.getJSONObject(i))
                                     }
-                                    prefs.edit().putString("blocked_elements", arr.toString()).apply()
+                                    val rulesStr = arr.toString()
+                                    lifecycleScope.launch(Dispatchers.IO) {
+                                        prefs.edit().putString("blocked_elements", rulesStr).apply()
+                                    }
                                     rulesList = arr
                                 },
                                 modifier = Modifier
@@ -1231,8 +1293,11 @@ class SettingsActivity : AppCompatActivity() {
                         editRuleData.put("urlPatterns", JSONArray(patterns.split(",").map { it.trim() }))
                         editRuleData.put("selectors", JSONArray(selectors.split("\n").map { it.trim() }))
                         if (editRuleIndex >= 0) rulesList.put(editRuleIndex, editRuleData) else rulesList.put(editRuleData)
-                        prefs.edit().putString("blocked_elements", rulesList.toString()).apply()
-                        rulesList = JSONArray(rulesList.toString())
+                        val rulesStr = rulesList.toString()
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            prefs.edit().putString("blocked_elements", rulesStr).apply()
+                        }
+                        rulesList = JSONArray(rulesStr)
                         showEditDialog = false
                     }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Save") }
                 },
@@ -1458,6 +1523,9 @@ class SettingsActivity : AppCompatActivity() {
                                             .setNegativeButton(nolabel.ifEmpty { "No" }) { _, _ -> future.complete(false) }.setOnCancelListener { future.complete(false) }.show()
                                     }
                                     return runBlocking { future.await() }
+                                }
+                                override fun selectDialog(options: List<String>, heading: String): Int {
+                                    return -1
                                 }
                                 override fun captchaDialog(imageBytes: ByteArray, heading: String): String? {
                                     return null

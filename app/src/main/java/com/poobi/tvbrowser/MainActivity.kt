@@ -29,12 +29,32 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalAutofill
+import java.util.UUID
+import java.util.concurrent.Exchanger
+
+object PythonMessageBridge {
+    private val pendingResponses = java.util.concurrent.ConcurrentHashMap<String, Exchanger<Any>>()
+
+    fun postRequest(requestId: String): Exchanger<Any> {
+        val exchanger = Exchanger<Any>()
+        pendingResponses[requestId] = exchanger
+        return exchanger
+    }
+
+    fun sendResponse(requestId: String, response: Any) {
+        val exchanger = pendingResponses.remove(requestId)
+        try {
+            exchanger?.exchange(response)
+        } catch (e: Exception) {
+            Log.e("PythonMessageBridge", "Failed to send response for $requestId", e)
+        }
+    }
+}
 
 class MainActivity : AppCompatActivity() {
 
@@ -305,34 +325,80 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     override fun okDialog(message: String, heading: String): Boolean {
-                        val future = CompletableDeferred<Boolean>()
+                        val taskId = UUID.randomUUID().toString()
+                        val exchanger = PythonMessageBridge.postRequest(taskId)
                         runOnUiThread {
                             AlertDialog.Builder(this@MainActivity)
                                 .setTitle(heading.cleanKodiText().ifEmpty { "Notice" })
                                 .setMessage(message.cleanKodiText())
-                                .setPositiveButton("OK") { _, _ -> future.complete(true) }
-                                .setOnCancelListener { future.complete(true) }
+                                .setPositiveButton("OK") { _, _ -> 
+                                    PythonMessageBridge.sendResponse(taskId, true) 
+                                }
+                                .setOnCancelListener { 
+                                    PythonMessageBridge.sendResponse(taskId, true) 
+                                }
                                 .show()
                         }
-                        return runBlocking { future.await() }
+                        return try {
+                            exchanger.exchange(true) as Boolean
+                        } catch (e: Exception) {
+                            true
+                        }
                     }
 
                     override fun yesnoDialog(message: String, heading: String, nolabel: String, yeslabel: String): Boolean {
-                        val future = CompletableDeferred<Boolean>()
+                        val taskId = UUID.randomUUID().toString()
+                        val exchanger = PythonMessageBridge.postRequest(taskId)
                         runOnUiThread {
                             AlertDialog.Builder(this@MainActivity)
                                 .setTitle(heading.cleanKodiText().ifEmpty { "Confirm" })
                                 .setMessage(message.cleanKodiText())
-                                .setPositiveButton(if (yeslabel.isEmpty()) "Yes" else yeslabel.cleanKodiText()) { _, _ -> future.complete(true) }
-                                .setNegativeButton(if (nolabel.isEmpty()) "No" else nolabel.cleanKodiText()) { _, _ -> future.complete(false) }
-                                .setOnCancelListener { future.complete(false) }
+                                .setPositiveButton(if (yeslabel.isEmpty()) "Yes" else yeslabel.cleanKodiText()) { _, _ -> 
+                                    PythonMessageBridge.sendResponse(taskId, true) 
+                                }
+                                .setNegativeButton(if (nolabel.isEmpty()) "No" else nolabel.cleanKodiText()) { _, _ -> 
+                                    PythonMessageBridge.sendResponse(taskId, false) 
+                                }
+                                .setOnCancelListener { 
+                                    PythonMessageBridge.sendResponse(taskId, false) 
+                                }
                                 .show()
                         }
-                        return runBlocking { future.await() }
+                        return try {
+                            exchanger.exchange(false) as Boolean
+                        } catch (e: Exception) {
+                            false
+                        }
+                    }
+
+                    override fun selectDialog(options: List<String>, heading: String): Int {
+                        val taskId = UUID.randomUUID().toString()
+                        val exchanger = PythonMessageBridge.postRequest(taskId)
+                        runOnUiThread {
+                            val items = options.map { it.cleanKodiText() }.toTypedArray()
+                            AlertDialog.Builder(this@MainActivity)
+                                .setTitle(heading.cleanKodiText().ifEmpty { "Select Option" })
+                                .setItems(items) { _, which ->
+                                    PythonMessageBridge.sendResponse(taskId, which)
+                                }
+                                .setNegativeButton("Cancel") { _, _ ->
+                                    PythonMessageBridge.sendResponse(taskId, -1)
+                                }
+                                .setOnCancelListener {
+                                    PythonMessageBridge.sendResponse(taskId, -1)
+                                }
+                                .show()
+                        }
+                        return try {
+                            exchanger.exchange(-1) as Int
+                        } catch (e: Exception) {
+                            -1
+                        }
                     }
 
                     override fun captchaDialog(imageBytes: ByteArray, heading: String): String? {
-                        val future = CompletableDeferred<String?>()
+                        val taskId = UUID.randomUUID().toString()
+                        val exchanger = PythonMessageBridge.postRequest(taskId)
                         runOnUiThread {
                             val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
                             val imageView = android.widget.ImageView(this@MainActivity).apply {
@@ -356,13 +422,13 @@ class MainActivity : AppCompatActivity() {
                                 .setTitle(heading.cleanKodiText())
                                 .setView(layout)
                                 .setPositiveButton("Submit") { _, _ -> 
-                                    future.complete(input.text.toString())
+                                    PythonMessageBridge.sendResponse(taskId, input.text.toString())
                                 }
                                 .setNegativeButton("Cancel") { _, _ -> 
-                                    future.complete(null)
+                                    PythonMessageBridge.sendResponse(taskId, "")
                                 }
                                 .setOnCancelListener { 
-                                    future.complete(null)
+                                    PythonMessageBridge.sendResponse(taskId, "")
                                 }
                                 .create()
                                 
@@ -370,7 +436,7 @@ class MainActivity : AppCompatActivity() {
                                 if (event.action == android.view.MotionEvent.ACTION_DOWN) {
                                     val x = (event.x * bitmap.width / v.width).toInt()
                                     val y = (event.y * bitmap.height / v.height).toInt()
-                                    future.complete("COORD:$x,$y")
+                                    PythonMessageBridge.sendResponse(taskId, "COORD:$x,$y")
                                     dialog.dismiss()
                                     true
                                 } else false
@@ -378,7 +444,12 @@ class MainActivity : AppCompatActivity() {
                             
                             dialog.show()
                         }
-                        return runBlocking { future.await() }
+                        return try {
+                            val result = exchanger.exchange("") as String
+                            if (result.isEmpty()) null else result
+                        } catch (e: Exception) {
+                            null
+                        }
                     }
                 })
             } catch (e: Exception) {
@@ -594,6 +665,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        longPressHandler.removeCallbacks(longPressRunnable)
         cursorManager.cleanup()
         playerEngine.stopAndRelease()
     }

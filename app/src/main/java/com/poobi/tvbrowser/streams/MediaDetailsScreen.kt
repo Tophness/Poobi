@@ -197,7 +197,8 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     Row(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
         Column(
             modifier = Modifier
-                .width(260.dp)
+                .fillMaxWidth(0.25f)
+                .widthIn(min = 220.dp, max = 320.dp)
                 .fillMaxHeight()
                 .verticalScroll(leftColumnScrollState)
         ) {
@@ -282,7 +283,6 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
                                     val code = keyEvent.nativeKeyEvent.keyCode
                                     if (code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER) {
-                                        // User is navigating manually, cancel the auto-jump to episode
                                         autoFocusCancelled = true
                                     }
                                 }
@@ -320,7 +320,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     .weight(1f)
                     .background(Color(0x0DFFFFFF), shape = RoundedCornerShape(8.dp))
                     .padding(5.dp),
-                contentPadding = PaddingValues(bottom = 50.dp)
+                contentPadding = PaddingValues(top = 8.dp, bottom = 60.dp, start = 8.dp, end = 8.dp)
             ) {
                 if (mediaType == "tv") {
                     if (localEpisodes != null) {
@@ -377,7 +377,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     Text("Top Cast", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp, 20.dp, 0.dp, 10.dp))
                     if (cast != null) {
                         if (cast!!.length() > 0) {
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
+                            ) {
                                 items(cast!!.length().coerceAtMost(15)) { idx ->
                                     val c = cast!!.getJSONObject(idx)
                                     val cPath = c.optString("profile_path")
@@ -403,7 +406,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                             Text("No cast details available.", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(10.dp))
                         }
                     } else {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
+                        ) {
                             items(5) { placeholderIdx ->
                                 CastPlaceholderItem(
                                     modifier = Modifier.let {
@@ -419,7 +425,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     Text("More Like This", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp, 20.dp, 0.dp, 10.dp))
                     if (recs != null) {
                         if (recs!!.length() > 0) {
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
+                            ) {
                                 items(recs!!.length().coerceAtMost(15)) { idx ->
                                     val rItem = recs!!.getJSONObject(idx)
                                     TvFocusableBox(
@@ -438,7 +447,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                             Text("No recommendations available.", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(10.dp))
                         }
                     } else {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
+                        ) {
                             items(5) { placeholderIdx ->
                                 RecommendationPlaceholderItem()
                             }
@@ -513,7 +525,7 @@ private fun EpisodePlaceholderItem() {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.5f)
-                    .height(12.dp)
+                    .height(10.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(Color(0xFF222225))
             )

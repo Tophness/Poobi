@@ -93,6 +93,14 @@ fun ModernTab(
     val currentOnFocus by rememberUpdatedState(onFocus)
     val currentIsSelected by rememberUpdatedState(isSelected)
 
+    LaunchedEffect(isSelected) {
+        if (isSelected) {
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {}
+        }
+    }
+
     val backgroundColor = when {
         isFocused -> Color(0xFF00BCD4) // Vibrant Cyan on focus
         isSelected -> Color(0xFF00BCD4).copy(alpha = 0.25f) // Subtle Cyan background on selection
@@ -206,17 +214,6 @@ fun MainApp(
                 homeIconFocusRequester.requestFocus()
             } catch (e: Exception) {}
         }
-    }
-
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(50)
-        try {
-            if (currentTab == AppTab.Browser) {
-                browserTabFocusRequester.requestFocus()
-            } else {
-                streamsTabFocusRequester.requestFocus()
-            }
-        } catch (e: Exception) {}
     }
 
     Box(
