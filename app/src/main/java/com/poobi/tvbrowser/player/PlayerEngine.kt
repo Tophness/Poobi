@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -31,7 +32,8 @@ class PlayerEngine(
     private val onPlaybackStarted: (String, String, JSONObject, Int?, Int?, Map<String, String>, Map<String, Map<String, String>>) -> Unit = { _, _, _, _, _, _, _ -> },
     private val onUpNextTriggered: () -> Unit,
     private val onVideoEnded: () -> Unit,
-    private val onPlayerReleased: () -> Unit = {}
+    private val onPlayerReleased: () -> Unit = {},
+    private val onVideoWatched: (Int, Int) -> Unit = { _, _ -> }
 ) {
     var exoPlayer: ExoPlayer? = null
         private set
@@ -297,15 +299,19 @@ class PlayerEngine(
             if (resumeKey != null) {
                 val pos = player.currentPosition
                 val dur = player.duration
+                val threshold = getUpNextThreshold()
+                val isCompleted = pos >= (dur - threshold)
                 if (dur > 0) {
-                    val threshold = getUpNextThreshold()
-                    if (pos > 5000L && pos < dur - threshold) {
-                        prefs.edit().putLong(resumeKey, pos).apply()
-                    } else if (pos >= dur - threshold) {
+                    if (isCompleted) {
                         prefs.edit().remove(resumeKey).apply()
+                        val season = lastScrapedSeason
+                        val episode = lastScrapedEpisode
+                        if (season != null && episode != null) {
+                            onVideoWatched(season, episode)
+                        }
                         lastScrapedItem?.let { item ->
                             @Suppress("OPT_IN_USAGE")
-                            playerScope.launch {
+                            playerScope.launch(Dispatchers.IO) {
                                 try {
                                     val py = Python.getInstance()
                                     val scrobbler = py.getModule("trakt.trakt_scrobble")
@@ -315,6 +321,8 @@ class PlayerEngine(
                                 }
                             }
                         }
+                    } else if (pos > 5000L) {
+                        prefs.edit().putLong(resumeKey, pos).apply()
                     }
                 }
             }

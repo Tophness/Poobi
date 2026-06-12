@@ -137,6 +137,9 @@ class MainActivity : AppCompatActivity() {
             onPlayerReleased = {
                 browserViewModel.hideCustomViewInternal()
                 streamsViewModel.resumeScrape()
+            },
+            onVideoWatched = { season, episode ->
+                streamsViewModel.markEpisodeAsWatchedLocal(season, episode)
             }
         )
 

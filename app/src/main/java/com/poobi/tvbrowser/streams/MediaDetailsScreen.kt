@@ -3,10 +3,10 @@ package com.poobi.tvbrowser.streams
 import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.painterResource
@@ -123,51 +122,91 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     }
 
     val leftColumnScrollState = rememberScrollState()
+    val lazyListState = rememberLazyListState()
+    val locallyWatchedEpisodes = remember(item, selectedSeasonIndex, seasons, localEpisodes) {
+        val watched = mutableSetOf<Int>()
+        val showId = item?.optString("id") ?: ""
+        val imdb = item?.optString("imdb") ?: ""
+        val activeSeasonNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number")
+        if (showId.isNotEmpty() || imdb.isNotEmpty()) {
+            try {
+                val recentJson = viewModel.prefs.getString("streams_recently_played", "[]") ?: "[]"
+                val array = JSONArray(recentJson)
+                for (i in 0 until array.length()) {
+                    val entry = array.getJSONObject(i)
+                    val itItem = entry.optJSONObject("item")
+                    val itId = itItem?.optString("id") ?: ""
+                    val itImdb = itItem?.optString("imdb") ?: ""
+                    if ((showId.isNotEmpty() && itId == showId) || (imdb.isNotEmpty() && itImdb == imdb)) {
+                        if (entry.has("season") && entry.getInt("season") == activeSeasonNum) {
+                            if (entry.has("episode")) {
+                                watched.add(entry.getInt("episode"))
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+        watched
+    }
 
-    val targetEpisodeToFocus = remember(localEpisodes, lastWatchedEpisode, viewModel.lastScrapedSeason, viewModel.lastScrapedEpisode) {
-        if (localEpisodes != null) {
-            // Priority 1: History-based "next" episode from ViewModel
-            if (lastWatchedEpisode != null) {
-                var exists = false
+    val targetEpisodeToFocus = remember(localEpisodes, locallyWatchedEpisodes, viewModel.lastScrapedSeason, viewModel.lastScrapedEpisode) {
+        if (localEpisodes != null && localEpisodes.length() > 0) {
+            val activeSeasonNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number")
+
+            if (viewModel.lastScrapedSeason != null && viewModel.lastScrapedEpisode != null && activeSeasonNum == viewModel.lastScrapedSeason) {
+                val showTitle = details?.optString("title")?.takeIf { it.isNotBlank() } 
+                    ?: item?.optString("title")?.takeIf { it.isNotBlank() } 
+                    ?: details?.optString("name")?.takeIf { it.isNotBlank() } 
+                    ?: item?.optString("name") ?: ""
+                val displayTitle = "$showTitle S${viewModel.lastScrapedSeason}E${viewModel.lastScrapedEpisode}"
+                val resumeKey = "resume_stream_$displayTitle"
+                val savedPos = viewModel.prefs.getLong(resumeKey, 0L)
+                if (savedPos > 0L) {
+                    return@remember viewModel.lastScrapedEpisode
+                }
+            }
+
+            val focusMode = viewModel.prefs.getInt("episode_focus_mode", 0) // 0 = Next after latest watched, 1 = First unwatched
+            
+            val isWatched = { ep: JSONObject ->
+                ep.optBoolean("is_watched", false) || locallyWatchedEpisodes.contains(ep.optInt("episode_number"))
+            }
+
+            if (focusMode == 0) {
+                var maxWatchedEp = -1
                 for (i in 0 until localEpisodes.length()) {
-                    if (localEpisodes.getJSONObject(i).optInt("episode_number") == lastWatchedEpisode) {
-                        exists = true
+                    val ep = localEpisodes.getJSONObject(i)
+                    val num = ep.optInt("episode_number")
+                    if (isWatched(ep)) {
+                        if (num > maxWatchedEp) {
+                            maxWatchedEp = num
+                        }
+                    }
+                }
+                if (maxWatchedEp != -1) {
+                    val nextEp = maxWatchedEp + 1
+                    var nextExists = false
+                    for (i in 0 until localEpisodes.length()) {
+                        if (localEpisodes.getJSONObject(i).optInt("episode_number") == nextEp) {
+                            nextExists = true
+                            break
+                        }
+                    }
+                    if (nextExists) nextEp else maxWatchedEp
+                } else {
+                    1
+                }
+            } else {
+                var targetEp = 1
+                for (i in 0 until localEpisodes.length()) {
+                    val ep = localEpisodes.getJSONObject(i)
+                    if (!isWatched(ep)) {
+                        targetEp = ep.optInt("episode_number", 1)
                         break
                     }
                 }
-                if (exists) return@remember lastWatchedEpisode
-            }
-
-            // Priority 2: Just-watched-session-based next episode logic
-            if (viewModel.lastScrapedSeason != null && viewModel.lastScrapedEpisode != null) {
-                val activeSeasonNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number")
-                if (activeSeasonNum == viewModel.lastScrapedSeason) {
-                    val showTitle = details?.optString("title")?.takeIf { it.isNotBlank() } 
-                        ?: item?.optString("title")?.takeIf { it.isNotBlank() } 
-                        ?: details?.optString("name")?.takeIf { it.isNotBlank() } 
-                        ?: item?.optString("name") ?: ""
-                    val displayTitle = "$showTitle S${viewModel.lastScrapedSeason}E${viewModel.lastScrapedEpisode}"
-                    val resumeKey = "resume_stream_$displayTitle"
-                    val savedPos = viewModel.prefs.getLong(resumeKey, 0L)
-                    
-                    if (savedPos > 0L) {
-                        viewModel.lastScrapedEpisode
-                    } else {
-                        val nextEp = viewModel.lastScrapedEpisode!! + 1
-                        var nextExists = false
-                        for (i in 0 until localEpisodes.length()) {
-                            if (localEpisodes.getJSONObject(i).optInt("episode_number") == nextEp) {
-                                nextExists = true
-                                break
-                            }
-                        }
-                        if (nextExists) nextEp else viewModel.lastScrapedEpisode
-                    }
-                } else {
-                    findFirstUnwatchedEpisode(localEpisodes)
-                }
-            } else {
-                findFirstUnwatchedEpisode(localEpisodes)
+                targetEp
             }
         } else null
     }
@@ -184,13 +223,25 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
     LaunchedEffect(targetEpisodeToFocus, autoFocusCancelled) {
         if (!autoFocusCancelled && mediaType == "tv" && targetEpisodeToFocus != null && localEpisodes != null) {
-            delay(800)
-            if (!autoFocusCancelled) {
-                try {
-                    targetEpisodeFocusRequester.requestFocus()
-                    autoFocusCancelled = true // Mark as finished so it doesn't jump again if list recomposes
-                } catch (e: Exception) {}
+            var targetIndex = -1
+            for (i in 0 until localEpisodes.length()) {
+                if (localEpisodes.getJSONObject(i).optInt("episode_number") == targetEpisodeToFocus) {
+                    targetIndex = i
+                    break
+                }
             }
+
+            if (targetIndex != -1) {
+                lazyListState.animateScrollToItem(targetIndex)
+            }
+
+            delay(800)
+            try {
+                if (!autoFocusCancelled) {
+                    targetEpisodeFocusRequester.requestFocus()
+                    autoFocusCancelled = true
+                }
+            } catch (e: Exception) {}
         }
     }
 
@@ -315,6 +366,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
             }
 
             LazyColumn(
+                state = lazyListState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
