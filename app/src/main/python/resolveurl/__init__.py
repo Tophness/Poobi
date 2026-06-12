@@ -64,17 +64,6 @@ def load_external_plugins():
                 common.logger.log_debug('Loaded %s as %s from %s' % (imp, mod_name, filename))
 
 
-# Force import of all plugins once at module load
-import resolveurl.plugins
-for mod_name in resolveurl.plugins.__all__:
-    try:
-        __import__('resolveurl.plugins.' + mod_name)
-    except:
-        pass
-
-_RELEVANT_CACHE = {}
-
-
 def relevant_resolvers(domain=None, include_universal=None, include_popups=None, include_external=False, include_disabled=False, order_matters=False):
     if include_external:
         load_external_plugins()
@@ -87,13 +76,10 @@ def relevant_resolvers(domain=None, include_universal=None, include_popups=None,
 
     if include_popups is None:
         include_popups = common.get_setting('allow_popups') == "true"
+    if include_popups is False:
+        common.logger.log_debug('Resolvers that require popups have been disabled')
 
-    # Performance optimization: cache results for the same parameters
-    cache_key = (domain, include_universal, include_popups, include_disabled, order_matters)
-    if not include_external and cache_key in _RELEVANT_CACHE:
-        return _RELEVANT_CACHE[cache_key]
-
-    classes = ResolveUrl.__subclasses__() + ResolveGeneric.__subclasses__()
+    classes = ResolveUrl.__class__.__subclasses__(ResolveUrl) + ResolveUrl.__class__.__subclasses__(ResolveGeneric)
     relevant = []
     for resolver in classes:
         if include_disabled or resolver._is_enabled():
@@ -108,9 +94,7 @@ def relevant_resolvers(domain=None, include_universal=None, include_popups=None,
     for i in relevant:
         i.priority = i._get_priority()
 
-    if not include_external:
-        _RELEVANT_CACHE[cache_key] = relevant
-
+    common.logger.log_debug('Relevant Resolvers: %s' % relevant)
     return relevant
 
 
