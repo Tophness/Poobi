@@ -229,7 +229,7 @@ except ImportError:
     pass
 
 class UniversalScraper:
-    def __init__(self, enabled_packs):
+    def __init__(self, enabled_packs, load_providers=False):
         self.enabled_packs = enabled_packs
         self.sources = []
         self.provider_instances = {}
@@ -260,7 +260,6 @@ class UniversalScraper:
                 resolvers = resolveurl.relevant_resolvers(include_popups=True, include_universal=True)
                 for r in resolvers:
                     try:
-                        # Check both class and instance for isPopup
                         is_popup = False
                         if hasattr(r, 'isPopup'):
                             if inspect.ismethod(r.isPopup) or inspect.isfunction(r.isPopup):
@@ -274,34 +273,54 @@ class UniversalScraper:
                     except: pass
             except: pass
 
-    def getSources(self, title, year, imdb, tmdb, tvdb='0', season=None, episode=None, tvshowtitle=None, premiered='0'):
-        providers = []
+        if load_providers:
+            self._load_all_providers()
 
+    def _load_all_providers(self):
         for pack in self.enabled_packs:
             pack_dir = os.path.join(SOURCES_PATH, pack)
-            if not os.path.exists(pack_dir): 
-                continue
+            if not os.path.exists(pack_dir): continue
+            for file in os.listdir(pack_dir):
+                if file.endswith('.py') and not file.startswith('__'):
+                    self._load_provider(pack, file[:-3])
+
+    def _load_provider(self, pack, name):
+        key = f"{pack}_{name}"
+        if key in self.provider_instances:
+            return self.provider_instances[key]
+
+        mod_name = f"sources.{pack}.{name}"
+        file_path = os.path.join(SOURCES_PATH, pack, f"{name}.py")
+        if not os.path.exists(file_path): return None
+
+        try:
+            spec = importlib.util.spec_from_file_location(mod_name, file_path)
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules[mod_name] = mod
+            spec.loader.exec_module(mod)
+            if hasattr(mod, 'source'):
+                instance = mod.source()
+                self.provider_instances[key] = instance
+                return instance
+        except: pass
+        return None
+
+    def getSources(self, title, year, imdb, tmdb, tvdb='0', season=None, episode=None, tvshowtitle=None, premiered='0'):
+        providers = []
+        for pack in self.enabled_packs:
+            pack_dir = os.path.join(SOURCES_PATH, pack)
+            if not os.path.exists(pack_dir): continue
             
             files = os.listdir(pack_dir)
             for file in files:
                 if file.endswith('.py') and not file.startswith('__'):
-                    mod_name = f"sources.{pack}.{file[:-3]}"
-                    file_path = os.path.join(pack_dir, file)
-                    spec = importlib.util.spec_from_file_location(mod_name, file_path)
-                    mod = importlib.util.module_from_spec(spec)
-                    sys.modules[mod_name] = mod
-                    try:
-                        spec.loader.exec_module(mod)
-                        if hasattr(mod, 'source'):
-                            instance = mod.source()
-                            instance_domains = [d.lower() for d in (getattr(instance, 'domains', None) or [])]
-                            if self.hostDict and instance_domains:
-                                if not any(d in self.provider_hosts for d in instance_domains):
-                                    continue
-                            providers.append((pack, file[:-3], instance))
-                            self.provider_instances[f"{pack}_{file[:-3]}"] = instance
-                    except Exception:
-                        pass
+                    instance = self._load_provider(pack, file[:-3])
+                    if instance:
+                        instance_domains = [d.lower() for d in (getattr(instance, 'domains', None) or [])]
+                        if self.hostDict and instance_domains:
+                            if not any(d in self.provider_hosts for d in instance_domains):
+                                continue
+                        providers.append((pack, file[:-3], instance))
 
         self.status["total"] = len(providers)
         self.status["current"] = 0
@@ -316,7 +335,6 @@ class UniversalScraper:
                 compatible_providers.append((pack_name, name, provider))
 
         self.status["total"] = len(compatible_providers)
-        self.status["current"] = 0
         self.status["message"] = f"Found {len(compatible_providers)} compatible providers..."
 
         aliases_str = "[]"
@@ -325,13 +343,9 @@ class UniversalScraper:
 
         for pack_name, name, provider in compatible_providers:
             if content == 'movie':
-                args = (
-                    provider, content, title, title, aliases_str, year, imdb, tmdb, None, None, None, None, name, pack_name
-                )
+                args = (provider, content, title, title, aliases_str, year, imdb, tmdb, None, None, None, None, name, pack_name)
             elif content == 'episode':
-                args = (
-                    provider, content, title, title, aliases_str, year, imdb, tmdb, tvdb, season, episode, premiered, name, pack_name
-                )
+                args = (provider, content, title, title, aliases_str, year, imdb, tmdb, tvdb, season, episode, premiered, name, pack_name)
             futures.append(executor.submit(self.worker, *args))
 
         mode = GLOBAL_CONFIG.get('timeout_mode', 'Both')
@@ -374,10 +388,7 @@ class UniversalScraper:
         executor.shutdown(wait=False)
 
         if not self.stop_event.is_set():
-            if self.status["message"] != "Timeout reached!":
-                self.status["message"] = f"Finished! Found {len(self.sources)} sources."
-            else:
-                self.status["message"] = f"Timeout reached! Found {len(self.sources)} sources."
+            self.status["message"] = f"Finished! Found {len(self.sources)} sources."
 
         quality_map = {'4k': 0, '1080p': 1, '720p': 2, 'hd': 2, 'sd': 3, 'cam': 4, 'scr': 4}
         for s in self.sources:
@@ -393,30 +404,23 @@ class UniversalScraper:
     def worker(self, provider, content, title, localtitle, aliases, year, imdb, tmdb, tvdb, season, episode, premiered, name, pack_name):
         try:
             if self.stop_event.is_set(): return
-            
             while not self.pause_event.is_set():
                 if self.stop_event.is_set(): return
                 time.sleep(0.2)
 
             if content == 'movie':
                 sig = inspect.signature(provider.movie)
-                if 'tmdb' in sig.parameters:
-                    url = provider.movie(imdb, tmdb, title, localtitle, aliases, year)
-                else:
-                    url = provider.movie(imdb, title, localtitle, aliases, year)
+                if 'tmdb' in sig.parameters: url = provider.movie(imdb, tmdb, title, localtitle, aliases, year)
+                else: url = provider.movie(imdb, title, localtitle, aliases, year)
             else:
                 sig = inspect.signature(provider.tvshow)
-                if 'tmdb' in sig.parameters:
-                    url = provider.tvshow(imdb, tmdb, tvdb, title, localtitle, aliases, year)
-                else:
-                    url = provider.tvshow(imdb, tvdb, title, localtitle, aliases, year)
+                if 'tmdb' in sig.parameters: url = provider.tvshow(imdb, tmdb, tvdb, title, localtitle, aliases, year)
+                else: url = provider.tvshow(imdb, tvdb, title, localtitle, aliases, year)
                 
                 if url and hasattr(provider, 'episode'):
                     ep_sig = inspect.signature(provider.episode)
-                    if 'tmdb' in ep_sig.parameters:
-                        url = provider.episode(url, imdb, tmdb, tvdb, title, premiered, season, episode)
-                    else:
-                        url = provider.episode(url, imdb, tvdb, title, premiered, season, episode)
+                    if 'tmdb' in ep_sig.parameters: url = provider.episode(url, imdb, tmdb, tvdb, title, premiered, season, episode)
+                    else: url = provider.episode(url, imdb, tvdb, title, premiered, season, episode)
 
             if url:
                 if self.stop_event.is_set(): return
@@ -425,10 +429,8 @@ class UniversalScraper:
                     time.sleep(0.2)
 
                 sources_sig = inspect.signature(provider.sources)
-                if 'hostprDict' in sources_sig.parameters:
-                    results = provider.sources(url, self.hostDict, [])
-                else:
-                    results = provider.sources(url, self.hostDict)
+                if 'hostprDict' in sources_sig.parameters: results = provider.sources(url, self.hostDict, [])
+                else: results = provider.sources(url, self.hostDict)
 
                 if results:
                     for res in results:
@@ -445,19 +447,16 @@ class UniversalScraper:
         url = source_data.get('url')
         provider_key = source_data.get('provider_key')
         is_video = source_data.get('direct', False)
-        print(f"[DEBUG] resolveSource: starting for {url[:100]} (Direct: {is_video})")
 
-        if provider_key in self.provider_instances:
-            provider = self.provider_instances[provider_key]
-            if hasattr(provider, 'resolve'):
+        if provider_key:
+            pack, name = provider_key.split('_', 1)
+            provider = self._load_provider(pack, name)
+            if provider and hasattr(provider, 'resolve'):
                 try: 
                     new_url = provider.resolve(url)
-                    if new_url:
+                    if new_url and new_url != url:
                         url = new_url
-                        is_video = True
-                        print(f"[DEBUG] resolveSource: provider resolved to {url[:100]}")
-                except Exception as e:
-                    print(f"[DEBUG] resolveSource: provider resolve error: {e}")
+                except: pass
 
         if not url: return None, False
 
@@ -470,21 +469,11 @@ class UniversalScraper:
 
         if resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
             try:
-                print(f"[DEBUG] resolveSource: checking HostedMediaFile for {url[:100]}")
                 hmf = resolveurl.HostedMediaFile(url)
                 if hmf:
-                    print(f"[DEBUG] resolveSource: HostedMediaFile MATCHED. Resolving...")
                     resolved = hmf.resolve()
-                    if resolved:
-                        print(f"[DEBUG] resolveSource: resolveurl success: {str(resolved)[:100]}")
-                        return resolved, True
-                    else:
-                        print(f"[DEBUG] resolveSource: resolveurl returned None/False")
-                else:
-                    print(f"[DEBUG] resolveSource: HostedMediaFile did not match any resolvers")
-            except Exception as e:
-                print(f"[DEBUG] resolveSource: resolveurl error: {e}")
-                traceback.print_exc()
+                    if resolved: return resolved, True
+            except: pass
             
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
         video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
@@ -645,7 +634,7 @@ def get_scrape_status():
                                     if resolveurl.HostedMediaFile(url):
                                         is_video = True
                                     UniversalScraper._ui_resolvable_cache[domain] = is_video
-                            except Exception as e: pass
+                            except: pass
                     s['is_video'] = is_video
 
                 is_captcha = s.get('requires_captcha')
@@ -666,7 +655,7 @@ def get_scrape_status():
                     "title": f"{title_prefix}{captcha_prefix}[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
                     "source_data": json.dumps(s)
                 })
-        except Exception as e: pass
+        except: pass
         s_inst._last_format_count = len(sources)
         s_inst._cached_display_sources = display_sources
         res["sources"] = display_sources
@@ -772,7 +761,12 @@ def scrape(item_json, season=None, episode=None):
 def resolve(source_data_json):
     try:
         source_data = json.loads(source_data_json)
-        scraper = UniversalScraper(GLOBAL_CONFIG.get("enabled_packs", []))
+        enabled_packs = GLOBAL_CONFIG.get("enabled_packs")
+        if enabled_packs is None:
+            packs = [d for d in os.listdir(SOURCES_PATH) if os.path.isdir(os.path.join(SOURCES_PATH, d))]
+            enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
+
+        scraper = UniversalScraper(enabled_packs, load_providers=True)
         url, is_video = scraper.resolveSource(source_data)
         return json.dumps({"url": url if url else "", "is_video": is_video})
     except Exception as e: return json.dumps({"error": str(e)})

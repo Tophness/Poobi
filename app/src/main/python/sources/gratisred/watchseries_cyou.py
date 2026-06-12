@@ -1,28 +1,13 @@
 # -*- coding: utf-8 -*-
 
-# Watchseries scraper.
-#
-# watchseries.cyou is a sister/dupe site of freeprojecttv.cyou (the
-# `projectfreetv_cyou` provider) - identical page template, same
-# /tv-series/<slug>-season-<n>-episode-<m>/ URL pattern, same
-# `<tr class="ext_link_HOST">` row markup with `/open/link/<id>/`
-# redirector hrefs.  The site sits behind Cloudflare's managed JS
-# challenge, so links only appear when the user has configured a
-# FlareSolverr endpoint in addon settings (see client._flaresolverr_url).
-# `client.scrapePage` transparently retries CF 403/503 through
-# FlareSolverr and caches the cf_clearance cookie per host so all
-# subsequent requests on the same domain bypass the challenge with
-# plain `requests` - critical for staying under providers.timeout.
-
 import re
 
-from six.moves.urllib_parse import parse_qs, urlencode
+from six.moves.urllib_parse import parse_qs, urlencode, urljoin
 
 from resources.lib.modules import cleantitle
 from resources.lib.modules import client
 from resources.lib.modules import client_utils
 from resources.lib.modules import scrape_sources
-#from resources.lib.modules import log_utils
 
 DOM = client_utils.parseDOM
 
@@ -81,7 +66,6 @@ class source:
             if not html:
                 return self.results
 
-            # Embedded iframe (rare on watchseries - usually internal /vembed/).
             try:
                 for link in DOM(html, 'iframe', ret='src'):
                     try:
@@ -95,8 +79,6 @@ class source:
             except Exception:
                 pass
 
-            # ext_link rows: <tr class="ext_link_<host>">
-            #   <a href="/open/link/<id>/" title="<host>">
             try:
                 ext_rows = DOM(html, 'tr', attrs={'class': r'ext_link.+?'})
                 for row in ext_rows:
@@ -116,7 +98,6 @@ class source:
                 pass
             return self.results
         except Exception:
-            #log_utils.log('sources', 1)
             return self.results
 
 
@@ -125,14 +106,21 @@ class source:
             try:
                 page = client.scrapePage(url, headers=self.headers, timeout='15')
                 html = (getattr(page, 'text', '') or '') if page is not None else ''
-                # Prefer iframe src.
+
+                # New advanced logic: follow /open/ redirectors
+                metaid = re.findall(r'data-metaid="(\d+)"', html)
+                prefix = re.findall(r"['\"](/open/[^'\"/]+/?)['\"]", html)
+                if metaid and prefix:
+                    link = urljoin(url, f"{prefix[0]}{metaid[0]}/")
+                    link = client.request(link, headers=self.headers, output='geturl')
+                    if link: return link
+
                 try:
                     iframe = DOM(html, 'iframe', ret='src')
                     if iframe:
                         return iframe[0]
                 except Exception:
                     pass
-                # Fallback: /open/site/... redirect target embedded in page.
                 try:
                     m = re.search(r'"(/open/site/[^"]+)"', html, re.I | re.S)
                     if m:
@@ -142,6 +130,5 @@ class source:
                 except Exception:
                     pass
             except Exception:
-                #log_utils.log('resolve', 1)
                 pass
         return url

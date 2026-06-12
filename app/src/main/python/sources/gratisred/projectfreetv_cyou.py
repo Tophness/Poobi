@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import re
-from six.moves.urllib_parse import parse_qs, urlencode
+from six.moves.urllib_parse import parse_qs, urlencode, urljoin
 
 from resources.lib.modules import cleantitle
 from resources.lib.modules import client
@@ -101,16 +101,23 @@ class source:
         if any(x in url for x in self.domains):
             try:
                 html = client.request(url, cookie=self.cookie)
+
+                # New advanced logic: follow /open/ redirectors
+                metaid = re.findall(r'data-metaid="(\d+)"', html)
+                prefix = re.findall(r"['\"](/open/[^'\"/]+/?)['\"]", html)
+                if metaid and prefix:
+                    link = urljoin(url, f"{prefix[0]}{metaid[0]}/")
+                    link = client.request(link, cookie=self.cookie, referer=url, output='geturl')
+                    if link: return link
+
                 try:
                     link = DOM(html, 'iframe', ret='src')[0]
+                    return link
                 except:
                     match = re.compile(r'"(/open/site/.+?)"', re.I|re.S).findall(html)[0]
                     link = self.base_link + match if not match.startswith('http') else match
                     link = client.request(link, output='geturl')
-                return link
+                    return link
             except:
                 pass
-        else:
-            return url
-
-
+        return url
