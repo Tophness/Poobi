@@ -311,7 +311,7 @@ class PlayerEngine(
                         }
                         lastScrapedItem?.let { item ->
                             @Suppress("OPT_IN_USAGE")
-                            playerScope.launch() {
+                            playerScope.launch {
                                 try {
                                     val py = Python.getInstance()
                                     val scrobbler = py.getModule("trakt.trakt_scrobble")
