@@ -1869,4 +1869,37 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         list.forEach { result.put(it) }
         return result
     }
+    fun markEpisodeAsWatchedLocal(season: Int, episode: Int) {
+        val item = _selectedItem.value ?: return
+        val id = item.optInt("id")
+
+        val cacheKey = "${id}_$season"
+        val cachedArray = episodesCache.get(cacheKey)
+        if (cachedArray != null) {
+            for (i in 0 until cachedArray.length()) {
+                val ep = cachedArray.getJSONObject(i)
+                if (ep.optInt("episode_number") == episode) {
+                    ep.put("is_watched", true)
+                    break
+                }
+            }
+        }
+
+        val currentEpisodes = _itemEpisodes.value
+        if (currentEpisodes != null) {
+            val updatedArray = JSONArray(currentEpisodes.toString())
+            var modified = false
+            for (i in 0 until updatedArray.length()) {
+                val ep = updatedArray.getJSONObject(i)
+                if (ep.optInt("episode_number") == episode) {
+                    ep.put("is_watched", true)
+                    modified = true
+                    break
+                }
+            }
+            if (modified) {
+                _itemEpisodes.value = updatedArray
+            }
+        }
+    }
 }

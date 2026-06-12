@@ -111,6 +111,7 @@ class SettingsActivity : AppCompatActivity() {
     private var upNextTime by mutableStateOf(20)
     private var upNextTimeStr by mutableStateOf("20")
     private var autoplayNext by mutableStateOf("Closest Source")
+    private var episodeFocusMode by mutableStateOf(0)
 
     // Interface Panel
     private var scrollTopbar by mutableStateOf(true)
@@ -296,6 +297,7 @@ class SettingsActivity : AppCompatActivity() {
         upNextTime = prefs.getInt("up_next_time_pref", 20)
         upNextTimeStr = upNextTime.toString()
         autoplayNext = prefs.getString("autoplay_next_pref", "Closest Source") ?: "Closest Source"
+        episodeFocusMode = prefs.getInt("episode_focus_mode", 0)
 
         // Interface Panel
         scrollTopbar = prefs.getBoolean("scroll_topbar_enabled", true)
@@ -575,6 +577,16 @@ class SettingsActivity : AppCompatActivity() {
                         selectedIndex = when(autoplayNext) { "Best Source" -> 1; "Ask" -> 2; else -> 0 }
                     ) { index ->
                         autoplayNext = when(index) { 1 -> "Best Source"; 2 -> "Ask"; else -> "Closest Source" }
+                    }
+                }
+
+                item {
+                    DropdownSettingRow(
+                        label = "Episode Auto-Focus Style",
+                        options = listOf("Next Episode after Latest Watched", "First Unwatched Episode"),
+                        selectedIndex = episodeFocusMode
+                    ) { index ->
+                        episodeFocusMode = index
                     }
                 }
             }
@@ -1711,6 +1723,7 @@ class SettingsActivity : AppCompatActivity() {
                     putString("up_next_popup_pref", upNextMode)
                     putInt("up_next_time_pref", upNextTime)
                     putString("autoplay_next_pref", autoplayNext)
+                    putInt("episode_focus_mode", episodeFocusMode)
 
                     // Interface
                     putBoolean("scroll_topbar_enabled", scrollTopbar)
