@@ -209,8 +209,9 @@ def make_item(hostDict, link, host=None, info=None, prep=False):
         if valid:
             quality, info = source_utils.get_release_quality(link, info)
             item = {'source': host, 'quality': quality, 'info': info, 'url': link, 'direct': False}
-        #else: log_utils.log('scrape_sources - make_item - non-valid link: ' + str(link))
-        #log_utils.log('scrape_sources - make_item item: ' + str(item))
+        else:
+            # print(f"[DEBUG] make_item: filtered {host or link}")
+            pass
         return item
     except:
         log_utils.log('make_item', 1)
@@ -666,5 +667,3 @@ def source_stream(link, hostDict, info=None):
     except Exception:
         log_utils.log('source_stream', 1)
         return sources
-
-

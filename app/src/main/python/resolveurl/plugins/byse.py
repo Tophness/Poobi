@@ -17,7 +17,6 @@
 """
 
 import json
-import requests
 from six.moves import urllib_parse
 from resolveurl.lib import helpers
 from resolveurl.lib.aesgcm import python_aesgcm
@@ -35,64 +34,43 @@ class ByseResolver(ResolveUrl):
         'kerapoxy.cc', 'furher.in', '1azayf9w.xyz', '81u6xl9d.xyz', 'smdfs40r.skin', 'c1z39.com',
         'bf0skv.org', 'z1ekv717.fun', 'l1afav.net', '222i8x.lol', '8mhlloqo.fun', 'f51rm.com',
         'xcoic.com', 'filemoon.nl', 'boosteradx.online', 'streamlyplayer.online', 'bysewihe.com',
-        'byselapuix.com'
+        'byselapuix.com', 'embedplaybyse.top'
     ]
     pattern = (
-        r'(?://|\.)((?:filemoon|cinegrab|moonmov|kerapoxy|furher|1azayf9w|81u6xl9d|f16px|'
-        r'smdfs40r|bf0skv|z1ekv717|l1afav|222i8x|8mhlloqo|96ar|xcoic|f51rm|c1z39|boosteradx|'
-        r'byse(?:sayeveum|tayico|vepoin|zejataos|koze|sukior|jikuar|fujedu|dikamoum|buho|wihe|lapuix)?)'
-        r'\.(?:sx|to|s?k?in|link|nl|wf|com|eu|art|pro|cc|xyz|org|fun|net|lol|online))'
+        r'(?://|\.)((?:filemoon|cinegrab|moonmov|kerapoxy|furher|1azayf9w|81u6xl9d|f16px|embedplaybyse|'
+        r'smdfs40r|bf0skv|z1ekv717|l1afav|222i8x|8mhlloqo|96ar|xcoic|f51rm|c1z39|boosteradx|vepoin|'
+        r'byse(?:sayeveum|tayico|zejataos|koze|sukior|jikuar|fujedu|dikamoum|buho|wihe|lapuix)?)'
+        r'\.(?:sx|top?|s?k?in|link|nl|wf|com|eu|art|pro|cc|xyz|org|fun|net|lol|online))'
         r'/(?:(?:e|d|download)/)?([0-9a-zA-Z]+)'
     )
 
     def get_media_url(self, host, media_id):
-        playback_url = 'https://{host}/api/videos/{media_id}/playback'.format(host=host, media_id=media_id)
-        origin_referer = 'https://{host}/'.format(host=host)
-
+        web_url = self.get_url(host, media_id)
+        ref = urllib_parse.urljoin(web_url, '/')
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/114.0',
-            'Referer': origin_referer,
-            'Origin': origin_referer.rstrip('/'),
-            'Content-Type': 'application/json'
+            'User-Agent': common.RAND_UA,
+            'Referer': ref,
+            'Origin': ref[:-1]
         }
-        
-        payload = self.fp(16, 0.6, 0.9)
-        
-        try:
-            response = requests.post(playback_url, headers=headers, json=payload, timeout=10)
-            
-            if response.status_code != 200:
-                raise ResolverError('Server returned status code: %d' % response.status_code)
-                
-            html_data = response.json()
-        except Exception as e:
-            raise ResolverError('Request or JSON parse failed: %s' % str(e))
-
-        sources = html_data.get('sources')
+        html = self.net.http_POST(web_url, headers=headers, form_data=self.fp(16, 0.6, 0.9), jdata=True).content
+        html = json.loads(html)
+        sources = html.get('sources')
         if sources:
             sources = [(x.get('label'), x.get('url')) for x in sources]
             uri = helpers.pick_source(helpers.sort_sources_list(sources))
             if uri.startswith('/'):
-                uri = urllib_parse.urljoin(playback_url, uri)
+                uri = urllib_parse.urljoin(web_url, uri)
             url = helpers.get_redirect_url(uri, headers=headers)
             return url + helpers.append_headers(headers)
-            
-        # Decryption flow
-        pd = html_data.get('playback')
+        pd = html.get('playback')
         if pd:
             iv = self.ft(pd.get('iv'))
-            key = self.xn(pd.get('key_parts'))
+            key = self.xn(pd.get('key_parts'), pd.get('version'))
             pl = self.ft(pd.get('payload'))
             cipher = python_aesgcm.new(key)
             ct = cipher.open(iv, pl)
-            
-            try:
-                decrypted_text = ct.decode('utf-8')
-            except UnicodeDecodeError:
-                decrypted_text = ct.decode('latin-1')
-                
-            ct_json = json.loads(decrypted_text)
-            sources = ct_json.get('sources')
+            ct = json.loads(ct.decode('latin-1'))
+            sources = ct.get('sources')
             if sources:
                 sources = [(x.get('label'), x.get('url')) for x in sources]
                 uri = helpers.pick_source(helpers.sort_sources_list(sources))
@@ -104,28 +82,19 @@ class ByseResolver(ResolveUrl):
         redirect_domains = ['boosteradx.online', 'byse.sx']
         if host in redirect_domains:
             host = 'streamlyplayer.online'
-        return 'https://{host}/d/{media_id}'.format(host=host, media_id=media_id)
+        return self._default_get_url(host, media_id, 'https://{host}/api/videos/{media_id}/playback')
 
     @staticmethod
     def ft(e):
-        if not e:
-            return b''
         t = e.replace('-', '+').replace('_', '/')
-        missing_padding = len(t) % 4
-        if missing_padding:
-            t += '=' * (4 - missing_padding)
         return helpers.b64decode(t, binary=True)
 
-    def xn(self, e):
-        decoded_parts = []
-        for part in e:
-            try:
-                decoded_parts.append(self.ft(part))
-            except Exception:
-                pass
-
-        active_parts = [part for part in decoded_parts if len(part) == 16]
-        return b''.join(active_parts)
+    def xn(self, e, v):
+        if v:
+            v = int(v)
+            e = [e[v - 1], e[len(e) - v]]
+        t = list(map(self.ft, e))
+        return b''.join(t)
 
     @staticmethod
     def fp(x, y, z):
@@ -147,4 +116,7 @@ class ByseResolver(ResolveUrl):
         t_bdata = helpers.b64urlencode(json.dumps(t_data), strip=True)
         t_sig = helpers.b64urlencode(sha256(t_bdata.encode()).digest(), strip=True)
         token = '{0}.{1}'.format(t_bdata, t_sig)
-        return {'fingerprint': {'viewer_id': v_id, 'device_id': d_id, 'confidence': t_data['confidence'], 'token': token}}
+        t_data.update({'token': token})
+        t_data.pop('iat')
+        t_data.pop('exp')
+        return {'fingerprint': t_data}

@@ -71,7 +71,7 @@ class sources:
         self.sourceFile = control.providercacheFile
         from resources.lib.sources import sources
         self.sourceDict = sources()
-        self.hostDict = self.getHostDict()
+        self.hostDict, self.hostPopupDict = self.getHostDict()
         self.hostcapDict = ['flashx.tv', 'flashx.to', 'uptobox.com', 'uptostream.com', 'vshare.eu', 'rabbitstream.net', 'dokicloud.one']
         self.hostblockDict = ['youtube.com', 'youtu.be', 'youtube-nocookie.com']
         self.hostDict = [x for x in self.hostDict if not x in self.hostblockDict]
@@ -79,14 +79,22 @@ class sources:
 
     def getHostDict(self):
         try:
-            hostDict = resolveurl.relevant_resolvers(order_matters=True)
-            hostDict = [i.domains for i in hostDict if not '*' in i.domains]
+            resolvers = resolveurl.relevant_resolvers(order_matters=True)
+            hostDict = [i.domains for i in resolvers if not '*' in i.domains]
             hostDict = [i.lower() for i in reduce(lambda x, y: x + y, hostDict)]
             hostDict = [x for y, x in enumerate(hostDict) if x not in hostDict[:y]]
-            return hostDict
+
+            popupDict = [i.domains for i in resolvers if i.isPopup() and not '*' in i.domains]
+            if popupDict:
+                popupDict = [i.lower() for i in reduce(lambda x, y: x + y, popupDict)]
+                popupDict = [x for y, x in enumerate(popupDict) if x not in popupDict[:y]]
+            else:
+                popupDict = []
+
+            return hostDict, popupDict
         except:
             log_utils.log('getHostDict', 1)
-            return []
+            return [], []
 
 
     def sourcesResolve(self, item, info=False):
@@ -460,6 +468,11 @@ class sources:
             p = self.sources[i]['provider'].replace('_', '.')
             q = self.sources[i]['quality']
             s = self.sources[i]['source']
+
+            is_captcha = s.lower() in self.hostPopupDict or s.lower() in self.hostcapDict
+            self.sources[i]['requires_captcha'] = is_captcha
+            captcha_prefix = '[CAPTCHA] ' if is_captcha else ''
+
             try:
                 f = ' / '.join(['%s' % info.strip() for info in self.sources[i].get('info', '').split('|')])
             except:
@@ -488,7 +501,7 @@ class sources:
                 if len(label_down_clean) > len(label_up_clean):
                     label_up += (len(label_down_clean) - len(label_up_clean)) * '  '
                     label = label_up + '[CR]' + label_down
-            self.sources[i]['label'] = '[UPPERCASE]' + label + '[/UPPERCASE]'
+            self.sources[i]['label'] = '[UPPERCASE]' + captcha_prefix + label + '[/UPPERCASE]'
         self.sources = [i for i in self.sources if 'label' in i]
         return self.sources
 

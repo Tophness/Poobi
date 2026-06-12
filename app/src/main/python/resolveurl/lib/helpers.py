@@ -62,29 +62,29 @@ def pick_source(sources, auto_pick=None):
     if auto_pick is None:
         auto_pick = common.get_setting('auto_pick') == 'true'
 
+    if not sources:
+        raise ResolverError(common.i18n('no_video_link'))
+
     if len(sources) == 1:
         return sources[0][1]
-    elif len(sources) > 1:
-        if auto_pick:
-            return sources[0][1]
-        else:
-            # Let the user choose via the console
-            print("\n[ResolveURL] Multiple sources found. Please choose one:")
-            for i, source in enumerate(sources):
-                label = str(source[0]) if source[0] else 'Unknown'
-                print(f"[{i}] {label}")
-            
-            while True:
-                try:
-                    choice = int(input(f"Select a source (0-{len(sources)-1}): "))
-                    if 0 <= choice < len(sources):
-                        return sources[choice][1]
-                    else:
-                        print("Invalid choice. Try again.")
-                except ValueError:
-                    print("Please enter a valid number.")
-    else:
-        raise ResolverError(common.i18n('no_video_link'))
+
+    if auto_pick:
+        return sources[0][1]
+
+    # Try to use UI selection via dialog listener
+    from resources.lib.modules import control
+    labels = [str(source[0]) if source[0] else 'Unknown' for source in sources]
+
+    try:
+        if hasattr(control, 'selectDialog'):
+            result = control.selectDialog(labels)
+            if result != -1:
+                return sources[result][1]
+    except:
+        pass
+
+    # Fallback to first if dialog fails
+    return sources[0][1]
 
 
 def append_headers(headers):
@@ -488,7 +488,7 @@ def xor_string(encurl, key):
     Code adapted from https://github.com/vb6rocod/utils/
     Copyright (C) 2019 vb6rocod
     """
-    strurl = b64decode(encurl)
+    strurl = b64decode(encurl, binary=True)
     surl = ''
     for i in range(len(strurl)):
         surl += chr(ord(strurl[i]) ^ ord(key[i % len(key)]))
@@ -739,7 +739,6 @@ def tear_decode(data_file, data_seed):
 
 def duboku_decode(encurl):
     base64_decode_chars = [
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         -1, -1, -1, 62, -1, -1, -1, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1,
         -1, -1, -1, -1, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,

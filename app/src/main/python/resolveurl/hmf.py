@@ -105,9 +105,11 @@ class HostedMediaFile:
         if include_popups is None:
             include_popups = common.get_setting('allow_popups') == "true"
 
+        print(f"[DEBUG] HostedMediaFile.__get_resolvers: domain={self._domain}, popups={include_popups}, univ={include_universal}")
         klasses = resolveurl.relevant_resolvers(self._domain, include_universal=include_universal,
                                                 include_popups=include_popups, include_external=True,
                                                 include_disabled=include_disabled, order_matters=True)
+        print(f"[DEBUG] HostedMediaFile: found {len(klasses)} relevant resolvers")
         resolvers = []
         for klass in klasses:
             if klass in resolver_cache:
@@ -158,31 +160,7 @@ class HostedMediaFile:
         return self.__resolvers
 
     def resolve(self, include_universal=True, allow_popups=True):
-        """
-        Resolves this :class:`HostedMediaFile` to a media URL.
-
-        Example::
-
-            stream_url = HostedMediaFile(host='youtube.com', media_id='ABC123XYZ').resolve()
-
-        Args:
-            include_universal: if False, then universal resolvers are not allowed to be resolvers
-
-            allow_popups: If False, then any resolver dependent on a pop-up dialog (e.g. captcha, /pair, etc) are not
-            allowed to be resolvers (does not include premium or debrid hosts)
-
-        .. note::
-
-            This method currently uses just the highest priority resolver to
-            attempt to resolve to a media URL and if that fails it will return
-            False. In future perhaps we should be more clever and check to make
-            sure that there are no more resolvers capable of attempting to
-            resolve the URL first.
-
-        Returns:
-            A direct URL to the media file that is playable by XBMC, or False
-            if this was not possible.
-        """
+        print(f"[DEBUG] HostedMediaFile.resolve: link={self._url[:80]} (popups={allow_popups})")
         for resolver in self.__resolvers:
             try:
                 if (include_universal or not resolver.isUniversal()) and (allow_popups or not resolver.isPopup()):
@@ -276,7 +254,7 @@ class HostedMediaFile:
         if '|' in stream_url:
             headers = dict([item.split('=') for item in (stream_url.split('|')[1]).split('&')])
         else:
-            headers = {'User-Agent': common.FF_USER_AGENT}
+            headers = {'User-Agent': common.RAND_UA}
         for header in headers:
             headers[header] = urllib_parse.unquote_plus(headers[header])
         common.logger.log_debug('Setting Headers on UrlOpen: %s' % headers)

@@ -124,6 +124,8 @@ class SettingsActivity : AppCompatActivity() {
     private var sourceTimeoutStr by mutableStateOf("15")
     private var enforceWhitelist by mutableStateOf(true)
     private val whitelistedHosts = mutableStateListOf<String>()
+    private var flareEnabled by mutableStateOf(false)
+    private var flareUrl by mutableStateOf("http://localhost:8191")
 
     // Subtitles Panel
     private var autoSubPref by mutableStateOf(0)
@@ -308,6 +310,8 @@ class SettingsActivity : AppCompatActivity() {
         sourceTimeout = prefs.getInt("per_source_timeout", 15)
         sourceTimeoutStr = sourceTimeout.toString()
         enforceWhitelist = prefs.getBoolean("use_only_whitelisted_hosts", true)
+        flareEnabled = prefs.getBoolean("flaresolverr_enabled", false)
+        flareUrl = prefs.getString("flaresolverr_url", "http://localhost:8191") ?: "http://localhost:8191"
         
         whitelistedHosts.clear()
         val hostsJson = prefs.getString("whitelisted_hosts", "[]") ?: "[]"
@@ -369,6 +373,8 @@ class SettingsActivity : AppCompatActivity() {
                 put("up_next_popup_pref", prefs.getString("up_next_popup_pref", "Ask"))
                 put("up_next_time_pref", prefs.getInt("up_next_time_pref", 20))
                 put("autoplay_next_pref", prefs.getString("autoplay_next_pref", "Closest Source"))
+                put("flaresolverr_enabled", prefs.getBoolean("flaresolverr_enabled", false))
+                put("flaresolverr_url", prefs.getString("flaresolverr_url", "http://localhost:8191"))
                 val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
                 serviceKeys.forEach { put("${it}_enabled", prefs.getBoolean("${it}_enabled", it != "bsplayer" && it != "opensubtitles_org" && it != "podnadpisi")) }
                 put("opensubtitles_username", prefs.getString("opensubtitles_username", ""))
@@ -673,6 +679,26 @@ class SettingsActivity : AppCompatActivity() {
                                 label = "Per-Source Timeout Limit (Seconds)",
                                 placeholder = "15",
                                 containerColor = Color(0xFF222225),
+                                imeAction = ImeAction.Done
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().background(Color(0xFF222225)).padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("FlareSolverr (Cloudflare Bypass)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        ToggleSettingRow("Enable FlareSolverr Bypass", flareEnabled) { flareEnabled = it }
+                        if (flareEnabled) {
+                            TvInputField(
+                                value = flareUrl,
+                                onValueChange = { flareUrl = it },
+                                label = "FlareSolverr Instance URL",
+                                placeholder = "http://192.168.x.x:8191",
+                                containerColor = Color(0xFF1A1A1D),
                                 imeAction = ImeAction.Done
                             )
                         }
@@ -1721,6 +1747,8 @@ class SettingsActivity : AppCompatActivity() {
                     putInt("global_timeout", globalTimeout)
                     putInt("per_source_timeout", sourceTimeout)
                     putBoolean("use_only_whitelisted_hosts", enforceWhitelist)
+                    putBoolean("flaresolverr_enabled", flareEnabled)
+                    putString("flaresolverr_url", flareUrl)
                     putString("enabled_packs", JSONArray(enabledPacksList).toString())
                     putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString())
 
@@ -1764,6 +1792,8 @@ class SettingsActivity : AppCompatActivity() {
                     put("up_next_popup_pref", upNextMode)
                     put("up_next_time_pref", upNextTime)
                     put("autoplay_next_pref", autoplayNext)
+                    put("flaresolverr_enabled", flareEnabled)
+                    put("flaresolverr_url", flareUrl)
 
                     val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
                     serviceKeys.forEach { key ->

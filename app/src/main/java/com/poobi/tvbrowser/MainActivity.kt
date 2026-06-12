@@ -370,6 +370,87 @@ class MainActivity : AppCompatActivity() {
                             false
                         }
                     }
+
+                    override fun selectDialog(options: List<String>, heading: String): Int {
+                        val taskId = UUID.randomUUID().toString()
+                        val exchanger = PythonMessageBridge.postRequest(taskId)
+                        runOnUiThread {
+                            val items = options.map { it.cleanKodiText() }.toTypedArray()
+                            AlertDialog.Builder(this@MainActivity)
+                                .setTitle(heading.cleanKodiText().ifEmpty { "Select Option" })
+                                .setItems(items) { _, which ->
+                                    PythonMessageBridge.sendResponse(taskId, which)
+                                }
+                                .setNegativeButton("Cancel") { _, _ ->
+                                    PythonMessageBridge.sendResponse(taskId, -1)
+                                }
+                                .setOnCancelListener {
+                                    PythonMessageBridge.sendResponse(taskId, -1)
+                                }
+                                .show()
+                        }
+                        return try {
+                            exchanger.exchange(-1) as Int
+                        } catch (e: Exception) {
+                            -1
+                        }
+                    }
+
+                    override fun captchaDialog(imageBytes: ByteArray, heading: String): String? {
+                        val taskId = UUID.randomUUID().toString()
+                        val exchanger = PythonMessageBridge.postRequest(taskId)
+                        runOnUiThread {
+                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                            val imageView = android.widget.ImageView(this@MainActivity).apply {
+                                setImageBitmap(bitmap)
+                                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                                adjustViewBounds = true
+                            }
+                            
+                            val input = android.widget.EditText(this@MainActivity).apply {
+                                hint = "Enter solution or click on image"
+                            }
+                            
+                            val layout = android.widget.LinearLayout(this@MainActivity).apply {
+                                orientation = android.widget.LinearLayout.VERTICAL
+                                setPadding(40, 20, 40, 20)
+                                addView(imageView)
+                                addView(input)
+                            }
+                            
+                            val dialog = AlertDialog.Builder(this@MainActivity)
+                                .setTitle(heading.cleanKodiText())
+                                .setView(layout)
+                                .setPositiveButton("Submit") { _, _ -> 
+                                    PythonMessageBridge.sendResponse(taskId, input.text.toString())
+                                }
+                                .setNegativeButton("Cancel") { _, _ -> 
+                                    PythonMessageBridge.sendResponse(taskId, "")
+                                }
+                                .setOnCancelListener { 
+                                    PythonMessageBridge.sendResponse(taskId, "")
+                                }
+                                .create()
+                                
+                            imageView.setOnTouchListener { v, event ->
+                                if (event.action == android.view.MotionEvent.ACTION_DOWN) {
+                                    val x = (event.x * bitmap.width / v.width).toInt()
+                                    val y = (event.y * bitmap.height / v.height).toInt()
+                                    PythonMessageBridge.sendResponse(taskId, "COORD:$x,$y")
+                                    dialog.dismiss()
+                                    true
+                                } else false
+                            }
+                            
+                            dialog.show()
+                        }
+                        return try {
+                            val result = exchanger.exchange("") as String
+                            if (result.isEmpty()) null else result
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
                 })
             } catch (e: Exception) {
                 Log.e("TVBrowser", "Error registering background Python dialog listener", e)

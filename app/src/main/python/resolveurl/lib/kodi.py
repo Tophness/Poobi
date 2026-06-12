@@ -7,7 +7,8 @@ from resolveurl.lib import strings
 
 # Set up a generic path for ResolveURL to store settings
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_PROFILE_DIR = os.path.join(_BASE_DIR, 'userdata')
+_PROJECT_DIR = os.path.dirname(_BASE_DIR)
+_PROFILE_DIR = os.path.join(_PROJECT_DIR, 'userdata')
 if not os.path.exists(_PROFILE_DIR):
     os.makedirs(_PROFILE_DIR, exist_ok=True)
 _SETTINGS_FILE = os.path.join(_PROFILE_DIR, 'settings.json')
@@ -31,7 +32,7 @@ def set_setting(id, value):
         with open(_SETTINGS_FILE, 'w') as f: json.dump(settings, f)
     except Exception: pass
 
-def get_version(): return "5.1.0"
+def get_version(): return "5.1.202"
 def get_id(): return "script.module.resolveurl"
 def get_name(): return "ResolveURL"
 def kodi_version(): return 20.0

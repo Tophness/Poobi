@@ -9,7 +9,11 @@ import importlib.util
 import types
 import inspect
 import re
+import warnings
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 try:
     from com.chaquo.python import Python
@@ -52,11 +56,16 @@ CONFIG_FILE = os.path.join(USERDATA_PATH, 'config.json')
 if not os.path.exists(USERDATA_PATH): os.makedirs(USERDATA_PATH)
 
 # Add relevant paths to sys.path
-# We only add PROJECT_ROOT. Adding RESOLVEURL_PATH or SUBTITLES_PATH directly 
-# causes "lib" namespace collisions because both contain a "lib" folder.
 for path in [PROJECT_ROOT, MODULES_PATH, RESOLVEURL_PATH]:
     if path and path not in sys.path:
         sys.path.append(path)
+
+# Alias cfscrape to cloudscraper for resolvers that expect it
+try:
+    import modules.cfscrape as cloudscraper
+    sys.modules['cloudscraper'] = cloudscraper
+except ImportError:
+    pass
 
 # Patch subtitles manager to use writable FILES_DIR and avoid metadata permission errors on Android
 try:
@@ -86,7 +95,7 @@ except ImportError:
 DEFAULT_WHITELIST = [
     'vidsrc.me', '2embed.me', 'vidsrc.to', 'vidlink.org', 'vidsrc.mov', 
     '2embed.ru', '2embed.cc', 'goload.io', 'goload.pro', 'vidembed.cc',
-    'vidcloud9.com', 'voxzer.org', 'ronemo.com', 'streamembed.net',
+    'vidcloud9.com', 'vidembed.cc', 'voxzer.org', 'ronemo.com', 'streamembed.net',
     'databasegdriveplayer.co', 'bnwmovies.com', 'levidia.ch', 'mp4hydra.top',
     'vidsrc.fyi', 'vidrock.net', 'vidnest.fun', 'vidking.net',
     'vidfast.pro', 'vidup.to', 'videasy.net', '111movies.com',
@@ -129,7 +138,8 @@ def get_default_whitelist():
     hosts = list(DEFAULT_WHITELIST)
     if resolveurl and hasattr(resolveurl, 'relevant_resolvers'):
         try:
-            resolvers = resolveurl.relevant_resolvers(order_matters=True)
+            # We want the absolute maximum whitelist, so include everything
+            resolvers = resolveurl.relevant_resolvers(include_popups=True, include_universal=True, order_matters=True)
             for r in resolvers:
                 if not '*' in r.domains:
                     for d in r.domains:
@@ -167,7 +177,12 @@ def load_config():
         "sub_retention_days": 3,
         "up_next_popup_pref": "Ask",
         "up_next_time_pref": 20,
-        "autoplay_next_pref": "Closest Source"
+        "autoplay_next_pref": "Closest Source",
+        "flaresolverr_enabled": False,
+        "flaresolverr_url": "http://localhost:8191",
+        "allow_popups": True,
+        "allow_universal": True,
+        "auto_pick": True
     }
     
     # Initialize all detected packs as enabled by default in the base config
@@ -199,6 +214,20 @@ def save_config(cfg):
 
 GLOBAL_CONFIG = load_config()
 
+# Sync config with control module and ResolveURL
+try:
+    import modules.control as control
+    control._settings.update(GLOBAL_CONFIG)
+
+    # Also sync to ResolveURL settings
+    try:
+        import resolveurl.lib.kodi as rk
+        rk.set_setting('allow_popups', 'true' if GLOBAL_CONFIG.get('allow_popups', True) else 'false')
+        rk.set_setting('allow_universal', 'true' if GLOBAL_CONFIG.get('allow_universal', True) else 'false')
+    except: pass
+except ImportError:
+    pass
+
 class UniversalScraper:
     def __init__(self, enabled_packs):
         self.enabled_packs = enabled_packs
@@ -218,17 +247,32 @@ class UniversalScraper:
             self.hostDict = cfg.get("whitelisted_hosts", [])
             self.hostDict = list(set([h.lower() for h in self.hostDict]))
         else:
-            # When whitelist is OFF, we use an empty list instead of None.
-            # This prevents crashes in source files that do 'hostDict.append()'
-            # while 'source_utils.is_host_valid' is updated to treat empty as 'allow all'.
             self.hostDict = []
 
         # Subset of the whitelist that corresponds to provider-pack source domains
-        # (e.g. 'freeprojecttv.cyou'). Used to skip entire providers whose
-        # self.domains are not in the whitelist. Only meaningful when hostDict
-        # is non-empty (i.e. the whitelist is active).
         provider_set = set(gather_provider_pack_hosts())
         self.provider_hosts = [h for h in self.hostDict if h in provider_set]
+
+        # Get captcha hosts from resolveurl
+        self.captcha_hosts = set(['flashx.tv', 'flashx.to', 'uptobox.com', 'uptostream.com', 'vshare.eu', 'rabbitstream.net', 'dokicloud.one', 'waaw.ac', 'waaw.tv', 'waaw.to', 'netu.ac', 'hqq.ac', 'brupload.net', 'dailyuploads.net', 'vshare.io'])
+        if resolveurl and hasattr(resolveurl, 'relevant_resolvers'):
+            try:
+                resolvers = resolveurl.relevant_resolvers(include_popups=True, include_universal=True)
+                for r in resolvers:
+                    try:
+                        # Check both class and instance for isPopup
+                        is_popup = False
+                        if hasattr(r, 'isPopup'):
+                            if inspect.ismethod(r.isPopup) or inspect.isfunction(r.isPopup):
+                                is_popup = r.isPopup()
+                            else:
+                                is_popup = r.isPopup
+
+                        if is_popup:
+                            for d in getattr(r, 'domains', []):
+                                self.captcha_hosts.add(d.lower())
+                    except: pass
+            except: pass
 
     def getSources(self, title, year, imdb, tmdb, tvdb='0', season=None, episode=None, tvshowtitle=None, premiered='0'):
         providers = []
@@ -250,16 +294,11 @@ class UniversalScraper:
                         spec.loader.exec_module(mod)
                         if hasattr(mod, 'source'):
                             instance = mod.source()
-                            # If the whitelist is active and the provider declared
-                            # one or more self.domains, require at least one of them
-                            # to be whitelisted. Providers with empty domains are
-                            # always allowed (no info to filter on).
                             instance_domains = [d.lower() for d in (getattr(instance, 'domains', None) or [])]
                             if self.hostDict and instance_domains:
                                 if not any(d in self.provider_hosts for d in instance_domains):
                                     continue
                             providers.append((pack, file[:-3], instance))
-                            # Use a unique key for provider instances to avoid collisions between packs
                             self.provider_instances[f"{pack}_{file[:-3]}"] = instance
                     except Exception:
                         pass
@@ -281,8 +320,6 @@ class UniversalScraper:
         self.status["message"] = f"Found {len(compatible_providers)} compatible providers..."
 
         aliases_str = "[]"
-        
-        # We limit the concurrency to 3 threads to prevent high context-switching and high memory pressure on low-RAM device
         executor = ThreadPoolExecutor(max_workers=3)
         futures = []
 
@@ -321,7 +358,7 @@ class UniversalScraper:
                     self.status["message"] = "Stopped!"
                     break
                 self.status["message"] = "Resuming..."
-                time.sleep(0.1) # Let threads catch up
+                time.sleep(0.1)
 
             elapsed = time.monotonic() - start_time - paused_duration
             if elapsed > max_wait: 
@@ -332,7 +369,6 @@ class UniversalScraper:
             self.status["message"] = f"Waiting for {alive} providers ({round(max_wait - elapsed)}s left)..."
             time.sleep(0.5)
 
-        # Cancel any pending futures that haven't run yet to save CPU and network resources
         for f in futures:
             f.cancel()
         executor.shutdown(wait=False)
@@ -343,13 +379,11 @@ class UniversalScraper:
             else:
                 self.status["message"] = f"Timeout reached! Found {len(self.sources)} sources."
 
-        # Quality sorting
         quality_map = {'4k': 0, '1080p': 1, '720p': 2, 'hd': 2, 'sd': 3, 'cam': 4, 'scr': 4}
         for s in self.sources:
             s['q_sort'] = quality_map.get(str(s.get('quality')).lower(), 3)
         self.sources.sort(key=lambda x: x['q_sort'])
 
-        # Final filtering: Ensure every result has a 'provider' and 'source' field
         for s in self.sources:
             if 'source' not in s and 'host' in s: s['source'] = s['host']
             if 'provider' not in s: s['provider'] = '[Unknown]'
@@ -401,7 +435,6 @@ class UniversalScraper:
                         if self.stop_event.is_set(): break
                         res.setdefault('provider', f"[{pack_name}] {name}")
                         res.setdefault('direct', False)
-                        # Store the internal key for resolution
                         res['provider_key'] = f"{pack_name}_{name}"
                     self.sources.extend(results)
             self.status["current"] += 1
@@ -412,6 +445,7 @@ class UniversalScraper:
         url = source_data.get('url')
         provider_key = source_data.get('provider_key')
         is_video = source_data.get('direct', False)
+        print(f"[DEBUG] resolveSource: starting for {url[:100]} (Direct: {is_video})")
 
         if provider_key in self.provider_instances:
             provider = self.provider_instances[provider_key]
@@ -420,10 +454,10 @@ class UniversalScraper:
                     new_url = provider.resolve(url)
                     if new_url:
                         url = new_url
-                        # If the provider resolved it, we tend to treat it as video 
-                        # unless it's obviously a webpage
                         is_video = True
-                except: pass
+                        print(f"[DEBUG] resolveSource: provider resolved to {url[:100]}")
+                except Exception as e:
+                    print(f"[DEBUG] resolveSource: provider resolve error: {e}")
 
         if not url: return None, False
 
@@ -436,14 +470,23 @@ class UniversalScraper:
 
         if resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
             try:
-                if resolveurl.HostedMediaFile(url):
-                    resolved = resolveurl.resolve(url)
-                    if resolved: return resolved, True
-            except: pass
+                print(f"[DEBUG] resolveSource: checking HostedMediaFile for {url[:100]}")
+                hmf = resolveurl.HostedMediaFile(url)
+                if hmf:
+                    print(f"[DEBUG] resolveSource: HostedMediaFile MATCHED. Resolving...")
+                    resolved = hmf.resolve()
+                    if resolved:
+                        print(f"[DEBUG] resolveSource: resolveurl success: {str(resolved)[:100]}")
+                        return resolved, True
+                    else:
+                        print(f"[DEBUG] resolveSource: resolveurl returned None/False")
+                else:
+                    print(f"[DEBUG] resolveSource: HostedMediaFile did not match any resolvers")
+            except Exception as e:
+                print(f"[DEBUG] resolveSource: resolveurl error: {e}")
+                traceback.print_exc()
             
-        # Fallback check for direct links or common video extensions
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
-        # Also check for common video hosting keywords if it's not a known extension
         video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
         
         url_lower = url.lower()
@@ -462,15 +505,12 @@ def set_config(cfg_json):
     try:
         cfg = json.loads(cfg_json)
         global GLOBAL_CONFIG
-        
-        # If enabled_packs list is provided, update individual pack_ flags to keep in sync
         if "enabled_packs" in cfg:
             enabled = cfg["enabled_packs"]
             if os.path.exists(SOURCES_PATH):
                 for d in os.listdir(SOURCES_PATH):
                     if os.path.isdir(os.path.join(SOURCES_PATH, d)):
                         GLOBAL_CONFIG[f"pack_{d}"] = d in enabled
-
         GLOBAL_CONFIG.update(cfg)
         save_config(GLOBAL_CONFIG)
         return "Success"
@@ -489,7 +529,7 @@ def get_all_hosts():
         resolveurl_hosts = set()
         if resolveurl and hasattr(resolveurl, 'relevant_resolvers'):
             try:
-                resolvers = resolveurl.relevant_resolvers(order_matters=True)
+                resolvers = resolveurl.relevant_resolvers(include_popups=True, include_universal=True, order_matters=True)
                 for r in resolvers:
                     if hasattr(r, 'domains') and r.domains:
                         for dom in r.domains:
@@ -497,7 +537,6 @@ def get_all_hosts():
                                 resolveurl_hosts.add(dom.lower())
             except: pass
         
-        # Add scrape_sources.py hosts to resolveurl category
         try:
             scrape_sources_path = os.path.join(PROJECT_ROOT, 'modules', 'scrape_sources.py')
             if os.path.exists(scrape_sources_path):
@@ -511,9 +550,7 @@ def get_all_hosts():
         except: pass
 
         provider_hosts = set(gather_provider_pack_hosts())
-        # Remove duplicates from provider_hosts if they are already in resolveurl_hosts
         provider_hosts = provider_hosts - resolveurl_hosts
-        
         return json.dumps({
             "ResolveURL Hosts": sorted(list(resolveurl_hosts)),
             "Provider Pack Hosts": sorted(list(provider_hosts))
@@ -547,22 +584,11 @@ def search_subtitles(item_json, season=None, episode=None):
         tmdb_id = str(item['id'])
         api_key = "f5608fba6ab49e9985828b35d5653321"
         media_type = item.get('media_type', 'movie')
-        
         ext_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}/external_ids?api_key={api_key}"
         imdb_id = requests.get(ext_url).json().get('imdb_id', '0')
-        
         title = item.get('orig_title') or item.get('title')
         year = item.get('year') or (item.get('release_date') or '0000')[:4]
-
-        results = sub_manager.search_subtitles(
-            imdb_id=imdb_id,
-            title=title,
-            year=year,
-            season=season,
-            episode=episode,
-            tvshow=title if media_type == 'tv' else None,
-            settings=GLOBAL_CONFIG
-        )
+        results = sub_manager.search_subtitles(imdb_id=imdb_id, title=title, year=year, season=season, episode=episode, tvshow=title if media_type == 'tv' else None, settings=GLOBAL_CONFIG)
         return json.dumps(results or [])
     except Exception:
         traceback.print_exc()
@@ -572,11 +598,7 @@ def get_subtitle_file(service_name, action_args_json):
     try:
         import subtitles.manager as sub_manager
         action_args = json.loads(action_args_json)
-        filepath = sub_manager.download_subtitle(
-            service_name,
-            action_args,
-            settings=GLOBAL_CONFIG
-        )
+        filepath = sub_manager.download_subtitle(service_name, action_args, settings=GLOBAL_CONFIG)
         return filepath if filepath else ""
     except Exception:
         traceback.print_exc()
@@ -588,47 +610,63 @@ def get_scrape_status():
     if s_inst:
         res = s_inst.status.copy()
         sources = s_inst.sources[:]
-        
-        # Check if we have cached display results for this count to save CPU
-        cached_count = getattr(s_inst, "_last_format_count", -1)
-        if cached_count == len(sources) and hasattr(s_inst, "_cached_display_sources"):
+        if getattr(s_inst, "_last_format_count", -1) == len(sources) and hasattr(s_inst, "_cached_display_sources"):
             res["sources"] = s_inst._cached_display_sources
             return json.dumps(res)
 
         display_sources = []
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
         video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
-
-        # Quality sorting for current sources
         quality_map = {'4k': 0, '1080p': 1, '720p': 2, 'hd': 2, 'sd': 3, 'cam': 4, 'scr': 4}
         for s in sources:
             s['q_sort'] = quality_map.get(str(s.get('quality')).lower(), 3)
         sources.sort(key=lambda x: x['q_sort'])
 
-        for s in sources:
-            is_video = s.get('is_video')
-            if is_video is None:
-                is_video = s.get('direct', False)
-                if not is_video:
-                    url = s.get('url', '')
-                    url_lower = url.lower()
-                    if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
-                        is_video = True
-                    elif any(k in url_lower for k in video_keywords):
-                        is_video = True
-                    elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
-                        try:
-                            if resolveurl.HostedMediaFile(url):
-                                is_video = True
-                        except: pass
-                s['is_video'] = is_video
+        try:
+            for s in sources:
+                is_video = s.get('is_video')
+                if is_video is None:
+                    is_video = s.get('direct', False)
+                    if not is_video:
+                        url = s.get('url', '')
+                        url_lower = url.lower()
+                        if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
+                            is_video = True
+                        elif any(k in url_lower for k in video_keywords):
+                            is_video = True
+                        elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
+                            try:
+                                if not hasattr(UniversalScraper, "_ui_resolvable_cache"):
+                                    UniversalScraper._ui_resolvable_cache = {}
+                                domain = urlparse(url).netloc.lower() if url else ''
+                                if domain and domain in UniversalScraper._ui_resolvable_cache:
+                                    is_video = UniversalScraper._ui_resolvable_cache[domain]
+                                elif domain:
+                                    if resolveurl.HostedMediaFile(url):
+                                        is_video = True
+                                    UniversalScraper._ui_resolvable_cache[domain] = is_video
+                            except Exception as e: pass
+                    s['is_video'] = is_video
 
-            title_prefix = "[BROWSER] " if not is_video else ""
-            display_sources.append({
-                "title": f"{title_prefix}[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
-                "source_data": json.dumps(s)
-            })
-        
+                is_captcha = s.get('requires_captcha')
+                if is_captcha is None:
+                    url = s.get('url', '')
+                    domain = urlparse(url).netloc.lower() if url else ''
+                    source_name = s.get('source', '').lower()
+                    is_captcha = False
+                    for h in s_inst.captcha_hosts:
+                        if h in domain or domain in h or h in source_name or source_name in h:
+                            is_captcha = True
+                            break
+                    s['requires_captcha'] = is_captcha
+
+                title_prefix = "[BROWSER] " if not is_video else ""
+                captcha_prefix = "[CAPTCHA] " if is_captcha else ""
+                display_sources.append({
+                    "title": f"{title_prefix}{captcha_prefix}[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
+                    "source_data": json.dumps(s)
+                })
+        except Exception as e: pass
         s_inst._last_format_count = len(sources)
         s_inst._cached_display_sources = display_sources
         res["sources"] = display_sources
@@ -639,7 +677,7 @@ def stop_scrape():
     global active_scraper
     if active_scraper:
         active_scraper.stop_event.set()
-        active_scraper.pause_event.set() # Unpause if paused so threads can exit
+        active_scraper.pause_event.set()
         return "Stopped"
     return "No active scraper"
 
@@ -661,43 +699,17 @@ def resume_scrape():
 
 def search(query):
     try:
-        # TMDB Search
         api_key = "55d4ea0acb04a10053c2be637eb707a9"
-        # Try multi search
         res = requests.get(f"https://api.themoviedb.org/3/search/multi?api_key={api_key}&query={query.replace(' ', '+')}").json().get('results', [])
-
         filtered = []
         for item in res:
             media_type = item.get('media_type')
             if media_type in ['movie', 'tv']:
                 title = item.get('title') or item.get('name')
                 year = (item.get('release_date') or item.get('first_air_date') or '0000')[:4]
-                filtered.append({
-                    "title": f"{title} ({year})",
-                    "id": item['id'],
-                    "media_type": media_type,
-                    "release_date": item.get('release_date') or item.get('first_air_date'),
-                    "overview": item.get('overview'),
-                    "poster_path": item.get('poster_path'),
-                    "backdrop_path": item.get('backdrop_path'),
-                    "vote_average": item.get('vote_average'),
-                    "genre_ids": item.get('genre_ids', []),
-                    "orig_title": title,
-                    "year": year
-                })
-            elif media_type == 'person':
-                filtered.append({
-                    "title": item.get('name'),
-                    "id": item['id'],
-                    "media_type": "person",
-                    "overview": f"Known for: {item.get('known_for_department')}",
-                    "poster_path": item.get('profile_path'),
-                    "orig_title": item.get('name'),
-                    "year": ""
-                })
+                filtered.append({"title": f"{title} ({year})", "id": item['id'], "media_type": media_type, "release_date": item.get('release_date') or item.get('first_air_date'), "overview": item.get('overview'), "poster_path": item.get('poster_path'), "backdrop_path": item.get('backdrop_path'), "vote_average": item.get('vote_average'), "genre_ids": item.get('genre_ids', []), "orig_title": title, "year": year})
         return json.dumps(filtered)
-    except Exception as e:
-        return json.dumps([{"title": f"Error: {str(e)}", "url": ""}])
+    except Exception as e: return json.dumps([{"title": f"Error: {str(e)}", "url": ""}])
 
 def scrape(item_json, season=None, episode=None):
     global active_scraper
@@ -707,85 +719,62 @@ def scrape(item_json, season=None, episode=None):
         tmdb_id = str(item['id'])
         api_key = "f5608fba6ab49e9985828b35d5653321"
         media_type = item.get('media_type', 'movie')
-        
         ext_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}/external_ids?api_key={api_key}"
         imdb_id = requests.get(ext_url).json().get('imdb_id', '0')
-        
-        # Get enabled packs
-        if not os.path.exists(SOURCES_PATH):
-            return json.dumps([{"title": f"Error: SOURCES_PATH not found at {SOURCES_PATH}", "source_data": ""}])
-
+        if not os.path.exists(SOURCES_PATH): return json.dumps([{"title": "Error: SOURCES_PATH not found", "source_data": ""}])
         packs = [d for d in os.listdir(SOURCES_PATH) if os.path.isdir(os.path.join(SOURCES_PATH, d))]
-        
         enabled_packs = GLOBAL_CONFIG.get("enabled_packs")
-        if enabled_packs is None:
-            # Fallback to individual flags, which default to True in load_config
-            enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
-        
+        if enabled_packs is None: enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
         active_scraper = UniversalScraper(enabled_packs)
-        
         title = item.get('orig_title') or item.get('title')
         year = item.get('year') or '0000'
-        
-        sources = active_scraper.getSources(
-            title=title, 
-            year=year, 
-            imdb=imdb_id, 
-            tmdb=tmdb_id,
-            tvshowtitle=title if media_type == 'tv' else None,
-            season=season,
-            episode=episode
-        )
-        
-        # Format for display
+        sources = active_scraper.getSources(title=title, year=year, imdb=imdb_id, tmdb=tmdb_id, tvshowtitle=title if media_type == 'tv' else None, season=season, episode=episode)
         display_sources = []
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
         video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
-        
-        for s in sources:
-            is_video = s.get('is_video')
-            if is_video is None:
-                is_video = s.get('direct', False)
-                if not is_video:
+        try:
+            for s in sources:
+                is_video = s.get('is_video')
+                if is_video is None:
+                    is_video = s.get('direct', False)
+                    if not is_video:
+                        url = s.get('url', '')
+                        url_lower = url.lower()
+                        if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower: is_video = True
+                        elif any(k in url_lower for k in video_keywords): is_video = True
+                        elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
+                            try:
+                                if not hasattr(UniversalScraper, "_ui_resolvable_cache"): UniversalScraper._ui_resolvable_cache = {}
+                                domain = urlparse(url).netloc.lower() if url else ''
+                                if domain and domain in UniversalScraper._ui_resolvable_cache: is_video = UniversalScraper._ui_resolvable_cache[domain]
+                                elif domain:
+                                    if resolveurl.HostedMediaFile(url): is_video = True
+                                    UniversalScraper._ui_resolvable_cache[domain] = is_video
+                            except: pass
+                    s['is_video'] = is_video
+                is_captcha = s.get('requires_captcha')
+                if is_captcha is None:
                     url = s.get('url', '')
-                    url_lower = url.lower()
-                    if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
-                        is_video = True
-                    elif any(k in url_lower for k in video_keywords):
-                        is_video = True
-                    elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
-                        try:
-                            if resolveurl.HostedMediaFile(url):
-                                is_video = True
-                        except: pass
-                s['is_video'] = is_video
-
-            title_prefix = "[BROWSER] " if not is_video else ""
-            display_sources.append({
-                "title": f"{title_prefix}[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
-                "source_data": json.dumps(s)
-            })
-            
+                    domain = urlparse(url).netloc.lower() if url else ''
+                    source_name = s.get('source', '').lower()
+                    is_captcha = False
+                    for h in active_scraper.captcha_hosts:
+                        if h in domain or domain in h or h in source_name or source_name in h: is_captcha = True; break
+                    s['requires_captcha'] = is_captcha
+                title_prefix = "[BROWSER] " if not is_video else ""
+                captcha_prefix = "[CAPTCHA] " if is_captcha else ""
+                display_sources.append({"title": f"{title_prefix}{captcha_prefix}[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})", "source_data": json.dumps(s)})
+        except: pass
         return json.dumps(display_sources)
-    except Exception as e:
-        traceback.print_exc()
-        return json.dumps([{"title": f"Scrape Error: {str(e)}", "source_data": ""}])
-    finally:
-        active_scraper = None
+    except Exception as e: return json.dumps([{"title": f"Scrape Error: {str(e)}", "source_data": ""}])
+    finally: active_scraper = None
 
 def resolve(source_data_json):
     try:
         source_data = json.loads(source_data_json)
-        # Get enabled packs
-        packs = [d for d in os.listdir(SOURCES_PATH) if os.path.isdir(os.path.join(SOURCES_PATH, d))]
-        enabled_packs = GLOBAL_CONFIG.get("enabled_packs")
-        if enabled_packs is None:
-            enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
-        
-        scraper = UniversalScraper(enabled_packs)
+        scraper = UniversalScraper(GLOBAL_CONFIG.get("enabled_packs", []))
         url, is_video = scraper.resolveSource(source_data)
         return json.dumps({"url": url if url else "", "is_video": is_video})
-    except Exception as e:
-        return json.dumps({"error": str(e)})
+    except Exception as e: return json.dumps({"error": str(e)})
 
 # --- END ANDROID BRIDGE ---

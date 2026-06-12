@@ -24,12 +24,32 @@ from resolveurl.lib import recaptcha_v2
 from resolveurl.lib import helpers
 import base64
 
+from resources.lib.modules import control
+
 net = common.Net()
 IMG_FILE = 'captcha_img.gif'
 
 
 def get_response(img, x=450, y=225, w=400, h=130):
-    print(f"\n[CAPTCHA REQUIRED] Please view the captcha image at: {img}")
+    print(f"[DEBUG] captcha_lib.get_response: starting for {img}")
+    if os.path.exists(img):
+        with open(img, 'rb') as f:
+            image_bytes = f.read()
+        res = control.captchaDialog(image_bytes)
+        print(f"[DEBUG] captcha_lib.get_response: listener returned: {res}")
+        return res
+
+    # Fallback for URL or if file read failed
+    try:
+        if img.startswith('http'):
+            image_bytes = net.http_GET(img).nodecode(True).content
+            res = control.captchaDialog(image_bytes)
+            print(f"[DEBUG] captcha_lib.get_response: listener returned: {res}")
+            return res
+    except:
+        pass
+
+    print(f"[DEBUG] captcha_lib.get_response: falling back to input()")
     return input("Enter Captcha: ")
 
 

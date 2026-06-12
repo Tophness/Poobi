@@ -4,7 +4,7 @@
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
+    the Free Software Foundation, either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -19,8 +19,6 @@
 import codecs
 import json
 import re
-
-from base64 import b64decode
 from random import choice
 from six.moves import urllib_parse
 from resolveurl.lib import helpers, captcha_window
@@ -41,11 +39,19 @@ class WaawResolver(ResolveUrl):
     pattern = r'(?://|\.)((?:you|stb)?(?:waaw|netu|hqq|doplay|brightmindwave|ncdn22|oyohd|' \
               r'player\.sorozatok|vidmoly|0gomovies)' \
               r'\.(?:ac|tv|to|store|c[ao]m|xyz|one|me|beer))/' \
-              r'(?:(?:watch_video|embed_player)\.php\?v=|.+?\?vid=|e/|f/)([a-zA-Z0-9]+)'
+              r'(?:(?:watch_video|embed_player)\.php\?v=|.+?\?vid=|e/|f/)([a-zA-Z0-9$:/]+)'
 
     def get_media_url(self, host, media_id, subs=False):
+        print(f"[DEBUG] WaawResolver.get_media_url: media_id={media_id}")
+        if '$$' in media_id:
+            media_id, referer = media_id.split('$$')
+            referer = urllib_parse.urljoin(referer, '/')
+        else:
+            referer = False
         web_url = self.get_url(host, media_id)
-        headers = {'User-Agent': common.FF_USER_AGENT}
+        headers = {'User-Agent': common.RAND_UA}
+        if referer:
+            headers.update({'Referer': referer})
         html = self.net.http_GET(web_url, headers=headers).content
         r = re.search(r"'videoid':\s*'([^']+)", html)
         if r:
@@ -65,18 +71,22 @@ class WaawResolver(ResolveUrl):
                 'Origin': urllib_parse.urljoin(web_url, '/')[:-1],
                 'X-Requested-With': 'XMLHttpRequest'
             })
+            print(f"[DEBUG] WaawResolver: requesting player image with videoid={video_id}")
             imgurl = urllib_parse.urljoin(web_url, '/player/get_player_image.php')
             html2 = self.net.http_POST(imgurl, form_data=data, headers=headers, jdata=True).content
             if 'Video not found' in html2:
+                print(f"[DEBUG] WaawResolver: Video not found in image request response")
                 raise ResolverError('Video Not Found')
             json_data = json.loads(html2)
 
             if json_data.get('try_again') == '1':
+                print(f"[DEBUG] WaawResolver: 'try_again' detected in image request response")
                 raise ResolverError('Too many attempts. Please try again later.')
 
             hash_img = json_data['hash_image']
-            image = json_data['image'].replace('data:image/jpeg;base64,', '')
-            image = b64decode(image + "==")
+            image = re.sub(r'data:image/(?:png|jpeg);base64,', '', json_data['image'])
+            image = helpers.b64decode(image, binary=True)
+            print(f"[DEBUG] WaawResolver: starting CaptchaWindow modal")
             window = captcha_window.CaptchaWindow(image, 400, 400)
             window.doModal()
 

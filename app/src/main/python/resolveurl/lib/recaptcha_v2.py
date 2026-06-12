@@ -23,13 +23,31 @@ import re
 import os
 from resolveurl import common
 
+from resources.lib.modules import control
+
 logger = common.log_utils.Logger.get_logger(__name__)
 logger.disable()
 
 
 class cInputWindow(object):
-    def __init__(self, *args, **kwargs): pass
-    def get(self): return []
+    def __init__(self, *args, **kwargs):
+        self.captcha_url = kwargs.get('captcha')
+        self.msg = kwargs.get('msg')
+        self.iteration = kwargs.get('iteration')
+
+    def get(self):
+        # captcha_url is a URL, we need to fetch it first to show in dialog
+        try:
+            image_bytes = common.Net().http_GET(self.captcha_url).nodecode(True).content
+            res = control.captchaDialog(image_bytes, self.msg)
+            if res:
+                # Recaptcha fallback expects indices if it's a grid, but here we'll just return what user typed
+                # or if they clicked, we might need to translate that to indices.
+                # For simplicity, if they clicked, return COORD string.
+                return res
+        except:
+            pass
+        return []
 
 
 class UnCaptchaReCaptcha:

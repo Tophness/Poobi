@@ -327,6 +327,141 @@ def request(url, close=True, redirect=True, error=False, verify=True, post=None,
 
 
 _cf_sessions = {}
+_flare_cookie_cache = {}
+_FLARE_CACHE_TTL = 25 * 60
+
+
+def _flaresolverr_url():
+    """Read FlareSolverr endpoint from addon settings.  Empty -> disabled."""
+    try:
+        enabled = control.setting('flaresolverr.enabled') == 'true'
+        if not enabled:
+            return ''
+        url = (control.setting('flaresolverr.url') or '').strip()
+    except Exception:
+        url = ''
+    return url
+
+
+def _is_cf_challenge(page):
+    """Detect a Cloudflare managed-challenge / IUAM / interstitial response."""
+    try:
+        if page is None:
+            return False
+        srv = (page.headers.get('Server') or '').lower() if hasattr(page, 'headers') else ''
+        mit = (page.headers.get('cf-mitigated') or '').lower() if hasattr(page, 'headers') else ''
+        body = getattr(page, 'text', '') or ''
+        if mit == 'challenge':
+            return True
+        head = body[:2000]
+        if ('Just a moment' in head or 'cf-chl' in head or
+                'challenge-platform' in head or '__cf_chl_' in head):
+            return True
+        code = getattr(page, 'status_code', 0)
+        if code in (403, 503) and 'cloudflare' in srv:
+            return True
+        return False
+    except Exception:
+        return False
+
+
+class _FsrResponse(object):
+    """Minimal duck-typed Response."""
+    __slots__ = ('text', 'status_code', 'headers', 'url', 'encoding', 'content', 'cookies', 'user_agent')
+    def __init__(self, text, status_code, headers, url, cookies=None, user_agent=None):
+        self.text = text or ''
+        self.status_code = int(status_code or 0)
+        self.headers = headers or {}
+        self.url = url or ''
+        self.encoding = 'utf-8'
+        self.cookies = cookies or []
+        self.user_agent = user_agent or ''
+        try:
+            self.content = self.text.encode('utf-8', 'replace')
+        except Exception:
+            self.content = b''
+
+
+def _host_key(target_url):
+    try:
+        host = (urllib_parse.urlparse(target_url).hostname or '').lower()
+        if host.startswith('www.'):
+            host = host[4:]
+        return host
+    except Exception:
+        return ''
+
+
+def _get_flare_cookies(target_url):
+    host = _host_key(target_url)
+    if not host:
+        return None, None
+    entry = _flare_cookie_cache.get(host)
+    if not entry:
+        return None, None
+    if entry.get('expires', 0) < time.time():
+        _flare_cookie_cache.pop(host, None)
+        return None, None
+    return entry.get('cookie_header'), entry.get('user_agent')
+
+
+def _store_flare_cookies(target_url, cookies, user_agent):
+    host = _host_key(target_url)
+    if not host or not cookies:
+        return
+    pairs = []
+    for c in cookies:
+        try:
+            n = c.get('name')
+            v = c.get('value', '')
+            if n:
+                pairs.append('%s=%s' % (n, v))
+        except Exception:
+            continue
+    if not pairs:
+        return
+    _flare_cookie_cache[host] = {
+        'cookie_header': '; '.join(pairs),
+        'user_agent': user_agent or UserAgent,
+        'expires': time.time() + _FLARE_CACHE_TTL,
+    }
+
+
+def _flaresolverr_request(fsr_url, target_url, post=None, timeout=30):
+    try:
+        endpoint = fsr_url.rstrip('/')
+        if not endpoint.endswith('/v1'):
+            endpoint = endpoint + '/v1'
+        body = {
+            'cmd': 'request.post' if post else 'request.get',
+            'url': target_url,
+            'maxTimeout': max(int(timeout) * 1000, 30000),
+        }
+        if post:
+            try:
+                body['postData'] = urllib_parse.urlencode(post) if isinstance(post, dict) else str(post)
+            except Exception:
+                body['postData'] = str(post)
+        r = requests.post(endpoint, json=body, timeout=int(timeout) + 10)
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        if data.get('status') != 'ok':
+            return None
+        sol = data.get('solution') or {}
+        cookies = sol.get('cookies') or []
+        user_agent = sol.get('userAgent') or ''
+        _store_flare_cookies(target_url, cookies, user_agent)
+        return _FsrResponse(
+            text=sol.get('response', ''),
+            status_code=sol.get('status', 0),
+            headers=sol.get('headers', {}) or {},
+            url=sol.get('url', target_url),
+            cookies=cookies,
+            user_agent=user_agent,
+        )
+    except Exception:
+        return None
 
 
 def scrapePage(url, referer=None, headers=None, post=None, cookie=None, timeout='10'):
@@ -335,6 +470,9 @@ def scrapePage(url, referer=None, headers=None, post=None, cookie=None, timeout=
             return
         url =  "https:" + url if url.startswith('//') else url
         netloc = urllib_parse.urlparse(url).netloc
+
+        flare_cookie, flare_ua = _get_flare_cookies(url)
+
         session = _cf_sessions.get(netloc)
         if session is None:
             try:
@@ -352,37 +490,35 @@ def scrapePage(url, referer=None, headers=None, post=None, cookie=None, timeout=
                 elements = urllib_parse.urlparse(url)
                 base = '%s://%s' % (elements.scheme, (elements.netloc or elements.path))
                 session.headers.update({'Referer': base})
-            if (cookie and not 'Cookie' in session.headers): # not tested yet, just placed as a idea reminder.
+            if (cookie and not 'Cookie' in session.headers):
                 session.headers.update({'Cookie': cookie})
             if not 'User-Agent' in session.headers:
                 session.headers.update({'User-Agent': UserAgent})
+
+            if flare_cookie:
+                existing = session.headers.get('Cookie') or session.headers.get(_COOKIE_HEADER) or ''
+                merged = (existing + '; ' + flare_cookie).strip('; ') if existing else flare_cookie
+                session.headers['Cookie'] = merged
+                if flare_ua:
+                    session.headers['User-Agent'] = flare_ua
+
             if post:
                 page = session.post(url, data=post, timeout=int(timeout))
             else:
                 page = session.get(url, timeout=int(timeout))
 
-            if page.status_code in [404, 403, 500, 502, 503, 504]:
-                log_utils.log('scrapePage - Skipping due to unreachable status %s for url: %s' % (page.status_code, url))
+            if _is_cf_challenge(page):
+                fsr = _flaresolverr_url()
+                if fsr:
+                    print(f"[DEBUG] Cloudflare detected, attempting FlareSolverr for {url}")
+                    fsr_resp = _flaresolverr_request(fsr, url, post=post, timeout=int(timeout))
+                    if fsr_resp is not None and fsr_resp.status_code and fsr_resp.status_code < 400:
+                        return fsr_resp
+            elif page.status_code in [404, 500, 502, 504]:
+                print(f"[DEBUG] scrapePage error {page.status_code} for {url}")
                 return None
 
-            ###################################################################
-            """## A ghetto fix for blockage that could probably be coded better.
-            resp_code = str(page.status_code)
-            resp_header = page.headers
-            resp_server = resp_header['Server']
-            if resp_code in ['403', '503'] and resp_server == 'cloudflare':
-                #log_utils.log('scrapePage - url with cloudflare: ' + repr(url))
-                corsproxy = 'https://corsproxy.io/?' + url
-                #corsproxy = 'https://proxy.iamcdn.net/sub?url=' + url
-                #corsproxy = 'https://api.allorigins.win/raw?url=' + url
-                if post:
-                    page = session.post(corsproxy, data=post, timeout=int(timeout))
-                else:
-                    page = session.get(corsproxy, timeout=int(timeout))
-            """
-            ###################################################################
             page.encoding = 'utf-8'
-            #page.raise_for_status()  # Commented out to make trakt progress option work properly again lol
         finally:
             pass
         return page

@@ -122,6 +122,11 @@ def is_host_valid(url, domains):
             if any([h for h in ['akamaized', 'ocloud'] if h in host]):
                 host = 'CDN'
             return True, host
+
+        # Special case: allow all domains if they are just raw IP or non-standard format
+        # and we don't have a strict whitelist matching.
+        # But here we follow the provided domains list.
+
         hosts = [domain.lower() for domain in domains if host and host in domain.lower()]
         if hosts and '.' not in host:
             host = hosts[0]
@@ -129,6 +134,9 @@ def is_host_valid(url, domains):
             host = 'gvideo'
         if hosts and any([h for h in ['akamaized', 'ocloud'] if h in host]):
             host = 'CDN'
+
+        # If not in whitelist, we return valid=False so it gets filtered.
+        # However, Universal resolvers usually handle everything.
         return any(hosts), host
     except:
         return False, ''

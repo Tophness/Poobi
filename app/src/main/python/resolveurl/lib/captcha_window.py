@@ -18,10 +18,38 @@
 
 import os
 from resolveurl import common
+from resources.lib.modules import control
 
 class CaptchaWindow(object):
-    def __init__(self, image, width, height): pass
-    def close(self): pass
+    def __init__(self, image, width, height):
+        self.image = image
+        self.width = width
+        self.height = height
+        self.solution_x = 0
+        self.solution_y = 0
+        self.finished = False
+
+    def close(self):
+        pass
+
+    def doModal(self):
+        # image is binary data
+        print(f"[DEBUG] CaptchaWindow.doModal: starting control.captchaDialog (image size: {len(self.image)})")
+        res = control.captchaDialog(self.image, "Select point in image")
+        print(f"[DEBUG] CaptchaWindow.doModal: control.captchaDialog returned: {res}")
+        if res and res.startswith("COORD:"):
+            coords = res[6:].split(",")
+            self.solution_x = int(coords[0])
+            self.solution_y = int(coords[1])
+            self.finished = True
+        elif res:
+            # Maybe it returned text? Not for coordinate captcha though.
+            print(f"[DEBUG] CaptchaWindow.doModal: unexpected response format: {res}")
+            self.finished = False
+        else:
+            print(f"[DEBUG] CaptchaWindow.doModal: user cancelled or error occurred")
+            self.finished = False
+
     def get(self): 
         # Since we have no UI, prompt in terminal
         return input("Captcha required. Enter solution: ")
