@@ -10,6 +10,7 @@ import types
 import inspect
 import re
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse
 
 try:
     from com.chaquo.python import Python
@@ -618,8 +619,17 @@ def get_scrape_status():
                         is_video = True
                     elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
                         try:
-                            if resolveurl.HostedMediaFile(url):
-                                is_video = True
+                            # Use a global domain-based cache for the UI thread
+                            if not hasattr(UniversalScraper, "_ui_resolvable_cache"):
+                                UniversalScraper._ui_resolvable_cache = {}
+
+                            domain = urlparse(url).netloc.lower() if url else ''
+                            if domain and domain in UniversalScraper._ui_resolvable_cache:
+                                is_video = UniversalScraper._ui_resolvable_cache[domain]
+                            elif domain:
+                                if resolveurl.HostedMediaFile(url):
+                                    is_video = True
+                                UniversalScraper._ui_resolvable_cache[domain] = is_video
                         except: pass
                 s['is_video'] = is_video
 
@@ -755,8 +765,17 @@ def scrape(item_json, season=None, episode=None):
                         is_video = True
                     elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
                         try:
-                            if resolveurl.HostedMediaFile(url):
-                                is_video = True
+                            # Use a global domain-based cache for the UI thread
+                            if not hasattr(UniversalScraper, "_ui_resolvable_cache"):
+                                UniversalScraper._ui_resolvable_cache = {}
+
+                            domain = urlparse(url).netloc.lower() if url else ''
+                            if domain and domain in UniversalScraper._ui_resolvable_cache:
+                                is_video = UniversalScraper._ui_resolvable_cache[domain]
+                            elif domain:
+                                if resolveurl.HostedMediaFile(url):
+                                    is_video = True
+                                UniversalScraper._ui_resolvable_cache[domain] = is_video
                         except: pass
                 s['is_video'] = is_video
 
