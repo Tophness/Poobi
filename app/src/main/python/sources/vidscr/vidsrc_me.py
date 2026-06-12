@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import re
 import requests
-from urllib.parse import urlparse
+import time
+from urllib.parse import urlparse, urljoin
 
 class source:
     def __init__(self):
@@ -9,6 +10,10 @@ class source:
         self.domains = ['vidsrc.me', 'vidsrc.in', 'vidsrc.to', 'vidsrc.net', 'vidsrc.xyz', 'vidsrcme.ru', 'vidsrc.stream', 'vidsrc.icu']
         self.base_link = 'https://v2.vidsrc.me'
         self.ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+        self.cdn_pool = [
+            'shadowlandschronicles.com', 'cdn-centaurus.com', 'cdn-fnc.com',
+            'shadowlands-cdn.com', 'nestra-cdn.com', 'cloudnestra.com', 'tmstr-cdn.com'
+        ]
 
     def movie(self, imdb, tmdb, title, localtitle, aliases, year):
         return imdb if imdb else str(tmdb)
@@ -25,49 +30,159 @@ class source:
             content = 'movie' if '/' not in url else 'tv'
             embed_url = f"{self.base_link}/embed/{content}/{url}"
             s = requests.Session()
-            s.headers.update({'User-Agent': self.ua, 'Referer': self.base_link})
+            s.headers.update({
+                'User-Agent': self.ua,
+                'Referer': self.base_link,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Encoding': 'gzip, deflate'
+            })
             
-            r = s.get(embed_url, timeout=10).text
-            rcp_links = re.findall(r'src=["\'](//cloudnestra\.com/rcp/[^"\']+)["\']', r)
-            rcp_links += re.findall(r'src=["\'](https?://cloudnestra\.com/rcp/[^"\']+)["\']', r)
-            
-            # Also try vidsrc.stream / new variants with data-h pattern
-            data_h = re.findall(r'data-h=["\']([^"\']+)["\']', r)
-            if data_h:
-                # This would need XOR decoding logic from original vidsrc.py
-                # For now we'll stick to rcp links which are most common
-                pass
+            r = s.get(embed_url, timeout=15).text
+            servers = self._extract_servers(r)
 
-            for rcp in rcp_links:
-                if rcp.startswith('//'): rcp = 'https:' + rcp
-                try:
-                    self._resolve_cloudnestra(rcp, s, embed_url)
-                except: pass
+            for srv in servers[:5]:
+                if srv['type'] == 'cloudnestra':
+                    try:
+                        self._resolve_cloudnestra(srv['url'], s, embed_url, srv.get('name', 'Cloudnestra'))
+                    except: pass
         except: pass
         return self.results
 
-    def _resolve_cloudnestra(self, rcp_url, sess, referer):
+    def _extract_servers(self, html):
+        servers = []
+        seen = set()
+        def _add(url, name='Cloudnestra'):
+            if url and url not in seen:
+                seen.add(url)
+                servers.append({'type': 'cloudnestra', 'url': url, 'name': name})
+
+        for m in re.finditer(r'src=["\'](//cloudnestra\.com/rcp/[^"\']+)["\']', html):
+            _add('https:' + m.group(1))
+        for m in re.finditer(r'src=["\'](https?://cloudnestra\.com/rcp/[^"\']+)["\']', html):
+            _add(m.group(1))
+        for m in re.finditer(r'data-hash=["\']([^"\']+)["\'][^>]*data-i=["\'](\d+)["\']', html):
+            _add('https://cloudnestra.com/rcp/' + m.group(1), 'Cloudnestra #%s' % m.group(2))
+        for m in re.finditer(r'data-hash=["\']([^"\']+)["\']', html):
+            if len(m.group(1)) > 20:
+                _add('https://cloudnestra.com/rcp/' + m.group(1))
+        return servers
+
+    def _resolve_cloudnestra(self, rcp_url, sess, referer, server_name):
         r = sess.get(rcp_url, headers={'Referer': referer}, timeout=10).text
-        next_url = re.search(r'src=["\']([^"\']+/prorcp/[^"\']+)["\']', r)
+        rcp_host = urlparse(rcp_url).netloc
+
+        # Look for direct media in RCP page
+        self._find_and_add_direct(r, rcp_url, server_name)
+
+        next_url = self._find_next_hop(r, rcp_host)
         if next_url:
-            n_url = next_url.group(1)
-            if n_url.startswith('//'): n_url = 'https:' + n_url
-            r2 = sess.get(n_url, headers={'Referer': rcp_url}, timeout=10).text
+            r2 = sess.get(next_url, headers={'Referer': rcp_url}, timeout=10).text
+            self._find_and_add_direct(r2, next_url, server_name)
             
-            files = re.findall(r'file\s*:\s*["\']([^"\']+)["\']', r2)
-            for f in files:
-                if '.m3u8' in f or '.mp4' in f:
-                    parsed = urlparse(n_url)
-                    origin = f"{parsed.scheme}://{parsed.netloc}"
-                    final_url = f"{f}|Origin={origin}&Referer={origin}/&User-Agent={self.ua}"
-                    
+            # Pool parsing and expansion
+            pool = self._parse_server_pool(r2)
+            raw_files = re.findall(r'file\s*:\s*["\']([^"\']+)["\']', r2)
+            for raw_file in raw_files:
+                candidates = self._expand_templates(raw_file, pool)
+                for c in candidates:
+                    if '.m3u8' in c or '.mp4' in c:
+                        self.results.append({
+                            'source': server_name,
+                            'quality': '720p',
+                            'url': f"{c}|Referer=https://cloudnestra.com/&Origin=https://cloudnestra.com&User-Agent={self.ua}",
+                            'direct': True,
+                            'info': 'HLS' if '.m3u8' in c else 'MP4'
+                        })
+
+    def _find_next_hop(self, body, current_host):
+        # XOR hidden source
+        enc = re.search(r'data-h=["\']([0-9a-fA-F]+)["\']', body)
+        seed = re.search(r'data-i=["\']([^"\']+)["\']', body)
+        if enc and seed:
+            decoded = self._xor_decode(enc.group(1), seed.group(1))
+            if decoded: return urljoin(f"https://{current_host}", decoded)
+
+        # Iframe patterns
+        for pat in (
+            r'src\s*[:=]\s*["\']([^"\']*?/prorcp/[^"\']+)["\']',
+            r'["\'](/prorcp/[A-Za-z0-9+/=_\-]+)["\']',
+            r'["\'](/(?:prosrc|rcp2|source|embed/player|pe|nrcp)/[A-Za-z0-9+/=_\-]{8,})["\']',
+            r'atob\((["\'][A-Za-z0-9+/=]{20,}["\'])\)'
+        ):
+            m = re.search(pat, body)
+            if m:
+                candidate = m.group(1).strip('"\'')
+                if 'atob' in pat:
+                    try:
+                        import base64
+                        candidate = base64.b64decode(candidate + '==').decode('utf-8', errors='replace')
+                    except: continue
+                return urljoin(f"https://{current_host}", candidate)
+        return None
+
+    def _xor_decode(self, encoded_hex, seed):
+        try:
+            buf = bytes.fromhex(encoded_hex)
+            seed_b = seed.encode('utf-8')
+            out = bytearray(len(buf))
+            for i, b in enumerate(buf):
+                out[i] = b ^ seed_b[i % len(seed_b)]
+            return out.decode('utf-8', errors='replace')
+        except: return ''
+
+    def _find_and_add_direct(self, body, referer, server_name):
+        pats = [
+            r'file\s*:\s*["\']([^"\']+\.(?:m3u8|mp4)[^"\']*)["\']',
+            r'sources?\s*:\s*\[\s*\{[^}]*?file\s*:\s*["\']([^"\']+)["\']',
+            r'["\'](https?://[^"\']+\.(?:m3u8|mp4)[^"\']*)["\']',
+            r'(https?://[^\s\'"<>(){}]+?\.m3u8[^\s\'"<>(){}]*)',
+            r'atob\((["\'][A-Za-z0-9+/=]{40,}["\'])\)'
+        ]
+        for pat in pats:
+            for m in re.finditer(pat, body):
+                u = m.group(1).replace('\\/', '/').strip('"\'')
+                if 'atob' in pat:
+                    try:
+                        import base64
+                        u = base64.b64decode(u + '===').decode('utf-8', errors='replace')
+                        nm = re.search(r'(https?://[^\s\'"<>]+?\.m3u8[^\s\'"<>]*)', u)
+                        if nm: u = nm.group(1)
+                        else: continue
+                    except: continue
+
+                if not (u.startswith('http') or u.startswith('//')): continue
+                if u.startswith('//'): u = 'https:' + u
+
+                if u not in [r['url'].split('|')[0] for r in self.results]:
                     self.results.append({
-                        'source': 'Cloudnestra',
+                        'source': server_name,
                         'quality': '720p',
-                        'url': final_url,
+                        'url': f"{u}|Referer=https://cloudnestra.com/&Origin=https://cloudnestra.com&User-Agent={self.ua}",
                         'direct': True,
-                        'info': 'HLS' if '.m3u8' in f else 'MP4'
+                        'info': 'HLS' if '.m3u8' in u else 'MP4'
                     })
+
+    def _parse_server_pool(self, body):
+        pool = []
+        for m in re.finditer(r'(?:servers|cdns|hosts|srv|cdn_list)\s*[:=]\s*\[([^\]]+)\]', body, re.I):
+            pool += re.findall(r'["\']([a-z0-9.\-]+\.[a-z]{2,})["\']', m.group(1), re.I)
+        return list(set(pool))
+
+    def _expand_templates(self, raw_file, page_pool):
+        parts = [p.strip() for p in re.split(r'\s+or\s+', raw_file) if p.strip()]
+        pool = list(dict.fromkeys(page_pool + self.cdn_pool))
+        candidates = []
+        for part in parts:
+            placeholders = re.findall(r'\{v(\d+)\}', part)
+            if not placeholders:
+                candidates.append(part)
+                continue
+            for host in pool:
+                url = part
+                for n in placeholders:
+                    url = url.replace('{v%s}' % n, host)
+                candidates.append(url)
+        return candidates
 
     def resolve(self, url):
         return url

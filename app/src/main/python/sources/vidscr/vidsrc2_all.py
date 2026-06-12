@@ -2,6 +2,7 @@
 import re
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urljoin, urlparse
 
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 KNOWN_HOSTS = (
@@ -35,12 +36,19 @@ class source:
         
         media_type = 'movie' if season is None else 'tv'
         
-        with ThreadPoolExecutor(max_workers=len(KNOWN_HOSTS)) as ex:
+        s = requests.Session()
+        s.headers.update({
+            'User-Agent': UA,
+            'Accept-Language': 'en-GB,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate'
+        })
+
+        with ThreadPoolExecutor(max_workers=5) as ex:
             futures = [
-                ex.submit(self._scrape_host, host, media_type, tmdb_id, season, episode, imdb_id)
+                ex.submit(self._scrape_host, s, host, media_type, tmdb_id, season, episode, imdb_id)
                 for host in KNOWN_HOSTS
             ]
-            for fut in as_completed(futures, timeout=20):
+            for fut in as_completed(futures, timeout=25):
                 try: 
                     res = fut.result()
                     if res: self.results.extend(res)
@@ -70,29 +78,100 @@ class source:
         if media_type == 'movie': return f'https://{host}/embed/{ident}'
         return f'https://{host}/embedtv/{ident}&s={s}&e={e}'
 
-    def _scrape_host(self, host, media_type, tmdb_id, season, episode, imdb_id):
+    def _scrape_host(self, sess, host, media_type, tmdb_id, season, episode, imdb_id):
         embed_url = self._build_embed_url(host, media_type, tmdb_id, season, episode, imdb_id)
+
+        # Special-case vidsrc.icu
+        if host == 'vidsrc.icu':
+            return self._resolve_vidsrc_icu(sess, embed_url)
+
         try:
-            r = requests.get(embed_url, headers={'User-Agent': UA, 'Referer': f'https://{host}/'}, timeout=10)
-            if not r.ok:
-                return []
-            r_text = r.text
+            r = sess.get(embed_url, headers={'Referer': f'https://{host}/'}, timeout=12)
+            if not r.ok: return []
+
+            html = r.text
             streams = []
-            # Extract direct links
-            pats = [r'file\s*:\s*["\']([^"\']+\.(?:m3u8|mp4)[^"\']*)["\']', r'["\'](https?://[^"\']+\.m3u8[^"\']*)["\']']
-            for pat in pats:
-                for m in re.finditer(pat, r):
-                    u = m.group(1)
-                    if u.startswith('//'): u = 'https:' + u
+
+            # Direct media
+            for mu in self._scrape_media(html):
+                streams.append({
+                    'source': f'{host} direct',
+                    'quality': '720p',
+                    'url': f"{mu}|Referer={embed_url}&User-Agent={UA}",
+                    'direct': True,
+                    'info': 'HLS' if '.m3u8' in mu else 'MP4'
+                })
+
+            # Iframes
+            iframes = re.findall(r'<iframe[^>]+src=["\']([^"\']+)["\']', html, re.I)
+            for i, u in enumerate(iframes[:3]):
+                if u.startswith('//'): u = 'https:' + u
+                media_urls = self._follow_iframe(sess, u, embed_url, depth=1)
+                for mu in media_urls:
                     streams.append({
-                        'source': host,
+                        'source': f'{host} iframe',
                         'quality': '720p',
-                        'url': u,
+                        'url': f"{mu}|Referer={u}&User-Agent={UA}",
                         'direct': True,
-                        'info': 'HLS' if '.m3u8' in u else 'MP4'
+                        'info': 'HLS' if '.m3u8' in mu else 'MP4'
                     })
             return streams
         except: return []
+
+    def _resolve_vidsrc_icu(self, sess, embed_url):
+        try:
+            r = sess.get(embed_url, timeout=10, headers={'Referer': 'https://vidsrc.icu/'})
+            m = re.search(r'<iframe[^>]+src=["\'](https?:[^"\']+vidsrcme[^"\']+)["\']', r.text)
+            if m:
+                inner = m.group(1)
+                # This could be handed off to vidsrc_me logic if we want to be thorough
+                # For now just follow and scrape
+                return [{'source': 'vidsrc.icu', 'quality': '720p', 'url': mu, 'direct': True} for mu in self._follow_iframe(sess, inner, embed_url)]
+        except: pass
+        return []
+
+    def _follow_iframe(self, sess, url, referer, depth=1):
+        if depth < 0 or not url: return []
+        try:
+            r = sess.get(url, timeout=10, headers={'Referer': referer})
+            body = r.text
+            media = self._scrape_media(body)
+            if media: return media
+
+            if depth > 0:
+                inner = re.findall(r'<iframe[^>]+src=["\']([^"\']+)["\']', body, re.I)
+                for u in inner[:2]:
+                    if u.startswith('//'): u = 'https:' + u
+                    res = self._follow_iframe(sess, u, url, depth - 1)
+                    if res: return res
+        except: pass
+        return []
+
+    def _scrape_media(self, body):
+        pats = [
+            r'file\s*:\s*["\']([^"\']+\.(?:m3u8|mp4)[^"\']*)["\']',
+            r'sources?\s*:\s*\[\s*\{[^}]*?file\s*:\s*["\']([^"\']+)["\']',
+            r'["\'](https?://[^"\']+\.(?:m3u8|mp4)[^"\']*)["\']',
+            r'(https?://[^\s\'"<>(){}]+?\.m3u8[^\s\'"<>(){}]*)',
+            r'atob\((["\'][A-Za-z0-9+/=]{40,}["\'])\)'
+        ]
+        out = []
+        for pat in pats:
+            for m in re.finditer(pat, body):
+                u = m.group(1).replace('\\/', '/').strip('"\'')
+                if 'atob' in pat:
+                    try:
+                        import base64
+                        u = base64.b64decode(u + '===').decode('utf-8', errors='replace')
+                        nm = re.search(r'(https?://[^\s\'"<>]+?\.m3u8[^\s\'"<>]*)', u)
+                        if nm: u = nm.group(1)
+                        else: continue
+                    except: continue
+
+                if not (u.startswith('http') or u.startswith('//')): continue
+                if u.startswith('//'): u = 'https:' + u
+                if u not in out: out.append(u)
+        return out
 
     def resolve(self, url):
         return url
