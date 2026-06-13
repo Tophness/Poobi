@@ -9,12 +9,12 @@ plugins {
 
 extensions.configure<ApplicationExtension> {
     namespace = "com.poobi.tvbrowser"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.poobi.tvbrowser"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 
@@ -95,9 +95,10 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    implementation("androidx.media3:media3-exoplayer:1.5.0")
-    implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
-    implementation("androidx.media3:media3-ui:1.5.0")
+    implementation("androidx.media3:media3-exoplayer:1.10.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.10.1")
+    implementation("androidx.media3:media3-ui:1.10.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
 
     implementation(libs.play.services.auth)
