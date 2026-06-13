@@ -102,7 +102,15 @@ class MainActivity : AppCompatActivity() {
                     } else if (fromStreams) {
                         when (fallbackPref) {
                             1 -> { // Always
-                                browserViewModel.loadUrlAndBrowse(this, url, true)
+                                val item = streamsViewModel.selectedItem.value
+                                browserViewModel.loadUrlAndBrowse(
+                                    context = this, 
+                                    inputUrl = url, 
+                                    newTab = true,
+                                    streamItemJson = item?.toString(),
+                                    season = streamsViewModel.lastScrapedSeason,
+                                    episode = streamsViewModel.lastScrapedEpisode
+                                )
                                 browserViewModel.currentAppTab.value = 0
                             }
                             2 -> { // Never
@@ -143,12 +151,19 @@ class MainActivity : AppCompatActivity() {
             }
         )
 
-        browserViewModel.onPlayNativeVideo = { videoUrl, title ->
-            val item = streamsViewModel.selectedItem.value
-            val season = streamsViewModel.lastScrapedSeason
-            val episode = streamsViewModel.lastScrapedEpisode
-            val isFromStreams = item != null && browserViewModel.currentAppTab.value == 0
+        browserViewModel.onPlayNativeVideo = { videoUrl, title, altUrls, altNames ->
+            val metadata = browserViewModel.currentWebView?.tag as? com.poobi.tvbrowser.browser.TabMetadata
+            
+            val isBrowserTab = browserViewModel.currentAppTab.value == 0
+            val item = if (isBrowserTab) {
+                metadata?.streamItemJson?.let { org.json.JSONObject(it) }
+            } else {
+                streamsViewModel.selectedItem.value
+            }
+            val season = if (isBrowserTab) metadata?.season else streamsViewModel.lastScrapedSeason
+            val episode = if (isBrowserTab) metadata?.episode else streamsViewModel.lastScrapedEpisode
 
+            val isFromStreams = item != null
             val cleanTitle = item?.optString("title") ?: item?.optString("name")
             val fullTitle = if (isFromStreams && cleanTitle != null && season != null && episode != null) {
                 "$cleanTitle S${season}E$episode"
@@ -158,7 +173,12 @@ class MainActivity : AppCompatActivity() {
 
             val combinedSubtitles = mutableMapOf<String, Map<String, String>>()
             combinedSubtitles.putAll(browserViewModel.interceptedSubtitleUrls)
-            if (isFromStreams) {
+
+            val isMatchingStreamsItem = isFromStreams && 
+                (item.optString("id") == streamsViewModel.selectedItem.value?.optString("id") ||
+                 (item.optString("imdb").isNotEmpty() && item.optString("imdb") == streamsViewModel.selectedItem.value?.optString("imdb")))
+            
+            if (isMatchingStreamsItem) {
                 combinedSubtitles.putAll(streamsViewModel.interceptedSubtitleUrls)
             }
 
@@ -170,7 +190,9 @@ class MainActivity : AppCompatActivity() {
                 item = if (isFromStreams) item else null,
                 season = if (isFromStreams) season else null,
                 episode = if (isFromStreams) episode else null,
-                fromStreams = false
+                fromStreams = false,
+                alternativeUrls = altUrls ?: emptyList(),
+                alternativeNames = altNames ?: emptyList()
             )
         }
 
@@ -213,7 +235,14 @@ class MainActivity : AppCompatActivity() {
                                 )
                             } else {
                                 playerEngine.stopAndRelease()
-                                browserViewModel.loadUrlAndBrowse(this@MainActivity, event.url, true) 
+                                browserViewModel.loadUrlAndBrowse(
+                                    context = this@MainActivity, 
+                                    inputUrl = event.url, 
+                                    newTab = true,
+                                    streamItemJson = event.item.toString(),
+                                    season = event.season,
+                                    episode = event.episode
+                                ) 
                                 browserViewModel.currentAppTab.value = 0 
                             }
                             streamsViewModel.consumeEvent()
@@ -299,7 +328,15 @@ class MainActivity : AppCompatActivity() {
                 if (checkBox.isChecked) {
                     prefs.edit().putInt("exo_fallback_pref", 1).apply()
                 }
-                browserViewModel.loadUrlAndBrowse(this, url, true)
+                val item = streamsViewModel.selectedItem.value
+                browserViewModel.loadUrlAndBrowse(
+                    context = this, 
+                    inputUrl = url, 
+                    newTab = true,
+                    streamItemJson = item?.toString(),
+                    season = streamsViewModel.lastScrapedSeason,
+                    episode = streamsViewModel.lastScrapedEpisode
+                )
                 browserViewModel.currentAppTab.value = 0
             }
             .setNegativeButton("Cancel") { _, _ ->
@@ -585,7 +622,12 @@ class MainActivity : AppCompatActivity() {
                     playerEngine.stopAndRelease()
                     return true
                 }
-                
+
+                if (event.keyCode == KeyEvent.KEYCODE_MENU) {
+                    playerEngine.showResolutionSelector()
+                    return true
+                }
+
                 if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                     val isControllerVisible = pView?.isControllerFullyVisible() == true
                     val focusedView = pView?.findFocus()
