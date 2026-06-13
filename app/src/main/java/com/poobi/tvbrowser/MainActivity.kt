@@ -571,8 +571,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (playerEngine.isPlayerActive.value) {
+            val pView = playerEngine.playerView
+
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
-                val pView = playerEngine.playerView
                 if (pView != null) {
                     return pView.dispatchKeyEvent(event)
                 }
@@ -584,14 +585,34 @@ class MainActivity : AppCompatActivity() {
                     playerEngine.stopAndRelease()
                     return true
                 }
-                if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                    playerEngine.seekVideo(-1, event.repeatCount)
-                    return true
+                
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    val isControllerVisible = pView?.isControllerFullyVisible() == true
+                    val focusedView = pView?.findFocus()
+                    val idName = try {
+                        focusedView?.id?.let { id -> pView.resources.getResourceEntryName(id) }
+                    } catch (e: Exception) {
+                        null
+                    }
+                    val shouldSeek = !isControllerVisible || 
+                                     focusedView == null || 
+                                     idName == "exo_play_pause" || 
+                                     idName == "exo_play" || 
+                                     idName == "exo_pause" || 
+                                     idName == "exo_progress" || 
+                                     idName == "exo_timebar" || 
+                                     idName == "exo_time_bar"
+
+                    if (shouldSeek) {
+                        val direction = if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
+                        playerEngine.seekVideo(direction, event.repeatCount)
+                        return true
+                    }
                 }
-                if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                    playerEngine.seekVideo(1, event.repeatCount)
-                    return true
-                }
+            }
+
+            if (pView != null) {
+                return pView.dispatchKeyEvent(event)
             }
             return super.dispatchKeyEvent(event)
         }

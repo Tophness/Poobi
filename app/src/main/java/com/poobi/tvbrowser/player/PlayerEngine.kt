@@ -16,6 +16,9 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.ui.PlayerView
 import com.chaquo.python.Python
 import com.poobi.tvbrowser.shared.SubtitleData
@@ -139,8 +142,12 @@ class PlayerEngine(
             .setDefaultRequestProperties(headers)
 
         val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+        val bandwidthMeter = DefaultBandwidthMeter.Builder(context)
+            .setInitialBitrateEstimate(20000000L) // 20 Mbps initial estimate
+            .build()
 
         exoPlayer = ExoPlayer.Builder(context)
+            .setBandwidthMeter(bandwidthMeter)
             .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory))
             .build()
 
@@ -197,8 +204,31 @@ class PlayerEngine(
             config
         }
 
-        mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
-        exoPlayer?.setMediaItem(mediaItemBuilder.build())
+        if (videoUrl.contains("|")) {
+            val urls = videoUrl.split("|")
+            val videoUri = Uri.parse(urls[0])
+            val audioUri = Uri.parse(urls[1])
+
+            val videoSource = ProgressiveMediaSource.Factory(dataSourceFactory)
+                .createMediaSource(MediaItem.Builder()
+                    .setUri(videoUri)
+                    .setSubtitleConfigurations(subtitleConfigs)
+                    .build())
+
+            val audioSource = ProgressiveMediaSource.Factory(dataSourceFactory)
+                .createMediaSource(MediaItem.fromUri(audioUri))
+
+            val mergedSource = MergingMediaSource(videoSource, audioSource)
+            exoPlayer?.setMediaSource(mergedSource)
+        } else {
+            val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
+            mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
+            if (videoUrl.contains(".mpd") || videoUrl.endsWith(".mpd")) {
+                mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
+            }
+            
+            exoPlayer?.setMediaItem(mediaItemBuilder.build())
+        }
 
         val resumeKey = if (title != null) "resume_stream_$title" else null
         if (resumeKey != null) {

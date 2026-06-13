@@ -10,14 +10,24 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +51,40 @@ private fun findFirstUnwatchedEpisode(episodes: JSONArray): Int {
     }
     return 1
 }
+
+private val MovieIcon: ImageVector = ImageVector.Builder(
+    name = "Movie",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f
+).path(fill = SolidColor(Color.White)) {
+    moveTo(18.0f, 4.0f)
+    lineToRelative(2.0f, 4.0f)
+    horizontalLineToRelative(-3.0f)
+    lineToRelative(-2.0f, -4.0f)
+    horizontalLineToRelative(-2.0f)
+    lineToRelative(2.0f, 4.0f)
+    horizontalLineToRelative(-3.0f)
+    lineToRelative(-2.0f, -4.0f)
+    horizontalLineToRelative(-2.0f)
+    lineToRelative(2.0f, 4.0f)
+    horizontalLineToRelative(-3.0f)
+    lineToRelative(-2.0f, -4.0f)
+    horizontalLineToRelative(-2.0f)
+    lineToRelative(2.0f, 4.0f)
+    horizontalLineTo(5.0f)
+    lineToRelative(2.0f, 4.0f)
+    horizontalLineTo(4.0f)
+    curveToRelative(-1.1f, 0.0f, -1.99f, 0.9f, -1.99f, 2.0f)
+    lineTo(2.0f, 20.0f)
+    curveToRelative(0.0f, 1.1f, 0.9f, 2.0f, 2.0f, 2.0f)
+    horizontalLineToRelative(16.0f)
+    curveToRelative(1.1f, 0.0f, 2.0f, -0.9f, 2.0f, -2.0f)
+    verticalLineTo(4.0f)
+    horizontalLineToRelative(-4.0f)
+    close()
+}.build()
 
 @Composable
 fun MediaDetailsScreen(viewModel: StreamsViewModel) {
@@ -306,47 +350,94 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
         Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = 15.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (mediaType == "movie") {
-                    Button(
-                        onClick = { viewModel.performScrape(item!!) }, 
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)), 
-                        modifier = Modifier
-                            .width(200.dp)
-                            .height(55.dp)
-                            .focusRequester(playButtonFocusRequester)
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Icon(painter = painterResource(id = R.drawable.ic_go), contentDescription = null, tint = Color.White)
-                            Text("Play Movie", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
+				if (mediaType == "movie") {
+					Row(
+						horizontalArrangement = Arrangement.spacedBy(10.dp),
+						verticalAlignment = Alignment.CenterVertically
+					) {
+						Button(
+							onClick = { viewModel.performScrape(item!!) }, 
+							colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)), 
+							modifier = Modifier
+								.width(180.dp)
+								.height(55.dp)
+								.focusRequester(playButtonFocusRequester)
+						) {
+							Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+								Icon(painter = painterResource(id = R.drawable.ic_go), contentDescription = null, tint = Color.White)
+								Text("Play Movie", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+							}
+						}
+						Button(
+							onClick = { viewModel.playTrailer(item!!) },
+							colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+							modifier = Modifier
+								.width(140.dp)
+								.height(55.dp)
+						) {
+							Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+								Icon(imageVector = MovieIcon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+								Text("Trailer", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+							}
+						}
+					}
+				}
 
-                if (mediaType == "tv" && seasons != null && seasons!!.length() > 0) {
-                    Text("Season:", color = Color.Gray, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
-                    
-                    TvFocusableBox(
-                        modifier = Modifier
-                            .width(200.dp)
-                            .height(50.dp)
-                            .focusRequester(seasonSelectorFocusRequester)
-                            .onPreviewKeyEvent { keyEvent ->
-                                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                                    val code = keyEvent.nativeKeyEvent.keyCode
-                                    if (code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER) {
-                                        autoFocusCancelled = true
-                                    }
-                                }
-                                false
-                            },
-                        onClick = { spinnerExpanded = true }
-                    ) {
-                        val activeSeasonName = seasons!!.getJSONObject(selectedSeasonIndex).optString("name", "Season ${selectedSeasonIndex + 1}")
-                        Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
-                            Text(activeSeasonName, color = Color.White)
-                        }
-                    }
-                }
+				if (mediaType == "tv" && seasons != null && seasons!!.length() > 0) {
+					Row(verticalAlignment = Alignment.CenterVertically) {
+						Text("Season:", color = Color.Gray, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
+						
+						TvFocusableBox(
+							modifier = Modifier
+								.width(200.dp)
+								.height(50.dp)
+								.focusRequester(seasonSelectorFocusRequester)
+								.onPreviewKeyEvent { keyEvent ->
+									if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+										val code = keyEvent.nativeKeyEvent.keyCode
+										if (code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER) {
+											autoFocusCancelled = true
+										}
+									}
+									false
+								},
+							onClick = { spinnerExpanded = true }
+						) {
+							val activeSeasonName = seasons!!.getJSONObject(selectedSeasonIndex).optString("name", "Season ${selectedSeasonIndex + 1}")
+							Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
+								Text(activeSeasonName, color = Color.White)
+							}
+						}
+
+						Spacer(modifier = Modifier.width(10.dp))
+
+						TvFocusableBox(
+							modifier = Modifier
+								.width(130.dp)
+								.height(50.dp),
+							onClick = { viewModel.playTrailer(item!!) }
+						) { isFocused ->
+							Row(
+								modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+								horizontalArrangement = Arrangement.spacedBy(8.dp),
+								verticalAlignment = Alignment.CenterVertically
+							) {
+								Icon(
+									painter = painterResource(id = R.drawable.ic_auto_play),
+									contentDescription = "Show Trailer",
+									tint = if (isFocused) Color.Black else Color.White,
+									modifier = Modifier.size(20.dp)
+								)
+								Text(
+									"Trailer",
+									color = if (isFocused) Color.Black else Color.White,
+									fontSize = 14.sp,
+									fontWeight = FontWeight.Bold
+								)
+							}
+						}
+					}
+				}
 
                 Spacer(modifier = Modifier.width(15.dp))
                 val favorites by viewModel.favoritesSet.collectAsState()
@@ -374,46 +465,152 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     .padding(5.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 60.dp, start = 8.dp, end = 8.dp)
             ) {
-                if (mediaType == "tv") {
-                    if (localEpisodes != null) {
-                        items(localEpisodes.length()) { idx ->
-                            val ep = localEpisodes.getJSONObject(idx)
-                            val num = ep.optInt("episode_number")
-                            val isWatched = ep.optBoolean("is_watched", false)
-                            val isTarget = (num == targetEpisodeToFocus)
+				if (mediaType == "tv") {
+					if (localEpisodes != null) {
+						items(localEpisodes.length()) { idx ->
+							val ep = localEpisodes.getJSONObject(idx)
+							val num = ep.optInt("episode_number")
+							val isWatched = ep.optBoolean("is_watched", false)
+							val isTarget = (num == targetEpisodeToFocus)
+							var isCardFocused by remember { mutableStateOf(false) }
+							
+							val scale by androidx.compose.animation.core.animateFloatAsState(
+								targetValue = if (isCardFocused) 1.02f else 1.0f,
+								animationSpec = androidx.compose.animation.core.tween(durationMillis = 150),
+								label = "CardFocusScale"
+							)
 
-                            TvFocusableBox(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 5.dp)
-                                    .let { if (isTarget) it.focusRequester(targetEpisodeFocusRequester) else it }
-                                    .onPreviewKeyEvent { keyEvent ->
-                                        val nativeEvent = keyEvent.nativeKeyEvent
-                                        if (idx == localEpisodes.length() - 1 && 
-                                            nativeEvent.action == KeyEvent.ACTION_DOWN && 
-                                            nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                                            try {
-                                                firstCastFocusRequester.requestFocus()
-                                                true
-                                            } catch (e: Exception) {
-                                                false
-                                            }
-                                        } else false
-                                    }, 
-                                onClick = { viewModel.performScrape(item!!, seasons!!.getJSONObject(selectedSeasonIndex).optInt("season_number"), num) }
-                            ) {
-                                Row(modifier = Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    RemoteImage(url = "https://image.tmdb.org/t/p/w300${ep.optString("still_path")}", contentDescription = null, modifier = Modifier.size(160.dp, 90.dp).clip(RoundedCornerShape(4.dp)))
-                                    Spacer(modifier = Modifier.width(15.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("E$num: ${ep.optString("name")}", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                        Text(ep.optString("overview"), color = Color(0xFFAAAAAA), fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                                    }
-                                    Icon(painter = painterResource(id = R.drawable.ic_watched), contentDescription = "Watched", tint = Color.White.copy(alpha = if (isWatched) 1.0f else 0.2f), modifier = Modifier.size(50.dp).padding(10.dp))
-                                }
-                            }
-                        }
-                    } else {
+							val cardBgColor = if (isCardFocused) Color(0xFF40C4FF) else Color(0xFF333333)
+							val cardBorderColor = if (isCardFocused) Color.White else Color.Transparent
+							val textColor = if (isCardFocused) Color.Black else Color.White
+							val descColor = if (isCardFocused) Color(0xFF333333) else Color(0xFFAAAAAA)
+
+							Row(
+								modifier = Modifier
+									.fillMaxWidth()
+									.padding(bottom = 8.dp)
+									.scale(scale)
+									.clip(RoundedCornerShape(8.dp))
+									.background(cardBgColor)
+									.border(if (isCardFocused) 2.dp else 0.dp, cardBorderColor, RoundedCornerShape(8.dp))
+									.onFocusChanged { state: FocusState ->
+										// Explicitly specified FocusState type
+										isCardFocused = state.hasFocus
+									},
+								verticalAlignment = Alignment.CenterVertically
+							) {
+								val playInteractionSource = remember { MutableInteractionSource() }
+								Box(
+									modifier = Modifier
+										.weight(1f)
+										.let { if (isTarget) it.focusRequester(targetEpisodeFocusRequester) else it }
+										.onPreviewKeyEvent { keyEvent ->
+											val nativeEvent = keyEvent.nativeKeyEvent
+											if (idx == localEpisodes.length() - 1 && 
+												nativeEvent.action == KeyEvent.ACTION_DOWN && 
+												nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+												try {
+													firstCastFocusRequester.requestFocus()
+													true
+												} catch (e: Exception) {
+													false
+												}
+											} else false
+										}
+										.clickable(
+											interactionSource = playInteractionSource,
+											indication = null,
+											onClick = { viewModel.performScrape(item!!, seasons!!.getJSONObject(selectedSeasonIndex).optInt("season_number"), num) }
+										)
+										.focusable(interactionSource = playInteractionSource)
+								) {
+									Row(
+										modifier = Modifier.fillMaxWidth().padding(10.dp),
+										verticalAlignment = Alignment.CenterVertically
+									) {
+										RemoteImage(
+											url = "https://image.tmdb.org/t/p/w300${ep.optString("still_path")}",
+											contentDescription = null,
+											modifier = Modifier.size(160.dp, 90.dp).clip(RoundedCornerShape(4.dp))
+										)
+										Spacer(modifier = Modifier.width(15.dp))
+										Column(modifier = Modifier.weight(1f)) {
+											Text(
+												text = "E$num: ${ep.optString("name")}",
+												color = textColor,
+												fontSize = 16.sp,
+												fontWeight = FontWeight.Bold
+											)
+											Text(
+												text = ep.optString("overview"),
+												color = descColor,
+												fontSize = 12.sp,
+												maxLines = 3,
+												overflow = TextOverflow.Ellipsis
+											)
+										}
+									}
+								}
+
+								val trailerInteractionSource = remember { MutableInteractionSource() }
+								val isTrailerFocused by trailerInteractionSource.collectIsFocusedAsState()
+
+								Box(
+									modifier = Modifier
+										.size(44.dp)
+										.clip(RoundedCornerShape(8.dp))
+										.background(
+											when {
+												isTrailerFocused && isCardFocused -> Color.Black.copy(alpha = 0.15f)
+												isTrailerFocused -> Color.White.copy(alpha = 0.15f)
+												else -> Color.Transparent
+											}
+										)
+										.clickable(
+											interactionSource = trailerInteractionSource,
+											indication = null,
+											onClick = { 
+												viewModel.playTrailer(
+													item = item!!,
+													season = seasons!!.getJSONObject(selectedSeasonIndex).optInt("season_number"),
+													episode = num
+												)
+											}
+										)
+										.focusable(interactionSource = trailerInteractionSource),
+									contentAlignment = Alignment.Center
+								) {
+									Icon(
+										imageVector = MovieIcon,
+										contentDescription = "Trailer",
+										tint = when {
+											isTrailerFocused -> Color(0xFFE53935)
+											isCardFocused -> Color.Black
+											else -> Color(0xFF00BCD4)
+										},
+										modifier = Modifier.size(24.dp)
+									)
+								}
+
+								Spacer(modifier = Modifier.width(4.dp))
+
+								Icon(
+									painter = painterResource(id = R.drawable.ic_watched),
+									contentDescription = "Watched",
+									tint = if (isCardFocused) {
+										Color.Black.copy(alpha = if (isWatched) 1.0f else 0.2f)
+									} else {
+										Color.White.copy(alpha = if (isWatched) 1.0f else 0.2f)
+									},
+									modifier = Modifier
+										.size(48.dp)
+										.padding(12.dp)
+								)
+								
+								Spacer(modifier = Modifier.width(8.dp))
+							}
+						}
+					} else {
                         val expectedCount = if (seasons != null && selectedSeasonIndex in 0 until seasons!!.length()) {
                             seasons!!.getJSONObject(selectedSeasonIndex).optInt("episode_count", 5)
                         } else {

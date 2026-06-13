@@ -109,6 +109,191 @@ DEFAULT_WHITELIST = [
     'fzmovies.live'
 ]
 
+def get_trailer(content, tmdb, season=None, episode=None):
+    try:
+        import tmdb.tmdb_utils as tu
+        import json
+        import requests
+        import os
+        
+        tmdb_id = str(tmdb)
+        videos = []
+
+        if content == 'movie':
+            videos = tu.get_movie_trailers(tmdb_id)
+        elif content in ['tvshow', 'tv']:
+            if season is not None and episode is not None:
+                videos = tu.get_episode_trailers(tmdb_id, str(season), str(episode))
+            elif season is not None:
+                videos = tu.get_season_trailers(tmdb_id, str(season))
+            else:
+                videos = tu.get_tvshow_trailers(tmdb_id)
+
+        youtube_key = None
+        for v in videos:
+            if v.get('site') == 'YouTube':
+                youtube_key = v.get('key')
+                if v.get('type') == 'Trailer':
+                    break
+                    
+        if not youtube_key:
+            return json.dumps({"error": "No YouTube trailer found."})
+
+        url = "https://www.youtube.com/youtubei/v1/player?key=AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w"
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 15) gzip"
+        }
+        payload = {
+            "context": {
+                "client": {
+                    "hl": "en",
+                    "gl": "US",
+                    "clientName": "ANDROID",
+                    "clientVersion": "20.10.38",
+                    "androidSdkVersion": "32",
+                    "osName": "Android",
+                    "osVersion": "15",
+                    "platform": "MOBILE"
+                },
+                "request": {
+                    "internalExperimentFlags": [],
+                    "useSsl": True
+                },
+                "user": {
+                    "lockedSafetyMode": False
+                }
+            },
+            "videoId": youtube_key,
+            "playbackContext": {
+                "contentPlaybackContext": {
+                    "html5Preference": "HTML5_PREF_WANTS"
+                }
+            },
+            "params": "2AMB",
+            "racyCheckOk": True,
+            "contentCheckOk": True
+        }
+        
+        res = requests.post(url, headers=headers, json=payload, timeout=8).json()
+
+        playability = res.get("playabilityStatus", {})
+        status = playability.get("status", "ERROR").upper()
+        if status != "OK":
+            reason = playability.get("reason", "YouTube playability error")
+            return json.dumps({"error": reason})
+            
+        streaming_data = res.get("streamingData", {})
+        adaptive_formats = streaming_data.get("adaptiveFormats", [])
+
+        video_formats = [f for f in adaptive_formats if "video" in f.get("mimeType", "") and "url" in f]
+        audio_formats = [f_audio for f_audio in adaptive_formats if "audio" in f_audio.get("mimeType", "") and "url" in f_audio]
+
+        def xml_escape(s):
+            return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&apos;")
+
+        video_reps_mp4 = []
+        video_reps_webm = []
+        for vf in video_formats:
+            init_r = vf.get("initRange")
+            index_r = vf.get("indexRange")
+            if not init_r or not index_r:
+                continue
+                
+            mime_type = vf.get("mimeType", "")
+            codecs = ""
+            if 'codecs="' in mime_type:
+                codecs = mime_type.split('codecs="')[1].split('"')[0]
+            
+            escaped_url = xml_escape(vf['url'])
+            rep_xml = f"""      <Representation id="{vf.get('itag')}" codecs="{codecs}" bandwidth="{vf.get('bitrate', 0)}" width="{vf.get('width', 0)}" height="{vf.get('height', 0)}">
+        <BaseURL>{escaped_url}</BaseURL>
+        <SegmentBase indexRange="{index_r['start']}-{index_r['end']}" timescale="1000">
+          <Initialization range="{init_r['start']}-{init_r['end']}"/>
+        </SegmentBase>
+      </Representation>"""
+
+            if "mp4" in mime_type:
+                video_reps_mp4.append(rep_xml)
+            elif "webm" in mime_type:
+                video_reps_webm.append(rep_xml)
+
+        audio_reps_mp4 = []
+        audio_reps_webm = []
+        for af in audio_formats:
+            init_r = af.get("initRange")
+            index_r = af.get("indexRange")
+            if not init_r or not index_r:
+                continue
+                
+            mime_type = af.get("mimeType", "")
+            codecs = ""
+            if 'codecs="' in mime_type:
+                codecs = mime_type.split('codecs="')[1].split('"')[0]
+            
+            channels = af.get("audioChannels", 2)
+            escaped_url = xml_escape(af['url'])
+            rep_xml = f"""      <Representation id="{af.get('itag')}" codecs="{codecs}" bandwidth="{af.get('bitrate', 0)}" sampleRate="{af.get('audioSampleRate', '44100')}">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="{channels}"/>
+        <BaseURL>{escaped_url}</BaseURL>
+        <SegmentBase indexRange="{index_r['start']}-{index_r['end']}" timescale="1000">
+          <Initialization range="{init_r['start']}-{init_r['end']}"/>
+        </SegmentBase>
+      </Representation>"""
+
+            if "mp4" in mime_type:
+                audio_reps_mp4.append(rep_xml)
+            elif "webm" in mime_type:
+                audio_reps_webm.append(rep_xml)
+
+        if (video_reps_mp4 or video_reps_webm) and (audio_reps_mp4 or audio_reps_webm):
+            duration_seconds = res.get("videoDetails", {}).get("lengthSeconds", "180")
+            video_reps_mp4_joined = "\n".join(video_reps_mp4)
+            video_reps_webm_joined = "\n".join(video_reps_webm)
+            audio_reps_mp4_joined = "\n".join(audio_reps_mp4)
+            audio_reps_webm_joined = "\n".join(audio_reps_webm)
+
+            xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xmlns="urn:mpeg:dash:schema:mpd:2011"
+     xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd"
+     profiles="urn:mpeg:dash:profile:isoff-on-demand:2011"
+     type="static"
+     mediaPresentationDuration="PT{duration_seconds}S"
+     minBufferTime="PT1.5S">
+  <Period>"""
+
+            if video_reps_mp4:
+                xml_content += f"""\n    <AdaptationSet mimeType="video/mp4" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{video_reps_mp4_joined}\n    </AdaptationSet>"""
+                
+            if video_reps_webm:
+                xml_content += f"""\n    <AdaptationSet mimeType="video/webm" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{video_reps_webm_joined}\n    </AdaptationSet>"""
+                
+            if audio_reps_mp4:
+                xml_content += f"""\n    <AdaptationSet mimeType="audio/mp4" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{audio_reps_mp4_joined}\n    </AdaptationSet>"""
+                
+            if audio_reps_webm:
+                xml_content += f"""\n    <AdaptationSet mimeType="audio/webm" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{audio_reps_webm_joined}\n    </AdaptationSet>"""
+
+            xml_content += "\n  </Period>\n</MPD>"
+            mpd_path = os.path.realpath(os.path.join(FILES_DIR, "trailer.mpd"))
+            with open(mpd_path, "w", encoding="utf-8") as f:
+                f.write(xml_content)
+                
+            return json.dumps({"url": f"file://{mpd_path}", "is_video": True})
+
+        formats = streaming_data.get("formats", [])
+        for f in formats:
+            if "url" in f:
+                return json.dumps({"url": f["url"], "is_video": True})
+                
+        return json.dumps({"error": "Failed to compile adaptive XML trailer manifest."})
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return json.dumps({"error": str(e)})
+
 def gather_provider_pack_hosts():
     hosts = set()
     if not os.path.exists(SOURCES_PATH):
