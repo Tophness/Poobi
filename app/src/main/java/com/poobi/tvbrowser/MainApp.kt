@@ -447,6 +447,67 @@ fun MainApp(
                                     }
                                 }
                             })
+
+                            post {
+                                val basicControlsId = try {
+                                    androidx.media3.ui.R.id.exo_basic_controls
+                                } catch (e: Throwable) {
+                                    resources.getIdentifier("exo_basic_controls", "id", "androidx.media3.ui")
+                                }
+                                val settingsBtnId = try {
+                                    androidx.media3.ui.R.id.exo_settings
+                                } catch (e: Throwable) {
+                                    resources.getIdentifier("exo_settings", "id", "androidx.media3.ui")
+                                }
+
+                                val basicControls = findViewById<android.widget.LinearLayout>(basicControlsId)
+                                val settingsBtn = findViewById<android.view.View>(settingsBtnId)
+
+                                if (basicControls != null) {
+                                    val existingBtn = basicControls.findViewWithTag<android.view.View>("exo_quality_button_tag")
+                                    if (existingBtn == null) {
+                                        val qualityBtn = android.widget.ImageButton(ctx).apply {
+                                            tag = "exo_quality_button_tag"
+
+                                            val attrs = intArrayOf(android.R.attr.selectableItemBackgroundBorderless)
+                                            val typedArray = ctx.obtainStyledAttributes(attrs)
+                                            val backgroundDrawable = typedArray.getDrawable(0)
+                                            typedArray.recycle()
+                                            background = backgroundDrawable
+                                            
+                                            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                                            val density = resources.displayMetrics.density
+                                            val padding = (8 * density).toInt()
+                                            setPadding(padding, padding, padding, padding)
+                                            setImageResource(com.poobi.tvbrowser.R.drawable.ic_auto_play)
+                                            setColorFilter(android.graphics.Color.WHITE)
+                                            if (settingsBtn != null) {
+                                                layoutParams = android.widget.LinearLayout.LayoutParams(settingsBtn.layoutParams).apply {
+                                                    gravity = android.view.Gravity.CENTER_VERTICAL
+                                                }
+                                            } else {
+                                                val size = (40 * density).toInt()
+                                                layoutParams = android.widget.LinearLayout.LayoutParams(size, size).apply {
+                                                    gravity = android.view.Gravity.CENTER_VERTICAL
+                                                }
+                                            }
+                                            
+                                            setOnClickListener {
+                                                playerEngine.showResolutionSelector()
+                                            }
+                                            
+                                            isFocusable = true
+                                        }
+
+                                        val index = if (settingsBtn != null) basicControls.indexOfChild(settingsBtn) else -1
+                                        if (index >= 0) {
+                                            basicControls.addView(qualityBtn, index)
+                                        } else {
+                                            basicControls.addView(qualityBtn)
+                                        }
+                                    }
+                                }
+                            }
                             
                             requestFocus()
                         }
@@ -484,113 +545,59 @@ fun MainApp(
                         playerEngine.dismissUpNext()
                     }
                 )
-            }
-        }
 
-        // Floating Context Menu Dropdown Overlay positioned at the EXACT cursor tip
-        if (dialogState is BrowserDialogState.SaveBlockRule) {
-            val rule = dialogState as BrowserDialogState.SaveBlockRule
-            if (rule.selector == "context_menu_trigger") {
-                ContextMenuOverlay(
-                    cursorX = cx,
-                    cursorY = cy,
-                    url = rule.url,
-                    onOpenInNewTab = { 
-                        browserViewModel.createNewTab(context, rule.url) 
-                    },
-                    onRefresh = { browserViewModel.currentWebView?.reload() },
-                    onBlockElement = { browserViewModel.blockElementAtCursor(cx, cy) },
-                    onDismiss = { browserViewModel.dismissDialog() }
-                )
-            } else {
-                var ruleName by remember { mutableStateOf(Uri.parse(rule.url).host ?: "Custom Rule") }
-                AlertDialog(
-                    onDismissRequest = { browserViewModel.dismissDialog() },
-                    title = { Text("Save Blocked Element", color = Color.White) },
-                    containerColor = Color(0xFF222225),
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Rule name for this site:", color = Color.LightGray)
-                            TvInputField(
-                                value = ruleName,
-                                onValueChange = { ruleName = it },
-                                placeholder = "e.g. Blocker",
-                                onAction = {
-                                    browserViewModel.saveBlockedElementRule(ruleName, rule.url, rule.selector)
-                                }
-                            )
-                        }
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                browserViewModel.saveBlockedElementRule(ruleName, rule.url, rule.selector)
-                            }
-                        ) {
-                            Text("Save", color = Color.White)
-                        }
-                    },
-                    dismissButton = {
-                        Button(
-                            onClick = { browserViewModel.dismissDialog() },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                        ) {
-                            Text("Cancel", color = Color.White)
-                        }
-                    }
-                )
-            }
-        }
+                val showQualitySelector by playerEngine.showQualitySelector.collectAsState()
+                val qualityOptions by playerEngine.qualityOptions.collectAsState()
+                val currentQuality by playerEngine.currentQuality.collectAsState()
 
-        // StreamPicker Dialog
-        if (dialogState is BrowserDialogState.StreamPicker) {
-            val picker = dialogState as BrowserDialogState.StreamPicker
-            val firstItemFocusRequester = remember { FocusRequester() }
-
-            // Instantly request focus on the first stream item when the dialog opens
-            LaunchedEffect(picker) {
-                Log.d("TVBrowser", "StreamPicker showing. URLs: ${picker.streams}, Infos: ${picker.streamInfos}")
-                try {
-                    firstItemFocusRequester.requestFocus()
-                } catch (_: Exception) {}
-            }
-
-            AlertDialog(
-                onDismissRequest = { browserViewModel.dismissStreamPicker() },
-                title = { Text("Select Video Stream", color = Color.White) },
-                containerColor = Color(0xFF222225),
-                text = {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        itemsIndexed(picker.streamInfos) { idx, info ->
-                            TvFocusableBox(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .let { if (idx == 0) it.focusRequester(firstItemFocusRequester) else it },
-                                onClick = {
-                                    val selectedStream = picker.streams[idx]
-                                    browserViewModel.playVideoInNativePlayer(selectedStream, browserViewModel.currentWebView?.title)
-                                    browserViewModel.dismissDialog()
-                                }
-                            ) { isFocused ->
-                                Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
-                                    Text(info, color = Color.White)
+                if (showQualitySelector && qualityOptions.isNotEmpty()) {
+                    AlertDialog(
+                        onDismissRequest = { playerEngine.dismissQualitySelector() },
+                        title = { Text("Select Video Quality", color = Color.White) },
+                        containerColor = Color(0xFF222225),
+                        text = {
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                itemsIndexed(qualityOptions) { idx, option ->
+                                    val isSelected = currentQuality == option
+                                    TvFocusableBox(
+                                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                                        onClick = {
+                                            playerEngine.selectQuality(option)
+                                        }
+                                    ) { isFocused ->
+                                        Row(
+                                            modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = option.name, 
+                                                color = if (isFocused) Color.Black else Color.White,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            if (isSelected) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_watched),
+                                                    contentDescription = "Selected",
+                                                    tint = if (isFocused) Color.Black else Color(0xFF00BCD4),
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            browserViewModel.dismissStreamPicker()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                    ) {
-                        Text("Use Website Player", color = Color.White)
-                    }
+                        confirmButton = {
+                            Button(
+                                onClick = { playerEngine.dismissQualitySelector() },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                            ) {
+                                Text("Close", color = Color.White)
+                            }
+                        }
+                    )
                 }
-            )
+            }
         }
 
         // Download Confirmation Dialog
