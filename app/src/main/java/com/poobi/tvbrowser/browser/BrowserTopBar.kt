@@ -80,7 +80,8 @@ fun BrowserTopBar(
         ) {
             LazyRow(modifier = Modifier.weight(1f)) {
                 itemsIndexed(viewModel.getWebViewsList()) { index, wv ->
-                    val title = wv.title ?: wv.url ?: "New Tab"
+                    val metadata = wv.tag as? TabMetadata
+                    val title = wv.title ?: metadata?.defaultTitle ?: wv.url ?: "New Tab"
                     val itemFocusRequester = tabFocusRequesters.getOrNull(index) ?: remember { FocusRequester() }
                     
                     TvFocusableHoldToDeleteBox(

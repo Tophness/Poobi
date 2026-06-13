@@ -6,18 +6,22 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
+import androidx.media3.common.TrackGroup
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.ui.PlayerView
 import com.chaquo.python.Python
@@ -27,6 +31,25 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
+
+sealed class QualityOption {
+    abstract val name: String
+    
+    data class Native(
+        override val name: String,
+        val trackGroup: TrackGroup,
+        val trackIndex: Int
+    ) : QualityOption()
+
+    data class DistinctUrl(
+        override val name: String,
+        val url: String
+    ) : QualityOption()
+
+    data class Auto(
+        override val name: String = "Auto"
+    ) : QualityOption()
+}
 
 class PlayerEngine(
     private val context: Context,
@@ -50,15 +73,28 @@ class PlayerEngine(
     private val _nextEpisodeData = MutableStateFlow<JSONObject?>(null)
     val nextEpisodeData: StateFlow<JSONObject?> = _nextEpisodeData.asStateFlow()
 
+    private val _showQualitySelector = MutableStateFlow(false)
+    val showQualitySelector: StateFlow<Boolean> = _showQualitySelector.asStateFlow()
+
+    private val _qualityOptions = MutableStateFlow<List<QualityOption>>(emptyList())
+    val qualityOptions: StateFlow<List<QualityOption>> = _qualityOptions.asStateFlow()
+
+    private val _currentQuality = MutableStateFlow<QualityOption?>(null)
+    val currentQuality: StateFlow<QualityOption?> = _currentQuality.asStateFlow()
+
     private var lastVideoTitle: String? = null
     private var lastVideoUrl: String? = null
     private var lastScrapedItem: JSONObject? = null
     private var lastScrapedSeason: Int? = null
     private var lastScrapedEpisode: Int? = null
     private var lastSubtitles: Map<String, Map<String, String>> = emptyMap()
+    private var lastHeaders: Map<String, String> = emptyMap()
+    private var lastFromStreams: Boolean = true
+    private var lastAlternativeUrls: List<String> = emptyList()
+    private var lastAlternativeNames: List<String> = emptyList()
+
     var playerView: PlayerView? = null
     private var hasReachedReady = false
-    
     private var hasTriggeredPlaybackStarted = false
 
     private var lastSeekTime = 0L
@@ -67,7 +103,6 @@ class PlayerEngine(
     var isUpNextDismissed = false
 
     private var isReleasing = false
-
     private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val checkUpNextRunnable = object : Runnable {
@@ -109,6 +144,14 @@ class PlayerEngine(
         isUpNextDismissed = true
     }
 
+    fun showResolutionSelector() {
+        _showQualitySelector.value = true
+    }
+
+    fun dismissQualitySelector() {
+        _showQualitySelector.value = false
+    }
+
     fun launchVideo(
         videoUrl: String, 
         title: String?, 
@@ -117,9 +160,14 @@ class PlayerEngine(
         item: JSONObject?,
         season: Int?,
         episode: Int?,
-        fromStreams: Boolean = true
+        fromStreams: Boolean = true,
+        alternativeUrls: List<String> = emptyList(),
+        alternativeNames: List<String> = emptyList(),
+        initialPositionMs: Long = 0L
     ) {
-        saveProgress()
+        if (initialPositionMs == 0L) {
+            saveProgress()
+        }
 
         lastVideoUrl = videoUrl
         lastVideoTitle = title
@@ -127,10 +175,18 @@ class PlayerEngine(
         lastScrapedSeason = season
         lastScrapedEpisode = episode
         lastSubtitles = subtitles
+        lastHeaders = headers
+        lastFromStreams = fromStreams
+        lastAlternativeUrls = alternativeUrls
+        lastAlternativeNames = alternativeNames
+
         isUpNextDismissed = false
         hasReachedReady = false
         hasTriggeredPlaybackStarted = false
         _showUpNext.value = false
+        _showQualitySelector.value = false
+        _qualityOptions.value = emptyList()
+        _currentQuality.value = null
         _isPlayerActive.value = true
         isReleasing = false
 
@@ -143,11 +199,13 @@ class PlayerEngine(
 
         val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
         val bandwidthMeter = DefaultBandwidthMeter.Builder(context)
-            .setInitialBitrateEstimate(20000000L) // 20 Mbps initial estimate
+            .setInitialBitrateEstimate(20000000L)
             .build()
 
+        val trackSelector = DefaultTrackSelector(context)
         exoPlayer = ExoPlayer.Builder(context)
             .setBandwidthMeter(bandwidthMeter)
+            .setTrackSelector(trackSelector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory))
             .build()
 
@@ -177,6 +235,11 @@ class PlayerEngine(
                 }
             }
 
+            override fun onTracksChanged(tracks: Tracks) {
+                if (isReleasing || !_isPlayerActive.value) return
+                updateQualityOptions(tracks)
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 if (isReleasing || !_isPlayerActive.value) return
                 onPlaybackError(error, videoUrl + (if (fromStreams) "|from_streams" else ""))
@@ -193,15 +256,13 @@ class PlayerEngine(
             val label = infoMap["label"] ?: getLanguageInfo(subUrl).second
             val lang = if (label.isNotEmpty() && label != "Unknown") null else (infoMap["lang"] ?: getLanguageInfo(subUrl).first)
 
-            val config = MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
+            MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
                 .setMimeType(mimeType)
                 .setLanguage(lang)
                 .setLabel(label)
                 .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                 .setRoleFlags(C.ROLE_FLAG_SUBTITLE)
                 .build()
-
-            config
         }
 
         if (videoUrl.contains("|")) {
@@ -231,11 +292,16 @@ class PlayerEngine(
         }
 
         val resumeKey = if (title != null) "resume_stream_$title" else null
-        if (resumeKey != null) {
-            val savedPos = prefs.getLong(resumeKey, 0L)
-            if (savedPos > 5000L) {
-                exoPlayer?.seekTo(savedPos)
-            }
+        val savedPos = if (initialPositionMs > 0L) {
+            initialPositionMs
+        } else if (resumeKey != null) {
+            prefs.getLong(resumeKey, 0L)
+        } else {
+            0L
+        }
+
+        if (savedPos > 5000L) {
+            exoPlayer?.seekTo(savedPos)
         }
 
         if (!prefs.getBoolean("embedded_subs_enabled", true)) {
@@ -246,6 +312,112 @@ class PlayerEngine(
 
         exoPlayer?.prepare()
         exoPlayer?.playWhenReady = true
+    }
+
+    private fun updateQualityOptions(tracks: Tracks) {
+        val options = mutableListOf<QualityOption>()
+
+        if (lastAlternativeUrls.isNotEmpty()) {
+            for (i in lastAlternativeUrls.indices) {
+                val url = lastAlternativeUrls[i]
+                val name = lastAlternativeNames.getOrNull(i) ?: "QualityOption ${i + 1}"
+                options.add(QualityOption.DistinctUrl(name, url))
+            }
+        }
+
+        for (group in tracks.groups) {
+            if (group.type == C.TRACK_TYPE_VIDEO && group.isSupported) {
+                if (group.isAdaptiveSupported && options.none { it is QualityOption.Auto }) {
+                    options.add(QualityOption.Auto())
+                }
+                
+                for (i in 0 until group.length) {
+                    if (group.isTrackSupported(i)) {
+                        val format = group.getTrackFormat(i)
+                        val width = format.width
+                        val height = format.height
+                        val bitrate = format.bitrate
+                        val label = when {
+                            height > 0 -> "${height}p"
+                            width > 0 -> "${width}p"
+                            else -> format.label ?: "Track ${i + 1}"
+                        }
+                        val bitrateLabel = if (bitrate > 0) " (${bitrate / 1000} kbps)" else ""
+                        options.add(
+                            QualityOption.Native(
+                                name = "$label$bitrateLabel",
+                                trackGroup = group.mediaTrackGroup,
+                                trackIndex = i
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        _qualityOptions.value = options
+
+        val currentUrl = lastVideoUrl
+        val currentDistinct = options.firstOrNull { it is QualityOption.DistinctUrl && it.url == currentUrl }
+        if (currentDistinct != null) {
+            _currentQuality.value = currentDistinct
+        } else {
+            var selectedNative: QualityOption? = null
+            for (opt in options) {
+                if (opt is QualityOption.Native) {
+                    for (group in tracks.groups) {
+                        if (group.mediaTrackGroup == opt.trackGroup && group.isTrackSelected(opt.trackIndex)) {
+                            selectedNative = opt
+                            break
+                        }
+                    }
+                }
+            }
+            _currentQuality.value = selectedNative ?: options.firstOrNull { it is QualityOption.Auto }
+        }
+    }
+
+    fun selectQuality(option: QualityOption) {
+        val player = exoPlayer ?: return
+        when (option) {
+            is QualityOption.Auto -> {
+                player.trackSelectionParameters = player.trackSelectionParameters
+                    .buildUpon()
+                    .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+                    .build()
+                _currentQuality.value = option
+            }
+            is QualityOption.Native -> {
+                player.trackSelectionParameters = player.trackSelectionParameters
+                    .buildUpon()
+                    .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+                    .addOverride(TrackSelectionOverride(option.trackGroup, option.trackIndex))
+                    .build()
+                _currentQuality.value = option
+            }
+            is QualityOption.DistinctUrl -> {
+                val currentPos = player.currentPosition
+                val wasPlaying = player.playWhenReady
+                
+                saveProgress()
+                
+                launchVideo(
+                    videoUrl = option.url,
+                    title = lastVideoTitle,
+                    headers = lastHeaders,
+                    subtitles = lastSubtitles,
+                    item = lastScrapedItem,
+                    season = lastScrapedSeason,
+                    episode = lastScrapedEpisode,
+                    fromStreams = lastFromStreams,
+                    alternativeUrls = lastAlternativeUrls,
+                    alternativeNames = lastAlternativeNames,
+                    initialPositionMs = currentPos
+                )
+                exoPlayer?.playWhenReady = wasPlaying
+            }
+        }
+        _showQualitySelector.value = false
     }
 
     fun seekVideo(direction: Int, repeatCount: Int) {
@@ -307,7 +479,7 @@ class PlayerEngine(
         isReleasing = true
         saveProgress()
         checkUpNextHandler.removeCallbacks(checkUpNextRunnable)
-        playerScope.coroutineContext.cancelChildren() // Cancel active progress tasks
+        playerScope.coroutineContext.cancelChildren()
         try {
             exoPlayer?.stop()
             exoPlayer?.release()

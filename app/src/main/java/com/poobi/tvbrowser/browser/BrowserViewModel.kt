@@ -34,6 +34,13 @@ import java.net.URL
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
+data class TabMetadata(
+    val defaultTitle: String?,
+    val streamItemJson: String? = null,
+    val season: Int? = null,
+    val episode: Int? = null
+)
+
 sealed class BrowserDialogState {
     data class Download(val url: String, val fileName: String, val sizeMb: Float) : BrowserDialogState()
     data class PopupBlocked(val resultMsg: Message) : BrowserDialogState()
@@ -80,7 +87,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private var pendingCustomView: View? = null
     var customViewCallback: WebChromeClient.CustomViewCallback? = null
-    var onPlayNativeVideo: ((videoUrl: String, title: String?) -> Unit)? = null
+    var onPlayNativeVideo: ((videoUrl: String, title: String?, alternativeUrls: List<String>?, alternativeNames: List<String>?) -> Unit)? = null
 
     val currentWebView: WebView? get() = if (_currentTabIndex.value in _webViews.indices) _webViews[_currentTabIndex.value] else null
 
@@ -225,7 +232,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT
             )
             visibility = View.GONE
-            tag = title
+            tag = TabMetadata(defaultTitle = title)
         }
         setupWebView(newWebView)
         _webViews.add(newWebView)
@@ -252,6 +259,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _currentTabIndex.value = index
         _isBrowsing.value = true
         _webViews[index].visibility = View.VISIBLE
+        interceptedMediaUrls.clear()
+        interceptedSubtitleUrls.clear()
         
         val url = _webViews[index].url ?: ""
         _currentUrl.value = url
@@ -297,18 +306,37 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun loadUrlAndBrowse(context: Context, inputUrl: String, newTab: Boolean = false) {
+    fun loadUrlAndBrowse(
+        context: Context, 
+        inputUrl: String, 
+        newTab: Boolean = false,
+        streamItemJson: String? = null,
+        season: Int? = null,
+        episode: Int? = null
+    ) {
         var url = inputUrl.trim()
         if (url.isNotEmpty()) {
             if (!url.startsWith("http://") && !url.startsWith("https://")) {
                 url = if (url.contains(".") && !url.contains(" ")) "https://$url" else "https://www.google.com/search?q=$url"
             }
             if (newTab || _webViews.isEmpty()) {
-                createNewTab(context, url)
+                val newWv = createNewTab(context, url, switchTo = true)
+                newWv.tag = TabMetadata(
+                    defaultTitle = newWv.title,
+                    streamItemJson = streamItemJson,
+                    season = season,
+                    episode = episode
+                )
             } else {
                 if (_currentTabIndex.value == -1) {
                     _currentTabIndex.value = 0
                 }
+                currentWebView?.tag = TabMetadata(
+                    defaultTitle = currentWebView?.title,
+                    streamItemJson = streamItemJson,
+                    season = season,
+                    episode = episode
+                )
                 currentWebView?.loadUrl(url)
                 _isBrowsing.value = true
                 currentWebView?.visibility = View.VISIBLE
@@ -932,8 +960,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             }
 
             withContext(Dispatchers.Main) {
-                if (streamInfos.isNotEmpty()) {
-                    _currentDialog.value = BrowserDialogState.StreamPicker(streamUrls, streamInfos)
+                if (streamUrls.isNotEmpty()) {
+                    isExtractionActive = false
+                    playVideoInNativePlayer(
+                        url = streamUrls[0],
+                        title = currentWebView?.title,
+                        alternativeUrls = streamUrls,
+                        alternativeNames = streamInfos
+                    )
                 } else {
                     isExtractionActive = false
                 }
@@ -948,7 +982,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun playVideoInNativePlayer(url: String, title: String?) {
+    fun playVideoInNativePlayer(
+        url: String, 
+        title: String?, 
+        alternativeUrls: List<String>? = null, 
+        alternativeNames: List<String>? = null
+    ) {
         currentWebView?.apply {
             onPause()
             pauseTimers()
@@ -963,7 +1002,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 })();
             """.trimIndent(), null)
         }
-        onPlayNativeVideo?.invoke(url, title)
+        onPlayNativeVideo?.invoke(url, title, alternativeUrls, alternativeNames)
     }
 
     fun dismissStreamPicker() {
@@ -1287,9 +1326,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         for (wv in _webViews) {
             val url = wv.url ?: "about:blank"
             if (url == "about:blank") continue
+            val metadata = wv.tag as? TabMetadata
             val obj = JSONObject().apply {
                 put("url", url)
-                put("title", wv.title ?: wv.tag as? String ?: url)
+                put("title", wv.title ?: metadata?.defaultTitle ?: url)
             }
             array.put(obj)
         }
