@@ -1902,4 +1902,63 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
+
+    fun playTrailer(item: JSONObject, season: Int? = null, episode: Int? = null) {
+        val id = item.optString("id")
+        val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
+            ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
+
+        _scrapeStatusMsg.value = "Fetching trailer..."
+        _isScraping.value = true
+        _isResolving.value = true
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val scraper = py.getModule("main")
+                
+                val resultStr = scraper.callAttr("get_trailer", mediaType, id, season, episode).toString()
+                val json = JSONObject(resultStr)
+
+                withContext(Dispatchers.Main) {
+                    _isScraping.value = false
+                    _isResolving.value = false
+
+                    if (json.has("error")) {
+                        _events.value = StreamsEvent.ShowToast(json.getString("error"))
+                        return@withContext
+                    }
+
+                    val url = json.getString("url")
+                    val isVideo = json.getBoolean("is_video")
+
+                    val titleRaw = item.optString("title").takeIf { it.isNotEmpty() } ?: item.optString("name", "Unknown")
+                    val cleanTitle = titleRaw.replace(Regex("\\s\\(\\d{4}\\)$"), "")
+                    val fullTitle = when {
+                        season != null && episode != null -> "$cleanTitle S${season}E$episode Trailer"
+                        season != null -> "$cleanTitle S$season Trailer"
+                        else -> "$cleanTitle Trailer"
+                    }
+
+                    _events.value = StreamsEvent.PlayVideo(
+                        url = url,
+                        title = fullTitle,
+                        headers = emptyMap(),
+                        subtitles = emptyMap(),
+                        item = item,
+                        season = null,
+                        episode = null,
+                        nextEpisode = null,
+                        isWebpage = false
+                    )
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _isScraping.value = false
+                    _isResolving.value = false
+                    _events.value = StreamsEvent.ShowToast("Trailer failed to load.")
+                }
+            }
+        }
+    }
 }
