@@ -14,7 +14,6 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-
 try:
     from com.chaquo.python import Python
     python_context = Python.getPlatform().getApplication()
@@ -22,7 +21,6 @@ try:
 except:
     FILES_DIR = "."
 
-# Define function to get path at runtime
 def get_path(pkg):
     try:
         import importlib.util
@@ -32,15 +30,12 @@ def get_path(pkg):
     except: pass
     return None
 
-# Use the discovered path or a direct construction if spec fails
 SOURCES_PATH = get_path("sources") or os.path.join(FILES_DIR, "chaquopy/AssetFinder/app/sources")
 MODULES_PATH = get_path("modules") or os.path.join(FILES_DIR, "chaquopy/AssetFinder/app/modules")
 RESOLVEURL_PATH = get_path("resolveurl") or os.path.join(FILES_DIR, "chaquopy/AssetFinder/app/resolveurl")
 
 PROJECT_ROOT = os.path.dirname(SOURCES_PATH)
-# If for some reason SOURCES_PATH is still wrong, hardcode the one we know worked
 if not os.path.exists(SOURCES_PATH):
-    # Try one more variation seen in error messages
     alt_root = "/data/data/com.poobi.tvbrowser/files/chaquopy/AssetFinder/app"
     if os.path.exists(alt_root):
         PROJECT_ROOT = alt_root
@@ -55,24 +50,19 @@ CONFIG_FILE = os.path.join(USERDATA_PATH, 'config.json')
 
 if not os.path.exists(USERDATA_PATH): os.makedirs(USERDATA_PATH)
 
-# Add relevant paths to sys.path
 for path in [PROJECT_ROOT, MODULES_PATH, RESOLVEURL_PATH]:
     if path and path not in sys.path:
         sys.path.append(path)
 
-# Alias cfscrape to cloudscraper for resolvers that expect it
 try:
     import modules.cfscrape as cloudscraper
     sys.modules['cloudscraper'] = cloudscraper
 except ImportError:
     pass
-
-# Patch subtitles manager to use writable FILES_DIR and avoid metadata permission errors on Android
 try:
     import subtitles.manager as sub_manager
     sub_manager.PROJECT_ROOT = FILES_DIR
     import shutil
-    # Android blocks copystat/copy2 on some filesystems; standard copy is safer
     sub_manager.shutil.copy2 = shutil.copy
 except Exception as e:
     print(f"Subtitle patching failed: {e}")
@@ -93,20 +83,6 @@ except ImportError:
     resolveurl = None
 
 DEFAULT_WHITELIST = [
-    'vidsrc.me', '2embed.me', 'vidsrc.to', 'vidlink.org', 'vidsrc.mov', 
-    '2embed.ru', '2embed.cc', 'goload.io', 'goload.pro', 'vidembed.cc',
-    'vidcloud9.com', 'vidembed.cc', 'voxzer.org', 'ronemo.com', 'streamembed.net',
-    'databasegdriveplayer.co', 'bnwmovies.com', 'levidia.ch', 'mp4hydra.top',
-    'vidsrc.fyi', 'vidrock.net', 'vidnest.fun', 'vidking.net',
-    'vidfast.pro', 'vidup.to', 'videasy.net', '111movies.com',
-    'multiembed.mov', 'superflixapi.co', 'peachify.top', 'gdriveplayer.us',
-    'gomo.to', 'vsembed.ru', 'cloudnestra.com', 'putgate.org', 'goodstream.cc',
-    'stigstream.ru', 'linkbin.me', 'hlspanel.xyz', 'furher.in', 'playerhost.net',
-    'gomostream.com', 'gomoplayer.com', 'database.gdriveplayer.co', 'database.gdriveplayer.io',
-    'database.gdriveplayer.me', 'database.gdriveplayer.us', 'database.gdriveplayer.xyz',
-    'downloads-anymovies.co', 'downloads-anymovies.com', 'mp4hydra.org', 'mp4hydra.info',
-    'naijavault.com', 'seriezloaded.com.ng', 'stagatv.com', 'tvseries.in', 'mobiletvshows.site',
-    'fzmovies.live'
 ]
 
 def get_trailer(content, tmdb, season=None, episode=None):
@@ -323,7 +299,6 @@ def get_default_whitelist():
     hosts = list(DEFAULT_WHITELIST)
     if resolveurl and hasattr(resolveurl, 'relevant_resolvers'):
         try:
-            # We want the absolute maximum whitelist, so include everything
             resolvers = resolveurl.relevant_resolvers(include_popups=True, include_universal=True, order_matters=True)
             for r in resolvers:
                 if not '*' in r.domains:
@@ -369,8 +344,7 @@ def load_config():
         "allow_universal": True,
         "auto_pick": True
     }
-    
-    # Initialize all detected packs as enabled by default in the base config
+
     try:
         if os.path.exists(SOURCES_PATH):
             for d in os.listdir(SOURCES_PATH):
@@ -384,8 +358,7 @@ def load_config():
                 user_cfg = json.load(f)
                 default_config.update(user_cfg)
         except Exception: pass
-    
-    # Subtitle purging
+
     try:
         import subtitles.manager as sub_manager
         sub_manager.purge_old_subtitles(default_config.get('sub_retention_days', 3))
@@ -399,7 +372,6 @@ def save_config(cfg):
 
 GLOBAL_CONFIG = load_config()
 
-# Sync config with control module and ResolveURL
 try:
     import modules.control as control
     control._settings.update(GLOBAL_CONFIG)
@@ -412,7 +384,6 @@ try:
     except: pass
 except ImportError:
     pass
-
 class UniversalScraper:
     def __init__(self, enabled_packs, load_providers=False):
         self.enabled_packs = enabled_packs
@@ -434,7 +405,6 @@ class UniversalScraper:
         else:
             self.hostDict = []
 
-        # Subset of the whitelist that corresponds to provider-pack source domains
         provider_set = set(gather_provider_pack_hosts())
         self.provider_hosts = [h for h in self.hostDict if h in provider_set]
 
@@ -507,6 +477,7 @@ class UniversalScraper:
                                 continue
                         providers.append((pack, file[:-3], instance))
 
+
         self.status["total"] = len(providers)
         self.status["current"] = 0
         self.status["message"] = f"Found {len(providers)} providers..."
@@ -523,6 +494,7 @@ class UniversalScraper:
         self.status["message"] = f"Found {len(compatible_providers)} compatible providers..."
 
         aliases_str = "[]"
+
         executor = ThreadPoolExecutor(max_workers=3)
         futures = []
 
@@ -573,7 +545,10 @@ class UniversalScraper:
         executor.shutdown(wait=False)
 
         if not self.stop_event.is_set():
-            self.status["message"] = f"Finished! Found {len(self.sources)} sources."
+            if self.status["message"] != "Timeout reached!":
+                self.status["message"] = f"Finished! Found {len(self.sources)} sources."
+            else:
+                self.status["message"] = f"Timeout reached! Found {len(self.sources)} sources."
 
         quality_map = {'4k': 0, '1080p': 1, '720p': 2, 'hd': 2, 'sd': 3, 'cam': 4, 'scr': 4}
         for s in self.sources:
@@ -589,23 +564,30 @@ class UniversalScraper:
     def worker(self, provider, content, title, localtitle, aliases, year, imdb, tmdb, tvdb, season, episode, premiered, name, pack_name):
         try:
             if self.stop_event.is_set(): return
+            
             while not self.pause_event.is_set():
                 if self.stop_event.is_set(): return
                 time.sleep(0.2)
 
             if content == 'movie':
                 sig = inspect.signature(provider.movie)
-                if 'tmdb' in sig.parameters: url = provider.movie(imdb, tmdb, title, localtitle, aliases, year)
-                else: url = provider.movie(imdb, title, localtitle, aliases, year)
+                if 'tmdb' in sig.parameters:
+                    url = provider.movie(imdb, tmdb, title, localtitle, aliases, year)
+                else:
+                    url = provider.movie(imdb, title, localtitle, aliases, year)
             else:
                 sig = inspect.signature(provider.tvshow)
-                if 'tmdb' in sig.parameters: url = provider.tvshow(imdb, tmdb, tvdb, title, localtitle, aliases, year)
-                else: url = provider.tvshow(imdb, tvdb, title, localtitle, aliases, year)
+                if 'tmdb' in sig.parameters:
+                    url = provider.tvshow(imdb, tmdb, tvdb, title, localtitle, aliases, year)
+                else:
+                    url = provider.tvshow(imdb, tvdb, title, localtitle, aliases, year)
                 
                 if url and hasattr(provider, 'episode'):
                     ep_sig = inspect.signature(provider.episode)
-                    if 'tmdb' in ep_sig.parameters: url = provider.episode(url, imdb, tmdb, tvdb, title, premiered, season, episode)
-                    else: url = provider.episode(url, imdb, tvdb, title, premiered, season, episode)
+                    if 'tmdb' in ep_sig.parameters:
+                        url = provider.episode(url, imdb, tmdb, tvdb, title, premiered, season, episode)
+                    else:
+                        url = provider.episode(url, imdb, tvdb, title, premiered, season, episode)
 
             if url:
                 if self.stop_event.is_set(): return
@@ -614,8 +596,10 @@ class UniversalScraper:
                     time.sleep(0.2)
 
                 sources_sig = inspect.signature(provider.sources)
-                if 'hostprDict' in sources_sig.parameters: results = provider.sources(url, self.hostDict, [])
-                else: results = provider.sources(url, self.hostDict)
+                if 'hostprDict' in sources_sig.parameters:
+                    results = provider.sources(url, self.hostDict, [])
+                else:
+                    results = provider.sources(url, self.hostDict)
 
                 if results:
                     for res in results:
@@ -659,7 +643,7 @@ class UniversalScraper:
                     resolved = hmf.resolve()
                     if resolved: return resolved, True
             except: pass
-            
+
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
         video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
         
@@ -671,7 +655,6 @@ class UniversalScraper:
                 
         return url, is_video
 
-# --- ANDROID BRIDGE FUNCTIONS ---
 
 active_scraper = None
 
@@ -679,12 +662,14 @@ def set_config(cfg_json):
     try:
         cfg = json.loads(cfg_json)
         global GLOBAL_CONFIG
+
         if "enabled_packs" in cfg:
             enabled = cfg["enabled_packs"]
             if os.path.exists(SOURCES_PATH):
                 for d in os.listdir(SOURCES_PATH):
                     if os.path.isdir(os.path.join(SOURCES_PATH, d)):
                         GLOBAL_CONFIG[f"pack_{d}"] = d in enabled
+
         GLOBAL_CONFIG.update(cfg)
         save_config(GLOBAL_CONFIG)
         return "Success"
@@ -710,7 +695,7 @@ def get_all_hosts():
                             if '*' not in dom:
                                 resolveurl_hosts.add(dom.lower())
             except: pass
-        
+
         try:
             scrape_sources_path = os.path.join(PROJECT_ROOT, 'modules', 'scrape_sources.py')
             if os.path.exists(scrape_sources_path):
@@ -725,6 +710,7 @@ def get_all_hosts():
 
         provider_hosts = set(gather_provider_pack_hosts())
         provider_hosts = provider_hosts - resolveurl_hosts
+        
         return json.dumps({
             "ResolveURL Hosts": sorted(list(resolveurl_hosts)),
             "Provider Pack Hosts": sorted(list(provider_hosts))
@@ -735,18 +721,16 @@ def get_all_hosts():
 
 def get_tv_seasons(tv_id):
     try:
-        api_key = "f5608fba6ab49e9985828b35d5653321"
-        url = f"https://api.themoviedb.org/3/tv/{tv_id}?api_key={api_key}"
-        res = requests.get(url).json()
+        import tmdb.tmdb_utils as tmdb_utils
+        res = tmdb_utils.get_details(tv_id, 'tv')
         return json.dumps(res)
     except:
         return json.dumps({})
 
 def get_tv_episodes(tv_id, season_number):
     try:
-        api_key = "f5608fba6ab49e9985828b35d5653321"
-        url = f"https://api.themoviedb.org/3/tv/{tv_id}/season/{season_number}?api_key={api_key}"
-        res = requests.get(url).json().get('episodes', [])
+        import tmdb.tmdb_utils as tmdb_utils
+        res = tmdb_utils.get_tv_episodes(tv_id, season_number).get('episodes', [])
         return json.dumps(res)
     except:
         return json.dumps([])
@@ -754,15 +738,26 @@ def get_tv_episodes(tv_id, season_number):
 def search_subtitles(item_json, season=None, episode=None):
     try:
         import subtitles.manager as sub_manager
+        import tmdb.tmdb_utils as tmdb_utils
         item = json.loads(item_json)
         tmdb_id = str(item['id'])
-        api_key = "f5608fba6ab49e9985828b35d5653321"
         media_type = item.get('media_type', 'movie')
-        ext_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}/external_ids?api_key={api_key}"
-        imdb_id = requests.get(ext_url).json().get('imdb_id', '0')
+        
+        ext_ids = tmdb_utils.get_external_ids(tmdb_id, media_type)
+        imdb_id = ext_ids.get('imdb_id', '0')
+        
         title = item.get('orig_title') or item.get('title')
         year = item.get('year') or (item.get('release_date') or '0000')[:4]
-        results = sub_manager.search_subtitles(imdb_id=imdb_id, title=title, year=year, season=season, episode=episode, tvshow=title if media_type == 'tv' else None, settings=GLOBAL_CONFIG)
+
+        results = sub_manager.search_subtitles(
+            imdb_id=imdb_id,
+            title=title,
+            year=year,
+            season=season,
+            episode=episode,
+            tvshow=title if media_type == 'tv' else None,
+            settings=GLOBAL_CONFIG
+        )
         return json.dumps(results or [])
     except Exception:
         traceback.print_exc()
@@ -772,7 +767,11 @@ def get_subtitle_file(service_name, action_args_json):
     try:
         import subtitles.manager as sub_manager
         action_args = json.loads(action_args_json)
-        filepath = sub_manager.download_subtitle(service_name, action_args, settings=GLOBAL_CONFIG)
+        filepath = sub_manager.download_subtitle(
+            service_name,
+            action_args,
+            settings=GLOBAL_CONFIG
+        )
         return filepath if filepath else ""
     except Exception:
         traceback.print_exc()
@@ -784,6 +783,7 @@ def get_scrape_status():
     if s_inst:
         res = s_inst.status.copy()
         sources = s_inst.sources[:]
+
         if getattr(s_inst, "_last_format_count", -1) == len(sources) and hasattr(s_inst, "_cached_display_sources"):
             res["sources"] = s_inst._cached_display_sources
             return json.dumps(res)
@@ -791,6 +791,7 @@ def get_scrape_status():
         display_sources = []
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
         video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
+
         quality_map = {'4k': 0, '1080p': 1, '720p': 2, 'hd': 2, 'sd': 3, 'cam': 4, 'scr': 4}
         for s in sources:
             s['q_sort'] = quality_map.get(str(s.get('quality')).lower(), 3)
@@ -873,28 +874,55 @@ def resume_scrape():
 
 def search(query):
     try:
-        api_key = "55d4ea0acb04a10053c2be637eb707a9"
-        res = requests.get(f"https://api.themoviedb.org/3/search/multi?api_key={api_key}&query={query.replace(' ', '+')}").json().get('results', [])
+        import tmdb.tmdb_utils as tmdb_utils
+        res = tmdb_utils.search(query).get('results', [])
+
         filtered = []
         for item in res:
             media_type = item.get('media_type')
             if media_type in ['movie', 'tv']:
                 title = item.get('title') or item.get('name')
                 year = (item.get('release_date') or item.get('first_air_date') or '0000')[:4]
-                filtered.append({"title": f"{title} ({year})", "id": item['id'], "media_type": media_type, "release_date": item.get('release_date') or item.get('first_air_date'), "overview": item.get('overview'), "poster_path": item.get('poster_path'), "backdrop_path": item.get('backdrop_path'), "vote_average": item.get('vote_average'), "genre_ids": item.get('genre_ids', []), "orig_title": title, "year": year})
+                filtered.append({
+                    "title": f"{title} ({year})",
+                    "id": item['id'],
+                    "media_type": media_type,
+                    "release_date": item.get('release_date') or item.get('first_air_date'),
+                    "overview": item.get('overview'),
+                    "poster_path": item.get('poster_path'),
+                    "backdrop_path": item.get('backdrop_path'),
+                    "vote_average": item.get('vote_average'),
+                    "genre_ids": item.get('genre_ids', []),
+                    "orig_title": title,
+                    "year": year
+                })
+            elif media_type == 'person':
+                filtered.append({
+                    "title": item.get('name'),
+                    "id": item['id'],
+                    "media_type": "person",
+                    "overview": f"Known for: {item.get('known_for_department')}",
+                    "poster_path": item.get('profile_path'),
+                    "orig_title": item.get('name'),
+                    "year": ""
+                })
         return json.dumps(filtered)
-    except Exception as e: return json.dumps([{"title": f"Error: {str(e)}", "url": ""}])
+    except Exception as e:
+        return json.dumps([{"title": f"Error: {str(e)}", "url": ""}])
 
 def scrape(item_json, season=None, episode=None):
     global active_scraper
     stop_scrape()
     try:
+        import tmdb.tmdb_utils as tmdb_utils
         item = json.loads(item_json)
         tmdb_id = str(item['id'])
-        api_key = "f5608fba6ab49e9985828b35d5653321"
         media_type = item.get('media_type', 'movie')
-        ext_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}/external_ids?api_key={api_key}"
-        imdb_id = requests.get(ext_url).json().get('imdb_id', '0')
+        
+        ext_ids = tmdb_utils.get_external_ids(tmdb_id, media_type)
+        imdb_id = ext_ids.get('imdb_id', '0')
+
+
         if not os.path.exists(SOURCES_PATH): return json.dumps([{"title": "Error: SOURCES_PATH not found", "source_data": ""}])
         packs = [d for d in os.listdir(SOURCES_PATH) if os.path.isdir(os.path.join(SOURCES_PATH, d))]
         enabled_packs = GLOBAL_CONFIG.get("enabled_packs")
@@ -955,5 +983,3 @@ def resolve(source_data_json):
         url, is_video = scraper.resolveSource(source_data)
         return json.dumps({"url": url if url else "", "is_video": is_video})
     except Exception as e: return json.dumps({"error": str(e)})
-
-# --- END ANDROID BRIDGE ---

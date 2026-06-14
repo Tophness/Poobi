@@ -23,6 +23,7 @@ import com.poobi.tvbrowser.browser.CursorManager
 import com.poobi.tvbrowser.player.PlayerEngine
 import com.poobi.tvbrowser.shared.PythonDialogListener
 import com.poobi.tvbrowser.shared.cleanKodiText
+import com.poobi.tvbrowser.shared.isFutureDate
 import com.poobi.tvbrowser.streams.StreamsEvent
 import com.poobi.tvbrowser.streams.StreamsViewModel
 import kotlinx.coroutines.CompletableDeferred
@@ -206,7 +207,12 @@ class MainActivity : AppCompatActivity() {
                             for (i in 0 until episodes.length()) {
                                 val ep = episodes.getJSONObject(i)
                                 if (ep.optInt("episode_number") == episode + 1) {
-                                    playerEngine.setNextEpisode(ep)
+                                    val airDate = ep.optString("air_date", "")
+                                    if (airDate.isNotEmpty() && !isFutureDate(airDate)) {
+                                        playerEngine.setNextEpisode(ep)
+                                    } else {
+                                        playerEngine.setNextEpisode(null)
+                                    }
                                     break
                                 }
                             }
@@ -304,7 +310,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 val py = Python.getInstance()
                 py.getModule("modules.control")
-                py.getModule("tmdb.tmdb_api")
+                py.getModule("tmdb.tmdb_utils")
                 py.getModule("main")
             } catch (e: Exception) {
                 Log.e("TVBrowser", "Error warming up Python modules", e)

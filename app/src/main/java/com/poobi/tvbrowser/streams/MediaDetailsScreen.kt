@@ -39,6 +39,7 @@ import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.RemoteImage
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvMarqueeText
+import com.poobi.tvbrowser.shared.isFutureDate
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -50,6 +51,18 @@ private fun findFirstUnwatchedEpisode(episodes: JSONArray): Int {
         }
     }
     return 1
+}
+
+private fun formatDateToDMY(dateStr: String?): String {
+    if (dateStr.isNullOrEmpty() || dateStr == "null" || dateStr == "0000") return dateStr ?: ""
+    return try {
+        val parser = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        val formatter = java.text.SimpleDateFormat("d/M/yyyy", java.util.Locale.US)
+        val date = parser.parse(dateStr)
+        if (date != null) formatter.format(date) else dateStr
+    } catch (e: Exception) {
+        dateStr
+    }
 }
 
 private val MovieIcon: ImageVector = ImageVector.Builder(
@@ -217,6 +230,11 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                 ep.optBoolean("is_watched", false) || locallyWatchedEpisodes.contains(ep.optInt("episode_number"))
             }
 
+            val isEpisodeAired = { ep: JSONObject ->
+                val airDate = ep.optString("air_date", "")
+                airDate.isNotEmpty() && !isFutureDate(airDate)
+            }
+
             if (focusMode == 0) {
                 var maxWatchedEp = -1
                 for (i in 0 until localEpisodes.length()) {
@@ -230,25 +248,40 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                 }
                 if (maxWatchedEp != -1) {
                     val nextEp = maxWatchedEp + 1
-                    var nextExists = false
+                    var nextExistsAndAired = false
                     for (i in 0 until localEpisodes.length()) {
-                        if (localEpisodes.getJSONObject(i).optInt("episode_number") == nextEp) {
-                            nextExists = true
+                        val ep = localEpisodes.getJSONObject(i)
+                        if (ep.optInt("episode_number") == nextEp) {
+                            if (isEpisodeAired(ep)) {
+                                nextExistsAndAired = true
+                            }
                             break
                         }
                     }
-                    if (nextExists) nextEp else maxWatchedEp
+                    if (nextExistsAndAired) nextEp else maxWatchedEp
                 } else {
                     1
                 }
             } else {
                 var targetEp = 1
+                var found = false
                 for (i in 0 until localEpisodes.length()) {
                     val ep = localEpisodes.getJSONObject(i)
-                    if (!isWatched(ep)) {
+                    if (!isWatched(ep) && isEpisodeAired(ep)) {
                         targetEp = ep.optInt("episode_number", 1)
+                        found = true
                         break
                     }
+                }
+                if (!found) {
+                    var lastWatched = 1
+                    for (i in 0 until localEpisodes.length()) {
+                        val ep = localEpisodes.getJSONObject(i)
+                        if (isWatched(ep)) {
+                            lastWatched = ep.optInt("episode_number", 1)
+                        }
+                    }
+                    targetEp = lastWatched
                 }
                 targetEp
             }
@@ -309,8 +342,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                 Text(text = year, color = Color(0xFFB0BEC5), fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text(text = " • ", color = Color.DarkGray, fontSize = 15.sp)
                 Text(text = mediaType.uppercase(), color = Color(0xFF90A4AE), fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Text(text = " • ", color = Color.DarkGray, fontSize = 15.sp)
-                Text(text = "⭐ %.1f".format(rating), color = Color(0xFF00BCD4), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                if (rating > 0.0) {
+                    Text(text = " • ", color = Color.DarkGray, fontSize = 15.sp)
+                    Text(text = "⭐ %.1f".format(rating), color = Color(0xFF00BCD4), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
             }
 
             if (genresStr.isNotEmpty()) {
@@ -320,6 +355,18 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     fontSize = 14.sp,
                     maxLines = 1,
                     isFocused = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (mediaType == "movie" && releaseDate != "0000" && releaseDate.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                val formattedReleaseDate = remember(releaseDate) { formatDateToDMY(releaseDate) }
+                Text(
+                    text = "Released: $formattedReleaseDate",
+                    color = Color(0xFF90A4AE),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -473,6 +520,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 							val isWatched = ep.optBoolean("is_watched", false)
 							val isTarget = (num == targetEpisodeToFocus)
 							var isCardFocused by remember { mutableStateOf(false) }
+							val airDate = ep.optString("air_date", "")
 							
 							val scale by androidx.compose.animation.core.animateFloatAsState(
 								targetValue = if (isCardFocused) 1.02f else 1.0f,
@@ -494,7 +542,6 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 									.background(cardBgColor)
 									.border(if (isCardFocused) 2.dp else 0.dp, cardBorderColor, RoundedCornerShape(8.dp))
 									.onFocusChanged { state: FocusState ->
-										// Explicitly specified FocusState type
 										isCardFocused = state.hasFocus
 									},
 								verticalAlignment = Alignment.CenterVertically
@@ -541,6 +588,18 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 												fontSize = 16.sp,
 												fontWeight = FontWeight.Bold
 											)
+											if (airDate.isNotEmpty()) {
+												val isFuture = isFutureDate(airDate)
+												val formattedAirDate = remember(airDate) { formatDateToDMY(airDate) }
+												val prefix = if (isFuture) "Airing: " else "Aired: "
+												Text(
+													text = "$prefix$formattedAirDate",
+													color = if (isCardFocused) Color(0xFF2E2E35) else Color(0xFF00BCD4),
+													fontSize = 11.sp,
+													fontWeight = FontWeight.Bold,
+													modifier = Modifier.padding(vertical = 2.dp)
+												)
+											}
 											Text(
 												text = ep.optString("overview"),
 												color = descColor,
@@ -637,7 +696,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                         modifier = Modifier
                                             .width(120.dp)
                                             .let { if (idx == 0) it.focusRequester(firstCastFocusRequester) else it },
-                                        onClick = {}
+                                        onClick = { viewModel.selectCastMember(c.optInt("id"), c.optString("name")) }
                                     ) { isFocused ->
                                         Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
                                             RemoteImage(

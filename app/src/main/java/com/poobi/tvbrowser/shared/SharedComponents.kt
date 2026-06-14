@@ -36,6 +36,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 // Elegant, zero-dependency in-memory LRU cache to prevent re-fetching list images
 object ImageCache {
@@ -168,5 +171,15 @@ fun RemoteImage(
                 modifier = Modifier.size(32.dp)
             )
         }
+    }
+}
+
+fun isFutureDate(dateStr: String?): Boolean {
+    if (dateStr.isNullOrEmpty() || dateStr == "null") return false
+    return try {
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        dateStr > todayStr
+    } catch (e: Exception) {
+        false
     }
 }
