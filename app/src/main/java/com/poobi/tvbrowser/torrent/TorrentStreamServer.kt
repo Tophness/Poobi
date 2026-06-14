@@ -92,20 +92,53 @@ class TorrentStreamServer private constructor(
     }
 
     fun clearAllCache() {
+        stopActiveStreams()
         if (torrentStorageDir.exists()) {
             torrentStorageDir.deleteRecursively()
             torrentStorageDir.mkdirs()
         }
     }
 
+    private fun getActualFileSize(file: File): Long {
+        return try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                val stat = android.system.Os.lstat(file.absolutePath)
+                stat.st_blocks * 512L
+            } else {
+                file.length()
+            }
+        } catch (e: Exception) {
+            file.length()
+        }
+    }
+
     private fun getFolderSize(file: File): Long {
-        if (file.isFile) return file.length()
+        if (file.isFile) return getActualFileSize(file)
         var size = 0L
         val files = file.listFiles() ?: return 0L
         for (f in files) {
             size += getFolderSize(f)
         }
         return size
+    }
+
+    fun checkAndCleanPeriodicCache(ctx: Context) {
+        val prefs = ctx.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
+        val cleanMode = prefs.getInt("torrent_cache_clean_mode", 0)
+        if (cleanMode == 3) {
+            val days = prefs.getInt("torrent_cache_clean_days", 0)
+            if (days > 0) {
+                val lastClean = prefs.getLong("torrent_cache_last_clean_time", 0L)
+                val now = System.currentTimeMillis()
+                val diffMs = now - lastClean
+                val daysInMs = days * 24L * 60L * 60L * 1000L
+                if (lastClean == 0L || diffMs >= daysInMs) {
+                    clearAllCache()
+                    prefs.edit().putLong("torrent_cache_last_clean_time", now).apply()
+                    Log.i("TorrentServer", "Periodic cache cleaning executed ($days days passed).")
+                }
+            }
+        }
     }
 
     fun prepareTorrent(
@@ -119,6 +152,15 @@ class TorrentStreamServer private constructor(
     ) {
         try {
             forcePlayTriggered = false
+
+            val prefs = context.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
+            val cleanMode = prefs.getInt("torrent_cache_clean_mode", 0)
+            if (cleanMode == 1) {
+                clearAllCache()
+            } else if (cleanMode == 3) {
+                checkAndCleanPeriodicCache(context)
+            }
+
             onStatusUpdate("Locating torrent metadata...", 0f, 0)
             val handle = getOrAddTorrent(infoHash)
             if (handle == null) {

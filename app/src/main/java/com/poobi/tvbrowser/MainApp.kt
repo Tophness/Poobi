@@ -896,23 +896,28 @@ fun MainApp(
                     }
                 },
                 confirmButton = {
-                    Button(
-                        onClick = { streamsViewModel.forcePlayTorrentNow() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                        modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Play Now", color = Color.White, fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = { streamsViewModel.forcePlayTorrentNow() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                        ) {
+                            Text("Play Now", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                        
+                        Button(
+                            onClick = { streamsViewModel.cancelTorrentBuffering() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                        ) {
+                            Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 },
-                dismissButton = {
-                    Button(
-                        onClick = { streamsViewModel.cancelTorrentBuffering() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-                        modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                    ) {
-                        Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                }
+                dismissButton = null
             )
         }
     }

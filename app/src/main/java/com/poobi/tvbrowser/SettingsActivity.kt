@@ -120,6 +120,12 @@ class SettingsActivity : AppCompatActivity() {
     private var scrapeTabOrder by mutableStateOf("Streams,Torrents")
     private var torrentLanguage by mutableStateOf("English")
 
+    // Torrent Cache auto-clean settings
+    private var torrentCacheCleanMode by mutableStateOf(0)
+    private var torrentCacheCleanDays by mutableStateOf(0)
+    private var torrentCacheCleanDaysStr by mutableStateOf("")
+	private var torrentPrebufferPieces by mutableStateOf(1)
+
     // Streaming Panel
     private var timeoutMode by mutableStateOf("Both")
     private var globalTimeout by mutableStateOf(30)
@@ -308,6 +314,12 @@ class SettingsActivity : AppCompatActivity() {
         navMode = prefs.getInt("navigation_mode_pref", 0)
         scrapeTabOrder = prefs.getString("scrape_tab_order", "Streams,Torrents") ?: "Streams,Torrents"
         torrentLanguage = prefs.getString("torrent_language", "English") ?: "English"
+
+        // Torrent Cache Auto-Clean Panel variables
+        torrentCacheCleanMode = prefs.getInt("torrent_cache_clean_mode", 0)
+        torrentCacheCleanDays = prefs.getInt("torrent_cache_clean_days", 0)
+        torrentCacheCleanDaysStr = if (torrentCacheCleanDays > 0) torrentCacheCleanDays.toString() else ""
+		torrentPrebufferPieces = prefs.getInt("torrent_prebuffer_pieces", 1)
 
         // Streaming Panel
         timeoutMode = prefs.getString("timeout_mode", "Both") ?: "Both"
@@ -1567,6 +1579,7 @@ class SettingsActivity : AppCompatActivity() {
 	fun TorrentPanel() {
 		var cacheSize by remember { mutableStateOf(0L) }
 		var cacheItems by remember { mutableStateOf(emptyList<com.poobi.tvbrowser.torrent.TorrentCacheItem>()) }
+		var showDaysPickerDialog by remember { mutableStateOf(false) }
 
 		fun refreshCache() {
 			val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
@@ -1586,7 +1599,7 @@ class SettingsActivity : AppCompatActivity() {
 					DropdownSettingRow(
 						label = "Playback Pre-buffer Size",
 						options = listOf("1 Piece (Fastest / Default)", "2 Pieces", "4 Pieces (Standard)", "8 Pieces (Most Stable)"),
-						selectedIndex = when (prefs.getInt("torrent_prebuffer_pieces", 1)) {
+						selectedIndex = when (torrentPrebufferPieces) {
 							1 -> 0
 							2 -> 1
 							4 -> 2
@@ -1601,6 +1614,7 @@ class SettingsActivity : AppCompatActivity() {
 							3 -> 8
 							else -> 1
 						}
+						torrentPrebufferPieces = pieces
 						lifecycleScope.launch(Dispatchers.IO) {
 							prefs.edit().putInt("torrent_prebuffer_pieces", pieces).apply()
 						}
@@ -1616,6 +1630,35 @@ class SettingsActivity : AppCompatActivity() {
 						torrentLanguage = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi")[index]
 						lifecycleScope.launch(Dispatchers.IO) {
 							prefs.edit().putString("torrent_language", torrentLanguage).apply()
+						}
+					}
+				}
+
+				item {
+					DropdownSettingRow(
+						label = "Torrent Cache Auto-Clean Mode",
+						options = listOf("Manual Only", "Every time a new torrent starts", "Every time a video is exited", "Every X days"),
+						selectedIndex = torrentCacheCleanMode
+					) { index ->
+						torrentCacheCleanMode = index
+						if (index == 3) {
+							showDaysPickerDialog = true
+						}
+					}
+				}
+
+				if (torrentCacheCleanMode == 3) {
+					item {
+						Card(
+							modifier = Modifier.fillMaxWidth().clickable { showDaysPickerDialog = true }.tvSettingsFocus(),
+							colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))
+						) {
+							Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+								Column(modifier = Modifier.weight(1f)) {
+									Text("Clean Interval", color = Color.LightGray, fontSize = 12.sp)
+									Text(if (torrentCacheCleanDays > 0) "Every $torrentCacheCleanDays days" else "Disabled / Click to set", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+								}
+							}
 						}
 					}
 				}
@@ -1670,6 +1713,55 @@ class SettingsActivity : AppCompatActivity() {
 					}
 				}
 			}
+		}
+
+		if (showDaysPickerDialog) {
+			AlertDialog(
+				onDismissRequest = { showDaysPickerDialog = false },
+				title = { Text("Auto-Clean Interval", color = Color.White) },
+				containerColor = Color(0xFF222225),
+				text = {
+					Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+						Text("Enter number of days between cache cleans:", color = Color.LightGray)
+						TvInputField(
+							value = torrentCacheCleanDaysStr,
+							onValueChange = { newValue ->
+								val filtered = newValue.filter { it.isDigit() }
+								torrentCacheCleanDaysStr = filtered
+								if (filtered.isNotEmpty()) {
+									torrentCacheCleanDays = filtered.toInt()
+								} else {
+									torrentCacheCleanDays = 0
+								}
+							},
+							placeholder = "e.g. 7",
+							containerColor = Color(0xFF222225),
+							imeAction = ImeAction.Done
+						)
+					}
+				},
+				confirmButton = {
+					Button(
+						onClick = {
+							showDaysPickerDialog = false
+						},
+						modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+					) {
+						Text("OK", color = Color.White)
+					}
+				},
+				dismissButton = {
+					Button(
+						onClick = {
+							showDaysPickerDialog = false
+						},
+						colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+						modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+					) {
+						Text("Cancel", color = Color.White)
+					}
+				}
+			)
 		}
 	}
 
@@ -1850,6 +1942,11 @@ class SettingsActivity : AppCompatActivity() {
                     putString("scrape_tab_order", scrapeTabOrder)
                     putString("torrent_language", torrentLanguage)
 
+                    // Torrent Auto-Clean
+                    putInt("torrent_cache_clean_mode", torrentCacheCleanMode)
+                    putInt("torrent_cache_clean_days", torrentCacheCleanDays)
+                    putInt("torrent_prebuffer_pieces", torrentPrebufferPieces)
+
                     // Streaming
                     putString("timeout_mode", timeoutMode)
                     putInt("global_timeout", globalTimeout)
@@ -1899,6 +1996,7 @@ class SettingsActivity : AppCompatActivity() {
                     put("up_next_time_pref", upNextTime)
                     put("autoplay_next_pref", autoplayNext)
                     put("scrape_tab_order", scrapeTabOrder)
+					put("torrent_language", torrentLanguage)
 
                     val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
                     serviceKeys.forEach { key ->

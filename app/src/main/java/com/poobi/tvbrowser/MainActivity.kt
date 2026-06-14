@@ -152,6 +152,11 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val server = TorrentStreamServer.getInstance(applicationContext)
                     server.stopActiveStreams()
+                    val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
+                    val cleanMode = prefs.getInt("torrent_cache_clean_mode", 0)
+                    if (cleanMode == 2) {
+                        server.clearAllCache()
+                    }
                 } catch (e: Exception) {}
             },
             onVideoWatched = { season, episode ->
@@ -667,6 +672,7 @@ class MainActivity : AppCompatActivity() {
                 val server = TorrentStreamServer.getInstance(applicationContext)
                 server.start()
                 Log.i("TVBrowser", "Local Torrent Engine running on port 11470")
+                server.checkAndCleanPeriodicCache(applicationContext)
             } catch (e: Exception) {
                 Log.e("TVBrowser", "Failed to start local Torrent Server", e)
             }
