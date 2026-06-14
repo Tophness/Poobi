@@ -116,6 +116,8 @@ class SettingsActivity : AppCompatActivity() {
     // Interface Panel
     private var scrollTopbar by mutableStateOf(true)
     private var navMode by mutableStateOf(0)
+    private var scrapeTabOrder by mutableStateOf("Streams,Torrents")
+    private var torrentLanguage by mutableStateOf("English")
 
     // Streaming Panel
     private var timeoutMode by mutableStateOf("Both")
@@ -302,6 +304,8 @@ class SettingsActivity : AppCompatActivity() {
         // Interface Panel
         scrollTopbar = prefs.getBoolean("scroll_topbar_enabled", true)
         navMode = prefs.getInt("navigation_mode_pref", 0)
+        scrapeTabOrder = prefs.getString("scrape_tab_order", "Streams,Torrents") ?: "Streams,Torrents"
+        torrentLanguage = prefs.getString("torrent_language", "English") ?: "English"
 
         // Streaming Panel
         timeoutMode = prefs.getString("timeout_mode", "Both") ?: "Both"
@@ -599,6 +603,9 @@ class SettingsActivity : AppCompatActivity() {
             PanelHeader("Interface Navigation Settings")
             ToggleSettingRow("Scroll up for Navigation Bar", scrollTopbar) { scrollTopbar = it }
             DropdownSettingRow("Default Pointer Navigation Mode", listOf("Simulated Pointer (Cursor)", "Physical target navigation (D-pad selection)"), navMode) { navMode = it }
+            DropdownSettingRow("Scraper Result Tab Order", listOf("Streams, Torrents", "Torrents, Streams"), if (scrapeTabOrder == "Streams,Torrents") 0 else 1) { 
+                scrapeTabOrder = if (it == 0) "Streams,Torrents" else "Torrents,Streams"
+            }
         }
     }
 
@@ -651,6 +658,12 @@ class SettingsActivity : AppCompatActivity() {
                         ToggleSettingRow("Enforce Host Whitelist", enforceWhitelist, modifier = Modifier.weight(1f)) { 
                             enforceWhitelist = it
                         }
+                    }
+                }
+
+                item {
+                    DropdownSettingRow("Preferred Torrent Language", listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi"), listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi").indexOf(torrentLanguage).coerceAtLeast(0)) {
+                        torrentLanguage = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi")[it]
                     }
                 }
 
@@ -1728,6 +1741,8 @@ class SettingsActivity : AppCompatActivity() {
                     // Interface
                     putBoolean("scroll_topbar_enabled", scrollTopbar)
                     putInt("navigation_mode_pref", navMode)
+                    putString("scrape_tab_order", scrapeTabOrder)
+                    putString("torrent_language", torrentLanguage)
 
                     // Streaming
                     putString("timeout_mode", timeoutMode)
@@ -1777,6 +1792,7 @@ class SettingsActivity : AppCompatActivity() {
                     put("up_next_popup_pref", upNextMode)
                     put("up_next_time_pref", upNextTime)
                     put("autoplay_next_pref", autoplayNext)
+                    put("scrape_tab_order", scrapeTabOrder)
 
                     val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
                     serviceKeys.forEach { key ->

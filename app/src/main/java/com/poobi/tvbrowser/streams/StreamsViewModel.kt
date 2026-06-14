@@ -101,6 +101,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _scrapedSources = MutableStateFlow<JSONArray?>(null)
     val scrapedSources: StateFlow<JSONArray?> = _scrapedSources.asStateFlow()
 
+    private val _torrentioSources = MutableStateFlow<JSONArray?>(null)
+    val torrentioSources: StateFlow<JSONArray?> = _torrentioSources.asStateFlow()
+
+    private val _isScrapingTorrents = MutableStateFlow(false)
+    val isScrapingTorrents: StateFlow<Boolean> = _isScrapingTorrents.asStateFlow()
+
     private val _events = MutableStateFlow<StreamsEvent?>(null)
     val events: StateFlow<StreamsEvent?> = _events.asStateFlow()
 
@@ -164,6 +170,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     fun clearScrapedSources() {
         stopScrape()
         _scrapedSources.value = null
+        _torrentioSources.value = null
+        _isScrapingTorrents.value = false
     }
 
     fun clearSelectedMedia() { _selectedItem.value = null }
@@ -1302,10 +1310,111 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _isScraping.value = true
         _isResolving.value = false
         _scrapedSources.value = null
+        _torrentioSources.value = null
+        _isScrapingTorrents.value = true
         _scrapeProgress.value = 0
         _scrapeTotal.value = 0
         _scrapeStatusMsg.value = "Starting scrapers..."
         isInteractingWithSources = false
+
+        // Fetch Torrentio sources in parallel
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val tmdb = py.getModule("tmdb.tmdb_utils")
+                
+                val id = item.optString("id")
+                val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
+                    ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
+                
+                Log.d("StreamsViewModel", "Torrentio Scrape - ID: $id, MediaType: $mediaType")
+
+                var imdbId = item.optString("imdb")
+                if (imdbId.isNullOrEmpty() || imdbId == "null") {
+                    // Try to get from cached details if available
+                    val details = _itemDetails.value
+                    if (details != null && details.optInt("id").toString() == id) {
+                        imdbId = details.optJSONObject("external_ids")?.optString("imdb_id") ?: ""
+                    }
+                }
+
+                if (imdbId.isNullOrEmpty() || imdbId == "null") {
+                    val extIds = JSONObject(tmdb.callAttr("get_external_ids", id, mediaType).toString())
+                    imdbId = extIds.optString("imdb_id")
+                }
+                
+                Log.d("StreamsViewModel", "Torrentio Scrape - IMDb ID: $imdbId")
+
+                if (!imdbId.isNullOrEmpty() && imdbId != "null") {
+                    val torrentio = py.getModule("sources.torrentio.torrentio").callAttr("source")
+                    val url = if (mediaType == "tv" || mediaType == "tvshow") {
+                        "$imdbId:${season ?: 1}:${episode ?: 1}"
+                    } else {
+                        imdbId
+                    }
+                    
+                    val torrentLanguage = prefs.getString("torrent_language", "English") ?: "English"
+                    Log.d("StreamsViewModel", "Torrentio Scrape - URL Param: $url, Lang: $torrentLanguage")
+
+                    val results = torrentio.callAttr("sources", url, emptyList<String>(), mapOf("torrent_language" to torrentLanguage))
+                    Log.d("StreamsViewModel", "Torrentio Scrape - Results count: ${results.asList().size}")
+                    val json = py.getModule("json")
+                    val resultsJson = json.callAttr("dumps", results).toString()
+                    val rawStreams = JSONArray(resultsJson)
+                    
+                    val langMap = mapOf(
+                        "English" to listOf("🇬🇧", "ENG", "Original"),
+                        "Russian" to listOf("🇷🇺", "RUS"),
+                        "Spanish" to listOf("🇪🇸", "🇲🇽", "SPA", "Lat"),
+                        "Portuguese" to listOf("🇵🇹", "🇧🇷", "POR"),
+                        "Italian" to listOf("🇮🇹", "ITA"),
+                        "French" to listOf("🇫🇷", "FRA"),
+                        "German" to listOf("🇩🇪", "GER"),
+                        "Polish" to listOf("🇵🇱", "POL"),
+                        "Hindi" to listOf("🇮🇳", "HIN")
+                    )
+                    val langKeywords = langMap[torrentLanguage] ?: emptyList()
+
+                    val prioritized = mutableListOf<JSONObject>()
+                    val others = mutableListOf<JSONObject>()
+
+                    for (i in 0 until rawStreams.length()) {
+                        val r = rawStreams.getJSONObject(i)
+                        val obj = JSONObject()
+                        val source = r.optString("source", "Unknown")
+                        val quality = r.optString("quality", "SD")
+                        val provider = r.optString("provider", "Torrentio")
+                        val torrentTitle = r.optString("title", "")
+                        
+                        val displayTitle = if (torrentTitle.isNotEmpty()) {
+                            torrentTitle // Just use the title from torrentio.py as it already has [quality]
+                        } else {
+                            "[$quality] $source ($provider)"
+                        }
+                        
+                        obj.put("title", displayTitle)
+                        obj.put("source_data", r.toString())
+
+                        val isMatch = langKeywords.any { displayTitle.contains(it, ignoreCase = true) }
+                        if (isMatch) prioritized.add(obj) else others.add(obj)
+                    }
+
+                    val finalStreams = JSONArray()
+                    prioritized.forEach { finalStreams.put(it) }
+                    others.forEach { finalStreams.put(it) }
+
+                    withContext(Dispatchers.Main) {
+                        _torrentioSources.value = finalStreams
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("StreamsViewModel", "Torrentio scrape error: ${e.message}")
+            } finally {
+                withContext(Dispatchers.Main) {
+                    _isScrapingTorrents.value = false
+                }
+            }
+        }
 
         scrapePollingJob = viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
