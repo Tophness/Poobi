@@ -57,8 +57,6 @@ def get_watched_status(tmdb_id, season, episodes_json):
     from modules import trakt
     try:
         watched_shows = trakt.syncTVShows(control.setting('trakt.user'))
-        # watched_shows is list of (tmdb_id, aired_count, [(s, e), ...])
-
         show_watched = None
         for s in watched_shows:
             if str(s[0]) == str(tmdb_id):

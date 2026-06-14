@@ -402,31 +402,95 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 						horizontalArrangement = Arrangement.spacedBy(10.dp),
 						verticalAlignment = Alignment.CenterVertically
 					) {
-						Button(
-							onClick = { viewModel.performScrape(item!!) }, 
-							colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)), 
-							modifier = Modifier
-								.width(180.dp)
-								.height(55.dp)
-								.focusRequester(playButtonFocusRequester)
-						) {
-							Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-								Icon(painter = painterResource(id = R.drawable.ic_go), contentDescription = null, tint = Color.White)
-								Text("Play Movie", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-							}
-						}
-						Button(
-							onClick = { viewModel.playTrailer(item!!) },
-							colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-							modifier = Modifier
-								.width(140.dp)
-								.height(55.dp)
-						) {
-							Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-								Icon(imageVector = MovieIcon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-								Text("Trailer", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-							}
-						}
+                        val playInteractionSource = remember { MutableInteractionSource() }
+                        val isPlayFocused by playInteractionSource.collectIsFocusedAsState()
+                        val playScale by androidx.compose.animation.core.animateFloatAsState(
+                            targetValue = if (isPlayFocused) 1.03f else 1.0f,
+                            animationSpec = androidx.compose.animation.core.tween(durationMillis = 150),
+                            label = "PlayFocusScale"
+                        )
+                        val playBgColor = if (isPlayFocused) Color(0xFF40C4FF) else Color(0xFF4CAF50)
+                        val playContentColor = if (isPlayFocused) Color.Black else Color.White
+
+                        Box(
+                            modifier = Modifier
+                                .width(180.dp)
+                                .height(55.dp)
+                                .scale(playScale)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(playBgColor)
+                                .border(if (isPlayFocused) 2.dp else 0.dp, Color.White, RoundedCornerShape(8.dp))
+                                .focusRequester(playButtonFocusRequester)
+                                .clickable(
+                                    interactionSource = playInteractionSource,
+                                    indication = null,
+                                    onClick = { viewModel.performScrape(item!!) }
+                                )
+                                .focusable(interactionSource = playInteractionSource),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_auto_play),
+                                    contentDescription = null,
+                                    tint = playContentColor
+                                )
+                                Text(
+                                    text = "Play Movie",
+                                    color = playContentColor,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        val trailerInteractionSource = remember { MutableInteractionSource() }
+                        val isTrailerFocused by trailerInteractionSource.collectIsFocusedAsState()
+                        val trailerScale by androidx.compose.animation.core.animateFloatAsState(
+                            targetValue = if (isTrailerFocused) 1.03f else 1.0f,
+                            animationSpec = androidx.compose.animation.core.tween(durationMillis = 150),
+                            label = "TrailerFocusScale"
+                        )
+                        val trailerBgColor = if (isTrailerFocused) Color(0xFF40C4FF) else Color(0xFFE53935)
+                        val trailerContentColor = if (isTrailerFocused) Color.Black else Color.White
+
+                        Box(
+                            modifier = Modifier
+                                .width(140.dp)
+                                .height(55.dp)
+                                .scale(trailerScale)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(trailerBgColor)
+                                .border(if (isTrailerFocused) 2.dp else 0.dp, Color.White, RoundedCornerShape(8.dp))
+                                .clickable(
+                                    interactionSource = trailerInteractionSource,
+                                    indication = null,
+                                    onClick = { viewModel.playTrailer(item!!) }
+                                )
+                                .focusable(interactionSource = trailerInteractionSource),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = MovieIcon,
+                                    contentDescription = null,
+                                    tint = trailerContentColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "Trailer",
+                                    color = trailerContentColor,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
 					}
 				}
 
@@ -500,6 +564,22 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                         tint = if (isFav) Color(0xFFE91E63) else Color.White,
                         modifier = Modifier.fillMaxSize().padding(10.dp)
                     )
+                }
+
+                if (mediaType == "movie") {
+                    Spacer(modifier = Modifier.width(15.dp))
+                    val isMovieWatched by viewModel.isMovieWatched.collectAsState()
+                    TvFocusableBox(
+                        modifier = Modifier.size(50.dp),
+                        onClick = { item?.let { viewModel.toggleMovieWatched(it) } }
+                    ) { isFocused ->
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_watched),
+                            contentDescription = "Trakt Watched",
+                            tint = if (isMovieWatched) Color(0xFF00BCD4) else Color.White.copy(alpha = if (isFocused) 1.0f else 0.4f),
+                            modifier = Modifier.fillMaxSize().padding(10.dp)
+                        )
+                    }
                 }
             }
 
@@ -653,18 +733,48 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
 								Spacer(modifier = Modifier.width(4.dp))
 
-								Icon(
-									painter = painterResource(id = R.drawable.ic_watched),
-									contentDescription = "Watched",
-									tint = if (isCardFocused) {
-										Color.Black.copy(alpha = if (isWatched) 1.0f else 0.2f)
-									} else {
-										Color.White.copy(alpha = if (isWatched) 1.0f else 0.2f)
-									},
-									modifier = Modifier
-										.size(48.dp)
-										.padding(12.dp)
-								)
+                                val watchedInteractionSource = remember { MutableInteractionSource() }
+                                val isWatchedFocused by watchedInteractionSource.collectIsFocusedAsState()
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            when {
+                                                isWatchedFocused && isCardFocused -> Color.Black.copy(alpha = 0.15f)
+                                                isWatchedFocused -> Color.White.copy(alpha = 0.15f)
+                                                else -> Color.Transparent
+                                            }
+                                        )
+                                        .clickable(
+                                            interactionSource = watchedInteractionSource,
+                                            indication = null,
+                                            onClick = {
+                                                item?.let {
+                                                    viewModel.toggleEpisodeWatched(
+                                                        item = it,
+                                                        season = seasons!!.getJSONObject(selectedSeasonIndex).optInt("season_number"),
+                                                        episode = num
+                                                    )
+                                                }
+                                            }
+                                        )
+                                        .focusable(interactionSource = watchedInteractionSource),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_watched),
+                                        contentDescription = "Toggle Watched Status",
+                                        tint = when {
+                                            isWatched -> Color(0xFF00BCD4)
+                                            isWatchedFocused -> Color.White
+                                            isCardFocused -> Color.Black.copy(alpha = 0.4f)
+                                            else -> Color.White.copy(alpha = 0.2f)
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
 								
 								Spacer(modifier = Modifier.width(8.dp))
 							}

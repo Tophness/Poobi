@@ -122,6 +122,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _subStatusMsg = MutableStateFlow("")
     val subStatusMsg: StateFlow<String> = _subStatusMsg.asStateFlow()
 
+    private val _isMovieWatched = MutableStateFlow(false)
+    val isMovieWatched: StateFlow<Boolean> = _isMovieWatched.asStateFlow()
+
     var lastScrapedSeason: Int? = null
     var lastScrapedEpisode: Int? = null
     var lastSelectedSource: JSONObject? = null
@@ -170,6 +173,17 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             delay(100)
         }
         return Python.getInstance()
+    }
+
+    private fun isTraktAuthorized(): Boolean {
+        return try {
+            if (!Python.isStarted()) return false
+            val py = Python.getInstance()
+            val control = py.getModule("modules.control")
+            control.callAttr("setting", "trakt.authed").toString() == "yes"
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun loadGenres() {
@@ -590,10 +604,15 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _itemEpisodes.value = null
         _itemSeasons.value = null
         _lastWatchedEpisode.value = null
+        _isMovieWatched.value = false
         
         val id = item.optInt("id")
         val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
             ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
+
+        if (mediaType == "movie") {
+            checkMovieWatchedStatus(item)
+        }
 
         val cacheKey = "${mediaType}_$id"
         val cached = detailsCache.get(cacheKey)
@@ -643,6 +662,151 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
             } catch (e: Exception) {}
+        }
+    }
+
+    private fun checkMovieWatchedStatus(item: JSONObject) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (!isTraktAuthorized()) {
+                withContext(Dispatchers.Main) {
+                    _isMovieWatched.value = false
+                }
+                return@launch
+            }
+            try {
+                val py = Python.getInstance()
+                val checker = py.getModule("trakt.movie_check")
+                val watched = checker.callAttr("is_movie_watched", item.toString()).toBoolean()
+                withContext(Dispatchers.Main) {
+                    _isMovieWatched.value = watched
+                }
+            } catch (e: Exception) {
+                Log.e("StreamsViewModel", "Failed checking movie watched status: ${e.message}")
+            }
+        }
+    }
+
+    fun toggleMovieWatched(item: JSONObject) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (!isTraktAuthorized()) {
+                withContext(Dispatchers.Main) {
+                    _events.value = StreamsEvent.ShowToast("Trakt not authorized")
+                }
+                return@launch
+            }
+
+            val currentStatus = _isMovieWatched.value
+            withContext(Dispatchers.Main) {
+                _isMovieWatched.value = !currentStatus
+            }
+
+            try {
+                val py = Python.getInstance()
+                val scrobbler = py.getModule("trakt.trakt_scrobble")
+                val success = if (currentStatus) {
+                    scrobbler.callAttr("remove_from_history", item.toString()).toBoolean()
+                } else {
+                    scrobbler.callAttr("add_to_history", item.toString()).toBoolean()
+                }
+                withContext(Dispatchers.Main) {
+                    if (success) {
+                        _events.value = StreamsEvent.ShowToast(if (currentStatus) "Marked as unwatched" else "Marked as watched")
+                    } else {
+                        _isMovieWatched.value = currentStatus
+                        _events.value = StreamsEvent.ShowToast("Failed to update status on Trakt")
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _isMovieWatched.value = currentStatus
+                    _events.value = StreamsEvent.ShowToast("Trakt update failed")
+                }
+            }
+        }
+    }
+
+    fun toggleEpisodeWatched(item: JSONObject, season: Int, episode: Int) {
+        val episodesList = _itemEpisodes.value ?: return
+        var isCurrentlyWatched = false
+        var episodeIndex = -1
+        for (i in 0 until episodesList.length()) {
+            val ep = episodesList.getJSONObject(i)
+            if (ep.optInt("episode_number") == episode) {
+                isCurrentlyWatched = ep.optBoolean("is_watched", false)
+                episodeIndex = i
+                break
+            }
+        }
+        if (episodeIndex == -1) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            if (!isTraktAuthorized()) {
+                withContext(Dispatchers.Main) {
+                    toggleEpisodeWatchedLocalState(season, episode, !isCurrentlyWatched)
+                    _events.value = StreamsEvent.ShowToast("Local status updated (Trakt not linked)")
+                }
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                toggleEpisodeWatchedLocalState(season, episode, !isCurrentlyWatched)
+            }
+
+            try {
+                val py = Python.getInstance()
+                val scrobbler = py.getModule("trakt.trakt_scrobble")
+                val success = if (isCurrentlyWatched) {
+                    scrobbler.callAttr("remove_from_history", item.toString(), season, episode).toBoolean()
+                } else {
+                    scrobbler.callAttr("add_to_history", item.toString(), season, episode).toBoolean()
+                }
+                withContext(Dispatchers.Main) {
+                    if (success) {
+                        _events.value = StreamsEvent.ShowToast(if (isCurrentlyWatched) "Episode marked unwatched" else "Episode marked watched")
+                    } else {
+                        toggleEpisodeWatchedLocalState(season, episode, isCurrentlyWatched)
+                        _events.value = StreamsEvent.ShowToast("Failed to update Trakt")
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    toggleEpisodeWatchedLocalState(season, episode, isCurrentlyWatched)
+                    _events.value = StreamsEvent.ShowToast("Trakt sync failed")
+                }
+            }
+        }
+    }
+
+    private fun toggleEpisodeWatchedLocalState(season: Int, episode: Int, newWatchedState: Boolean) {
+        val id = _selectedItem.value?.optInt("id") ?: return
+
+        val cacheKey = "${id}_$season"
+        val cachedArray = episodesCache.get(cacheKey)
+        if (cachedArray != null) {
+            for (i in 0 until cachedArray.length()) {
+                val ep = cachedArray.getJSONObject(i)
+                if (ep.optInt("episode_number") == episode) {
+                    ep.put("is_watched", newWatchedState)
+                    break
+                }
+            }
+        }
+
+        val currentEpisodes = _itemEpisodes.value
+        if (currentEpisodes != null) {
+            val updatedArray = JSONArray(currentEpisodes.toString())
+            var modified = false
+            for (i in 0 until updatedArray.length()) {
+                val ep = updatedArray.getJSONObject(i)
+                if (ep.optInt("episode_number") == episode) {
+                    ep.put("is_watched", newWatchedState)
+                    modified = true
+                    break
+                }
+            }
+            if (modified) {
+                _itemEpisodes.value = updatedArray
+            }
         }
     }
 
