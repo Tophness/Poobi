@@ -226,7 +226,7 @@ class PlayerEngine(
                 } else if (state == Player.STATE_ENDED) {
                     checkUpNextHandler.removeCallbacks(checkUpNextRunnable)
                     try {
-                        if (prefs.getString("up_next_popup_pref", "Ask") == "Always") {
+                        if (prefs.getString("up_next_popup_pref", "Ask") == "Always" && _nextEpisodeData.value != null) {
                             onVideoEnded()
                         }
                     } catch (e: Exception) {}

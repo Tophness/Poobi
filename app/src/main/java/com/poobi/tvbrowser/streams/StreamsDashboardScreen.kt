@@ -39,24 +39,24 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
     val searchResults by viewModel.searchResults.collectAsState()
     val libraryItems by viewModel.libraryItems.collectAsState()
     val isScraping by viewModel.isScraping.collectAsState()
+    val activeCategoryIndex by viewModel.activeCategoryIndex.collectAsState()
 
     var searchInput by remember { mutableStateOf("") }
-    var activeCategoryIndex by remember { mutableStateOf(0) }
 
     val firstHistoryFocusRequester = remember { FocusRequester() }
 
     val categories = listOf(
         "Search" to { viewModel.loadSearchHistory() },
+        "Favourites" to { viewModel.loadFavorites() },
+        "Recently Watched" to { viewModel.loadRecentlyPlayed() },
         "Trending" to { viewModel.loadLibraryCategory("Trending Today", "get_trending", "all") },
         "In Cinemas" to { viewModel.loadLibraryCategory("In Cinemas Now", "get_movies_in_cinemas") },
         "Upcoming" to { viewModel.loadLibraryCategory("Upcoming Movies", "get_upcoming_movies") },
         "Popular TV" to { viewModel.loadLibraryCategory("Popular TV Shows", "get_popular", "tv") },
-        "Top Rated" to { viewModel.loadLibraryCategory("Top Rated Movies", "get_top_rated", "movie") },
-        "Favourites" to { viewModel.loadFavorites() },
-        "Recently Watched" to { viewModel.loadRecentlyPlayed() }
+        "Top Rated" to { viewModel.loadLibraryCategory("Top Rated Movies", "get_top_rated", "movie") }
     )
 
-    val isDeletable = activeCategoryIndex == 6 || activeCategoryIndex == 7
+    val isDeletable = activeCategoryIndex == 1 || activeCategoryIndex == 2
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
         if (activeCategoryIndex == 0 && searchResults == null) {
@@ -192,14 +192,14 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                                 TvFocusableHoldToDeleteBox(
                                     modifier = Modifier.wrapContentSize(),
                                     onTriggerDelete = {
-                                        if (activeCategoryIndex == 6) {
+                                        if (activeCategoryIndex == 1) {
                                             viewModel.toggleFavorite(item, isCurrentlyViewingFavorites = true)
-                                        } else if (activeCategoryIndex == 7) {
+                                        } else if (activeCategoryIndex == 2) {
                                             viewModel.removeFromRecentlyPlayed(index)
                                         }
                                     },
                                     onClick = { 
-                                        if (activeCategoryIndex == 7) viewModel.selectRecentlyPlayedItem(wrapper)
+                                        if (activeCategoryIndex == 2) viewModel.selectRecentlyPlayedItem(wrapper)
                                         else viewModel.selectMediaItem(item) 
                                     }
                                 ) { isFocused, progress ->
@@ -250,12 +250,12 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                 TvFocusableBox(
                     modifier = Modifier.height(45.dp),
                     onClick = { 
-                        activeCategoryIndex = index
+                        viewModel.setActiveCategoryIndex(index)
                         searchInput = ""
                         if (index > 0) pair.second() else viewModel.loadSearchHistory() 
                     },
                     onFocus = { 
-                        activeCategoryIndex = index
+                        viewModel.setActiveCategoryIndex(index)
                         searchInput = ""
                         if (index > 0) pair.second() else viewModel.loadSearchHistory() 
                     }

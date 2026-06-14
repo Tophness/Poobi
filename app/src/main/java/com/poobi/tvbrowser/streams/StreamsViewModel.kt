@@ -78,6 +78,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _favoritesSet = MutableStateFlow<Set<String>>(emptySet())
     val favoritesSet: StateFlow<Set<String>> = _favoritesSet.asStateFlow()
 
+    private val _activeCategoryIndex = MutableStateFlow(0)
+    val activeCategoryIndex: StateFlow<Int> = _activeCategoryIndex.asStateFlow()
+
     val genreMap = mutableStateMapOf<Int, String>()
 
     private val _isScraping = MutableStateFlow(false)
@@ -149,6 +152,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         startBackgroundTraktCheck()
     }
 
+    fun setActiveCategoryIndex(index: Int) {
+        _activeCategoryIndex.value = index
+    }
+
     fun consumeEvent() { _events.value = null }
 
     fun clearScrapedSources() {
@@ -170,7 +177,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             try {
                 delay(3000)
                 val py = getPythonInstance()
-                val tmdb = py.getModule("tmdb.tmdb_api")
+                val tmdb = py.getModule("tmdb.tmdb_utils")
                 val movieGenres = JSONObject(tmdb.callAttr("get_genres", "movie").toString()).getJSONArray("genres")
                 val tvGenres = JSONObject(tmdb.callAttr("get_genres", "tv").toString()).getJSONArray("genres")
                 withContext(Dispatchers.Main) {
@@ -280,7 +287,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 if (!isActive) return@launch
 
                 val py = Python.getInstance()
-                val tmdb = py.getModule("tmdb.tmdb_api")
+                val tmdb = py.getModule("tmdb.tmdb_utils")
                 val resultJson = if (arg != null) {
                     tmdb.callAttr(method, arg).toString()
                 } else {
@@ -465,7 +472,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             newList.add(0, newEntry)
             if (newList.size > 20) newList.removeAt(newList.size - 1)
 
-            prefs.edit().putString("streams_recently_played", JSONArray(newList).toString()).apply()
+            prefs.edit().putString("streams_recently_played", newList.toString()).apply()
         }
     }
 
@@ -610,7 +617,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
-                val tmdb = py.getModule("tmdb.tmdb_api")
+                val tmdb = py.getModule("tmdb.tmdb_utils")
                 val detailsJson = tmdb.callAttr("get_details", id, mediaType).toString()
                 val details = JSONObject(detailsJson)
                 
@@ -636,6 +643,62 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
             } catch (e: Exception) {}
+        }
+    }
+
+    fun selectCastMember(personId: Int, personName: String) {
+        _scrapeStatusMsg.value = "Loading $personName's works..."
+        _isScraping.value = true
+        _searchResults.value = null
+        _selectedItem.value = null
+        _activeCategoryIndex.value = 0
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val tmdb = py.getModule("tmdb.tmdb_utils")
+                val detailsJson = tmdb.callAttr("get_person_details", personId).toString()
+                val details = JSONObject(detailsJson)
+                val combinedCredits = details.optJSONObject("combined_credits")
+                val castArray = combinedCredits?.optJSONArray("cast") ?: JSONArray()
+                
+                val formattedResults = JSONArray()
+                for (i in 0 until castArray.length()) {
+                    val credit = castArray.getJSONObject(i)
+                    val mediaType = credit.optString("media_type")
+                    if (mediaType == "movie" || mediaType == "tv") {
+                        val title = credit.optString("title").takeIf { it.isNotEmpty() } ?: credit.optString("name", "")
+                        val releaseDate = credit.optString("release_date").takeIf { !it.isNullOrEmpty() } ?: credit.optString("first_air_date") ?: "0000"
+                        val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else "0000"
+                        
+                        val formatted = JSONObject().apply {
+                            put("title", "$title ($year)")
+                            put("id", credit.optInt("id"))
+                            put("media_type", mediaType)
+                            put("release_date", releaseDate)
+                            put("overview", credit.optString("overview"))
+                            put("poster_path", credit.optString("poster_path"))
+                            put("backdrop_path", credit.optString("backdrop_path"))
+                            put("vote_average", credit.optDouble("vote_average", 0.0))
+                            put("genre_ids", credit.optJSONArray("genre_ids") ?: JSONArray())
+                            put("orig_title", title)
+                            put("year", year)
+                        }
+                        formattedResults.put(formatted)
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    _searchResults.value = formattedResults
+                    _isScraping.value = false
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _isScraping.value = false
+                    _searchResults.value = JSONArray()
+                    _events.value = StreamsEvent.ShowToast("Failed to load credits: ${e.message}")
+                }
+            }
         }
     }
 
@@ -989,7 +1052,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private fun playStream(streamUrl: String, isVideo: Boolean, sourceDataJson: String) {
         val cleanTitle = _selectedItem.value?.optString("title")?.takeIf { it.isNotBlank() } ?: _selectedItem.value?.optString("name") ?: "Unknown"
         val fullTitle = if (lastScrapedSeason != null && lastScrapedEpisode != null) {
-            "$cleanTitle S${lastScrapedSeason}E$lastScrapedEpisode"
+            "$cleanTitle S${lastScrapedSeason}E${lastScrapedEpisode}"
         } else cleanTitle
 
         val headersMap = mutableMapOf<String, String>()
@@ -1010,7 +1073,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     for (i in 0 until episodes.length()) {
                         val ep = episodes.getJSONObject(i)
                         if (ep.optInt("episode_number") == currentEp + 1) {
-                            nextEp = ep
+                            val airDate = ep.optString("air_date", "")
+                            if (airDate.isNotEmpty() && !com.poobi.tvbrowser.shared.isFutureDate(airDate)) {
+                                nextEp = ep
+                            }
                             break
                         }
                     }
