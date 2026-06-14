@@ -536,7 +536,10 @@ class UniversalScraper:
 
                 sources_sig = inspect.signature(provider.sources)
                 if 'hostprDict' in sources_sig.parameters:
-                    results = provider.sources(url, self.hostDict, [])
+                    torrent_cfg = {
+                        "torrent_language": GLOBAL_CONFIG.get("torrent_language", "English")
+                    }
+                    results = provider.sources(url, self.hostDict, torrent_cfg)
                 else:
                     results = provider.sources(url, self.hostDict)
 

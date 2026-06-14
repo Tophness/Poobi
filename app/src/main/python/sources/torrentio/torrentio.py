@@ -30,13 +30,11 @@ class source:
     def sources(self, url, hostDict, hostprDict):
         sources = []
         try:
-            # url is either imdbId or imdbId:season:episode
             if ':' in url:
                 media_type = 'series'
             else:
                 media_type = 'movie'
 
-            # Build settings string if provided
             settings_path = ""
             if hostprDict and isinstance(hostprDict, dict):
                 lang = hostprDict.get('torrent_language', '').lower()
@@ -56,12 +54,17 @@ class source:
                 print(f"Torrentio: Response code: {response.status_code}")
                 return []
 
+            import urllib.parse
             data = response.json()
             for stream in data.get('streams', []):
                 name = stream.get('name', 'Torrentio')
                 torrent_info = stream.get('title', '')
 
-                # Extract quality from name or title
+                seeders = 0
+                seeder_match = re.search(r'👤\s*(\d+)', torrent_info)
+                if seeder_match:
+                    seeders = int(seeder_match.group(1))
+
                 quality = 'SD'
                 full_text = (name + " " + torrent_info).lower()
                 if '4k' in full_text or '2160p' in full_text:
@@ -71,18 +74,21 @@ class source:
                 elif '720p' in full_text:
                     quality = '720p'
 
-                # Torrentio title often has seeders/size on the 3rd line
-                # e.g. "Rick and Morty...\n👤 6 💾 1.2 GB ⚙️ ThePirateBay"
                 display_title = torrent_info.split('\n')[0]
                 metadata = ""
                 lines = torrent_info.split('\n')
                 if len(lines) > 2:
                     metadata = " (" + lines[2].strip() + ")"
 
-                # Torrentio usually provides direct links if configured with Debrid,
-                # or infoHash if not.
                 stream_url = stream.get('url')
                 info_hash = stream.get('infoHash')
+                file_idx = stream.get('fileIdx', 0)
+
+                filename = stream.get('behaviorHints', {}).get('filename', 'video.mkv')
+
+                if not stream_url and info_hash:
+                    safe_filename = urllib.parse.quote(filename)
+                    stream_url = f"http://localhost:11470/{info_hash}/{file_idx}/{safe_filename}"
 
                 if stream_url:
                     sources.append({
@@ -92,19 +98,11 @@ class source:
                         'url': stream_url,
                         'direct': True,
                         'provider': 'Torrentio',
-                        'title': f"[{quality}] {display_title}{metadata}"
-                    })
-                elif info_hash:
-                    # If it's just an infoHash, we mark it as magnet
-                    magnet = f"magnet:?xt=urn:btih:{info_hash}"
-                    sources.append({
-                        'source': name.replace('\n', ' '),
-                        'quality': quality,
-                        'language': 'en',
-                        'url': magnet,
-                        'direct': False,
-                        'provider': 'Torrentio',
-                        'title': f"[{quality}] {display_title}{metadata} [P2P]"
+                        'title': f"[{quality}] {display_title}{metadata}",
+                        'infoHash': info_hash,
+                        'fileIdx': file_idx,
+                        'trackers': stream.get('sources', []),
+                        'seeders': seeders # Pass seeders explicitly to Kotlin
                     })
         except Exception as e:
             print(f"Torrentio error: {e}")

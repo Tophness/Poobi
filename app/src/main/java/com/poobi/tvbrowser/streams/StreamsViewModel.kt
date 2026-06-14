@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaquo.python.Python
 import com.poobi.tvbrowser.shared.SubtitleData
+import com.poobi.tvbrowser.torrent.TorrentStreamServer
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
 
 sealed class StreamsEvent {
     data class PlayVideo(
@@ -153,12 +155,87 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     var isPlayingFromSavedLink = false
 
+    private val _isBufferingTorrent = MutableStateFlow(false)
+    val isBufferingTorrent: StateFlow<Boolean> = _isBufferingTorrent.asStateFlow()
+
+    private val _torrentBufferProgress = MutableStateFlow(0f)
+    val torrentBufferProgress: StateFlow<Float> = _torrentBufferProgress.asStateFlow()
+
+    private val _torrentBufferStatus = MutableStateFlow("Initializing...")
+    val torrentBufferStatus: StateFlow<String> = _torrentBufferStatus.asStateFlow()
+
+    private val _torrentBufferSeeders = MutableStateFlow(0)
+    val torrentBufferSeeders: StateFlow<Int> = _torrentBufferSeeders.asStateFlow()
+
+    private var torrentCancelLatch: CountDownLatch? = null
+
     init {
         loadSearchHistory()
         refreshFavoritesSet()
         loadGenres()
         purgeOldSubtitles()
         startBackgroundTraktCheck()
+    }
+
+    private fun performTorrentPreBuffering(infoHash: String, fileIdx: Int, sourceDataJson: String) {
+        _isBufferingTorrent.value = true
+        _torrentBufferProgress.value = 0f
+        _torrentBufferStatus.value = "Starting Torrent Engine..."
+        _torrentBufferSeeders.value = 0
+        
+        val latch = CountDownLatch(1)
+        torrentCancelLatch = latch
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val server = TorrentStreamServer.getInstance(context)
+                val prebufferLimit = prefs.getInt("torrent_prebuffer_pieces", 1)
+
+                server.prepareTorrent(
+                    infoHash = infoHash,
+                    fileIdx = fileIdx,
+                    prebufferPiecesLimit = prebufferLimit,
+                    onStatusUpdate = { status, progress, seeders ->
+                        _torrentBufferStatus.value = status
+                        _torrentBufferProgress.value = progress
+                        _torrentBufferSeeders.value = seeders
+                    },
+                    onReady = {
+                        viewModelScope.launch(Dispatchers.Main) {
+                            _isBufferingTorrent.value = false
+                            resolveAndPlayInternal(sourceDataJson)
+                        }
+                    },
+                    onError = { error ->
+                        viewModelScope.launch(Dispatchers.Main) {
+                            _isBufferingTorrent.value = false
+                            _events.value = StreamsEvent.ShowToast("Pre-Buffering Failed: $error")
+                            resumeScrape()
+                        }
+                    },
+                    cancellationToken = latch
+                )
+            } catch (e: Exception) {
+                viewModelScope.launch(Dispatchers.Main) {
+                    _isBufferingTorrent.value = false
+                    _events.value = StreamsEvent.ShowToast("Pre-Buffering Failed: ${e.message}")
+                    resumeScrape()
+                }
+            }
+        }
+    }
+
+    fun forcePlayTorrentNow() {
+        try {
+            val server = TorrentStreamServer.getInstance(context)
+            server.forcePlayTriggered = true
+        } catch (e: Exception) {}
+    }
+
+    fun cancelTorrentBuffering() {
+        torrentCancelLatch?.countDown()
+        _isBufferingTorrent.value = false
+        resumeScrape()
     }
 
     fun setActiveCategoryIndex(index: Int) {
@@ -1746,21 +1823,29 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         isInteractingWithSources = true
         _scrapeStatusMsg.value = "Pausing Scrapers..."
 
-        if (_isDownloadingSubs.value) {
-            when (prefs.getInt("auto_sub_wait_pref", 0)) {
-                0 -> {
-                    cancelSubtitleDownloads()
-                    resolveAndPlayInternal(sourceDataJson)
-                }
-                1 -> {
-                    _events.value = StreamsEvent.AskSubtitleWait(sourceDataJson)
-                }
-                2 -> {
-                    resolveAndPlayInternal(sourceDataJson)
-                }
-            }
+        val sourceData = JSONObject(sourceDataJson)
+        val infoHash = sourceData.optString("infoHash", "")
+        val fileIdx = sourceData.optInt("fileIdx", -1)
+
+        if (infoHash.isNotEmpty() && fileIdx != -1) {
+            performTorrentPreBuffering(infoHash, fileIdx, sourceDataJson)
         } else {
-            resolveAndPlayInternal(sourceDataJson)
+            if (_isDownloadingSubs.value) {
+                when (prefs.getInt("auto_sub_wait_pref", 0)) {
+                    0 -> {
+                        cancelSubtitleDownloads()
+                        resolveAndPlayInternal(sourceDataJson)
+                    }
+                    1 -> {
+                        _events.value = StreamsEvent.AskSubtitleWait(sourceDataJson)
+                    }
+                    2 -> {
+                        resolveAndPlayInternal(sourceDataJson)
+                    }
+                }
+            } else {
+                resolveAndPlayInternal(sourceDataJson)
+            }
         }
     }
 

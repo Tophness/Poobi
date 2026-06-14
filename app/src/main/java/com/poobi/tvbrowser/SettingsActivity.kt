@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
@@ -144,7 +145,7 @@ class SettingsActivity : AppCompatActivity() {
     private var subsourceApikey by mutableStateOf("")
 
     enum class Category {
-        General, Web, Player, Interface, Streaming, Autoplay, Subtitles, Sorting, Blocked, Trakt, TMDb, Sync
+        General, Web, Player, Interface, Streaming, Autoplay, Subtitles, Sorting, Blocked, Trakt, TMDb, Torrents, Sync
     }
 
     private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -242,6 +243,7 @@ class SettingsActivity : AppCompatActivity() {
                         Category.Blocked -> BlockedPanel()
                         Category.Trakt -> TraktPanel()
                         Category.TMDb -> TmdbPanel()
+                        Category.Torrents -> TorrentPanel()
                         Category.Sync -> SyncPanel()
                     }
                 }
@@ -658,12 +660,6 @@ class SettingsActivity : AppCompatActivity() {
                         ToggleSettingRow("Enforce Host Whitelist", enforceWhitelist, modifier = Modifier.weight(1f)) { 
                             enforceWhitelist = it
                         }
-                    }
-                }
-
-                item {
-                    DropdownSettingRow("Preferred Torrent Language", listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi"), listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi").indexOf(torrentLanguage).coerceAtLeast(0)) {
-                        torrentLanguage = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi")[it]
                     }
                 }
 
@@ -1566,6 +1562,116 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
     }
+
+	@Composable
+	fun TorrentPanel() {
+		var cacheSize by remember { mutableStateOf(0L) }
+		var cacheItems by remember { mutableStateOf(emptyList<com.poobi.tvbrowser.torrent.TorrentCacheItem>()) }
+
+		fun refreshCache() {
+			val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
+			cacheSize = server.getCacheSize()
+			cacheItems = server.getCacheItems()
+		}
+
+		LaunchedEffect(Unit) {
+			refreshCache()
+		}
+
+		Column(modifier = Modifier.fillMaxSize()) {
+			LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+				item { PanelHeader("Torrent Streaming Configuration") }
+
+				item {
+					DropdownSettingRow(
+						label = "Playback Pre-buffer Size",
+						options = listOf("1 Piece (Fastest / Default)", "2 Pieces", "4 Pieces (Standard)", "8 Pieces (Most Stable)"),
+						selectedIndex = when (prefs.getInt("torrent_prebuffer_pieces", 1)) {
+							1 -> 0
+							2 -> 1
+							4 -> 2
+							8 -> 3
+							else -> 0
+						}
+					) { index ->
+						val pieces = when (index) {
+							0 -> 1
+							1 -> 2
+							2 -> 4
+							3 -> 8
+							else -> 1
+						}
+						lifecycleScope.launch(Dispatchers.IO) {
+							prefs.edit().putInt("torrent_prebuffer_pieces", pieces).apply()
+						}
+					}
+				}
+
+				item {
+					DropdownSettingRow(
+						label = "Preferred Torrent Language",
+						options = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi"),
+						selectedIndex = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi").indexOf(torrentLanguage).coerceAtLeast(0)
+					) { index ->
+						torrentLanguage = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi")[index]
+						lifecycleScope.launch(Dispatchers.IO) {
+							prefs.edit().putString("torrent_language", torrentLanguage).apply()
+						}
+					}
+				}
+
+				item { Spacer(modifier = Modifier.height(8.dp)) }
+				item { Text("Storage Cache Manager", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+
+				item {
+					Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))) {
+						Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+							Column(modifier = Modifier.weight(1f)) {
+								Text("Total Cached P2P Storage", color = Color.LightGray, fontSize = 12.sp)
+								Text("%.2f MB".format(cacheSize / (1024f * 1024f)), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+							}
+							Button(
+								onClick = {
+									val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
+									server.clearAllCache()
+									refreshCache()
+								},
+								colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+								modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+							) {
+								Text("Clear All")
+							}
+						}
+					}
+				}
+
+				if (cacheItems.isNotEmpty()) {
+					item { Text("Cached Directory Sub-folders", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)) }
+					items(cacheItems) { cacheItem ->
+						Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = Color(0x0DFFFFFF))) {
+							Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+								Column(modifier = Modifier.weight(1f)) {
+									Text(cacheItem.name, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+									Text("%.2f MB".format(cacheItem.size / (1024f * 1024f)), color = Color.Gray, fontSize = 11.sp)
+								}
+								Button(
+									onClick = {
+										val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
+										server.deleteCacheItem(cacheItem.path)
+										refreshCache()
+									},
+									colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+									modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+								) {
+									Text("Clear", fontSize = 11.sp)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 
     @Composable
     fun SyncPanel() {
