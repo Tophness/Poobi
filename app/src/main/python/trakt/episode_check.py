@@ -2,11 +2,11 @@ import requests
 import json
 from datetime import datetime
 from modules import control
-from tmdb import tmdb_api
+from tmdb import tmdb_utils
 
 def check_new_episodes(favorites_json, last_check_json):
     favorites = json.loads(favorites_json)
-    last_check = json.loads(last_check_json) # dict: show_id -> last_aired_ep_id
+    last_check = json.loads(last_check_json)
 
     new_episodes = []
     updated_last_check = last_check.copy()
@@ -18,8 +18,7 @@ def check_new_episodes(favorites_json, last_check_json):
         tmdb_id = str(item.get('id'))
         
         try:
-            # Get show details to find last aired episode
-            details = tmdb_api.get_details(tmdb_id, 'tv')
+            details = tmdb_utils.get_details(tmdb_id, 'tv')
             last_ep = details.get('last_episode_to_air')
 
             if last_ep:
@@ -27,11 +26,9 @@ def check_new_episodes(favorites_json, last_check_json):
                 last_seen_ep_id = last_check.get(tmdb_id)
                 
                 if ep_id != last_seen_ep_id:
-                    # It's a new episode since we last checked
                     airdate = last_ep.get('air_date')
                     if airdate:
                         dt = datetime.strptime(airdate, '%Y-%m-%d')
-                        # Only notify if it aired recently (e.g. last 30 days) to avoid spamming old shows
                         if (datetime.now() - dt).days <= 30:
                             new_episodes.append({
                                 "show_id": tmdb_id,
