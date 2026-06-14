@@ -42,7 +42,7 @@ Poobi features a powerful scraping engine that searches for high-quality streams
 * **Smart Sorting:** Sources are automatically sorted by quality and reliability, giving you the best experience with minimal effort.
 
 # Screenshots
-<div style="overflow-x: auto; white-space: nowrap;">
+<p align="center">
 <img width="1920" height="1080" alt="Screenshot_20260614_235139" src="https://github.com/user-attachments/assets/39785ea5-b492-4d0d-8e27-0186baa7ae4d" />
 <img width="1920" height="1080" alt="Screenshot_20260614_235049" src="https://github.com/user-attachments/assets/08419975-9de1-4bd4-8959-a66aace0d75f" />
 <img width="1920" height="1080" alt="Screenshot_20260614_234003" src="https://github.com/user-attachments/assets/6eb8b3c3-dbcc-4373-a0c1-d48a623821d7" />
@@ -55,7 +55,7 @@ Poobi features a powerful scraping engine that searches for high-quality streams
 <img width="1920" height="1080" alt="Screenshot_20260614_234947" src="https://github.com/user-attachments/assets/9811e1b5-7213-4025-b354-77a560724f64" />
 <img width="1920" height="1080" alt="Screenshot_20260614_234856" src="https://github.com/user-attachments/assets/82323491-8040-487e-acbd-1257ff289764" />
 <img width="1920" height="1080" alt="Screenshot_20260614_235014" src="https://github.com/user-attachments/assets/a999e9a0-8c8a-4300-a8ae-c2354a399c86" />
-</div>
+</p>
 
 
 # Installation
