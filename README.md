@@ -42,17 +42,21 @@ Poobi features a powerful scraping engine that searches for high-quality streams
 * **Smart Sorting:** Sources are automatically sorted by quality and reliability, giving you the best experience with minimal effort.
 
 # Screenshots
-<img width="1920" height="1080" alt="Screenshot_20260521_145049" src="https://github.com/user-attachments/assets/aeb84fc0-b707-491e-9239-922c97ee947c" />
-<img width="1920" height="1080" alt="Screenshot_20260521_145132" src="https://github.com/user-attachments/assets/4aa60ae1-4091-4f3d-a67c-3eb77f1781ac" />
-<img width="1920" height="1080" alt="Screenshot_20260521_144703" src="https://github.com/user-attachments/assets/9314e50a-f399-4d71-99fa-1913e2544261" />
-<img width="1920" height="1080" alt="Screenshot_20260521_020856" src="https://github.com/user-attachments/assets/ec8a8b5b-25d6-4112-a831-e06b5172c3fa" />
-<img width="1920" height="1080" alt="Screenshot_20260521_021149" src="https://github.com/user-attachments/assets/4033d42b-96d0-4ea7-8832-35b802878749" />
-<img width="1920" height="1080" alt="Screenshot_20260521_021245" src="https://github.com/user-attachments/assets/b51a91a8-eca6-4cde-9950-e6d124f6fee7" />
-<img width="1920" height="1080" alt="Screenshot_20260521_021612" src="https://github.com/user-attachments/assets/1ad0ed94-6697-4d06-ab50-adf5f1aa2a88" />
-<img width="1920" height="1080" alt="Screenshot_20260605_183616" src="https://github.com/user-attachments/assets/99f8c292-0b20-4c7e-b090-77965f9bd1ba" />
-<img width="1920" height="1080" alt="Screenshot_20260605_183649" src="https://github.com/user-attachments/assets/c55ec865-78ec-4657-9054-7031c8864483" />
-<img width="1920" height="1080" alt="Screenshot_20260605_183824" src="https://github.com/user-attachments/assets/59f07c57-5191-45bf-b976-2e1fb75aa10e" />
-<img width="1920" height="1080" alt="Screenshot_20260605_184255" src="https://github.com/user-attachments/assets/85c405b8-6b8e-424e-8ff3-762b7093f5f1" />
+<div style="overflow-x: auto; white-space: nowrap;">
+<img width="1920" height="1080" alt="Screenshot_20260614_235139" src="https://github.com/user-attachments/assets/39785ea5-b492-4d0d-8e27-0186baa7ae4d" />
+<img width="1920" height="1080" alt="Screenshot_20260614_235049" src="https://github.com/user-attachments/assets/08419975-9de1-4bd4-8959-a66aace0d75f" />
+<img width="1920" height="1080" alt="Screenshot_20260614_234003" src="https://github.com/user-attachments/assets/6eb8b3c3-dbcc-4373-a0c1-d48a623821d7" />
+<img width="1920" height="1080" alt="Screenshot_20260614_234017" src="https://github.com/user-attachments/assets/e93ff9a1-d719-471a-aa0d-c2920216ca1e" />
+<img width="1920" height="1080" alt="Screenshot_20260614_234037" src="https://github.com/user-attachments/assets/0acd6e5e-0fe9-443b-874b-a87b7689851f" />
+<img width="1920" height="1080" alt="Screenshot_20260614_235353" src="https://github.com/user-attachments/assets/1f56448c-e78a-41ec-ad06-ce1c43364637" />
+<img width="1920" height="1080" alt="Screenshot_20260614_235452" src="https://github.com/user-attachments/assets/95c28fb6-f325-4203-a41c-b631cd98c01a" />
+<img width="1920" height="1080" alt="Screenshot_20260614_234732" src="https://github.com/user-attachments/assets/67d1998d-ddfc-4b6c-9000-ddc20d763ba6" />
+<img width="1920" height="1080" alt="Screenshot_20260614_234818" src="https://github.com/user-attachments/assets/ddd5bdf3-92ce-4c2a-baf7-52aae4b037ac" />
+<img width="1920" height="1080" alt="Screenshot_20260614_234947" src="https://github.com/user-attachments/assets/9811e1b5-7213-4025-b354-77a560724f64" />
+<img width="1920" height="1080" alt="Screenshot_20260614_234856" src="https://github.com/user-attachments/assets/82323491-8040-487e-acbd-1257ff289764" />
+<img width="1920" height="1080" alt="Screenshot_20260614_235014" src="https://github.com/user-attachments/assets/a999e9a0-8c8a-4300-a8ae-c2354a399c86" />
+</div>
+
 
 # Installation
 
