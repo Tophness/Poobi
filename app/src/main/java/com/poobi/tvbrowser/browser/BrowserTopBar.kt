@@ -31,7 +31,7 @@ import com.poobi.tvbrowser.shared.TvInputField
 @Composable
 fun BrowserTopBar(
     viewModel: BrowserViewModel,
-    homeIconFocusRequester: FocusRequester
+    onNavigateDown: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -69,19 +69,20 @@ fun BrowserTopBar(
             .fillMaxWidth()
             .background(Color(0xF2111111))
     ) {
-        // Tabs Selection Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(60.dp)
-                .background(Color(0xFF222222))
-                .padding(horizontal = 20.dp),
+                .background(Color(0xFF222222)),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            LazyRow(modifier = Modifier.weight(1f)) {
+            LazyRow(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(start = 20.dp, end = 10.dp)
+            ) {
                 itemsIndexed(viewModel.getWebViewsList()) { index, wv ->
                     val metadata = wv.tag as? TabMetadata
-                    val title = wv.title ?: metadata?.defaultTitle ?: wv.url ?: "New Tab"
+                    val title = wv.title?.takeIf { it.isNotBlank() } ?: metadata?.defaultTitle ?: wv.url ?: "New Tab"
                     val itemFocusRequester = tabFocusRequesters.getOrNull(index) ?: remember { FocusRequester() }
                     
                     TvFocusableHoldToDeleteBox(
@@ -103,22 +104,31 @@ fun BrowserTopBar(
             }
             
             Spacer(modifier = Modifier.width(10.dp))
-            TopBarIconButton(R.drawable.ic_add) { viewModel.createNewTab(context) }
+            Box(modifier = Modifier.padding(end = 20.dp)) {
+                TopBarIconButton(R.drawable.ic_add) { viewModel.createNewTab(context) }
+            }
         }
 
-        // Action Navigation Toolbar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(65.dp)
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 20.dp)
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                        keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                        onNavigateDown()
+                        true
+                    } else {
+                        false
+                    }
+                },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             TvFocusableBox(
                 modifier = Modifier
-                    .size(40.dp)
-                    .focusRequester(homeIconFocusRequester),
+                    .size(40.dp),
                 onClick = { viewModel.showHomeScreen() }
             ) { isFocused ->
                 Icon(
@@ -187,6 +197,7 @@ fun BrowserTopBar(
         }
     }
 }
+
 
 @Composable
 fun TopBarIconButton(iconId: Int, tint: Color = Color.White, onClick: () -> Unit) {

@@ -7,7 +7,12 @@ import android.view.KeyEvent
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.text.KeyboardActions
@@ -16,8 +21,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
@@ -48,6 +55,8 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
     val savedTabsArray by viewModel.savedTabsList.collectAsState()
 
     val openTabsFocusRequester = remember { FocusRequester() }
+    val restoreAllFocusRequester = remember { FocusRequester() }
+    val tabsLazyRowFocusRequester = remember { FocusRequester() }
 
     var bookmarkPage by remember { mutableStateOf(0) }
     val ITEMS_PER_PAGE = 10
@@ -102,7 +111,6 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
             }
         }
 
-        // Sub Category Row Navigation Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -134,33 +142,77 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                 HomeTab.Tabs -> {
                     Column {
                         if (savedTabsArray.length() > 0) {
-                            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.End) {
+                            val restoreAllInteractionSource = remember { MutableInteractionSource() }
+                            val isRestoreAllFocused by restoreAllInteractionSource.collectIsFocusedAsState()
+                            val restoreAllScale by animateFloatAsState(
+                                targetValue = if (isRestoreAllFocused) 1.03f else 1.0f,
+                                animationSpec = tween(durationMillis = 150),
+                                label = "RestoreAllScale"
+                            )
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 10.dp),
+                                horizontalArrangement = Arrangement.End
+                            ) {
                                 Button(
                                     onClick = { viewModel.restoreAllTabs(context) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
+                                    interactionSource = restoreAllInteractionSource,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isRestoreAllFocused) Color(0xFF40C4FF) else Color(0xFF00BCD4),
+                                        contentColor = if (isRestoreAllFocused) Color.Black else Color.White
+                                    ),
+                                    border = if (isRestoreAllFocused) BorderStroke(2.dp, Color.White) else null,
+                                    modifier = Modifier
+                                        .scale(restoreAllScale)
+                                        .focusRequester(restoreAllFocusRequester)
+                                        .focusProperties {
+                                            down = tabsLazyRowFocusRequester
+                                        }
                                 ) {
-                                    Text("Restore All Tabs", color = Color.White)
+                                    Text("Restore All Tabs", fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
+                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
+                            modifier = Modifier.focusRequester(tabsLazyRowFocusRequester)
                         ) {
                             items(savedTabsArray.length()) { index ->
                                 val item = savedTabsArray.getJSONObject(index)
                                 val itemUrl = item.optString("url")
+                                val isLastItem = index == savedTabsArray.length() - 1
                                 TvFocusableHoldToDeleteBox(
-                                    modifier = Modifier.width(240.dp).height(50.dp),
+                                    modifier = Modifier
+                                        .width(240.dp)
+                                        .height(50.dp)
+                                        .focusProperties {
+                                            up = restoreAllFocusRequester
+                                            if (isLastItem) {
+                                                right = restoreAllFocusRequester
+                                            }
+                                        },
                                     onTriggerDelete = {
-                                        val array = JSONArray()
-                                        for (i in 0 until savedTabsArray.length()) {
-                                            if (i != index) array.put(savedTabsArray.get(i))
+                                        if (index in viewModel.getWebViewsList().indices) {
+                                            viewModel.closeTab(index)
+                                        } else {
+                                            val array = JSONArray()
+                                            for (i in 0 until savedTabsArray.length()) {
+                                                if (i != index) array.put(savedTabsArray.get(i))
+                                            }
+                                            viewModel.prefs.edit().putString("saved_tabs", array.toString()).apply()
+                                            viewModel.refreshLists()
                                         }
-                                        viewModel.prefs.edit().putString("saved_tabs", array.toString()).apply()
-                                        viewModel.refreshLists()
                                     },
-                                    onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true) }
+                                    onClick = {
+                                        if (index in viewModel.getWebViewsList().indices) {
+                                            viewModel.switchTab(index)
+                                        } else {
+                                            viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true)
+                                        }
+                                    }
                                 ) { isFocused, progress ->
                                     TabItemCard(
                                         title = item.optString("title", "Saved Tab"),
@@ -226,15 +278,29 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
 
                 HomeTab.History -> {
                     Column {
+                        val clearHistoryInteractionSource = remember { MutableInteractionSource() }
+                        val isClearHistoryFocused by clearHistoryInteractionSource.collectIsFocusedAsState()
+                        val clearHistoryScale by animateFloatAsState(
+                            targetValue = if (isClearHistoryFocused) 1.03f else 1.0f,
+                            animationSpec = tween(durationMillis = 150),
+                            label = "ClearHistoryScale"
+                        )
+
                         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.End) {
                             Button(
                                 onClick = {
                                     viewModel.prefs.edit().putString("history", "[]").apply()
                                     viewModel.refreshLists()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
+                                interactionSource = clearHistoryInteractionSource,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isClearHistoryFocused) Color(0xFF40C4FF) else Color(0xFFE53935),
+                                    contentColor = if (isClearHistoryFocused) Color.Black else Color.White
+                                ),
+                                border = if (isClearHistoryFocused) BorderStroke(2.dp, Color.White) else null,
+                                modifier = Modifier.scale(clearHistoryScale)
                             ) {
-                                Text("Clear History", color = Color.White)
+                                Text("Clear History", fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -265,15 +331,29 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
 
                 HomeTab.Downloads -> {
                     Column {
+                        val clearDownloadsInteractionSource = remember { MutableInteractionSource() }
+                        val isClearDownloadsFocused by clearDownloadsInteractionSource.collectIsFocusedAsState()
+                        val clearDownloadsScale by animateFloatAsState(
+                            targetValue = if (isClearDownloadsFocused) 1.03f else 1.0f,
+                            animationSpec = tween(durationMillis = 150),
+                            label = "ClearDownloadsScale"
+                        )
+
                         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.End) {
                             Button(
                                 onClick = {
                                     viewModel.prefs.edit().putString("downloads", "[]").apply()
                                     viewModel.refreshLists()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
+                                interactionSource = clearDownloadsInteractionSource,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isClearDownloadsFocused) Color(0xFF40C4FF) else Color(0xFFE53935),
+                                    contentColor = if (isClearDownloadsFocused) Color.Black else Color.White
+                                ),
+                                border = if (isClearDownloadsFocused) BorderStroke(2.dp, Color.White) else null,
+                                modifier = Modifier.scale(clearDownloadsScale)
                             ) {
-                                Text("Clear Downloads", color = Color.White)
+                                Text("Clear Downloads", fontWeight = FontWeight.Bold)
                             }
                         }
 

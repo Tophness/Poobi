@@ -1833,7 +1833,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             performTorrentPreBuffering(infoHash, fileIdx, sourceDataJson)
         } else {
             if (_isDownloadingSubs.value) {
-                when (prefs.getInt("auto_sub_wait_pref", 0)) {
+                when (prefs.getInt("auto_sub_wait_pref", 1)) {
                     0 -> {
                         cancelSubtitleDownloads()
                         resolveAndPlayInternal(sourceDataJson)

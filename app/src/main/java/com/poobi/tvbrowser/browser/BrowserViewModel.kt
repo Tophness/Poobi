@@ -36,6 +36,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 data class TabMetadata(
     val defaultTitle: String?,
+    val defaultUrl: String? = null, 
     val streamItemJson: String? = null,
     val season: Int? = null,
     val episode: Int? = null
@@ -49,7 +50,9 @@ sealed class BrowserDialogState {
     data class SaveBlockRule(val url: String, val selector: String) : BrowserDialogState()
     data class SaveAutoplayProfile(val url: String, val selectors: List<String>) : BrowserDialogState()
     data class Error(val message: String) : BrowserDialogState()
+    data class ContextMenu(val url: String, val x: Float, val y: Float) : BrowserDialogState()
 }
+
 
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -114,6 +117,16 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private var currentHost = ""
     var isExtractionActive = false
     val recordedSelectors = mutableListOf<String>()
+
+    fun reloadPreferences() {
+        isLightTheme.value = prefs.getBoolean("light_theme", false)
+        silentPopupBlock.value = prefs.getBoolean("silent_popup_block", true)
+        extractVideoPref.value = prefs.getInt("extract_video_pref", 0)
+        videoTriggerPref.value = prefs.getInt("video_trigger_pref", 1)
+        clickjackPref.value = prefs.getBoolean("clickjack_prevention", true)
+        navigationModePref.value = prefs.getInt("navigation_mode_pref", 0)
+        scrollTopbarEnabled.value = prefs.getBoolean("scroll_topbar_enabled", true)
+    }
 
     companion object {
         const val DEFAULT_AUTOPLAY_SCRIPT = """
@@ -232,7 +245,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT
             )
             visibility = View.GONE
-            tag = TabMetadata(defaultTitle = title)
+            tag = TabMetadata(defaultTitle = title, defaultUrl = url)
         }
         setupWebView(newWebView)
         _webViews.add(newWebView)
@@ -323,6 +336,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val newWv = createNewTab(context, url, switchTo = true)
                 newWv.tag = TabMetadata(
                     defaultTitle = newWv.title,
+                    defaultUrl = url,
                     streamItemJson = streamItemJson,
                     season = season,
                     episode = episode
@@ -333,6 +347,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 }
                 currentWebView?.tag = TabMetadata(
                     defaultTitle = currentWebView?.title,
+                    defaultUrl = url,
                     streamItemJson = streamItemJson,
                     season = season,
                     episode = episode
@@ -357,6 +372,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     val title = obj.optString("title")
                     createNewTab(context, url, switchTo = false, title = title)
                 }
+            }
+            if (_currentTabIndex.value == -1 && _webViews.isNotEmpty()) {
+                _currentTabIndex.value = 0
             }
         } catch (e: Exception) {
             Log.e("TVBrowser", "Error restoring tabs: ${e.message}")
@@ -421,7 +439,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         clearFocus()
                     }
 
-                    _currentDialog.value = BrowserDialogState.SaveBlockRule(link, "context_menu_trigger") 
+                    _currentDialog.value = BrowserDialogState.ContextMenu(link, cursorX, cursorY) 
                 } catch (e: Exception) { }
             }
         }
@@ -508,10 +526,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     triggerAutoPlayClicks(view)
                 }
 
-                if (navigationModePref.value == 1) {
-                    initDpadNav()
-                }
-
                 view.evaluateJavascript("(function() { return document.documentElement.innerText; })();") { content ->
                     if (content != null && content.contains("#EXTM3U")) {
                         val headers = mutableMapOf<String, String>()
@@ -526,7 +540,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
 
-                view.postDelayed({ saveSnapshot(url, view.title ?: "Website", view) }, 2500)
+                view.postDelayed({ 
+                    saveSnapshot(
+                        url = url, 
+                        title = view.title?.takeIf { it.isNotBlank() } ?: "Website", 
+                        wv = view
+                    ) 
+                }, 2500)
             }
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
@@ -1149,73 +1169,77 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         dismissDialog()
     }
 
-    fun initDpadNav() {
-        val script = """
+    fun inspectActiveElement() {
+        val wv = currentWebView ?: return
+        wv.evaluateJavascript("""
             (function() {
-                if (!window.navHelper) {
-                    window.navHelper = {
-                        focusedEl: null,
-                        highlight: function(el) {
-                            this.clearHighlight(); if (!el) return; this.focusedEl = el;
-                            let style = document.getElementById('poobi-nav-highlight');
-                            if (!style) { style = document.createElement('style'); style.id = 'poobi-nav-highlight'; document.head.appendChild(style); }
-                            el.classList.add('poobi-focused');
-                            style.innerHTML = '.poobi-focused { outline: 6px solid #FF5722 !important; box-shadow: 0 0 15px rgba(255, 87, 34, 0.7) !important; position: relative !important; z-index: 2147483645 !important; }';
-                            el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
-                        },
-                        clearHighlight: function() { if (this.focusedEl) { this.focusedEl.classList.remove('poobi-focused'); this.focusedEl = null; } },
-                        getFocusableElements: function() {
-                            return Array.from(document.querySelectorAll('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"]), [onclick], [role="button"]')).filter(el => el.getBoundingClientRect().width > 0);
-                        },
-                        move: function(direction) {
-                            const elements = this.getFocusableElements();
-                            if (elements.length === 0) return;
-                            
-                            let currentRect = this.focusedEl ? this.focusedEl.getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0 };
-                            let bestCandidate = null;
-                            let minDistance = Infinity;
-                            
-                            const curX = (currentRect.left + currentRect.right) / 2;
-                            const curY = (currentRect.top + currentRect.bottom) / 2;
-
-                            elements.forEach(el => {
-                                if (el === this.focusedEl) return;
-                                const rect = el.getBoundingClientRect();
-                                const tgtX = (rect.left + rect.right) / 2;
-                                const tgtY = (rect.top + rect.bottom) / 2;
-                                
-                                let isCandidate = false;
-                                if (direction === 'up' && rect.bottom <= currentRect.top + 5) isCandidate = true;
-                                else if (direction === 'down' && rect.top >= currentRect.bottom - 5) isCandidate = true;
-                                else if (direction === 'left' && rect.right <= currentRect.left + 5) isCandidate = true;
-                                else if (direction === 'right' && rect.left >= currentRect.right - 5) isCandidate = true;
-                                
-                                if (isCandidate) {
-                                    const distance = Math.sqrt(Math.pow(curX - tgtX, 2) + Math.pow(curY - tgtY, 2));
-                                    if (distance < minDistance) {
-                                        minDistance = distance;
-                                        bestCandidate = el;
-                                    }
-                                }
-                            });
-                            
-                            if (bestCandidate) this.highlight(bestCandidate);
-                            else if (!this.focusedEl && elements.length > 0) this.highlight(elements[0]);
-                        },
-                        clickFocused: function() { if (this.focusedEl) this.focusedEl.click(); }
-                    };
+                var el = document.activeElement;
+                if (!el || el === document.body || el === document.documentElement) {
+                    return null;
                 }
-                if (!window.navHelper.focusedEl) {
-                    const elements = window.navHelper.getFocusableElements();
-                    if (elements.length > 0) window.navHelper.highlight(elements[0]);
+                var options = [];
+                var tag = el.tagName.toLowerCase();
+                if (el.id) options.push({type: 'ID', value: '#' + el.id});
+                
+                var classes = Array.from(el.classList).filter(function(c) {
+                    return !c.startsWith('poobi-') && !c.includes('focused');
+                });
+                classes.forEach(function(c) {
+                    options.push({type: 'Class', value: '.' + c});
+                });
+                
+                options.push({type: 'Tag', value: tag});
+                if (classes.length > 0) {
+                    options.push({type: 'Tag+Class', value: tag + '.' + classes.join('.')});
                 }
-            })();
-        """.trimIndent()
-        currentWebView?.evaluateJavascript(script, null)
-    }
+                
+                var parent = el.parentElement;
+                if (parent) {
+                    var idx = Array.from(parent.children).indexOf(el) + 1;
+                    options.push({type: 'Position', value: tag + ':nth-child(' + idx + ')'});
+                }
+                
+                var path = [];
+                var curr = el;
+                while (curr && curr.tagName !== 'HTML' && curr.tagName !== 'BODY') {
+                    var segment = curr.tagName.toLowerCase();
+                    if (curr.id) {
+                        segment += '#' + curr.id;
+                        path.unshift(segment);
+                        break;
+                    }
+                    var p = curr.parentElement;
+                    if (p) {
+                        var i = Array.from(p.children).indexOf(curr) + 1;
+                        segment += ':nth-child(' + i + ')';
+                    }
+                    path.unshift(segment);
+                    curr = curr.parentElement;
+                }
+                if (path.length > 1) {
+                    options.push({type: 'Path', value: path.join(' > ')});
+                }
 
-    fun handleDpadNav(direction: String) {
-        currentWebView?.evaluateJavascript("if(window.navHelper) window.navHelper.move('$direction');", null)
+                return {
+                    tagName: el.tagName,
+                    id: el.id,
+                    className: el.className,
+                    candidatesCount: 1,
+                    candidateIndex: 0,
+                    options: options
+                };
+            })()
+        """.trimIndent()) { result ->
+            if (result == null || result == "null") {
+                _currentDialog.value = BrowserDialogState.Error("No webpage element was highlighted or active.")
+                return@evaluateJavascript
+            }
+            try {
+                _currentDialog.value = BrowserDialogState.AdvancedBlockElement(JSONObject(result))
+            } catch (e: Exception) {
+                _currentDialog.value = BrowserDialogState.Error("Failed to parse the highlighted element's selectors.")
+            }
+        }
     }
 
     private fun applyBlockedElements(wv: WebView) {
@@ -1324,12 +1348,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private fun saveTabs() {
         val array = JSONArray()
         for (wv in _webViews) {
-            val url = wv.url ?: "about:blank"
-            if (url == "about:blank") continue
             val metadata = wv.tag as? TabMetadata
+            val url = wv.url?.takeIf { it.isNotBlank() && it != "about:blank" } ?: metadata?.defaultUrl ?: "about:blank"
+            if (url == "about:blank") continue
             val obj = JSONObject().apply {
                 put("url", url)
-                put("title", wv.title ?: metadata?.defaultTitle ?: url)
+                put("title", wv.title?.takeIf { it.isNotBlank() } ?: metadata?.defaultTitle ?: url)
             }
             array.put(obj)
         }
