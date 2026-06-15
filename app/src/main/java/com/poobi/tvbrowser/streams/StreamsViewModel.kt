@@ -1394,7 +1394,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _scrapeStatusMsg.value = "Starting scrapers..."
         isInteractingWithSources = false
 
-        // Fetch Torrentio sources in parallel
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
@@ -1408,7 +1407,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                 var imdbId = item.optString("imdb")
                 if (imdbId.isNullOrEmpty() || imdbId == "null") {
-                    // Try to get from cached details if available
                     val details = _itemDetails.value
                     if (details != null && details.optInt("id").toString() == id) {
                         imdbId = details.optJSONObject("external_ids")?.optString("imdb_id") ?: ""
@@ -1423,7 +1421,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 Log.d("StreamsViewModel", "Torrentio Scrape - IMDb ID: $imdbId")
 
                 if (!imdbId.isNullOrEmpty() && imdbId != "null") {
-                    val torrentio = py.getModule("sources.torrentio.torrentio").callAttr("source")
+                    val torrentio = py.getModule("torrentio.torrentio").callAttr("source")
                     val url = if (mediaType == "tv" || mediaType == "tvshow") {
                         "$imdbId:${season ?: 1}:${episode ?: 1}"
                     } else {
@@ -1464,7 +1462,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         val torrentTitle = r.optString("title", "")
                         
                         val displayTitle = if (torrentTitle.isNotEmpty()) {
-                            torrentTitle // Just use the title from torrentio.py as it already has [quality]
+                            torrentTitle
                         } else {
                             "[$quality] $source ($provider)"
                         }

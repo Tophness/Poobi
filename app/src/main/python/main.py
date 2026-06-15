@@ -548,7 +548,6 @@ class UniversalScraper:
                         if self.stop_event.is_set(): break
                         res.setdefault('provider', f"[{pack_name}] {name}")
                         res.setdefault('direct', False)
-                        # Store the internal key for resolution
                         res['provider_key'] = f"{pack_name}_{name}"
                     self.sources.extend(results)
             self.status["current"] += 1
@@ -567,8 +566,6 @@ class UniversalScraper:
                     new_url = provider.resolve(url)
                     if new_url:
                         url = new_url
-                        # If the provider resolved it, we tend to treat it as video 
-                        # unless it's obviously a webpage
                         is_video = True
                 except: pass
 
@@ -760,9 +757,8 @@ def get_scrape_status():
                         except: pass
                 s['is_video'] = is_video
 
-            title_prefix = "[BROWSER] " if not is_video else ""
             display_sources.append({
-                "title": f"{title_prefix}[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
+                "title": f"[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
                 "source_data": json.dumps(s)
             })
         
@@ -776,7 +772,7 @@ def stop_scrape():
     global active_scraper
     if active_scraper:
         active_scraper.stop_event.set()
-        active_scraper.pause_event.set() # Unpause if paused so threads can exit
+        active_scraper.pause_event.set()
         return "Stopped"
     return "No active scraper"
 
@@ -892,9 +888,8 @@ def scrape(item_json, season=None, episode=None):
                         except: pass
                 s['is_video'] = is_video
 
-            title_prefix = "[BROWSER] " if not is_video else ""
             display_sources.append({
-                "title": f"{title_prefix}[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
+                "title": f"[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
                 "source_data": json.dumps(s)
             })
             
