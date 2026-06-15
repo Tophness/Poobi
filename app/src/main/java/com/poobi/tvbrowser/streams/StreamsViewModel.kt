@@ -169,12 +169,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     private var torrentCancelLatch: CountDownLatch? = null
 
-    companion object {
-        private const val TAG = "StreamsViewModel"
-    }
-
     init {
-        Log.i(TAG, "[Init] Initializing StreamsViewModel.")
         loadSearchHistory()
         refreshFavoritesSet()
         loadGenres()
@@ -183,7 +178,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun performTorrentPreBuffering(infoHash: String, fileIdx: Int, sourceDataJson: String) {
-        Log.i(TAG, "[performTorrentPreBuffering] Thread: ${Thread.currentThread().name} - Requested pre-buffering for Hash: $infoHash, Index: $fileIdx")
         _isBufferingTorrent.value = true
         _torrentBufferProgress.value = 0f
         _torrentBufferStatus.value = "Starting Torrent Engine..."
@@ -194,10 +188,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                Log.d(TAG, "[performTorrentPreBuffering] Requesting server instance from Thread: ${Thread.currentThread().name}")
                 val server = TorrentStreamServer.getInstance(context)
                 val prebufferLimit = prefs.getInt("torrent_prebuffer_pieces", 1)
-                Log.d(TAG, "[performTorrentPreBuffering] Target prebuffer pieces limit: $prebufferLimit")
 
                 server.prepareTorrent(
                     infoHash = infoHash,
@@ -207,17 +199,14 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         _torrentBufferStatus.value = status
                         _torrentBufferProgress.value = progress
                         _torrentBufferSeeders.value = seeders
-                        Log.v(TAG, "[performTorrentPreBuffering-Callback] Buffer Status: $status, Progress: $progress, Seeds: $seeders")
                     },
                     onReady = {
-                        Log.i(TAG, "[performTorrentPreBuffering-Callback] Buffer complete onReady received! Proceeding to resolveAndPlayInternal.")
                         viewModelScope.launch(Dispatchers.Main) {
                             _isBufferingTorrent.value = false
                             resolveAndPlayInternal(sourceDataJson)
                         }
                     },
                     onError = { error ->
-                        Log.e(TAG, "[performTorrentPreBuffering-Callback] Buffer complete onError: $error")
                         viewModelScope.launch(Dispatchers.Main) {
                             _isBufferingTorrent.value = false
                             _events.value = StreamsEvent.ShowToast("Pre-Buffering Failed: $error")
@@ -227,7 +216,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     cancellationToken = latch
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "[performTorrentPreBuffering] Exception during launch", e)
                 viewModelScope.launch(Dispatchers.Main) {
                     _isBufferingTorrent.value = false
                     _events.value = StreamsEvent.ShowToast("Pre-Buffering Failed: ${e.message}")
@@ -238,54 +226,35 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun forcePlayTorrentNow() {
-        Log.i(TAG, "[forcePlayTorrentNow] Flag forcePlayTriggered toggled in TorrentStreamServer.")
         try {
             val server = TorrentStreamServer.getInstance(context)
             server.forcePlayTriggered = true
-        } catch (e: Exception) {
-            Log.e(TAG, "[forcePlayTorrentNow] Error fetching server instance", e)
-        }
+        } catch (e: Exception) {}
     }
 
     fun cancelTorrentBuffering() {
-        Log.i(TAG, "[cancelTorrentBuffering] Torrent buffering cancelled.")
         torrentCancelLatch?.countDown()
         _isBufferingTorrent.value = false
         resumeScrape()
     }
 
     fun setActiveCategoryIndex(index: Int) {
-        Log.d(TAG, "[setActiveCategoryIndex] Category index modified to: $index")
         _activeCategoryIndex.value = index
     }
 
-    fun consumeEvent() { 
-        Log.v(TAG, "[consumeEvent] Resetting stream event emission pipeline.")
-        _events.value = null 
-    }
+    fun consumeEvent() { _events.value = null }
 
     fun clearScrapedSources() {
-        Log.i(TAG, "[clearScrapedSources] Scraping cancelled, cleaning lists.")
         stopScrape()
         _scrapedSources.value = null
         _torrentioSources.value = null
         _isScrapingTorrents.value = false
     }
 
-    fun clearSelectedMedia() { 
-        Log.d(TAG, "[clearSelectedMedia] Cleared active media selections.")
-        _selectedItem.value = null 
-    }
-
-    fun clearSearchResults() { 
-        Log.d(TAG, "[clearSearchResults] Cleared active search records.")
-        _searchResults.value = null 
-    }
-
+    fun clearSelectedMedia() { _selectedItem.value = null }
+    fun clearSearchResults() { _searchResults.value = null }
     private suspend fun getPythonInstance(): Python {
-        Log.v(TAG, "[getPythonInstance] Verification lookup on Python runtime engine.")
         while (!Python.isStarted()) {
-            Log.v(TAG, "[getPythonInstance] Waiting on Python engine startup loop...")
             delay(100)
         }
         return Python.getInstance()
@@ -296,17 +265,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             if (!Python.isStarted()) return false
             val py = Python.getInstance()
             val control = py.getModule("modules.control")
-            val authed = control.callAttr("setting", "trakt.authed").toString() == "yes"
-            Log.v(TAG, "[isTraktAuthorized] Evaluated: $authed")
-            authed
+            control.callAttr("setting", "trakt.authed").toString() == "yes"
         } catch (e: Exception) {
-            Log.e(TAG, "[isTraktAuthorized] Failed checking authorization", e)
             false
         }
     }
 
     private fun loadGenres() {
-        Log.i(TAG, "[loadGenres] Initiating TMDB genres pre-fetch task.")
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 delay(3000)
@@ -323,11 +288,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         val g = tvGenres.getJSONObject(i)
                         genreMap[g.getInt("id")] = g.getString("name")
                     }
-                    Log.d(TAG, "[loadGenres] Genre mapping parsed successfully: ${genreMap.size} loaded.")
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "[loadGenres] Failed parsing genres", e)
-            }
+            } catch (e: Exception) {}
         }
     }
 
@@ -340,7 +302,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             
             withContext(Dispatchers.Main) {
                 _searchHistory.value = list
-                Log.d(TAG, "[loadSearchHistory] History items synchronized: ${list.size}")
             }
         }
     }
@@ -355,7 +316,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             prefs.edit().putString("streams_search_history", JSONArray(list).toString()).apply()
             withContext(Dispatchers.Main) {
                 _searchHistory.value = list
-                Log.d(TAG, "[addToSearchHistory] Query added: $query. Total unique queries: ${list.size}")
             }
         }
     }
@@ -365,19 +325,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             prefs.edit().putString("streams_search_history", "[]").apply()
             withContext(Dispatchers.Main) {
                 _searchHistory.value = emptyList()
-                Log.d(TAG, "[clearSearchHistory] Searched elements list cleared completely.")
             }
         }
     }
 
     fun performSearch(query: String) {
         if (query.isBlank()) return
-        Log.i(TAG, "[performSearch] Starting search request for: $query")
         addToSearchHistory(query)
         
         val cached = searchCache.get(query)
         if (cached != null) {
-            Log.d(TAG, "[performSearch] Found search results in cache.")
             _searchResults.value = cached
             _isScraping.value = false
             return
@@ -397,10 +354,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 withContext(Dispatchers.Main) {
                     _searchResults.value = results
                     _isScraping.value = false
-                    Log.d(TAG, "[performSearch] Results retrieved successfully: ${results.length()}")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "[performSearch] Error executing TMDB Python query", e)
                 withContext(Dispatchers.Main) {
                     _events.value = StreamsEvent.ShowToast("Search error: ${e.message}")
                     _isScraping.value = false
@@ -411,17 +366,14 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun cancelLibraryJobs() {
-        Log.d(TAG, "[cancelLibraryJobs] Cleaning active TMDB library fetch tasks.")
         libraryLoadJob?.cancel()
         _libraryItems.value = null
     }
 
     fun loadLibraryCategory(title: String, method: String, arg: String? = null) {
         val cacheKey = "${method}_${arg ?: ""}"
-        Log.i(TAG, "[loadLibraryCategory] Requested category: $title, cacheKey: $cacheKey")
         val cached = libraryCache.get(cacheKey)
         if (cached != null) {
-            Log.d(TAG, "[loadLibraryCategory] Fetching matching cache entry.")
             cancelLibraryJobs()
             _libraryItems.value = cached
             return
@@ -445,42 +397,35 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     libraryCache.put(cacheKey, results)
                     withContext(Dispatchers.Main) { 
                         _libraryItems.value = results 
-                        Log.d(TAG, "[loadLibraryCategory] Loaded items: ${results.length()}")
                     }
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                Log.e(TAG, "[loadLibraryCategory] Library loading crashed", e)
             }
         }
     }
 
     fun loadFavorites() { 
-        Log.i(TAG, "[loadFavorites] Fetching user favorites list.")
         cancelLibraryJobs()
         viewModelScope.launch(Dispatchers.IO) {
             val list = JSONArray(prefs.getString("streams_favorites", "[]") ?: "[]")
             withContext(Dispatchers.Main) {
                 _libraryItems.value = list
-                Log.d(TAG, "[loadFavorites] Favorites loaded: ${list.length()}")
             }
         }
     }
     
     fun loadRecentlyPlayed() { 
-        Log.i(TAG, "[loadRecentlyPlayed] Fetching recently watched history items.")
         cancelLibraryJobs()
         viewModelScope.launch(Dispatchers.IO) {
             val list = JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
             withContext(Dispatchers.Main) {
                 _libraryItems.value = list
-                Log.d(TAG, "[loadRecentlyPlayed] Recently played loaded: ${list.length()}")
             }
         }
     }
     
     fun removeFromRecentlyPlayed(index: Int) {
-        Log.i(TAG, "[removeFromRecentlyPlayed] Requested removal for row position: $index")
         viewModelScope.launch(Dispatchers.IO) {
             val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
             val array = JSONArray(recentJson)
@@ -501,14 +446,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                                     if (path != null) {
                                         val file = File(path)
                                         if (file.exists() && file.isFile) {
-                                            val deleted = file.delete()
-                                            Log.d(TAG, "[removeFromRecentlyPlayed] Deleted associated subtitle path file: $path ($deleted)")
+                                            file.delete()
                                         }
                                     }
                                 }
                             }
                         } catch (e: Exception) {
-                            Log.e(TAG, "Failed to delete subtitle file: ${e.message}")
+                            Log.e("StreamsViewModel", "Failed to delete subtitle file: ${e.message}")
                         }
                     }
                 }
@@ -548,18 +492,15 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         headers: Map<String, String>,
         subtitles: Map<String, Map<String, String>>
     ) {
-        Log.i(TAG, "[onVideoPlaybackStarted] Video playback initiated. Title: $displayTitle, URL: $url")
         if (subtitles.isNotEmpty()) {
             val copiedSubtitles = subtitles.toMap()
             interceptedSubtitleUrls.clear()
             interceptedSubtitleUrls.putAll(copiedSubtitles)
-            Log.d(TAG, "[onVideoPlaybackStarted] Associated playback subtitles linked: ${copiedSubtitles.size}")
         }
 
         addToRecentlyPlayed(displayTitle, item, season, episode, url, headers)
 
         val autoSubMode = prefs.getInt("auto_sub_pref", 0)
-        Log.d(TAG, "[onVideoPlaybackStarted] Current autoSubMode configuration: $autoSubMode")
         if (autoSubMode == 0) {
             fetchManualSubtitles(item, season, episode)
         } else if (autoSubMode == 1 && interceptedSubtitleUrls.isEmpty()) {
@@ -575,7 +516,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         videoUrl: String? = null, 
         headers: Map<String, String>? = null
     ) {
-        Log.d(TAG, "[addToRecentlyPlayed] Adding item: $displayTitle, S:${season ?: -1} E:${episode ?: -1}")
         viewModelScope.launch(Dispatchers.IO) {
             val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
             val array = JSONArray(recentJson)
@@ -599,7 +539,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             var existing: JSONObject? = null
             if (existingIndex != -1) {
                 existing = newList.removeAt(existingIndex)
-                Log.v(TAG, "[addToRecentlyPlayed] Overwriting existing matching history record entry index: $existingIndex")
             }
 
             val newEntry = JSONObject().apply {
@@ -643,7 +582,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val videoUrl = entry.optString("video_url")
         val title = entry.optString("display_title")
 
-        Log.i(TAG, "[selectRecentlyPlayedItem] Selected history card: $title, url exists: ${videoUrl.isNotEmpty()}")
         lastScrapedSeason = season
         lastScrapedEpisode = episode
 
@@ -702,7 +640,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
             withContext(Dispatchers.Main) {
                 _favoritesSet.value = set
-                Log.d(TAG, "[refreshFavoritesSet] Favorites set updated: ${set.size} entries mapped.")
             }
         }
     }
@@ -723,7 +660,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             if (foundIndex != -1) {
                 array.remove(foundIndex)
                 _events.value = StreamsEvent.ShowToast("Removed from Favorites")
-                Log.i(TAG, "[toggleFavorite] Removed item from favorites: ID: $id")
             } else {
                 if (!item.has("genre_ids") && !item.has("genres")) {
                     _itemDetails.value?.let { details ->
@@ -735,7 +671,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
                 array.put(item)
                 _events.value = StreamsEvent.ShowToast("Added to Favorites")
-                Log.i(TAG, "[toggleFavorite] Added item to favorites: ID: $id")
             }
             prefs.edit().putString("streams_favorites", array.toString()).apply()
             refreshFavoritesSet()
@@ -749,17 +684,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun selectMediaItem(item: JSONObject, initialSeason: Int? = null) {
-        val id = item.optInt("id")
-        val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
-            ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
-        Log.i(TAG, "[selectMediaItem] Loading media item details. ID: $id, Type: $mediaType")
-
         _selectedItem.value = item
         _itemDetails.value = null
         _itemEpisodes.value = null
         _itemSeasons.value = null
         _lastWatchedEpisode.value = null
         _isMovieWatched.value = false
+        
+        val id = item.optInt("id")
+        val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
+            ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
 
         if (mediaType == "movie") {
             checkMovieWatchedStatus(item)
@@ -768,7 +702,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val cacheKey = "${mediaType}_$id"
         val cached = detailsCache.get(cacheKey)
         if (cached != null) {
-            Log.d(TAG, "[selectMediaItem] Retrieved items details from memory LruCache.")
             _itemDetails.value = cached
             _itemRecommendations.value = cached.optJSONObject("recommendations")?.optJSONArray("results")
             _itemCast.value = cached.optJSONObject("credits")?.optJSONArray("cast")
@@ -813,9 +746,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "[selectMediaItem] Failed querying metadata from TMDB utils python script", e)
-            }
+            } catch (e: Exception) {}
         }
     }
 
@@ -833,10 +764,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val watched = checker.callAttr("is_movie_watched", item.toString()).toBoolean()
                 withContext(Dispatchers.Main) {
                     _isMovieWatched.value = watched
-                    Log.v(TAG, "[checkMovieWatchedStatus] Trakt check completed. Watched: $watched")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed checking movie watched status: ${e.message}")
+                Log.e("StreamsViewModel", "Failed checking movie watched status: ${e.message}")
             }
         }
     }
@@ -1023,7 +953,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun loadEpisodes(item: JSONObject, seasonNumber: Int, isAutoSelect: Boolean = false) {
         val id = item.optInt("id")
-        Log.i(TAG, "[loadEpisodes] Querying episodes list. Show: $id, Season: $seasonNumber")
         _itemEpisodes.value = null
 
         if (isAutoSelect) {
@@ -1036,7 +965,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val cacheKey = "${id}_$seasonNumber"
         val cached = episodesCache.get(cacheKey)
         if (cached != null) {
-            Log.d(TAG, "[loadEpisodes] Found cached seasons episodes structure.")
             _itemEpisodes.value = cached
             return
         }
@@ -1054,20 +982,15 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     for (i in 0 until episodes.length()) {
                         episodes.getJSONObject(i).put("is_watched", if (i < watchedStatus.length()) watchedStatus.getBoolean(i) else false)
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "[loadEpisodes] Trakt episode check query failed", e)
-                }
+                } catch (e: Exception) {}
                 withContext(Dispatchers.Main) { 
                     if (isActive) _itemEpisodes.value = episodes 
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "[loadEpisodes] Error fetching episodes list", e)
-            }
+            } catch (e: Exception) {}
         }
     }
 
     fun stopScrape(triggerSubtitles: Boolean = false) {
-        Log.i(TAG, "[stopScrape] Stop scrape requested. triggerSubtitles: $triggerSubtitles")
         stopTryAll()
         scrapePollingJob?.cancel()
         scrapePollingJob = null
@@ -1099,7 +1022,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private var filteredSourcesToTry: List<JSONObject>? = null
 
     fun startTryAll() {
-        Log.i(TAG, "[startTryAll] Toggled try all automation loop.")
         if (_isTryingAll.value) {
             stopTryAll()
             return
@@ -1133,7 +1055,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun stopTryAll(resume: Boolean = true) {
-        Log.i(TAG, "[stopTryAll] Disabling auto try loop. resume scrape states: $resume")
         if (!_isTryingAll.value) return
         _isTryingAll.value = false
         tryAllJob?.cancel()
@@ -1152,7 +1073,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
         
         currentTryingIndex++
-        Log.d(TAG, "[tryNextSource] Transitioning to position index $currentTryingIndex of total ${sources.size} streams.")
 
         if (currentTryingIndex >= sources.size) {
             _events.value = StreamsEvent.ShowToast("Finished trying all sources. None found.")
@@ -1209,7 +1129,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun checkUrlValidity(url: String, headers: Map<String, String>): Boolean = withContext(Dispatchers.IO) {
-        Log.d(TAG, "[checkUrlValidity] Testing endpoint accessibility: $url")
         try {
             val connection = URL(url).openConnection() as HttpURLConnection
             connection.requestMethod = "HEAD"
@@ -1219,7 +1138,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             
             val responseCode = connection.responseCode
             val contentType = connection.contentType ?: ""
-            Log.v(TAG, "[checkUrlValidity] HEAD request responseCode: $responseCode, contentType: $contentType")
 
             if (responseCode in 200..299) {
                 if (contentType.contains("mpegurl", ignoreCase = true) || url.contains(".m3u8", ignoreCase = true)) {
@@ -1243,7 +1161,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 
                 val getResponseCode = getConn.responseCode
                 val getContentType = getConn.contentType ?: ""
-                Log.v(TAG, "[checkUrlValidity] GET Range validation fallback. responseCode: $getResponseCode, contentType: $getContentType")
 
                 if ((getResponseCode in 200..299) || getResponseCode == 206) {
                     getConn.inputStream.use { input ->
@@ -1263,9 +1180,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "[checkUrlValidity] Connectivity test failure: ${e.message}")
-        }
+        } catch (e: Exception) {}
         false
     }
 
@@ -1389,8 +1304,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             "$cleanTitle S${lastScrapedSeason}E${lastScrapedEpisode}"
         } else cleanTitle
 
-        Log.i(TAG, "[playStream] Formulating PlayVideo event. Target URL: $streamUrl, Title: $fullTitle, isVideo: $isVideo")
-
         val headersMap = mutableMapOf<String, String>()
         try {
             val sourceData = JSONObject(sourceDataJson)
@@ -1434,7 +1347,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun onPlaybackError() {
-        Log.w(TAG, "[onPlaybackError] Playback error captured. isTryingAll: ${_isTryingAll.value}")
         if (_isTryingAll.value) {
             viewModelScope.launch(Dispatchers.Main) {
                 tryNextSource()
@@ -1443,7 +1355,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun onScrapeFinished(item: JSONObject, season: Int?, episode: Int?, sources: JSONArray?) {
-        Log.i(TAG, "[onScrapeFinished] Python scraper thread complete.")
         scrapePollingJob?.cancel()
         scrapePollingJob = null
         scrapeJob?.cancel()
@@ -1463,7 +1374,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun performScrape(item: JSONObject, season: Int? = null, episode: Int? = null) {
-        Log.i(TAG, "[performScrape] Toggling full scrape sequence for target item. S:${season ?: -1} E:${episode ?: -1}")
         isPlayingFromSavedLink = false
         stopScrape()
         
@@ -1484,6 +1394,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _scrapeStatusMsg.value = "Starting scrapers..."
         isInteractingWithSources = false
 
+        // Fetch Torrentio sources in parallel
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
@@ -1497,6 +1408,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                 var imdbId = item.optString("imdb")
                 if (imdbId.isNullOrEmpty() || imdbId == "null") {
+                    // Try to get from cached details if available
                     val details = _itemDetails.value
                     if (details != null && details.optInt("id").toString() == id) {
                         imdbId = details.optJSONObject("external_ids")?.optString("imdb_id") ?: ""
@@ -1552,7 +1464,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         val torrentTitle = r.optString("title", "")
                         
                         val displayTitle = if (torrentTitle.isNotEmpty()) {
-                            torrentTitle
+                            torrentTitle // Just use the title from torrentio.py as it already has [quality]
                         } else {
                             "[$quality] $source ($provider)"
                         }
@@ -1905,7 +1817,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun resolveAndPlay(sourceDataJson: String, rawItem: JSONObject) {
-        Log.i(TAG, "[resolveAndPlay] Resolve action triggered for: $sourceDataJson")
         stopTryAll()
         isPlayingFromSavedLink = false
         lastSelectedSource = try { JSONObject(sourceDataJson) } catch (e: Exception) { rawItem }
@@ -1917,13 +1828,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val fileIdx = sourceData.optInt("fileIdx", -1)
 
         if (infoHash.isNotEmpty() && fileIdx != -1) {
-            Log.d(TAG, "[resolveAndPlay] Match resolved as p2p torrent stream. Initiating performTorrentPreBuffering.")
             performTorrentPreBuffering(infoHash, fileIdx, sourceDataJson)
         } else {
             if (_isDownloadingSubs.value) {
-                val subWaitMode = prefs.getInt("auto_sub_wait_pref", 0)
-                Log.d(TAG, "[resolveAndPlay] Subtitles auto-download active. Evaluating wait mode: $subWaitMode")
-                when (subWaitMode) {
+                when (prefs.getInt("auto_sub_wait_pref", 0)) {
                     0 -> {
                         cancelSubtitleDownloads()
                         resolveAndPlayInternal(sourceDataJson)
@@ -1942,7 +1850,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun resolveAndPlayInternal(sourceDataJson: String) {
-        Log.i(TAG, "[resolveAndPlayInternal] Running resolve sequence. data: $sourceDataJson")
         _isScraping.value = true
         _isResolving.value = true
         _scrapeStatusMsg.value = "Resolving Link..."
@@ -1968,7 +1875,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         val streamUrl = json.optString("url")
                         val isVideo = json.optBoolean("is_video", false)
                         
-                        Log.d(TAG, "[resolveAndPlayInternal] Resolution complete. streamUrl: $streamUrl, isVideo: $isVideo")
                         if (streamUrl.isNotEmpty() && streamUrl.startsWith("http")) {
                             playStream(streamUrl, isVideo, sourceDataJson)
                         } else {
@@ -1992,7 +1898,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun resumeScrape() {
-        Log.i(TAG, "[resumeScrape] Attempting scraper engine resume. isAutoplayStarting: $isAutoplayStarting")
         if (isAutoplayStarting) {
             return
         }
@@ -2009,7 +1914,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun handleNextEpisodeAutoPlay(item: JSONObject, season: Int, episode: Int) {
-        Log.i(TAG, "[handleNextEpisodeAutoPlay] Autoplay requested. S:$season E:$episode")
         isAutoplayStarting = true
         stopScrape()
         val nextEp = episode + 1
@@ -2389,7 +2293,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         list.forEach { result.put(it) }
         return result
     }
-    
     fun markEpisodeAsWatchedLocal(season: Int, episode: Int) {
         val item = _selectedItem.value ?: return
         val id = item.optInt("id")
