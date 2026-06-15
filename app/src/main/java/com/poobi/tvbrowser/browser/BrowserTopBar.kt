@@ -31,7 +31,7 @@ import com.poobi.tvbrowser.shared.TvInputField
 @Composable
 fun BrowserTopBar(
     viewModel: BrowserViewModel,
-    homeIconFocusRequester: FocusRequester
+    onNavigateDown: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -113,14 +113,22 @@ fun BrowserTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(65.dp)
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 20.dp)
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                        keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                        onNavigateDown()
+                        true
+                    } else {
+                        false
+                    }
+                },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             TvFocusableBox(
                 modifier = Modifier
-                    .size(40.dp)
-                    .focusRequester(homeIconFocusRequester),
+                    .size(40.dp),
                 onClick = { viewModel.showHomeScreen() }
             ) { isFocused ->
                 Icon(
@@ -189,6 +197,7 @@ fun BrowserTopBar(
         }
     }
 }
+
 
 @Composable
 fun TopBarIconButton(iconId: Int, tint: Color = Color.White, onClick: () -> Unit) {

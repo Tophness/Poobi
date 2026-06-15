@@ -84,27 +84,22 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var driveSyncManager: DriveSyncManager
     private var googleSignInClient: GoogleSignInClient? = null
 
-    // Google Sign-In Callbacks mapped to state
     private var onSignInRequested: (() -> Unit)? = null
     private var onSignOutRequested: ((onComplete: () -> Unit) -> Unit)? = null
 
     private var googleSignInStatusState = mutableStateOf("Not signed in.")
     private var isGoogleSignedInState = mutableStateOf(false)
 
-    // Lifted Class-level settings variables
-    // General Panel
     private var lightTheme by mutableStateOf(false)
     private var restoreOption by mutableStateOf(0)
     private var histLimit by mutableStateOf(20)
     private var historyIconOption by mutableStateOf(0)
     private var bookmarkIconOption by mutableStateOf(0)
 
-    // Web Panel
     private var silentBlock by mutableStateOf(true)
     private var clickjack by mutableStateOf(true)
     private var adblockUrl by mutableStateOf("")
 
-    // Player Panel
     private var extractPref by mutableStateOf(0)
     private var fallbackPref by mutableStateOf(0)
     private var embeddedSubs by mutableStateOf(true)
@@ -114,19 +109,16 @@ class SettingsActivity : AppCompatActivity() {
     private var autoplayNext by mutableStateOf("Closest Source")
     private var episodeFocusMode by mutableStateOf(0)
 
-    // Interface Panel
     private var scrollTopbar by mutableStateOf(true)
     private var navMode by mutableStateOf(0)
     private var scrapeTabOrder by mutableStateOf("Streams,Torrents")
     private var torrentLanguage by mutableStateOf("English")
 
-    // Torrent Cache auto-clean settings
     private var torrentCacheCleanMode by mutableStateOf(0)
     private var torrentCacheCleanDays by mutableStateOf(0)
     private var torrentCacheCleanDaysStr by mutableStateOf("")
 	private var torrentPrebufferPieces by mutableStateOf(1)
 
-    // Streaming Panel
     private var timeoutMode by mutableStateOf("Both")
     private var globalTimeout by mutableStateOf(30)
     private var globalTimeoutStr by mutableStateOf("30")
@@ -135,10 +127,9 @@ class SettingsActivity : AppCompatActivity() {
     private var enforceWhitelist by mutableStateOf(true)
     private val whitelistedHosts = mutableStateListOf<String>()
 
-    // Subtitles Panel
     private var autoSubPref by mutableStateOf(0)
     private var countPref by mutableStateOf(1)
-    private var waitPref by mutableStateOf(0)
+    private var waitPref by mutableStateOf(1)
     private var retentionDays by mutableStateOf(3)
     private var subsLanguages by mutableStateOf("English")
     private var subtitlesLimit by mutableStateOf(20)
@@ -287,19 +278,16 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun loadSettingsFromPrefs() {
-        // General Panel
         lightTheme = prefs.getBoolean("light_theme", false)
         restoreOption = prefs.getInt("restore_tabs_pref", 0)
         histLimit = prefs.getInt("history_limit", 20)
         historyIconOption = prefs.getInt("history_icon_pref", 0)
         bookmarkIconOption = prefs.getInt("bookmark_icon_pref", 0)
 
-        // Web Panel
         silentBlock = prefs.getBoolean("silent_popup_block", true)
         clickjack = prefs.getBoolean("clickjack_prevention", true)
         adblockUrl = prefs.getString("custom_adblock_url", "https://easylist.to/easylist/easylist.txt") ?: ""
 
-        // Player Panel
         extractPref = prefs.getInt("extract_video_pref", 0)
         fallbackPref = prefs.getInt("exo_fallback_pref", 0)
         embeddedSubs = prefs.getBoolean("embedded_subs_enabled", true)
@@ -309,19 +297,16 @@ class SettingsActivity : AppCompatActivity() {
         autoplayNext = prefs.getString("autoplay_next_pref", "Closest Source") ?: "Closest Source"
         episodeFocusMode = prefs.getInt("episode_focus_mode", 0)
 
-        // Interface Panel
         scrollTopbar = prefs.getBoolean("scroll_topbar_enabled", true)
         navMode = prefs.getInt("navigation_mode_pref", 0)
         scrapeTabOrder = prefs.getString("scrape_tab_order", "Streams,Torrents") ?: "Streams,Torrents"
         torrentLanguage = prefs.getString("torrent_language", "English") ?: "English"
 
-        // Torrent Cache Auto-Clean Panel variables
         torrentCacheCleanMode = prefs.getInt("torrent_cache_clean_mode", 0)
         torrentCacheCleanDays = prefs.getInt("torrent_cache_clean_days", 0)
         torrentCacheCleanDaysStr = if (torrentCacheCleanDays > 0) torrentCacheCleanDays.toString() else ""
 		torrentPrebufferPieces = prefs.getInt("torrent_prebuffer_pieces", 1)
 
-        // Streaming Panel
         timeoutMode = prefs.getString("timeout_mode", "Both") ?: "Both"
         globalTimeout = prefs.getInt("global_timeout", 30)
         globalTimeoutStr = globalTimeout.toString()
@@ -336,10 +321,9 @@ class SettingsActivity : AppCompatActivity() {
             whitelistedHosts.add(hostsArr.getString(i))
         }
 
-        // Subtitles Panel
         autoSubPref = prefs.getInt("auto_sub_pref", 0)
         countPref = prefs.getInt("auto_sub_count", 1)
-        waitPref = prefs.getInt("auto_sub_wait_pref", 0)
+        waitPref = prefs.getInt("auto_sub_wait_pref", 1)
         retentionDays = prefs.getInt("sub_retention_days", 3)
         subsLanguages = prefs.getString("subtitles_languages", "English") ?: "English"
         subtitlesLimit = prefs.getInt("subtitles_limit", 20)
@@ -390,7 +374,7 @@ class SettingsActivity : AppCompatActivity() {
                 put("up_next_time_pref", prefs.getInt("up_next_time_pref", 20))
                 put("autoplay_next_pref", prefs.getString("autoplay_next_pref", "Closest Source"))
                 val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
-                serviceKeys.forEach { put("${it}_enabled", prefs.getBoolean("${it}_enabled", it != "bsplayer" && it != "opensubtitles_org" && it != "podnadpisi")) }
+                serviceKeys.forEach { put("${it}_enabled", prefs.getBoolean("${it}_enabled", it != "bsplayer" && it != "podnadpisi")) }
                 put("opensubtitles_username", prefs.getString("opensubtitles_username", ""))
                 put("opensubtitles_password", prefs.getString("opensubtitles_password", ""))
                 put("opensubtitles_org_username", prefs.getString("opensubtitles_org_username", ""))
@@ -1130,7 +1114,7 @@ class SettingsActivity : AppCompatActivity() {
 
             val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
             items(serviceKeys) { key ->
-                var isEnabled by remember { mutableStateOf(prefs.getBoolean("${key}_enabled", key != "bsplayer" && key != "opensubtitles_org" && key != "podnadpisi")) }
+                var isEnabled by remember { mutableStateOf(prefs.getBoolean("${key}_enabled", key != "bsplayer" && key != "podnadpisi")) }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2056,14 +2040,11 @@ class SettingsActivity : AppCompatActivity() {
     private fun saveAndExit() {
         val newAdblockUrl = prefs.getString("custom_adblock_url", "https://easylist.to/easylist/easylist.txt") ?: ""
 
-        // Use a persistent CoroutineScope bound to global Dispatchers rather than the Activity lifecycle.
-        // This ensures saving completes even if the activity's lifecyclescope gets cancelled prematurely.
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val py = Python.getInstance()
                 val main = py.getModule("main")
 
-                // Re-compile enabled_packs dynamically based on individual pack_ boolean flags from memory
                 val allPacksJson = main.callAttr("get_enabled_packs").toString()
                 val allPacksArr = JSONArray(allPacksJson)
                 val enabledPacksList = mutableListOf<String>()
@@ -2074,21 +2055,17 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
 
-                // Write ALL states to SharedPreferences at once
                 prefs.edit().apply {
-                    // General
                     putBoolean("light_theme", lightTheme)
                     putInt("restore_tabs_pref", restoreOption)
                     putInt("history_limit", histLimit)
                     putInt("history_icon_pref", historyIconOption)
                     putInt("bookmark_icon_pref", bookmarkIconOption)
 
-                    // Web
                     putBoolean("silent_popup_block", silentBlock)
                     putBoolean("clickjack_prevention", clickjack)
                     putString("custom_adblock_url", adblockUrl)
 
-                    // Player
                     putInt("extract_video_pref", extractPref)
                     putInt("exo_fallback_pref", fallbackPref)
                     putBoolean("embedded_subs_enabled", embeddedSubs)
@@ -2097,18 +2074,15 @@ class SettingsActivity : AppCompatActivity() {
                     putString("autoplay_next_pref", autoplayNext)
                     putInt("episode_focus_mode", episodeFocusMode)
 
-                    // Interface
                     putBoolean("scroll_topbar_enabled", scrollTopbar)
                     putInt("navigation_mode_pref", navMode)
                     putString("scrape_tab_order", scrapeTabOrder)
                     putString("torrent_language", torrentLanguage)
 
-                    // Torrent Auto-Clean
                     putInt("torrent_cache_clean_mode", torrentCacheCleanMode)
                     putInt("torrent_cache_clean_days", torrentCacheCleanDays)
                     putInt("torrent_prebuffer_pieces", torrentPrebufferPieces)
 
-                    // Streaming
                     putString("timeout_mode", timeoutMode)
                     putInt("global_timeout", globalTimeout)
                     putInt("per_source_timeout", sourceTimeout)
@@ -2116,7 +2090,6 @@ class SettingsActivity : AppCompatActivity() {
                     putString("enabled_packs", JSONArray(enabledPacksList).toString())
                     putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString())
 
-                    // Subtitles
                     putInt("auto_sub_pref", autoSubPref)
                     putInt("auto_sub_count", countPref)
                     putInt("auto_sub_wait_pref", waitPref)
@@ -2131,8 +2104,6 @@ class SettingsActivity : AppCompatActivity() {
                     putString("subsource_apikey", subsourceApikey)
                 }.apply()
 
-                // Launch EasyList adblock download in a detached, separate coroutine.
-                // This prevents rules downloading from blocking the immediate Save & Exit workflow.
                 val appContext = applicationContext
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
@@ -2161,7 +2132,7 @@ class SettingsActivity : AppCompatActivity() {
 
                     val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
                     serviceKeys.forEach { key ->
-                        put("${key}_enabled", prefs.getBoolean("${key}_enabled", key != "bsplayer" && key != "opensubtitles_org" && key != "podnadpisi"))
+                        put("${key}_enabled", prefs.getBoolean("${key}_enabled", key != "bsplayer" && key != "podnadpisi"))
                     }
 
                     put("opensubtitles_username", opensubUser)
@@ -2173,8 +2144,6 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 main.callAttr("set_config", cfg.toString())
 
-                // Cloud Drive Sync is launched in an independent background coroutine
-                // to prevent network delays from delaying the UI transition.
                 val account = GoogleSignIn.getLastSignedInAccount(this@SettingsActivity)
                 if (account != null) {
                     CoroutineScope(Dispatchers.IO).launch {

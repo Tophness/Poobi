@@ -79,7 +79,6 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
         if (viewModel.isBrowsing.value && !viewModel.topBarVisible.value && viewModel.customView.value == null) {
             if (viewModel.navigationModePref.value == 1 || isSelectionMode) {
                 _cursorVisible.value = false
-                viewModel.initDpadNav()
             } else {
                 _cursorVisible.value = true
                 handler.removeCallbacks(hideCursorRunnable)
@@ -97,21 +96,12 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
             return false
         }
 
+        if (viewModel.navigationModePref.value == 1 || isSelectionMode) {
+            return false 
+        }
+
         val keyCode = event.keyCode
         val isDown = event.action == KeyEvent.ACTION_DOWN
-
-        if (viewModel.navigationModePref.value == 1 || isSelectionMode) {
-            if (isDown) {
-                when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_UP -> viewModel.handleDpadNav("up")
-                    KeyEvent.KEYCODE_DPAD_DOWN -> viewModel.handleDpadNav("down")
-                    KeyEvent.KEYCODE_DPAD_LEFT -> viewModel.handleDpadNav("left")
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> viewModel.handleDpadNav("right")
-                    else -> return false
-                }
-            }
-            return true
-        }
 
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,

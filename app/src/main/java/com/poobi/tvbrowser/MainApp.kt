@@ -201,7 +201,6 @@ fun MainApp(
 
     val customView by browserViewModel.customView.collectAsState()
 
-    val homeIconFocusRequester = remember { FocusRequester() }
     val browserTabFocusRequester = remember { FocusRequester() }
     val streamsTabFocusRequester = remember { FocusRequester() }
 
@@ -320,7 +319,10 @@ fun MainApp(
                                 if (topBarVisible) {
                                     BrowserTopBar(
                                         viewModel = browserViewModel,
-                                        homeIconFocusRequester = homeIconFocusRequester
+                                        onNavigateDown = {
+                                            browserViewModel.hideTopBar()
+                                            cursorManager.wakeCursor()
+                                        }
                                     )
                                 }
                                 
@@ -591,6 +593,75 @@ fun MainApp(
                     )
                 }
             }
+        }
+
+        // --- Context Menu Dialog ---
+        if (dialogState is BrowserDialogState.ContextMenu) {
+            val contextMenu = dialogState as BrowserDialogState.ContextMenu
+            com.poobi.tvbrowser.browser.ContextMenuOverlay(
+                cursorX = contextMenu.x,
+                cursorY = contextMenu.y,
+                url = contextMenu.url,
+                onOpenInNewTab = {
+                    browserViewModel.loadUrlAndBrowse(context, contextMenu.url, newTab = true)
+                    browserViewModel.dismissDialog()
+                },
+                onRefresh = {
+                    browserViewModel.currentWebView?.reload()
+                    browserViewModel.dismissDialog()
+                },
+                onBlockElement = {
+                    browserViewModel.blockElementAtCursor(contextMenu.x, contextMenu.y)
+                },
+                onDismiss = {
+                    browserViewModel.dismissDialog()
+                }
+            )
+        }
+
+        // --- Save Block Rule Dialog ---
+        if (dialogState is BrowserDialogState.SaveBlockRule) {
+            val saveRule = dialogState as BrowserDialogState.SaveBlockRule
+            var ruleName by remember { 
+                mutableStateOf(
+                    android.net.Uri.parse(saveRule.url).host ?: "Custom Rule"
+                ) 
+            }
+            AlertDialog(
+                onDismissRequest = { browserViewModel.dismissDialog() },
+                title = { Text("Save Blocked Element", color = Color.White) },
+                containerColor = Color(0xFF222225),
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Rule name for this site:", color = Color.LightGray)
+                        TvInputField(
+                            value = ruleName,
+                            onValueChange = { ruleName = it },
+                            placeholder = "e.g. ad-banner",
+                            onAction = {
+                                browserViewModel.saveBlockedElementRule(ruleName, saveRule.url, saveRule.selector)
+                            }
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            browserViewModel.saveBlockedElementRule(ruleName, saveRule.url, saveRule.selector)
+                        }
+                    ) {
+                        Text("Save", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = { browserViewModel.dismissDialog() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                    ) {
+                        Text("Cancel", color = Color.White)
+                    }
+                }
+            )
         }
 
         // Download Confirmation Dialog

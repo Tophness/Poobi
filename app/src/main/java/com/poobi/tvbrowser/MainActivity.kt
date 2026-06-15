@@ -307,6 +307,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+		browserViewModel.reloadPreferences()
         browserViewModel.refreshLists()
         streamsViewModel.refreshFavoritesSet()
         registerPythonDialogListenerAsync()
@@ -482,9 +483,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startDpadSelectionMode() {
-        browserViewModel.initDpadNav()
         cursorManager.isSelectionMode = true
-        Toast.makeText(this, "D-pad Navigation: Select Element and Press OK", Toast.LENGTH_LONG).show()
+        browserViewModel.currentWebView?.requestFocus()
+        Toast.makeText(this, "Navigate with D-pad & press Select on the element to block", Toast.LENGTH_LONG).show()
     }
 
     private fun checkStartupTabs() {
@@ -602,6 +603,37 @@ class MainActivity : AppCompatActivity() {
                             browserViewModel.currentDialog.value == null
         
         if (isBrowserMode) {
+            val isNativeDpadMode = browserViewModel.navigationModePref.value == 1 && !cursorManager.isSelectionMode
+
+            if (isNativeDpadMode) {
+                val key = event.keyCode
+                if (key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_DOWN ||
+                    key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                    key == KeyEvent.KEYCODE_DPAD_CENTER || key == KeyEvent.KEYCODE_ENTER) {
+                    
+                    if (browserViewModel.currentWebView?.hasFocus() == false) {
+                        browserViewModel.currentWebView?.requestFocus()
+                    }
+                    if (browserViewModel.currentWebView?.dispatchKeyEvent(event) == true) {
+                        return true
+                    }
+                }
+            }
+
+            if (cursorManager.isSelectionMode) {
+                val key = event.keyCode
+                if (key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_DOWN ||
+                    key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    
+                    if (browserViewModel.currentWebView?.hasFocus() == false) {
+                        browserViewModel.currentWebView?.requestFocus()
+                    }
+                    if (browserViewModel.currentWebView?.dispatchKeyEvent(event) == true) {
+                        return true
+                    }
+                }
+            }
+
             if (cursorManager.handleMovementKey(event)) {
                 return true
             }
@@ -616,8 +648,9 @@ class MainActivity : AppCompatActivity() {
                 } else if (event.action == KeyEvent.ACTION_UP) {
                     longPressHandler.removeCallbacks(longPressRunnable)
                     if (!cursorManager.isLongPressing) {
-                        if (browserViewModel.navigationModePref.value == 1) {
-                            browserViewModel.currentWebView?.evaluateJavascript("if(window.navHelper) window.navHelper.clickFocused();", null)
+                        if (cursorManager.isSelectionMode) {
+                            cursorManager.isSelectionMode = false
+                            browserViewModel.inspectActiveElement()
                         } else {
                             cursorManager.simulateClick()
                         }
@@ -629,6 +662,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_DOWN) {
+            if (cursorManager.isSelectionMode) {
+                cursorManager.isSelectionMode = false
+                Toast.makeText(this, "Selection mode canceled", Toast.LENGTH_SHORT).show()
+                return true
+            }
             if (browserViewModel.currentDialog.value != null) {
                 browserViewModel.dismissDialog()
                 return true

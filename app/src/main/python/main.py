@@ -316,7 +316,7 @@ def load_config():
         "addic7ed_enabled": True,
         "bsplayer_enabled": False,
         "opensubtitles_enabled": True,
-        "opensubtitles_org_enabled": False,
+        "opensubtitles_org_enabled": True,
         "podnadpisi_enabled": False,
         "subdl_enabled": True,
         "subsource_enabled": True,
