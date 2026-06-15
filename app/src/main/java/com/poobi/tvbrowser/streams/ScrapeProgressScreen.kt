@@ -15,6 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -121,6 +124,13 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
 
     var showSortDialog by remember { mutableStateOf(false) }
 
+    // Focus requesters mapped to each tab index to control exit paths cleanly
+    val tabFocusRequesters = remember(tabs.size) { List(tabs.size) { FocusRequester() } }
+
+    val stopScanningFocusRequester = remember { FocusRequester() }
+    val sortStreamsFocusRequester = remember { FocusRequester() }
+    val sortTorrentsFocusRequester = remember { FocusRequester() }
+
     val currentSources = if (selectedTab == "Streams") sources else torrentioSources
     val isCurrentTabScraping = if (selectedTab == "Streams") isScraping else isScrapingTorrents
 
@@ -152,7 +162,8 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                     text = tabName,
                     isSelected = isTabSelected,
                     onFocus = { selectedTabIndex = index },
-                    onClick = { selectedTabIndex = index }
+                    onClick = { selectedTabIndex = index },
+                    modifier = Modifier.focusRequester(tabFocusRequesters[index])
                 ) {
                     val textColor = if (isTabSelected) Color(0xFF00BCD4) else Color.Gray
                     val count = if (tabName == "Streams") sources?.length() ?: 0 else torrentioSources?.length() ?: 0
@@ -192,7 +203,13 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                 ) {
                     if (isScraping && !isResolving) {
                         TvFocusableBox(
-                            modifier = Modifier.height(44.dp).wrapContentWidth(),
+                            modifier = Modifier
+                                .height(44.dp)
+                                .wrapContentWidth()
+                                .focusRequester(stopScanningFocusRequester)
+                                .focusProperties {
+                                    up = tabFocusRequesters.getOrNull(0) ?: FocusRequester.Default
+                                },
                             onClick = { viewModel.stopScrape(triggerSubtitles = true) }
                         ) { isFocused ->
                             Row(
@@ -246,7 +263,13 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                         }
 
                         TvFocusableBox(
-                            modifier = Modifier.height(44.dp).wrapContentWidth(),
+                            modifier = Modifier
+                                .height(44.dp)
+                                .wrapContentWidth()
+                                .focusRequester(sortStreamsFocusRequester)
+                                .focusProperties {
+                                    up = tabFocusRequesters.getOrNull(0) ?: FocusRequester.Default
+                                },
                             onClick = { showSortDialog = true }
                         ) { isFocused ->
                             Row(
@@ -272,7 +295,13 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                 ) {
                     if (torrentioSources != null && torrentioSources!!.length() > 0) {
                         TvFocusableBox(
-                            modifier = Modifier.height(44.dp).wrapContentWidth(),
+                            modifier = Modifier
+                                .height(44.dp)
+                                .wrapContentWidth()
+                                .focusRequester(sortTorrentsFocusRequester)
+                                .focusProperties {
+                                    up = tabFocusRequesters.getOrNull(1) ?: FocusRequester.Default
+                                },
                             onClick = { showSortDialog = true }
                         ) { isFocused ->
                             Row(
@@ -343,7 +372,13 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                             val autoSubPref = viewModel.prefs.getInt("auto_sub_pref", 0)
                             if (autoSubPref == 2) {
                                 TvFocusableBox(
-                                    modifier = Modifier.fillMaxWidth().height(48.dp).padding(bottom = 8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .padding(bottom = 8.dp)
+                                        .focusProperties {
+                                            up = if (isScraping && !isResolving) stopScanningFocusRequester else sortStreamsFocusRequester
+                                        },
                                     onClick = { 
                                         viewModel.selectedItem.value?.let { item ->
                                             viewModel.fetchManualSubtitles(
@@ -379,7 +414,22 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                         val isBrowser = !isVideo
                         val seeders = rawData.optInt("seeders", -1)
 
-                        TvFocusableBox(modifier = Modifier.fillMaxWidth(), onClick = { viewModel.resolveAndPlay(sourceDataStr, s) }) { isFocused ->
+                        val isFirstItem = idx == 0 && (selectedTab == "Torrents" || viewModel.prefs.getInt("auto_sub_pref", 0) != 2)
+
+                        TvFocusableBox(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusProperties {
+                                    if (isFirstItem) {
+                                        up = if (selectedTab == "Streams") {
+                                            if (isScraping && !isResolving) stopScanningFocusRequester else sortStreamsFocusRequester
+                                        } else {
+                                            sortTorrentsFocusRequester
+                                        }
+                                    }
+                                }, 
+                            onClick = { viewModel.resolveAndPlay(sourceDataStr, s) }
+                        ) { isFocused ->
                             Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     painter = painterResource(id = if (isBrowser) R.drawable.ic_go else R.drawable.ic_auto_play),
