@@ -69,16 +69,17 @@ fun BrowserTopBar(
             .fillMaxWidth()
             .background(Color(0xF2111111))
     ) {
-        // Tabs Selection Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(60.dp)
-                .background(Color(0xFF222222))
-                .padding(horizontal = 20.dp),
+                .background(Color(0xFF222222)),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            LazyRow(modifier = Modifier.weight(1f)) {
+            LazyRow(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(start = 20.dp, end = 10.dp)
+            ) {
                 itemsIndexed(viewModel.getWebViewsList()) { index, wv ->
                     val metadata = wv.tag as? TabMetadata
                     val title = wv.title ?: metadata?.defaultTitle ?: wv.url ?: "New Tab"
@@ -103,10 +104,11 @@ fun BrowserTopBar(
             }
             
             Spacer(modifier = Modifier.width(10.dp))
-            TopBarIconButton(R.drawable.ic_add) { viewModel.createNewTab(context) }
+            Box(modifier = Modifier.padding(end = 20.dp)) {
+                TopBarIconButton(R.drawable.ic_add) { viewModel.createNewTab(context) }
+            }
         }
 
-        // Action Navigation Toolbar
         Row(
             modifier = Modifier
                 .fillMaxWidth()

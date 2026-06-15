@@ -210,17 +210,7 @@ fun MainApp(
     val torrentBufferProgress by streamsViewModel.torrentBufferProgress.collectAsState()
     val torrentBufferSeeders by streamsViewModel.torrentBufferSeeders.collectAsState()
 
-    // Synchronous track of physical key interactions
     val keyTracker = remember { KeyTracker() }
-
-    LaunchedEffect(topBarVisible) {
-        if (topBarVisible) {
-            kotlinx.coroutines.delay(50)
-            try {
-                homeIconFocusRequester.requestFocus()
-            } catch (e: Exception) {}
-        }
-    }
 
     Box(
         modifier = Modifier
@@ -236,7 +226,6 @@ fun MainApp(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
-            // Tab Bar - Completely Hidden during Active Browsing to isolate DPAD focus!
             AnimatedVisibility(
                 visible = !isPlayerActive && !isBrowsing,
                 enter = fadeIn(),
@@ -323,7 +312,6 @@ fun MainApp(
                 Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color(0xFF00BCD4)))
             }
 
-            // Main Content Area
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when (currentTab) {
                     AppTab.Browser -> {
@@ -378,7 +366,6 @@ fun MainApp(
                     }
                     AppTab.Streams -> {
                         when {
-                            // ONLY show ScrapeProgressScreen if we are actively scraping source links for a selected media item
                             (isScraping && selectedMedia != null) || scrapedSources != null -> {
                                 ScrapeProgressScreen(streamsViewModel)
                             }
@@ -394,7 +381,6 @@ fun MainApp(
             }
         }
 
-        // Virtual Cursor Pointer Overlay
         val cursorVisible by cursorManager.cursorVisible.collectAsState()
         val cx by cursorManager.cursorX.collectAsState()
         val cy by cursorManager.cursorY.collectAsState()
@@ -703,7 +689,6 @@ fun MainApp(
             )
         }
 
-        // AdvancedBlockElement Dialog
         if (dialogState is BrowserDialogState.AdvancedBlockElement) {
             val block = dialogState as BrowserDialogState.AdvancedBlockElement
             var blockData by remember { mutableStateOf(block.data) }
