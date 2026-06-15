@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poobi.tvbrowser.R
+import com.poobi.tvbrowser.shared.LanguageHelper
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import org.json.JSONArray
 import org.json.JSONObject
@@ -84,7 +85,6 @@ fun ScrapeTab(
                 )
                 trailingContent()
             }
-            // Elegant bottom line distinct from the main Browser/Streams bar pill backgrounds
             Box(
                 modifier = Modifier
                     .width(40.dp)
@@ -121,71 +121,71 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
 
     var showSortDialog by remember { mutableStateOf(false) }
 
+    val currentSources = if (selectedTab == "Streams") sources else torrentioSources
+    val isCurrentTabScraping = if (selectedTab == "Streams") isScraping else isScrapingTorrents
+
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
 
-		Row(
-			modifier = Modifier
-				.wrapContentWidth()
-				.height(50.dp)
-				.background(Color(0xFF1E1E24), RoundedCornerShape(25.dp))
-				.padding(horizontal = 4.dp),
-			verticalAlignment = Alignment.CenterVertically,
-			horizontalArrangement = Arrangement.spacedBy(16.dp)
-		) {
-			tabs.forEachIndexed { index, tabName ->
-				val isTabSelected = selectedTabIndex == index
-				val isTabScraping = if (tabName == "Streams") isScraping else isScrapingTorrents
+        Row(
+            modifier = Modifier
+                .wrapContentWidth()
+                .height(50.dp)
+                .background(Color(0xFF1E1E24), RoundedCornerShape(25.dp))
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            tabs.forEachIndexed { index, tabName ->
+                val isTabSelected = selectedTabIndex == index
+                val isTabScraping = if (tabName == "Streams") isScraping else isScrapingTorrents
 
-				// Vertical divider drawn between the tabs
-				if (index > 0) {
-					Box(
-						modifier = Modifier
-							.fillMaxHeight(0.4f) // Centered 40% height divider
-							.width(1.dp)
-							.background(Color.Gray.copy(alpha = 0.4f))
-					)
-				}
+                if (index > 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight(0.4f)
+                            .width(1.dp)
+                            .background(Color.Gray.copy(alpha = 0.4f))
+                    )
+                }
 
-				ScrapeTab(
-					text = tabName,
-					isSelected = isTabSelected,
-					onFocus = { selectedTabIndex = index },
-					onClick = { selectedTabIndex = index }
-				) {
-					val textColor = if (isTabSelected) Color(0xFF00BCD4) else Color.Gray
-					val count = if (tabName == "Streams") sources?.length() ?: 0 else torrentioSources?.length() ?: 0
+                ScrapeTab(
+                    text = tabName,
+                    isSelected = isTabSelected,
+                    onFocus = { selectedTabIndex = index },
+                    onClick = { selectedTabIndex = index }
+                ) {
+                    val textColor = if (isTabSelected) Color(0xFF00BCD4) else Color.Gray
+                    val count = if (tabName == "Streams") sources?.length() ?: 0 else torrentioSources?.length() ?: 0
 
-					// Display dynamic number counts
-					if (count > 0) {
-						Spacer(modifier = Modifier.width(6.dp))
-						Text(
-							text = "($count)",
-							color = textColor,
-							fontSize = 12.sp,
-							fontWeight = FontWeight.Bold
-						)
-					}
-					
-					// Display scraping activity progress indicator
-					if (isTabScraping) {
-						Spacer(modifier = Modifier.width(8.dp))
-						CircularProgressIndicator(
-							modifier = Modifier.size(14.dp),
-							color = textColor,
-							strokeWidth = 2.dp
-						)
-					}
-				}
-			}
-		}
+                    if (count > 0) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "($count)",
+                            color = textColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    if (isTabScraping) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            color = textColor,
+                            strokeWidth = 2.dp
+                        )
+                    }
+                }
+            }
+        }
 
-        if (selectedTab == "Streams") {
-            Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-            Box(
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                contentAlignment = Alignment.Center
-            ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (selectedTab == "Streams") {
                 Row(
                     modifier = Modifier.align(Alignment.CenterStart),
                     verticalAlignment = Alignment.CenterVertically
@@ -216,7 +216,8 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                     text = status, 
                     color = Color(0xFF00BCD4), 
                     fontSize = 15.sp, 
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Center)
                 )
 
                 Row(
@@ -264,39 +265,60 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                         }
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(15.dp))
-
-            if (isScraping) {
-                LinearProgressIndicator(
-                    progress = { if (total > 0) progress.toFloat() / total.toFloat() else 0f },
-                    modifier = Modifier.fillMaxWidth().height(8.dp),
-                    color = Color(0xFF00BCD4),
-                    trackColor = Color(0xFF333333)
-                )
-                Spacer(modifier = Modifier.height(15.dp))
-            }
-            
-            if (isDownloadingSubs) {
-                Text(subStatus, color = Color(0xFFFFC107), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                if (showSubProgressBar) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    LinearProgressIndicator(
-                        progress = { subProgress },
-                        modifier = Modifier.fillMaxWidth().height(6.dp),
-                        color = Color(0xFFFFC107),
-                        trackColor = Color(0xFF333333)
-                    )
+            } else {
+                Row(
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (torrentioSources != null && torrentioSources!!.length() > 0) {
+                        TvFocusableBox(
+                            modifier = Modifier.height(44.dp).wrapContentWidth(),
+                            onClick = { showSortDialog = true }
+                        ) { isFocused ->
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp).fillMaxHeight(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_sort), 
+                                    contentDescription = null, 
+                                    tint = if (isFocused) Color.Black else Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text("Sort", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            }
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.height(15.dp))
             }
-        } else {
-            Spacer(modifier = Modifier.height(12.dp))
         }
 
-        val currentSources = if (selectedTab == "Streams") sources else torrentioSources
-        val isCurrentTabScraping = if (selectedTab == "Streams") isScraping else isScrapingTorrents
+        Spacer(modifier = Modifier.height(15.dp))
+
+        if (selectedTab == "Streams" && isScraping) {
+            LinearProgressIndicator(
+                progress = { if (total > 0) progress.toFloat() / total.toFloat() else 0f },
+                modifier = Modifier.fillMaxWidth().height(8.dp),
+                color = Color(0xFF00BCD4),
+                trackColor = Color(0xFF333333)
+            )
+            Spacer(modifier = Modifier.height(15.dp))
+        }
+        
+        if (selectedTab == "Streams" && isDownloadingSubs) {
+            Text(subStatus, color = Color(0xFFFFC107), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            if (showSubProgressBar) {
+                Spacer(modifier = Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = { subProgress },
+                    modifier = Modifier.fillMaxWidth().height(6.dp),
+                    color = Color(0xFFFFC107),
+                    trackColor = Color(0xFF333333)
+                )
+            }
+            Spacer(modifier = Modifier.height(15.dp))
+        }
 
         if (isCurrentTabScraping && (currentSources == null || currentSources.length() == 0)) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -355,6 +377,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                         val rawTitle = s.optString("title", "")
                         val isVideo = rawData.optBoolean("is_video", true)
                         val isBrowser = !isVideo
+                        val seeders = rawData.optInt("seeders", -1)
 
                         TvFocusableBox(modifier = Modifier.fillMaxWidth(), onClick = { viewModel.resolveAndPlay(sourceDataStr, s) }) { isFocused ->
                             Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -364,27 +387,91 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                     tint = if (isFocused) Color.Black else Color.White,
                                     modifier = Modifier.size(32.dp).padding(end = 8.dp)
                                 )
-                                Column {
-                                    Text(
-                                        text = rawTitle.ifEmpty { "[$quality] $sourceName ($providerName)" }, 
-                                        color = if (isFocused) Color.Black else Color.White, 
-                                        fontSize = 18.sp, 
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    if (isBrowser) {
+
+                                if (selectedTab == "Torrents" && seeders >= 0) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.padding(horizontal = 8.dp).width(50.dp)
+                                    ) {
                                         Text(
-                                            text = "> Open in browser", 
-                                            color = if (isFocused) Color.Black.copy(alpha = 0.8f) else Color(0xFFE53935), 
-                                            fontSize = 14.sp,
+                                            text = "SEEDS",
+                                            color = if (isFocused) Color.Black.copy(alpha = 0.7f) else Color(0xFF00BCD4),
+                                            fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold
                                         )
-                                    } else {
                                         Text(
-                                            text = "Play video", 
-                                            color = if (isFocused) Color.Black.copy(alpha = 0.8f) else Color(0xFF00BCD4), 
-                                            fontSize = 14.sp,
+                                            text = "$seeders",
+                                            color = if (isFocused) Color.Black else Color(0xFF00BCD4),
+                                            fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold
                                         )
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    if (selectedTab == "Torrents") {
+                                        val parsedLangs = LanguageHelper.parseLanguages(rawTitle)
+                                        if (parsedLangs.isNotEmpty()) {
+                                            Text(
+                                                text = parsedLangs,
+                                                color = Color(0xFF4CAF50),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(bottom = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        val cleanTitle = remember(rawTitle) {
+                                            val baseTitle = rawTitle.ifEmpty { "[$quality] $sourceName ($providerName)" }
+                                            baseTitle.lineSequence().firstOrNull { it.isNotBlank() } ?: baseTitle
+                                        }
+
+                                        Text(
+                                            text = cleanTitle, 
+                                            color = if (isFocused) Color.Black else Color.White, 
+                                            fontSize = 18.sp, 
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        if (selectedTab == "Torrents") {
+                                            val size = parseSize(rawTitle)
+                                            if (size.isNotEmpty()) {
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Text(
+                                                    text = size,
+                                                    color = Color(0xFF4CAF50),
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(top = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (selectedTab == "Streams") {
+                                        if (isBrowser) {
+                                            Text(
+                                                text = "> Open in browser", 
+                                                color = if (isFocused) Color.Black.copy(alpha = 0.8f) else Color(0xFFE53935), 
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        } else {
+                                            Text(
+                                                text = "Play video", 
+                                                color = if (isFocused) Color.Black.copy(alpha = 0.8f) else Color(0xFF00BCD4), 
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -395,26 +482,43 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
         }
     }
 
-
     if (showSortDialog) {
+        val isTorrent = selectedTab == "Torrents"
+        val prefsKey = if (isTorrent) "torrent_sort_priorities" else "sort_priorities"
+        val defaultList = if (isTorrent) {
+            listOf("LANGUAGE", "SIZE", "SEEDERS", "RESOLUTION")
+        } else {
+            listOf("NATIVE", "DIRECT", "RESOLUTION", "SOURCE")
+        }
+
         var prioritiesList by remember {
             mutableStateOf(
-                viewModel.prefs.getString("sort_priorities", null)?.let {
+                viewModel.prefs.getString(prefsKey, null)?.let {
                     val arr = JSONArray(it)
                     (0 until arr.length()).map { i -> arr.getString(i) }
-                } ?: listOf("NATIVE", "DIRECT", "RESOLUTION", "SOURCE")
+                } ?: defaultList
             )
         }
 
         AlertDialog(
             onDismissRequest = { showSortDialog = false },
-            title = { Text("Sort Priorities", color = Color.White) },
+            title = { Text(if (isTorrent) "Sort Torrents" else "Sort Priorities", color = Color.White) },
             containerColor = Color(0xFF222225),
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     prioritiesList.forEachIndexed { index, criteria ->
+                        val displayName = when (criteria) {
+                            "LANGUAGE" -> "Language"
+                            "SIZE" -> "File Size"
+                            "SEEDERS" -> "Seeders"
+                            "RESOLUTION" -> "Resolution"
+                            "NATIVE" -> "Native Player Compatibility"
+                            "DIRECT" -> "Direct Links"
+                            "SOURCE" -> "Host / Source Name"
+                            else -> criteria
+                        }
                         Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF333338)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = criteria, color = Color.White, modifier = Modifier.weight(1f))
+                            Text(text = displayName, color = Color.White, modifier = Modifier.weight(1f))
                             
                             if (index > 0) {
                                 TvFocusableBox(
@@ -425,7 +529,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                         list[index] = list[index - 1]
                                         list[index - 1] = temp
                                         prioritiesList = list
-                                        viewModel.prefs.edit().putString("sort_priorities", JSONArray(list).toString()).apply()
+                                        viewModel.prefs.edit().putString(prefsKey, JSONArray(list).toString()).apply()
                                     }
                                 ) {
                                     Icon(painter = painterResource(id = R.drawable.ic_arrow_up), contentDescription = "Move Up", tint = Color.White, modifier = Modifier.fillMaxSize().padding(4.dp))
@@ -441,7 +545,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                         list[index] = list[index + 1]
                                         list[index + 1] = temp
                                         prioritiesList = list
-                                        viewModel.prefs.edit().putString("sort_priorities", JSONArray(list).toString()).apply()
+                                        viewModel.prefs.edit().putString(prefsKey, JSONArray(list).toString()).apply()
                                     }
                                 ) {
                                     Icon(painter = painterResource(id = R.drawable.ic_arrow_down), contentDescription = "Move Down", tint = Color.White, modifier = Modifier.fillMaxSize().padding(4.dp))
@@ -459,4 +563,11 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
             }
         )
     }
+}
+
+private fun parseSize(title: String): String {
+    if (title.isEmpty()) return ""
+    val sizeRegex = """💾\s*([\d\.]+\s*(?:GB|MB|KB))""".toRegex(RegexOption.IGNORE_CASE)
+    val match = sizeRegex.find(title)
+    return match?.groupValues?.get(1) ?: ""
 }

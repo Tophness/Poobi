@@ -2,6 +2,27 @@ import requests
 import json
 import re
 
+def detect_language(torrent_info):
+    info_lower = torrent_info.lower()
+
+    mapping = {
+        'ru': ['🇷🇺', 'rus', 'russian', 'сыендук', 'mvo', 'vo'],
+        'es': ['🇪🇸', '🇲🇽', 'spa', 'spanish', 'lat'],
+        'pt': ['🇵🇹', '🇧🇷', 'por', 'portuguese'],
+        'it': ['🇮🇹', 'ita', 'italian'],
+        'fr': ['🇫🇷', 'fra', 'french'],
+        'de': ['🇩🇪', 'ger', 'german'],
+        'pl': ['🇵🇱', 'pol', 'polish'],
+        'hi': ['🇮🇳', 'hin', 'hindi'],
+        'uk': ['🇺🇦', 'ukr', 'ukrainian']
+    }
+    
+    for lang_code, indicators in mapping.items():
+        if any(ind in info_lower for ind in indicators):
+            return lang_code
+            
+    return 'en'
+
 class source:
     def __init__(self):
         self.priority = 1
@@ -94,15 +115,15 @@ class source:
                     sources.append({
                         'source': name.replace('\n', ' '),
                         'quality': quality,
-                        'language': 'en',
+                        'language': detect_language(torrent_info),
                         'url': stream_url,
                         'direct': True,
                         'provider': 'Torrentio',
-                        'title': f"[{quality}] {display_title}{metadata}",
+                        'title': f"[{quality}] {torrent_info}",
                         'infoHash': info_hash,
                         'fileIdx': file_idx,
                         'trackers': stream.get('sources', []),
-                        'seeders': seeders # Pass seeders explicitly to Kotlin
+                        'seeders': seeders
                     })
         except Exception as e:
             print(f"Torrentio error: {e}")

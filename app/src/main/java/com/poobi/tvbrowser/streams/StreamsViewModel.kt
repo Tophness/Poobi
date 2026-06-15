@@ -10,7 +10,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaquo.python.Python
 import com.poobi.tvbrowser.shared.SubtitleData
+import com.poobi.tvbrowser.torrent.TorrentSortCriteria
 import com.poobi.tvbrowser.torrent.TorrentStreamServer
+import com.poobi.tvbrowser.torrent.TorrentSorter
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -1436,23 +1438,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     val json = py.getModule("json")
                     val resultsJson = json.callAttr("dumps", results).toString()
                     val rawStreams = JSONArray(resultsJson)
-                    
-                    val langMap = mapOf(
-                        "English" to listOf("🇬🇧", "ENG", "Original"),
-                        "Russian" to listOf("🇷🇺", "RUS"),
-                        "Spanish" to listOf("🇪🇸", "🇲🇽", "SPA", "Lat"),
-                        "Portuguese" to listOf("🇵🇹", "🇧🇷", "POR"),
-                        "Italian" to listOf("🇮🇹", "ITA"),
-                        "French" to listOf("🇫🇷", "FRA"),
-                        "German" to listOf("🇩🇪", "GER"),
-                        "Polish" to listOf("🇵🇱", "POL"),
-                        "Hindi" to listOf("🇮🇳", "HIN")
-                    )
-                    val langKeywords = langMap[torrentLanguage] ?: emptyList()
 
-                    val prioritized = mutableListOf<JSONObject>()
-                    val others = mutableListOf<JSONObject>()
-
+                    val finalStreams = JSONArray()
                     for (i in 0 until rawStreams.length()) {
                         val r = rawStreams.getJSONObject(i)
                         val obj = JSONObject()
@@ -1469,17 +1456,11 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         
                         obj.put("title", displayTitle)
                         obj.put("source_data", r.toString())
-
-                        val isMatch = langKeywords.any { displayTitle.contains(it, ignoreCase = true) }
-                        if (isMatch) prioritized.add(obj) else others.add(obj)
+                        finalStreams.put(obj)
                     }
 
-                    val finalStreams = JSONArray()
-                    prioritized.forEach { finalStreams.put(it) }
-                    others.forEach { finalStreams.put(it) }
-
                     withContext(Dispatchers.Main) {
-                        _torrentioSources.value = finalStreams
+                        _torrentioSources.value = sortTorrents(finalStreams)
                     }
                 }
             } catch (e: Exception) {
@@ -1798,6 +1779,29 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         if (current != null) {
             _scrapedSources.value = sortSources(current)
         }
+        val currentTorrents = _torrentioSources.value
+        if (currentTorrents != null) {
+            _torrentioSources.value = sortTorrents(currentTorrents)
+        }
+    }
+
+    private fun sortTorrents(sources: JSONArray): JSONArray {
+        val priorities = mutableListOf<TorrentSortCriteria>()
+        val json = prefs.getString("torrent_sort_priorities", null)
+        if (json != null) {
+            try {
+                val arr = JSONArray(json)
+                for (i in 0 until arr.length()) {
+                    priorities.add(TorrentSortCriteria.valueOf(arr.getString(i)))
+                }
+            } catch (e: Exception) { 
+                priorities.addAll(TorrentSorter.DEFAULT_PRIORITIES) 
+            }
+        } else {
+            priorities.addAll(TorrentSorter.DEFAULT_PRIORITIES)
+        }
+        val torrentLanguage = prefs.getString("torrent_language", "English") ?: "English"
+        return TorrentSorter(priorities, torrentLanguage).sort(sources)
     }
 
     private fun sortSources(sources: JSONArray): JSONArray {

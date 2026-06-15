@@ -440,7 +440,8 @@ fun MainApp(
                         PlayerView(ctx).apply {
                             player = playerEngine.exoPlayer
                             useController = true
-                            setShowSubtitleButton(true) // Display the subtitle track selector control
+                            setShowSubtitleButton(true)
+                            setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
                             playerEngine.playerView = this
                             
                             setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->

@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -192,10 +193,16 @@ class PlayerEngine(
 
         exoPlayer?.release()
 
+        val isLocalHost = videoUrl.contains("localhost") || videoUrl.contains("127.0.0.1")
+        val connectTimeout = if (isLocalHost) 60000 else DefaultHttpDataSource.DEFAULT_CONNECT_TIMEOUT_MILLIS
+        val readTimeout = if (isLocalHost) 120000 else DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS
+
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"))
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
+            .setConnectTimeoutMs(connectTimeout)
+            .setReadTimeoutMs(readTimeout)
 
         val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
         val bandwidthMeter = DefaultBandwidthMeter.Builder(context)
@@ -222,6 +229,10 @@ class PlayerEngine(
                         lastScrapedItem?.let { item ->
                             onPlaybackStarted(videoUrl, title, item, lastScrapedSeason, lastScrapedEpisode, headers, lastSubtitles)
                         }
+                    }
+                } else if (state == Player.STATE_BUFFERING) {
+                    if (videoUrl.contains("localhost") || videoUrl.contains("127.0.0.1")) {
+                        Toast.makeText(context, "Buffering torrent... Please wait", Toast.LENGTH_SHORT).show()
                     }
                 } else if (state == Player.STATE_ENDED) {
                     checkUpNextHandler.removeCallbacks(checkUpNextRunnable)
