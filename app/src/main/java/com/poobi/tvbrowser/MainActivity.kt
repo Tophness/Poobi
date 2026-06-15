@@ -26,6 +26,7 @@ import com.poobi.tvbrowser.shared.cleanKodiText
 import com.poobi.tvbrowser.shared.isFutureDate
 import com.poobi.tvbrowser.streams.StreamsEvent
 import com.poobi.tvbrowser.streams.StreamsViewModel
+import com.poobi.tvbrowser.torrent.TorrentStreamServer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -64,6 +65,7 @@ class MainActivity : AppCompatActivity() {
     
     private lateinit var cursorManager: CursorManager
     private lateinit var playerEngine: PlayerEngine
+    private var torrentServer: TorrentStreamServer? = null
 
     private val longPressHandler = Handler(Looper.getMainLooper())
     private val longPressRunnable = Runnable {
@@ -74,6 +76,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AdBlockManager.init(this)
+        startTorrentServer()
 
         cursorManager = CursorManager(this, browserViewModel)
         
@@ -146,6 +149,15 @@ class MainActivity : AppCompatActivity() {
             onPlayerReleased = {
                 browserViewModel.hideCustomViewInternal()
                 streamsViewModel.resumeScrape()
+                try {
+                    val server = TorrentStreamServer.getInstance(applicationContext)
+                    server.stopActiveStreams()
+                    val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
+                    val cleanMode = prefs.getInt("torrent_cache_clean_mode", 0)
+                    if (cleanMode == 2) {
+                        server.clearAllCache()
+                    }
+                } catch (e: Exception) {}
             },
             onVideoWatched = { season, episode ->
                 streamsViewModel.markEpisodeAsWatchedLocal(season, episode)
@@ -735,10 +747,24 @@ class MainActivity : AppCompatActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    private fun startTorrentServer() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val server = TorrentStreamServer.getInstance(applicationContext)
+                server.start()
+                Log.i("TVBrowser", "Local Torrent Engine running on port 11470")
+                server.checkAndCleanPeriodicCache(applicationContext)
+            } catch (e: Exception) {
+                Log.e("TVBrowser", "Failed to start local Torrent Server", e)
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         longPressHandler.removeCallbacks(longPressRunnable)
         cursorManager.cleanup()
         playerEngine.stopAndRelease()
+		TorrentStreamServer.stopInstance()
     }
 }

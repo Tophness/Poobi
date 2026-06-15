@@ -101,6 +101,14 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
 
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
+    val jlibtorrentVersion = "2.0.12.9"
+    implementation("com.frostwire:jlibtorrent:$jlibtorrentVersion")
+    implementation("com.frostwire:jlibtorrent-android-arm:$jlibtorrentVersion")
+    implementation("com.frostwire:jlibtorrent-android-arm64:$jlibtorrentVersion")
+    implementation("com.frostwire:jlibtorrent-android-x86:$jlibtorrentVersion")
+    implementation("com.frostwire:jlibtorrent-android-x86_64:$jlibtorrentVersion")
+
     implementation(libs.play.services.auth)
     implementation(libs.google.api.client.android)
     implementation(libs.google.http.client.android)

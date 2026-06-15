@@ -10,6 +10,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaquo.python.Python
 import com.poobi.tvbrowser.shared.SubtitleData
+import com.poobi.tvbrowser.torrent.TorrentSortCriteria
+import com.poobi.tvbrowser.torrent.TorrentStreamServer
+import com.poobi.tvbrowser.torrent.TorrentSorter
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +24,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
 
 sealed class StreamsEvent {
     data class PlayVideo(
@@ -101,6 +105,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _scrapedSources = MutableStateFlow<JSONArray?>(null)
     val scrapedSources: StateFlow<JSONArray?> = _scrapedSources.asStateFlow()
 
+    private val _torrentioSources = MutableStateFlow<JSONArray?>(null)
+    val torrentioSources: StateFlow<JSONArray?> = _torrentioSources.asStateFlow()
+
+    private val _isScrapingTorrents = MutableStateFlow(false)
+    val isScrapingTorrents: StateFlow<Boolean> = _isScrapingTorrents.asStateFlow()
+
     private val _events = MutableStateFlow<StreamsEvent?>(null)
     val events: StateFlow<StreamsEvent?> = _events.asStateFlow()
 
@@ -147,12 +157,87 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     var isPlayingFromSavedLink = false
 
+    private val _isBufferingTorrent = MutableStateFlow(false)
+    val isBufferingTorrent: StateFlow<Boolean> = _isBufferingTorrent.asStateFlow()
+
+    private val _torrentBufferProgress = MutableStateFlow(0f)
+    val torrentBufferProgress: StateFlow<Float> = _torrentBufferProgress.asStateFlow()
+
+    private val _torrentBufferStatus = MutableStateFlow("Initializing...")
+    val torrentBufferStatus: StateFlow<String> = _torrentBufferStatus.asStateFlow()
+
+    private val _torrentBufferSeeders = MutableStateFlow(0)
+    val torrentBufferSeeders: StateFlow<Int> = _torrentBufferSeeders.asStateFlow()
+
+    private var torrentCancelLatch: CountDownLatch? = null
+
     init {
         loadSearchHistory()
         refreshFavoritesSet()
         loadGenres()
         purgeOldSubtitles()
         startBackgroundTraktCheck()
+    }
+
+    private fun performTorrentPreBuffering(infoHash: String, fileIdx: Int, sourceDataJson: String) {
+        _isBufferingTorrent.value = true
+        _torrentBufferProgress.value = 0f
+        _torrentBufferStatus.value = "Starting Torrent Engine..."
+        _torrentBufferSeeders.value = 0
+        
+        val latch = CountDownLatch(1)
+        torrentCancelLatch = latch
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val server = TorrentStreamServer.getInstance(context)
+                val prebufferLimit = prefs.getInt("torrent_prebuffer_pieces", 1)
+
+                server.prepareTorrent(
+                    infoHash = infoHash,
+                    fileIdx = fileIdx,
+                    prebufferPiecesLimit = prebufferLimit,
+                    onStatusUpdate = { status, progress, seeders ->
+                        _torrentBufferStatus.value = status
+                        _torrentBufferProgress.value = progress
+                        _torrentBufferSeeders.value = seeders
+                    },
+                    onReady = {
+                        viewModelScope.launch(Dispatchers.Main) {
+                            _isBufferingTorrent.value = false
+                            resolveAndPlayInternal(sourceDataJson)
+                        }
+                    },
+                    onError = { error ->
+                        viewModelScope.launch(Dispatchers.Main) {
+                            _isBufferingTorrent.value = false
+                            _events.value = StreamsEvent.ShowToast("Pre-Buffering Failed: $error")
+                            resumeScrape()
+                        }
+                    },
+                    cancellationToken = latch
+                )
+            } catch (e: Exception) {
+                viewModelScope.launch(Dispatchers.Main) {
+                    _isBufferingTorrent.value = false
+                    _events.value = StreamsEvent.ShowToast("Pre-Buffering Failed: ${e.message}")
+                    resumeScrape()
+                }
+            }
+        }
+    }
+
+    fun forcePlayTorrentNow() {
+        try {
+            val server = TorrentStreamServer.getInstance(context)
+            server.forcePlayTriggered = true
+        } catch (e: Exception) {}
+    }
+
+    fun cancelTorrentBuffering() {
+        torrentCancelLatch?.countDown()
+        _isBufferingTorrent.value = false
+        resumeScrape()
     }
 
     fun setActiveCategoryIndex(index: Int) {
@@ -164,6 +249,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     fun clearScrapedSources() {
         stopScrape()
         _scrapedSources.value = null
+        _torrentioSources.value = null
+        _isScrapingTorrents.value = false
     }
 
     fun clearSelectedMedia() { _selectedItem.value = null }
@@ -1302,10 +1389,88 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _isScraping.value = true
         _isResolving.value = false
         _scrapedSources.value = null
+        _torrentioSources.value = null
+        _isScrapingTorrents.value = true
         _scrapeProgress.value = 0
         _scrapeTotal.value = 0
         _scrapeStatusMsg.value = "Starting scrapers..."
         isInteractingWithSources = false
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val py = Python.getInstance()
+                val tmdb = py.getModule("tmdb.tmdb_utils")
+                
+                val id = item.optString("id")
+                val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
+                    ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
+                
+                Log.d("StreamsViewModel", "Torrentio Scrape - ID: $id, MediaType: $mediaType")
+
+                var imdbId = item.optString("imdb")
+                if (imdbId.isNullOrEmpty() || imdbId == "null") {
+                    val details = _itemDetails.value
+                    if (details != null && details.optInt("id").toString() == id) {
+                        imdbId = details.optJSONObject("external_ids")?.optString("imdb_id") ?: ""
+                    }
+                }
+
+                if (imdbId.isNullOrEmpty() || imdbId == "null") {
+                    val extIds = JSONObject(tmdb.callAttr("get_external_ids", id, mediaType).toString())
+                    imdbId = extIds.optString("imdb_id")
+                }
+                
+                Log.d("StreamsViewModel", "Torrentio Scrape - IMDb ID: $imdbId")
+
+                if (!imdbId.isNullOrEmpty() && imdbId != "null") {
+                    val torrentio = py.getModule("torrentio.torrentio").callAttr("source")
+                    val url = if (mediaType == "tv" || mediaType == "tvshow") {
+                        "$imdbId:${season ?: 1}:${episode ?: 1}"
+                    } else {
+                        imdbId
+                    }
+                    
+                    val torrentLanguage = prefs.getString("torrent_language", "English") ?: "English"
+                    Log.d("StreamsViewModel", "Torrentio Scrape - URL Param: $url, Lang: $torrentLanguage")
+
+                    val results = torrentio.callAttr("sources", url, emptyList<String>(), mapOf("torrent_language" to torrentLanguage))
+                    Log.d("StreamsViewModel", "Torrentio Scrape - Results count: ${results.asList().size}")
+                    val json = py.getModule("json")
+                    val resultsJson = json.callAttr("dumps", results).toString()
+                    val rawStreams = JSONArray(resultsJson)
+
+                    val finalStreams = JSONArray()
+                    for (i in 0 until rawStreams.length()) {
+                        val r = rawStreams.getJSONObject(i)
+                        val obj = JSONObject()
+                        val source = r.optString("source", "Unknown")
+                        val quality = r.optString("quality", "SD")
+                        val provider = r.optString("provider", "Torrentio")
+                        val torrentTitle = r.optString("title", "")
+                        
+                        val displayTitle = if (torrentTitle.isNotEmpty()) {
+                            torrentTitle
+                        } else {
+                            "[$quality] $source ($provider)"
+                        }
+                        
+                        obj.put("title", displayTitle)
+                        obj.put("source_data", r.toString())
+                        finalStreams.put(obj)
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        _torrentioSources.value = sortTorrents(finalStreams)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("StreamsViewModel", "Torrentio scrape error: ${e.message}")
+            } finally {
+                withContext(Dispatchers.Main) {
+                    _isScrapingTorrents.value = false
+                }
+            }
+        }
 
         scrapePollingJob = viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
@@ -1614,6 +1779,29 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         if (current != null) {
             _scrapedSources.value = sortSources(current)
         }
+        val currentTorrents = _torrentioSources.value
+        if (currentTorrents != null) {
+            _torrentioSources.value = sortTorrents(currentTorrents)
+        }
+    }
+
+    private fun sortTorrents(sources: JSONArray): JSONArray {
+        val priorities = mutableListOf<TorrentSortCriteria>()
+        val json = prefs.getString("torrent_sort_priorities", null)
+        if (json != null) {
+            try {
+                val arr = JSONArray(json)
+                for (i in 0 until arr.length()) {
+                    priorities.add(TorrentSortCriteria.valueOf(arr.getString(i)))
+                }
+            } catch (e: Exception) { 
+                priorities.addAll(TorrentSorter.DEFAULT_PRIORITIES) 
+            }
+        } else {
+            priorities.addAll(TorrentSorter.DEFAULT_PRIORITIES)
+        }
+        val torrentLanguage = prefs.getString("torrent_language", "English") ?: "English"
+        return TorrentSorter(priorities, torrentLanguage).sort(sources)
     }
 
     private fun sortSources(sources: JSONArray): JSONArray {
@@ -1637,21 +1825,29 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         isInteractingWithSources = true
         _scrapeStatusMsg.value = "Pausing Scrapers..."
 
-        if (_isDownloadingSubs.value) {
-            when (prefs.getInt("auto_sub_wait_pref", 0)) {
-                0 -> {
-                    cancelSubtitleDownloads()
-                    resolveAndPlayInternal(sourceDataJson)
-                }
-                1 -> {
-                    _events.value = StreamsEvent.AskSubtitleWait(sourceDataJson)
-                }
-                2 -> {
-                    resolveAndPlayInternal(sourceDataJson)
-                }
-            }
+        val sourceData = JSONObject(sourceDataJson)
+        val infoHash = sourceData.optString("infoHash", "")
+        val fileIdx = sourceData.optInt("fileIdx", -1)
+
+        if (infoHash.isNotEmpty() && fileIdx != -1) {
+            performTorrentPreBuffering(infoHash, fileIdx, sourceDataJson)
         } else {
-            resolveAndPlayInternal(sourceDataJson)
+            if (_isDownloadingSubs.value) {
+                when (prefs.getInt("auto_sub_wait_pref", 0)) {
+                    0 -> {
+                        cancelSubtitleDownloads()
+                        resolveAndPlayInternal(sourceDataJson)
+                    }
+                    1 -> {
+                        _events.value = StreamsEvent.AskSubtitleWait(sourceDataJson)
+                    }
+                    2 -> {
+                        resolveAndPlayInternal(sourceDataJson)
+                    }
+                }
+            } else {
+                resolveAndPlayInternal(sourceDataJson)
+            }
         }
     }
 

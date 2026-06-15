@@ -24,6 +24,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -203,6 +204,11 @@ fun MainApp(
     val homeIconFocusRequester = remember { FocusRequester() }
     val browserTabFocusRequester = remember { FocusRequester() }
     val streamsTabFocusRequester = remember { FocusRequester() }
+
+    val isBufferingTorrent by streamsViewModel.isBufferingTorrent.collectAsState()
+    val torrentBufferStatus by streamsViewModel.torrentBufferStatus.collectAsState()
+    val torrentBufferProgress by streamsViewModel.torrentBufferProgress.collectAsState()
+    val torrentBufferSeeders by streamsViewModel.torrentBufferSeeders.collectAsState()
 
     // Synchronous track of physical key interactions
     val keyTracker = remember { KeyTracker() }
@@ -434,7 +440,8 @@ fun MainApp(
                         PlayerView(ctx).apply {
                             player = playerEngine.exoPlayer
                             useController = true
-                            setShowSubtitleButton(true) // Display the subtitle track selector control
+                            setShowSubtitleButton(true)
+                            setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
                             playerEngine.playerView = this
                             
                             setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
@@ -843,6 +850,75 @@ fun MainApp(
                         Text("OK", color = Color.White)
                     }
                 }
+            )
+        }
+
+        if (isBufferingTorrent) {
+            AlertDialog(
+                onDismissRequest = { streamsViewModel.cancelTorrentBuffering() },
+                title = { Text("Pre-Buffering Video Stream", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+                containerColor = Color(0xFF222225),
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(
+                            text = torrentBufferStatus,
+                            color = Color.LightGray,
+                            fontSize = 14.sp
+                        )
+
+                        LinearProgressIndicator(
+                            progress = { torrentBufferProgress },
+                            modifier = Modifier.fillMaxWidth().height(8.dp),
+                            color = Color(0xFF00BCD4),
+                            trackColor = Color(0xFF333338)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = if (torrentBufferSeeders > 0) "Seeds: $torrentBufferSeeders" else "Locating seeders...",
+                                color = if (torrentBufferSeeders > 0) Color(0xFFFFB74D) else Color.Gray,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "${(torrentBufferProgress * 100).toInt()}%",
+                                color = Color(0xFF00BCD4),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { streamsViewModel.forcePlayTorrentNow() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                        ) {
+                            Text("Play Now", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                        
+                        Button(
+                            onClick = { streamsViewModel.cancelTorrentBuffering() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                        ) {
+                            Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                },
+                dismissButton = null
             )
         }
     }

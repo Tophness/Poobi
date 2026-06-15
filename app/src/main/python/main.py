@@ -59,6 +59,7 @@ try:
     sys.modules['cloudscraper'] = cloudscraper
 except ImportError:
     pass
+
 try:
     import subtitles.manager as sub_manager
     sub_manager.PROJECT_ROOT = FILES_DIR
@@ -384,6 +385,7 @@ try:
     except: pass
 except ImportError:
     pass
+
 class UniversalScraper:
     def __init__(self, enabled_packs, load_providers=False):
         self.enabled_packs = enabled_packs
@@ -476,7 +478,6 @@ class UniversalScraper:
                             if not any(d in self.provider_hosts for d in instance_domains):
                                 continue
                         providers.append((pack, file[:-3], instance))
-
 
         self.status["total"] = len(providers)
         self.status["current"] = 0
@@ -597,7 +598,10 @@ class UniversalScraper:
 
                 sources_sig = inspect.signature(provider.sources)
                 if 'hostprDict' in sources_sig.parameters:
-                    results = provider.sources(url, self.hostDict, [])
+                    torrent_cfg = {
+                        "torrent_language": GLOBAL_CONFIG.get("torrent_language", "English")
+                    }
+                    results = provider.sources(url, self.hostDict, torrent_cfg)
                 else:
                     results = provider.sources(url, self.hostDict)
 
@@ -625,6 +629,7 @@ class UniversalScraper:
                     new_url = provider.resolve(url)
                     if new_url and new_url != url:
                         url = new_url
+                        is_video = True
                 except: pass
 
         if not url: return None, False
@@ -784,7 +789,8 @@ def get_scrape_status():
         res = s_inst.status.copy()
         sources = s_inst.sources[:]
 
-        if getattr(s_inst, "_last_format_count", -1) == len(sources) and hasattr(s_inst, "_cached_display_sources"):
+        cached_count = getattr(s_inst, "_last_format_count", -1)
+        if cached_count == len(sources) and hasattr(s_inst, "_cached_display_sources"):
             res["sources"] = s_inst._cached_display_sources
             return json.dumps(res)
 
@@ -922,15 +928,28 @@ def scrape(item_json, season=None, episode=None):
         ext_ids = tmdb_utils.get_external_ids(tmdb_id, media_type)
         imdb_id = ext_ids.get('imdb_id', '0')
 
+        if not os.path.exists(SOURCES_PATH):
+            return json.dumps([{"title": f"Error: SOURCES_PATH not found at {SOURCES_PATH}", "source_data": ""}])
 
-        if not os.path.exists(SOURCES_PATH): return json.dumps([{"title": "Error: SOURCES_PATH not found", "source_data": ""}])
         packs = [d for d in os.listdir(SOURCES_PATH) if os.path.isdir(os.path.join(SOURCES_PATH, d))]
         enabled_packs = GLOBAL_CONFIG.get("enabled_packs")
-        if enabled_packs is None: enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
+        if enabled_packs is None:
+            enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
+        
         active_scraper = UniversalScraper(enabled_packs)
         title = item.get('orig_title') or item.get('title')
         year = item.get('year') or '0000'
-        sources = active_scraper.getSources(title=title, year=year, imdb=imdb_id, tmdb=tmdb_id, tvshowtitle=title if media_type == 'tv' else None, season=season, episode=episode)
+        
+        sources = active_scraper.getSources(
+            title=title, 
+            year=year, 
+            imdb=imdb_id, 
+            tmdb=tmdb_id,
+            tvshowtitle=title if media_type == 'tv' else None,
+            season=season,
+            episode=episode
+        )
+
         display_sources = []
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
         video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
@@ -982,4 +1001,5 @@ def resolve(source_data_json):
         scraper = UniversalScraper(enabled_packs, load_providers=True)
         url, is_video = scraper.resolveSource(source_data)
         return json.dumps({"url": url if url else "", "is_video": is_video})
-    except Exception as e: return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
