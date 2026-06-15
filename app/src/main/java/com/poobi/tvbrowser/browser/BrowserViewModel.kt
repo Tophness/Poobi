@@ -36,6 +36,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 data class TabMetadata(
     val defaultTitle: String?,
+    val defaultUrl: String? = null, 
     val streamItemJson: String? = null,
     val season: Int? = null,
     val episode: Int? = null
@@ -244,7 +245,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT
             )
             visibility = View.GONE
-            tag = TabMetadata(defaultTitle = title)
+            tag = TabMetadata(defaultTitle = title, defaultUrl = url)
         }
         setupWebView(newWebView)
         _webViews.add(newWebView)
@@ -335,6 +336,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val newWv = createNewTab(context, url, switchTo = true)
                 newWv.tag = TabMetadata(
                     defaultTitle = newWv.title,
+                    defaultUrl = url,
                     streamItemJson = streamItemJson,
                     season = season,
                     episode = episode
@@ -345,6 +347,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 }
                 currentWebView?.tag = TabMetadata(
                     defaultTitle = currentWebView?.title,
+                    defaultUrl = url,
                     streamItemJson = streamItemJson,
                     season = season,
                     episode = episode
@@ -369,6 +372,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     val title = obj.optString("title")
                     createNewTab(context, url, switchTo = false, title = title)
                 }
+            }
+            if (_currentTabIndex.value == -1 && _webViews.isNotEmpty()) {
+                _currentTabIndex.value = 0
             }
         } catch (e: Exception) {
             Log.e("TVBrowser", "Error restoring tabs: ${e.message}")
@@ -534,7 +540,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
 
-                view.postDelayed({ saveSnapshot(url, view.title ?: "Website", view) }, 2500)
+                view.postDelayed({ 
+                    saveSnapshot(
+                        url = url, 
+                        title = view.title?.takeIf { it.isNotBlank() } ?: "Website", 
+                        wv = view
+                    ) 
+                }, 2500)
             }
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
@@ -1336,12 +1348,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private fun saveTabs() {
         val array = JSONArray()
         for (wv in _webViews) {
-            val url = wv.url ?: "about:blank"
-            if (url == "about:blank") continue
             val metadata = wv.tag as? TabMetadata
+            val url = wv.url?.takeIf { it.isNotBlank() && it != "about:blank" } ?: metadata?.defaultUrl ?: "about:blank"
+            if (url == "about:blank") continue
             val obj = JSONObject().apply {
                 put("url", url)
-                put("title", wv.title ?: metadata?.defaultTitle ?: url)
+                put("title", wv.title?.takeIf { it.isNotBlank() } ?: metadata?.defaultTitle ?: url)
             }
             array.put(obj)
         }

@@ -82,7 +82,7 @@ fun BrowserTopBar(
             ) {
                 itemsIndexed(viewModel.getWebViewsList()) { index, wv ->
                     val metadata = wv.tag as? TabMetadata
-                    val title = wv.title ?: metadata?.defaultTitle ?: wv.url ?: "New Tab"
+                    val title = wv.title?.takeIf { it.isNotBlank() } ?: metadata?.defaultTitle ?: wv.url ?: "New Tab"
                     val itemFocusRequester = tabFocusRequesters.getOrNull(index) ?: remember { FocusRequester() }
                     
                     TvFocusableHoldToDeleteBox(
