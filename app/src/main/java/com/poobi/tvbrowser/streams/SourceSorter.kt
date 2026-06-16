@@ -4,10 +4,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 enum class SortCriteria {
-    NATIVE,      // Native ExoPlayer vs Browser
-    RESOLUTION,  // 4K, 1080p, etc.
-    DIRECT,      // Direct link vs HLS/Stream
-    SOURCE       // Host name
+    NATIVE,
+    RESOLUTION,
+    DIRECT,
+    SOURCE
 }
 
 class SourceSorter(private val priorities: List<SortCriteria>) {
@@ -82,7 +82,10 @@ class SourceSorter(private val priorities: List<SortCriteria>) {
         
         val url = data.optString("url", "").lowercase()
         val videoExtensions = listOf(".m3u8", ".mp4", ".mkv", ".ts", ".webm", ".mpd", ".avi", ".flv", ".mov")
-        if (videoExtensions.any { url.split("?")[0].endsWith(it) } || url.contains("/hls/")) return true
+        if (videoExtensions.any { url.split("?")[0].endsWith(it) } || 
+            url.contains("/hls/") || 
+            url.contains("m3u8") || 
+            url.contains("mpd")) return true
         
         return false
     }

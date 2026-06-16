@@ -889,6 +889,73 @@ fun MainApp(
             )
         }
 
+        // --- Playback Hijack Ask Dialog ---
+        if (dialogState is BrowserDialogState.PlaybackHijackAsk) {
+            val ask = dialogState as BrowserDialogState.PlaybackHijackAsk
+            var rememberDecision by remember { mutableStateOf(false) }
+
+            AlertDialog(
+                onDismissRequest = {
+                    browserViewModel.handleHijackChoice(useNative = false, remember = false, ask = ask)
+                },
+                title = { Text("Video Detected", color = Color.White) },
+                containerColor = Color(0xFF222225),
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "Video intercepted. Would you like to play it inside the native player or keep using the website player?",
+                            color = Color.LightGray
+                        )
+                        
+                        TvFocusableBox(
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            onClick = { rememberDecision = !rememberDecision }
+                        ) { isFocused ->
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.Checkbox(
+                                    checked = rememberDecision,
+                                    onCheckedChange = { rememberDecision = it },
+                                    colors = androidx.compose.material3.CheckboxDefaults.colors(
+                                        checkedColor = Color(0xFF00BCD4),
+                                        uncheckedColor = Color.Gray
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Remember my decision (Don't ask again)",
+                                    color = Color.White,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            browserViewModel.handleHijackChoice(useNative = true, remember = rememberDecision, ask = ask)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    ) {
+                        Text("Play Native", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = {
+                            browserViewModel.handleHijackChoice(useNative = false, remember = rememberDecision, ask = ask)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                    ) {
+                        Text("Website Player", color = Color.White)
+                    }
+                }
+            )
+        }
+
         // Error Dialog
         if (dialogState is BrowserDialogState.Error) {
             val error = dialogState as BrowserDialogState.Error

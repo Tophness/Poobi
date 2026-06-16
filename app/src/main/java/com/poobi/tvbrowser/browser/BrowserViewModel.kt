@@ -51,6 +51,7 @@ sealed class BrowserDialogState {
     data class SaveAutoplayProfile(val url: String, val selectors: List<String>) : BrowserDialogState()
     data class Error(val message: String) : BrowserDialogState()
     data class ContextMenu(val url: String, val x: Float, val y: Float) : BrowserDialogState()
+    data class PlaybackHijackAsk(val url: String, val title: String?, val alternativeUrls: List<String>?, val alternativeNames: List<String>?, val view: View?, val callback: WebChromeClient.CustomViewCallback?) : BrowserDialogState()
 }
 
 
@@ -560,11 +561,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream("".toByteArray()))
                     }
 
-                    val isVideo = requestedUrl.contains(".m3u8") || 
-                                 requestedUrl.contains(".mp4") || 
-                                 requestedUrl.contains(".mkv") ||
-                                 requestedUrl.contains(".mpd") ||
-                                 requestedUrl.contains("/m3u8/")
+                    val urlLower = requestedUrl.lowercase()
+                    val isVideo = urlLower.contains("m3u8") || 
+                                 urlLower.contains("mpd") ||
+                                 urlLower.contains("/hls/") ||
+                                 urlLower.contains(".mp4") || 
+                                 urlLower.contains(".mkv") ||
+                                 urlLower.contains(".ts")
 
                     if (isVideo) {
                         val wasEmpty = interceptedMediaUrls.isEmpty()
@@ -889,11 +892,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val pref = extractVideoPref.value
                 if (pref == 1 && finalCandidates.size == 1) {
                     playVideoInNativePlayer(finalCandidates[0], wv.title)
+                    callback?.onCustomViewHidden()
                 } else if (pref == 2) {
                     _customView.value = view
                     isExtractionActive = false
                 } else {
-                    parseHlsAndShowPicker(finalCandidates)
+                    parseHlsAndShowPicker(finalCandidates, view, callback)
                 }
             } else {
                 isExtractionActive = false
@@ -904,14 +908,47 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun parseHlsAndShowPicker(streams: List<String>) {
+    fun handleHijackChoice(
+        useNative: Boolean,
+        remember: Boolean,
+        ask: BrowserDialogState.PlaybackHijackAsk
+    ) {
+        if (remember) {
+            val newPref = if (useNative) 1 else 2
+            prefs.edit().putInt("extract_video_pref", newPref).apply()
+            extractVideoPref.value = newPref
+        }
+
+        if (useNative) {
+            playVideoInNativePlayer(
+                url = ask.url,
+                title = ask.title,
+                alternativeUrls = ask.alternativeUrls,
+                alternativeNames = ask.alternativeNames
+            )
+            ask.callback?.onCustomViewHidden()
+        } else {
+            if (ask.view != null) {
+                _customView.value = ask.view
+            } else {
+                resumeTimersOnCurrent()
+            }
+        }
+        dismissDialog()
+    }
+
+    private fun parseHlsAndShowPicker(
+        streams: List<String>,
+        view: View?,
+        callback: WebChromeClient.CustomViewCallback?
+    ) {
         val streamInfos = mutableListOf<String>()
         val streamUrls = mutableListOf<String>()
 
         viewModelScope.launch(Dispatchers.IO) {
             for (url in streams) {
                 val headers = interceptedMediaUrls[url] ?: emptyMap()
-                if (url.contains(".m3u8") || url.contains("/streamsvr/")) {
+                if (url.contains(".m3u8") || url.contains("/streamsvr/") || url.contains("m3u8-proxy")) {
                     try {
                         val connection = URL(url).openConnection() as HttpURLConnection
                         headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
@@ -986,14 +1023,36 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             withContext(Dispatchers.Main) {
                 if (streamUrls.isNotEmpty()) {
                     isExtractionActive = false
-                    playVideoInNativePlayer(
-                        url = streamUrls[0],
-                        title = currentWebView?.title,
-                        alternativeUrls = streamUrls,
-                        alternativeNames = streamInfos
-                    )
+                    val pref = extractVideoPref.value
+                    if (pref == 1) {
+                        playVideoInNativePlayer(
+                            url = streamUrls[0],
+                            title = currentWebView?.title,
+                            alternativeUrls = streamUrls,
+                            alternativeNames = streamInfos
+                        )
+                        callback?.onCustomViewHidden()
+                    } else if (pref == 2) {
+                        if (view != null) {
+                            _customView.value = view
+                        } else {
+                            resumeTimersOnCurrent()
+                        }
+                    } else {
+                        _currentDialog.value = BrowserDialogState.PlaybackHijackAsk(
+                            url = streamUrls[0],
+                            title = currentWebView?.title,
+                            alternativeUrls = streamUrls,
+                            alternativeNames = streamInfos,
+                            view = view,
+                            callback = callback
+                        )
+                    }
                 } else {
                     isExtractionActive = false
+                    if (view != null) {
+                        _customView.value = view
+                    }
                 }
             }
         }

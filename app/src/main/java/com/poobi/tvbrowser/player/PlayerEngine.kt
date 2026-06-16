@@ -253,6 +253,8 @@ class PlayerEngine(
 
             override fun onPlayerError(error: PlaybackException) {
                 if (isReleasing || !_isPlayerActive.value) return
+                Log.e("PlayerEngine", "onPlayerError occurred! Error code name: ${error.errorCodeName}, message: ${error.message}", error)
+                Log.e("PlayerEngine", "Failed playing stream URL: $videoUrl")
                 onPlaybackError(error, videoUrl + (if (fromStreams) "|from_streams" else ""))
             }
         })
@@ -281,11 +283,20 @@ class PlayerEngine(
             val videoUri = Uri.parse(urls[0])
             val audioUri = Uri.parse(urls[1])
 
-            val videoSource = ProgressiveMediaSource.Factory(dataSourceFactory)
-                .createMediaSource(MediaItem.Builder()
-                    .setUri(videoUri)
-                    .setSubtitleConfigurations(subtitleConfigs)
-                    .build())
+            val videoUrlLower = urls[0].lowercase()
+            val videoMediaItemBuilder = MediaItem.Builder()
+                .setUri(videoUri)
+                .setSubtitleConfigurations(subtitleConfigs)
+
+            if (videoUrlLower.contains("m3u8") || videoUrlLower.contains("/hls/")) {
+                videoMediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
+            } else if (videoUrlLower.contains("mpd")) {
+                videoMediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
+            }
+
+            val videoSource = DefaultMediaSourceFactory(context)
+                .setDataSourceFactory(dataSourceFactory)
+                .createMediaSource(videoMediaItemBuilder.build())
 
             val audioSource = ProgressiveMediaSource.Factory(dataSourceFactory)
                 .createMediaSource(MediaItem.fromUri(audioUri))
@@ -295,7 +306,11 @@ class PlayerEngine(
         } else {
             val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
             mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
-            if (videoUrl.contains(".mpd") || videoUrl.endsWith(".mpd")) {
+            
+            val urlLower = videoUrl.lowercase()
+            if (urlLower.contains("m3u8") || urlLower.contains("/hls/")) {
+                mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
+            } else if (urlLower.contains("mpd")) {
                 mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
             }
             
