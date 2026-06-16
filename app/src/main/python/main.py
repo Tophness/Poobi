@@ -758,7 +758,10 @@ def get_scrape_status():
                 s['is_video'] = is_video
 
             display_sources.append({
-                "title": f"[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
+                "title": s.get('title') or s.get('source') or '',
+                "quality": s.get('quality', 'SD'),
+                "source": s.get('source', 'Unknown'),
+                "provider": s.get('provider', 'Unknown'),
                 "source_data": json.dumps(s)
             })
         
@@ -889,7 +892,10 @@ def scrape(item_json, season=None, episode=None):
                 s['is_video'] = is_video
 
             display_sources.append({
-                "title": f"[{s.get('quality', 'SD')}] {s.get('source')} ({s.get('provider')})",
+                "title": s.get('title') or s.get('source') or '',
+                "quality": s.get('quality', 'SD'),
+                "source": s.get('source', 'Unknown'),
+                "provider": s.get('provider', 'Unknown'),
                 "source_data": json.dumps(s)
             })
             

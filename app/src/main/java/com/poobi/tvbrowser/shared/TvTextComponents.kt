@@ -45,7 +45,6 @@ fun TvMarqueeText(
         maxLines = maxLines,
         overflow = if (maxLines == 1) TextOverflow.Clip else TextOverflow.Ellipsis,
         modifier = modifier
-            .fillMaxWidth()
             .then(if (isFocused && maxLines == 1) Modifier.basicMarquee() else Modifier)
     )
 }

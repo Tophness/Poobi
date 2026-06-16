@@ -1,7 +1,8 @@
 package com.poobi.tvbrowser.streams
 
+import android.view.KeyEvent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.LanguageHelper
 import com.poobi.tvbrowser.shared.TvFocusableBox
+import com.poobi.tvbrowser.shared.TvMarqueeText
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -124,7 +126,6 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
 
     var showSortDialog by remember { mutableStateOf(false) }
 
-    // Focus requesters mapped to each tab index to control exit paths cleanly
     val tabFocusRequesters = remember(tabs.size) { List(tabs.size) { FocusRequester() } }
 
     val stopScanningFocusRequester = remember { FocusRequester() }
@@ -405,14 +406,34 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                         val s = currentSources.optJSONObject(idx) ?: return@items
                         val sourceDataStr = s.optString("source_data", "{}")
                         val rawData = JSONObject(sourceDataStr)
-                        val quality = rawData.optString("quality", "SD")
-                        val sourceName = rawData.optString("source", "Unknown")
-                        val providerName = rawData.optString("provider", "Unknown")
-
-                        val rawTitle = s.optString("title", "")
                         val isVideo = rawData.optBoolean("is_video", true)
                         val isBrowser = !isVideo
                         val seeders = rawData.optInt("seeders", -1)
+                        val sourceName = s.optString("source", rawData.optString("source", "Unknown"))
+                        val providerName = s.optString("provider", rawData.optString("provider", "Unknown"))
+                        val rawTitle = s.optString("title", rawData.optString("title", "")).substringBefore("\n").trim()
+                        
+                        val (displayTitle, quality) = if (selectedTab == "Torrents") {
+                            val parsed = parseResolution(rawTitle)
+                            val titleClean = if (parsed.first.isNotEmpty()) parsed.first else "Torrent Stream"
+                            Pair(titleClean, parsed.second)
+                        } else {
+                            val titleClean = if (rawTitle.isNotEmpty() && !rawTitle.equals(sourceName, ignoreCase = true)) {
+                                rawTitle
+                            } else {
+                                sourceName
+                            }
+                            val q = s.optString("quality", rawData.optString("quality", "SD")).uppercase()
+                            Pair(titleClean, q)
+                        }
+
+                        val logoResId = when {
+                            quality.contains("4K") || quality.contains("2160P") -> R.drawable.res_4k
+                            quality.contains("2K") || quality.contains("1440P") -> R.drawable.res_2k
+                            quality.contains("1080P") -> R.drawable.res_1080p
+                            quality.contains("720P") || quality.contains("HD") -> R.drawable.res_720p
+                            else -> R.drawable.res_480p
+                        }
 
                         val isFirstItem = idx == 0 && (selectedTab == "Torrents" || viewModel.prefs.getInt("auto_sub_pref", 0) != 2)
 
@@ -435,29 +456,10 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                     painter = painterResource(id = if (isBrowser) R.drawable.ic_go else R.drawable.ic_auto_play),
                                     contentDescription = null,
                                     tint = if (isFocused) Color.Black else Color.White,
-                                    modifier = Modifier.size(32.dp).padding(end = 8.dp)
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .padding(end = 8.dp)
                                 )
-
-                                if (selectedTab == "Torrents" && seeders >= 0) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.padding(horizontal = 8.dp).width(50.dp)
-                                    ) {
-                                        Text(
-                                            text = "SEEDS",
-                                            color = if (isFocused) Color.Black.copy(alpha = 0.7f) else Color(0xFF00BCD4),
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "$seeders",
-                                            color = if (isFocused) Color.Black else Color(0xFF00BCD4),
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                }
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     if (selectedTab == "Torrents") {
@@ -476,53 +478,127 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.Top
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        val cleanTitle = remember(rawTitle) {
-                                            val baseTitle = rawTitle.ifEmpty { "[$quality] $sourceName ($providerName)" }
-                                            baseTitle.lineSequence().firstOrNull { it.isNotBlank() } ?: baseTitle
-                                        }
-
-                                        Text(
-                                            text = cleanTitle, 
-                                            color = if (isFocused) Color.Black else Color.White, 
-                                            fontSize = 18.sp, 
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.weight(1f)
-                                        )
-
-                                        if (selectedTab == "Torrents") {
-                                            val size = parseSize(rawTitle)
-                                            if (size.isNotEmpty()) {
-                                                Spacer(modifier = Modifier.width(12.dp))
-                                                Text(
-                                                    text = size,
-                                                    color = Color(0xFF4CAF50),
-                                                    fontSize = 16.sp,
+                                        if (selectedTab == "Streams") {
+                                            Row(
+                                                modifier = Modifier.weight(1f),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                TvMarqueeText(
+                                                    text = displayTitle, 
+                                                    color = if (isFocused) Color.Black else Color.White, 
+                                                    fontSize = 18.sp, 
                                                     fontWeight = FontWeight.Bold,
-                                                    modifier = Modifier.padding(top = 2.dp)
+                                                    isFocused = isFocused,
+                                                    modifier = Modifier.weight(1f, fill = false)
                                                 )
+                                                
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    if (displayTitle != sourceName) {
+                                                        Text(
+                                                            text = sourceName,
+                                                            color = if (isFocused) Color.Black.copy(alpha = 0.8f) else Color(0xFF00BCD4),
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1
+                                                        )
+                                                        Text(
+                                                            text = "•",
+                                                            color = if (isFocused) Color.Black.copy(alpha = 0.5f) else Color.Gray,
+                                                            fontSize = 12.sp
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = "via $providerName",
+                                                        color = if (isFocused) Color.Black.copy(alpha = 0.7f) else Color(0xFFFFB74D),
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        maxLines = 1
+                                                    )
+                                                }
                                             }
+                                        } else {
+                                            TvMarqueeText(
+                                                text = displayTitle, 
+                                                color = if (isFocused) Color.Black else Color.White, 
+                                                fontSize = 18.sp, 
+                                                fontWeight = FontWeight.Bold,
+                                                isFocused = isFocused,
+                                                modifier = Modifier.weight(1f)
+                                            )
                                         }
                                     }
 
                                     if (selectedTab == "Streams") {
+                                        Spacer(modifier = Modifier.height(4.dp))
                                         if (isBrowser) {
                                             Text(
-                                                text = "> Open in browser", 
+                                                text = "Open in Browser", 
                                                 color = if (isFocused) Color.Black.copy(alpha = 0.8f) else Color(0xFFE53935), 
-                                                fontSize = 14.sp,
+                                                fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         } else {
                                             Text(
-                                                text = "Play video", 
+                                                text = "Play Native Video", 
                                                 color = if (isFocused) Color.Black.copy(alpha = 0.8f) else Color(0xFF00BCD4), 
-                                                fontSize = 14.sp,
+                                                fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
                                     }
+                                }
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    if (selectedTab == "Torrents") {
+                                        if (seeders >= 0) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                modifier = Modifier.padding(horizontal = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "👤",
+                                                    fontSize = 22.sp,
+                                                    color = if (isFocused) Color.Black.copy(alpha = 0.7f) else Color(0xFF00BCD4)
+                                                )
+                                                Text(
+                                                    text = "$seeders",
+                                                    color = if (isFocused) Color.Black else Color(0xFF00BCD4),
+                                                    fontSize = 24.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+
+                                        val size = parseSize(rawTitle)
+                                        if (size.isNotEmpty()) {
+                                            Text(
+                                                text = size,
+                                                color = Color(0xFF4CAF50),
+                                                fontSize = 20.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+
+                                    Image(
+                                        painter = painterResource(id = logoResId),
+                                        contentDescription = quality,
+                                        modifier = Modifier
+                                            .width(100.dp)
+                                            .height(50.dp)
+                                    )
                                 }
                             }
                         }
@@ -613,6 +689,24 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
             }
         )
     }
+}
+
+private fun parseResolution(title: String): Pair<String, String> {
+    val resolutions = listOf("4k", "2160p", "1080p", "2k", "720p", "480p", "360p", "hd", "sd", "cam", "scr")
+    for (res in resolutions) {
+        val regex = "(?i)\\[$res\\]|\\b$res\\b".toRegex()
+        val match = regex.find(title)
+        if (match != null) {
+            val cleaned = title.replace(regex, "")
+                .replace("[]", "")
+                .replace("()", "")
+                .replace(Regex("^[-_\\s]+|[-_\\s]+$"), "")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            return Pair(cleaned, res.uppercase())
+        }
+    }
+    return Pair(title, "SD")
 }
 
 private fun parseSize(title: String): String {
