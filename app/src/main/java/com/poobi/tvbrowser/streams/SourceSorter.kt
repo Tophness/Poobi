@@ -85,6 +85,8 @@ class SourceSorter(private val priorities: List<SortCriteria>) {
         if (videoExtensions.any { url.split("?")[0].endsWith(it) } || 
             url.contains("/hls/") || 
             url.contains("m3u8") || 
+            url.contains("/pl/") ||
+            url.contains("/playlist/") ||
             url.contains("mpd")) return true
         
         return false

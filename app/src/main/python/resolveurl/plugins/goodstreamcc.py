@@ -27,7 +27,7 @@ from resolveurl.resolver import ResolveUrl, ResolverError
 class GoodStreamCCResolver(ResolveUrl):
     name = 'GoodStreamCC'
     domains = ['goodstream.cc']
-    pattern = r'(?://|\.)(goodstream\.cc)/embed/([0-9a-zA-Z_-]+)'
+    pattern = r'(?://|\.)(goodstream\.cc)/(?!pl/|playlist/|embed/)([0-9a-zA-Z_-]+)'
 
     def get_media_url(self, host, media_id):
         web_url = self.get_url(host, media_id)

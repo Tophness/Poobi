@@ -1101,11 +1101,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     return@launch
                 }
 
-                val streamUrl = json.optString("url")
-                if (streamUrl.isEmpty() || !streamUrl.startsWith("http")) {
+                val rawStreamUrl = json.optString("url")
+                if (rawStreamUrl.isEmpty() || !rawStreamUrl.startsWith("http")) {
                     withContext(Dispatchers.Main) { tryNextSource() }
                     return@launch
                 }
+
+                val (streamUrl, parsedHeaders) = com.poobi.tvbrowser.shared.parseKodiUrl(rawStreamUrl)
 
                 val headersMap = mutableMapOf<String, String>()
                 try {
@@ -1114,11 +1116,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     hObj?.keys()?.forEach { headersMap[it] = hObj.getString(it) }
                 } catch (e: Exception) {}
 
+                headersMap.putAll(parsedHeaders)
+
                 if (checkUrlValidity(streamUrl, headersMap)) {
                     withContext(Dispatchers.Main) {
                         _isResolving.value = false
                         _scrapeStatusMsg.value = "Valid source found! Playing..."
-                        playStream(streamUrl, json.optBoolean("is_video", false), sourceDataJson)
+                        playStream(streamUrl, json.optBoolean("is_video", false), sourceDataJson, parsedHeaders)
                     }
                 } else {
                     withContext(Dispatchers.Main) { tryNextSource() }
@@ -1271,15 +1275,31 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                 if (isSuspicious) {
                     connection.inputStream.use { input ->
-                        val buffer = ByteArray(32)
+                        val buffer = ByteArray(376)
                         val read = input.read(buffer)
                         if (read >= 4) {
-                            if (buffer[0] == 0x89.toByte() && buffer[1] == 0x50.toByte() && 
-                                buffer[2] == 0x4E.toByte() && buffer[3] == 0x47.toByte()) {
+                            val isMp4Video = read >= 12 && (
+                                (buffer[4] == 'f'.toByte() && buffer[5] == 't'.toByte() && buffer[6] == 'y'.toByte() && buffer[7] == 'p'.toByte()) ||
+                                (buffer[8] == 'f'.toByte() && buffer[9] == 't'.toByte() && buffer[10] == 'y'.toByte() && buffer[11] == 'p'.toByte())
+                            )
+
+                            val isTsVideo = buffer[0] == 0x47.toByte() || (read > 188 && buffer[188] == 0x47.toByte())
+
+                            if (isMp4Video || isTsVideo) {
+                                return@withContext true
+                            }
+
+                            val isRealPng = buffer[0] == 0x89.toByte() && buffer[1] == 0x50.toByte() && 
+                                            buffer[2] == 0x4E.toByte() && buffer[3] == 0x47.toByte()
+                                            
+                            val isRealGif = buffer[0] == 'G'.toByte() && buffer[1] == 'I'.toByte() && 
+                                            buffer[2] == 'F'.toByte() && buffer[3] == '8'.toByte()
+
+                            if (isRealPng || isRealGif) {
                                 return@withContext false
                             }
                             
-                            val head = String(buffer, 0, read)
+                            val head = String(buffer, 0, minOf(read, 64))
                             if (head.contains("<svg", true) || head.contains("<?xml", true) || 
                                 head.contains("<!DOCTYPE", true) || head.contains("<html", true)) {
                                 return@withContext false
@@ -1300,7 +1320,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         false
     }
 
-    private fun playStream(streamUrl: String, isVideo: Boolean, sourceDataJson: String) {
+    private fun playStream(streamUrl: String, isVideo: Boolean, sourceDataJson: String, extraHeaders: Map<String, String> = emptyMap()) {
         val cleanTitle = _selectedItem.value?.optString("title")?.takeIf { it.isNotBlank() } ?: _selectedItem.value?.optString("name") ?: "Unknown"
         val fullTitle = if (lastScrapedSeason != null && lastScrapedEpisode != null) {
             "$cleanTitle S${lastScrapedSeason}E${lastScrapedEpisode}"
@@ -1312,6 +1332,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             val hObj = sourceData.optJSONObject("headers")
             hObj?.keys()?.forEach { headersMap[it] = hObj.getString(it) }
         } catch (e: Exception) {}
+
+        headersMap.putAll(extraHeaders)
 
         var nextEp: JSONObject? = null
         if (lastScrapedSeason != null && lastScrapedEpisode != null) {
@@ -1874,11 +1896,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                             return@withContext
                         }
 
-                        val streamUrl = json.optString("url")
+                        val rawStreamUrl = json.optString("url")
                         val isVideo = json.optBoolean("is_video", false)
                         
-                        if (streamUrl.isNotEmpty() && streamUrl.startsWith("http")) {
-                            playStream(streamUrl, isVideo, sourceDataJson)
+                        if (rawStreamUrl.isNotEmpty() && rawStreamUrl.startsWith("http")) {
+                            val (streamUrl, parsedHeaders) = com.poobi.tvbrowser.shared.parseKodiUrl(rawStreamUrl)
+                            playStream(streamUrl, isVideo, sourceDataJson, parsedHeaders)
                         } else {
                             resumeScrape()
                             _events.value = StreamsEvent.ShowToast("Could not resolve stream URL")

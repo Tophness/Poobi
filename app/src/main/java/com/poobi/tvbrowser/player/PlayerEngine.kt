@@ -106,6 +106,35 @@ class PlayerEngine(
     private var isReleasing = false
     private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    private fun isHlsUrl(url: String): Boolean {
+        val urlLower = url.lowercase()
+        return urlLower.contains("m3u8") || 
+               urlLower.contains("/hls/") || 
+               urlLower.contains("/pl/") || 
+               urlLower.contains("/playlist/")
+    }
+
+    private fun isDashUrl(url: String): Boolean {
+        return url.lowercase().contains("mpd")
+    }
+
+	private fun sanitizeHeaders(videoUrl: String, headers: Map<String, String>): Map<String, String> {
+		val mergedHeaders = headers.toMutableMap()
+		
+		if (isHlsUrl(videoUrl)) {
+			val refKey = mergedHeaders.keys.find { it.equals("referer", ignoreCase = true) }
+			val currentReferer = refKey?.let { mergedHeaders[it] }
+
+			if (currentReferer.isNullOrEmpty()) {
+				mergedHeaders.keys.filter { it.equals("referer", ignoreCase = true) }.forEach {
+					mergedHeaders.remove(it)
+				}
+				mergedHeaders["Referer"] = videoUrl
+			}
+		}
+		return mergedHeaders
+	}
+
     private val checkUpNextRunnable = object : Runnable {
         override fun run() {
             val player = exoPlayer ?: return
@@ -170,13 +199,18 @@ class PlayerEngine(
             saveProgress()
         }
 
-        lastVideoUrl = videoUrl
+        val (cleanUrl, parsedHeaders) = com.poobi.tvbrowser.shared.parseKodiUrl(videoUrl)
+        val mergedHeaders = headers.toMutableMap()
+        mergedHeaders.putAll(parsedHeaders)
+        val finalHeaders = sanitizeHeaders(cleanUrl, mergedHeaders)
+
+        lastVideoUrl = cleanUrl
         lastVideoTitle = title
         lastScrapedItem = item
         lastScrapedSeason = season
         lastScrapedEpisode = episode
         lastSubtitles = subtitles
-        lastHeaders = headers
+        lastHeaders = finalHeaders
         lastFromStreams = fromStreams
         lastAlternativeUrls = alternativeUrls
         lastAlternativeNames = alternativeNames
@@ -193,14 +227,14 @@ class PlayerEngine(
 
         exoPlayer?.release()
 
-        val isLocalHost = videoUrl.contains("localhost") || videoUrl.contains("127.0.0.1")
+        val isLocalHost = cleanUrl.contains("localhost") || cleanUrl.contains("127.0.0.1")
         val connectTimeout = if (isLocalHost) 60000 else DefaultHttpDataSource.DEFAULT_CONNECT_TIMEOUT_MILLIS
         val readTimeout = if (isLocalHost) 120000 else DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS
 
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"))
             .setAllowCrossProtocolRedirects(true)
-            .setDefaultRequestProperties(headers)
+            .setDefaultRequestProperties(finalHeaders)
             .setConnectTimeoutMs(connectTimeout)
             .setReadTimeoutMs(readTimeout)
 
@@ -307,14 +341,44 @@ class PlayerEngine(
             val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
             mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
             
-            val urlLower = videoUrl.lowercase()
-            if (urlLower.contains("m3u8") || urlLower.contains("/hls/")) {
-                mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
-            } else if (urlLower.contains("mpd")) {
-                mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
-            }
-            
-            exoPlayer?.setMediaItem(mediaItemBuilder.build())
+			if (videoUrl.contains("|")) {
+				val urls = videoUrl.split("|")
+				val videoUri = Uri.parse(urls[0])
+				val audioUri = Uri.parse(urls[1])
+
+				val videoMediaItemBuilder = MediaItem.Builder()
+					.setUri(videoUri)
+					.setSubtitleConfigurations(subtitleConfigs)
+
+				// Updated HLS and DASH detection using robust checks
+				if (isHlsUrl(urls[0])) {
+					videoMediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
+				} else if (isDashUrl(urls[0])) {
+					videoMediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
+				}
+
+				val videoSource = DefaultMediaSourceFactory(context)
+					.setDataSourceFactory(dataSourceFactory)
+					.createMediaSource(videoMediaItemBuilder.build())
+
+				val audioSource = ProgressiveMediaSource.Factory(dataSourceFactory)
+					.createMediaSource(MediaItem.fromUri(audioUri))
+
+				val mergedSource = MergingMediaSource(videoSource, audioSource)
+				exoPlayer?.setMediaSource(mergedSource)
+			} else {
+				val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
+				mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
+				
+				// Updated HLS and DASH detection using robust checks
+				if (isHlsUrl(videoUrl)) {
+					mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
+				} else if (isDashUrl(videoUrl)) {
+					mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
+				}
+				
+				exoPlayer?.setMediaItem(mediaItemBuilder.build())
+			}
         }
 
         val resumeKey = if (title != null) "resume_stream_$title" else null

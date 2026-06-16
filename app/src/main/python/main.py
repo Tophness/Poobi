@@ -586,7 +586,7 @@ class UniversalScraper:
             except: pass
 
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
-        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
+        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo', '/pl/', '/playlist/']
         
         url_lower = url.lower()
         if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
@@ -732,7 +732,7 @@ def get_scrape_status():
 
         display_sources = []
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
-        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
+        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo', '/pl/', '/playlist/']
 
         quality_map = {'4k': 0, '1080p': 1, '720p': 2, 'hd': 2, 'sd': 3, 'cam': 4, 'scr': 4}
         for s in sources:
@@ -868,7 +868,7 @@ def scrape(item_json, season=None, episode=None):
 
         display_sources = []
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
-        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo']
+        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo', '/pl/', '/playlist/']
         
         for s in sources:
             is_video = s.get('is_video')
@@ -909,7 +909,8 @@ def resolve(source_data_json):
             enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
         
         scraper = UniversalScraper(enabled_packs)
-        url, is_video = scraper.resolveSource(source_data)
+        url, is_video = scraper.resolveSource(source_data)   
         return json.dumps({"url": url if url else "", "is_video": is_video})
     except Exception as e:
+        print(f"[DEBUG] Resolve Error: {str(e)}")
         return json.dumps({"error": str(e)})
