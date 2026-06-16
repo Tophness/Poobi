@@ -447,24 +447,28 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView(wv: WebView) {
-        wv.isFocusable = true
-        wv.isFocusableInTouchMode = true
-        val customUserAgent = prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-        
-        wv.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            mediaPlaybackRequiresUserGesture = false
-            setSupportMultipleWindows(true)
-            javaScriptCanOpenWindowsAutomatically = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-            userAgentString = customUserAgent
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                isAlgorithmicDarkeningAllowed = !isLightTheme.value
-            }
-        }
+		wv.isFocusable = true
+		wv.isFocusableInTouchMode = true
+		val defaultUA = WebSettings.getDefaultUserAgent(appContext)
+		val customUserAgent = prefs.getString("user_agent", defaultUA)
+		
+		wv.settings.apply {
+			javaScriptEnabled = true
+			domStorageEnabled = true
+			databaseEnabled = true
+			mediaPlaybackRequiresUserGesture = false
+			setSupportMultipleWindows(true)
+			javaScriptCanOpenWindowsAutomatically = false
+			mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+			userAgentString = customUserAgent
+			if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+				isAlgorithmicDarkeningAllowed = !isLightTheme.value
+			}
+		}
 
-        wv.addJavascriptInterface(WebAppInterface(), "AndroidAutoplay")
+		CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
+
+		wv.addJavascriptInterface(WebAppInterface(), "AndroidAutoplay")
 
         wv.setDownloadListener { url, _, contentDisposition, mimetype, contentLength ->
             val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
