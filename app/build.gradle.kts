@@ -19,15 +19,32 @@ extensions.configure<ApplicationExtension> {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 
-        ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+    flavorDimensions += "abi"
+    productFlavors {
+        create("arm64") {
+            dimension = "abi"
+            ndk { abiFilters.add("arm64-v8a") }
+        }
+        create("armv7") {
+            dimension = "abi"
+            ndk { abiFilters.add("armeabi-v7a") }
+        }
+        create("x86") {
+            dimension = "abi"
+            ndk { abiFilters.add("x86") }
+        }
+        create("x86_64") {
+            dimension = "abi"
+            ndk { abiFilters.add("x86_64") }
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
