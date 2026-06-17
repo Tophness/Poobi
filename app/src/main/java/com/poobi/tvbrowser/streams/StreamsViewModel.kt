@@ -36,7 +36,8 @@ sealed class StreamsEvent {
         val season: Int?, 
         val episode: Int?, 
         val nextEpisode: JSONObject? = null,
-        val isWebpage: Boolean = false
+        val isWebpage: Boolean = false,
+        val isTrailer: Boolean = false
     ) : StreamsEvent()
     data class ShowToast(val message: String) : StreamsEvent()
     data class ShowSubtitlePicker(val subs: JSONArray) : StreamsEvent()
@@ -174,6 +175,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     private var torrentCancelLatch: CountDownLatch? = null
 
+    private val _activeNotifications = MutableStateFlow<List<JSONObject>>(emptyList())
+    val activeNotifications: StateFlow<List<JSONObject>> = _activeNotifications.asStateFlow()
+
     init {
         loadSearchHistory()
         refreshFavoritesSet()
@@ -229,6 +233,74 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
+    }
+
+    fun dismissNotificationAt(index: Int) {
+        val currentList = _activeNotifications.value.toMutableList()
+        if (index in currentList.indices) {
+            currentList.removeAt(index)
+            _activeNotifications.value = currentList
+        }
+    }
+
+    fun dismissAllNotifications() {
+        _activeNotifications.value = emptyList()
+    }
+
+    fun playNotificationEpisode(notification: JSONObject, index: Int) {
+        dismissNotificationAt(index)
+        
+        val itemObj = notification.optJSONObject("item")
+        val showTitle = notification.optString("show_title", "Unknown")
+        val season = notification.optInt("season", 1)
+        val episodeNum = notification.optInt("number", 1)
+
+        val constructedItem = if (itemObj != null) {
+            itemObj
+        } else {
+            val showTmdbId = notification.optInt("show_id", 0)
+            JSONObject().apply {
+                put("id", showTmdbId)
+                put("imdb", "")
+                put("media_type", "tv")
+                put("name", showTitle)
+            }
+        }
+
+        selectMediaItem(constructedItem, initialSeason = season)
+        performScrape(constructedItem, season, episodeNum)
+    }
+
+    private suspend fun enrichNotificationWithTmdb(notification: JSONObject): JSONObject = withContext(Dispatchers.IO) {
+        try {
+            val showTmdbId = notification.optInt("show_id", 0)
+            val season = notification.optInt("season", 1)
+            val episodeNum = notification.optInt("number", 1)
+
+            if (showTmdbId > 0) {
+                val py = getPythonInstance()
+                val main = py.getModule("main")
+                val detailsJson = main.callAttr("get_tv_episodes", showTmdbId, season).toString()
+                val episodesArray = JSONArray(detailsJson)
+                for (i in 0 until episodesArray.length()) {
+                    val ep = episodesArray.getJSONObject(i)
+                    if (ep.optInt("episode_number") == episodeNum) {
+                        val stillPath = ep.optString("still_path", "")
+                        if (stillPath.isNotEmpty() && stillPath != "null") {
+                            notification.put("still_path", stillPath)
+                        }
+                        val overview = ep.optString("overview", "")
+                        if (overview.isNotEmpty() && overview != "null") {
+                            notification.put("episode_overview", overview)
+                        }
+                        break
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("StreamsViewModel", "Notification enrichment failed: ${e.message}")
+        }
+        notification
     }
 
     fun loadProgressCounts() {
@@ -2235,15 +2307,25 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 						cacheFile.writeText(updatedLastCheck.toString())
 
 						if (newEpisodes.length() > 0) {
-							withContext(Dispatchers.Main) {
-								for (i in 0 until newEpisodes.length()) {
-									val ep = newEpisodes.getJSONObject(i)
-									val showId = ep.getString("show_id")
-									py.getModule("trakt.episode_check").callAttr("invalidate_show_progress_cache", showId)
+							val enrichedList = mutableListOf<JSONObject>()
+							for (i in 0 until newEpisodes.length()) {
+								val ep = newEpisodes.getJSONObject(i)
+								val showId = ep.optString("show_id", "")
+								if (showId.isNotEmpty()) {
+									try {
+										py.getModule("trakt.episode_check").callAttr("invalidate_show_progress_cache", showId)
+									} catch (e: Exception) {}
 								}
-								
+								val enriched = enrichNotificationWithTmdb(ep)
+								enrichedList.add(enriched)
+							}
+							
+							withContext(Dispatchers.Main) {
 								loadProgressCounts()
-								_events.value = StreamsEvent.ShowToast("${newEpisodes.length()} New Episodes Alert!")
+								
+								val currentList = _activeNotifications.value.toMutableList()
+								currentList.addAll(enrichedList)
+								_activeNotifications.value = currentList
 							}
 						}
 					}
@@ -2375,6 +2457,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         list.forEach { result.put(it) }
         return result
     }
+
     fun markEpisodeAsWatchedLocal(season: Int, episode: Int) {
         val item = _selectedItem.value ?: return
         val id = item.optInt("id")
@@ -2449,7 +2532,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     val titleRaw = item.optString("title").takeIf { it.isNotEmpty() } ?: item.optString("name", "Unknown")
                     val cleanTitle = titleRaw.replace(Regex("\\s\\(\\d{4}\\)$"), "")
                     val fullTitle = when {
-                        season != null && episode != null -> "$cleanTitle S${season}E$episode Trailer"
+                        season != null && episode != null -> "$cleanTitle S${season}E${episode} Trailer"
                         season != null -> "$cleanTitle S$season Trailer"
                         else -> "$cleanTitle Trailer"
                     }
@@ -2463,7 +2546,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         season = null,
                         episode = null,
                         nextEpisode = null,
-                        isWebpage = false
+                        isWebpage = false,
+                        isTrailer = true
                     )
                 }
             } catch (e: Exception) {

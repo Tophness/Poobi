@@ -93,6 +93,7 @@ class PlayerEngine(
     private var lastFromStreams: Boolean = true
     private var lastAlternativeUrls: List<String> = emptyList()
     private var lastAlternativeNames: List<String> = emptyList()
+    private var lastIsTrailer: Boolean = false
 
     var playerView: PlayerView? = null
     private var hasReachedReady = false
@@ -193,7 +194,8 @@ class PlayerEngine(
         fromStreams: Boolean = true,
         alternativeUrls: List<String> = emptyList(),
         alternativeNames: List<String> = emptyList(),
-        initialPositionMs: Long = 0L
+        initialPositionMs: Long = 0L,
+        isTrailer: Boolean = false
     ) {
         if (initialPositionMs == 0L) {
             saveProgress()
@@ -260,8 +262,10 @@ class PlayerEngine(
                     val title = lastVideoTitle ?: "Unknown"
                     if (!hasTriggeredPlaybackStarted) {
                         hasTriggeredPlaybackStarted = true
-                        lastScrapedItem?.let { item ->
-                            onPlaybackStarted(videoUrl, title, item, lastScrapedSeason, lastScrapedEpisode, headers, lastSubtitles)
+                        if (!lastIsTrailer) {
+                            lastScrapedItem?.let { item ->
+                                onPlaybackStarted(videoUrl, title, item, lastScrapedSeason, lastScrapedEpisode, headers, lastSubtitles)
+                            }
                         }
                     }
                 } else if (state == Player.STATE_BUFFERING) {
@@ -502,7 +506,8 @@ class PlayerEngine(
                     fromStreams = lastFromStreams,
                     alternativeUrls = lastAlternativeUrls,
                     alternativeNames = lastAlternativeNames,
-                    initialPositionMs = currentPos
+                    initialPositionMs = currentPos,
+                    isTrailer = lastIsTrailer
                 )
                 exoPlayer?.playWhenReady = wasPlaying
             }
@@ -584,7 +589,7 @@ class PlayerEngine(
 
     private fun saveProgress() {
         val player = exoPlayer
-        if (player != null && player.playerError == null && hasReachedReady) {
+        if (player != null && player.playerError == null && hasReachedReady && !lastIsTrailer) {
             val title = lastVideoTitle
             val resumeKey = if (title != null) "resume_stream_$title" else null
 

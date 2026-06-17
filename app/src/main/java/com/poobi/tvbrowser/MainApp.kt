@@ -66,6 +66,7 @@ import com.poobi.tvbrowser.streams.MediaDetailsScreen
 import com.poobi.tvbrowser.streams.ScrapeProgressScreen
 import com.poobi.tvbrowser.streams.StreamsDashboardScreen
 import com.poobi.tvbrowser.streams.StreamsViewModel
+import com.poobi.tvbrowser.streams.NewEpisodeNotificationOverlay
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -1044,5 +1045,21 @@ fun MainApp(
                 dismissButton = null
             )
         }
+        val activeNotifications by streamsViewModel.activeNotifications.collectAsState()
+
+        NewEpisodeNotificationOverlay(
+            isVisible = activeNotifications.isNotEmpty(),
+            notificationsList = activeNotifications,
+            onPlayEpisode = { notification, index ->
+                browserViewModel.currentAppTab.value = 1
+                streamsViewModel.playNotificationEpisode(notification, index)
+            },
+            onDismissItem = { index ->
+                streamsViewModel.dismissNotificationAt(index)
+            },
+            onDismissAll = {
+                streamsViewModel.dismissAllNotifications()
+            }
+        )
     }
 }

@@ -249,7 +249,8 @@ class MainActivity : AppCompatActivity() {
                                     item = event.item,
                                     season = event.season,
                                     episode = event.episode,
-                                    fromStreams = true
+                                    fromStreams = true,
+                                    isTrailer = event.isTrailer
                                 )
                             } else {
                                 playerEngine.stopAndRelease()
