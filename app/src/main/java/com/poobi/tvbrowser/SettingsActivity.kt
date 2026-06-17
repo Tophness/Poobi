@@ -111,7 +111,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private var scrollTopbar by mutableStateOf(true)
     private var navMode by mutableStateOf(0)
-    private var scrapeTabOrder by mutableStateOf("Streams,Torrents")
+    private var scrapeTabOrder by mutableStateOf("Web,Torrents")
     private var torrentLanguage by mutableStateOf("English")
 
     private var torrentCacheCleanMode by mutableStateOf(0)
@@ -299,7 +299,7 @@ class SettingsActivity : AppCompatActivity() {
 
         scrollTopbar = prefs.getBoolean("scroll_topbar_enabled", true)
         navMode = prefs.getInt("navigation_mode_pref", 0)
-        scrapeTabOrder = prefs.getString("scrape_tab_order", "Streams,Torrents") ?: "Streams,Torrents"
+        scrapeTabOrder = prefs.getString("scrape_tab_order", "Web,Torrents") ?: "Web,Torrents"
         torrentLanguage = prefs.getString("torrent_language", "English") ?: "English"
 
         torrentCacheCleanMode = prefs.getInt("torrent_cache_clean_mode", 0)
@@ -601,8 +601,8 @@ class SettingsActivity : AppCompatActivity() {
             PanelHeader("Interface Navigation Settings")
             ToggleSettingRow("Scroll up for Navigation Bar", scrollTopbar) { scrollTopbar = it }
             DropdownSettingRow("Default Pointer Navigation Mode", listOf("Simulated Pointer (Cursor)", "Physical target navigation (D-pad selection)"), navMode) { navMode = it }
-            DropdownSettingRow("Scraper Result Tab Order", listOf("Streams, Torrents", "Torrents, Streams"), if (scrapeTabOrder == "Streams,Torrents") 0 else 1) { 
-                scrapeTabOrder = if (it == 0) "Streams,Torrents" else "Torrents,Streams"
+            DropdownSettingRow("Scraper Result Tab Order", listOf("Web, Torrents", "Torrents, Web"), if (scrapeTabOrder == "Web,Torrents") 0 else 1) { 
+                scrapeTabOrder = if (it == 0) "Web,Torrents" else "Torrents,Web"
             }
         }
     }

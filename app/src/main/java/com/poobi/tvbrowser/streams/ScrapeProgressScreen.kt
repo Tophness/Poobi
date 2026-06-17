@@ -118,11 +118,11 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
     val subProgress by viewModel.subProgress.collectAsState()
     val isTryingAll by viewModel.isTryingAll.collectAsState()
 
-    val tabOrder = viewModel.prefs.getString("scrape_tab_order", "Streams,Torrents") ?: "Streams,Torrents"
+    val tabOrder = viewModel.prefs.getString("scrape_tab_order", "Web,Torrents") ?: "Web,Torrents"
     val tabs = remember(tabOrder) { tabOrder.split(",") }
     var selectedTabIndex by remember { mutableStateOf(0) }
     
-    val selectedTab = tabs.getOrNull(selectedTabIndex) ?: "Streams"
+    val selectedTab = tabs.getOrNull(selectedTabIndex) ?: "Web"
 
     var showSortDialog by remember { mutableStateOf(false) }
 
@@ -132,8 +132,8 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
     val sortStreamsFocusRequester = remember { FocusRequester() }
     val sortTorrentsFocusRequester = remember { FocusRequester() }
 
-    val currentSources = if (selectedTab == "Streams") sources else torrentioSources
-    val isCurrentTabScraping = if (selectedTab == "Streams") isScraping else isScrapingTorrents
+    val currentSources = if (selectedTab == "Web") sources else torrentioSources
+    val isCurrentTabScraping = if (selectedTab == "Web") isScraping else isScrapingTorrents
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
 
@@ -148,7 +148,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
         ) {
             tabs.forEachIndexed { index, tabName ->
                 val isTabSelected = selectedTabIndex == index
-                val isTabScraping = if (tabName == "Streams") isScraping else isScrapingTorrents
+                val isTabScraping = if (tabName == "Web") isScraping else isScrapingTorrents
 
                 if (index > 0) {
                     Box(
@@ -167,7 +167,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                     modifier = Modifier.focusRequester(tabFocusRequesters[index])
                 ) {
                     val textColor = if (isTabSelected) Color(0xFF00BCD4) else Color.Gray
-                    val count = if (tabName == "Streams") sources?.length() ?: 0 else torrentioSources?.length() ?: 0
+                    val count = if (tabName == "Web") sources?.length() ?: 0 else torrentioSources?.length() ?: 0
 
                     if (count > 0) {
                         Spacer(modifier = Modifier.width(6.dp))
@@ -197,7 +197,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
             modifier = Modifier.fillMaxWidth().height(48.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (selectedTab == "Streams") {
+            if (selectedTab == "Web") {
                 Row(
                     modifier = Modifier.align(Alignment.CenterStart),
                     verticalAlignment = Alignment.CenterVertically
@@ -326,7 +326,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
 
         Spacer(modifier = Modifier.height(15.dp))
 
-        if (selectedTab == "Streams" && isScraping) {
+        if (selectedTab == "Web" && isScraping) {
             LinearProgressIndicator(
                 progress = { if (total > 0) progress.toFloat() / total.toFloat() else 0f },
                 modifier = Modifier.fillMaxWidth().height(8.dp),
@@ -336,7 +336,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
             Spacer(modifier = Modifier.height(15.dp))
         }
         
-        if (selectedTab == "Streams" && isDownloadingSubs) {
+        if (selectedTab == "Web" && isDownloadingSubs) {
             Text(subStatus, color = Color(0xFFFFC107), fontSize = 14.sp, fontWeight = FontWeight.Bold)
             if (showSubProgressBar) {
                 Spacer(modifier = Modifier.height(6.dp))
@@ -355,7 +355,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = Color(0xFF00BCD4))
                     Spacer(modifier = Modifier.height(10.dp))
-                    Text(if (selectedTab == "Streams") "Searching regular sources..." else "Querying Torrentio...", color = Color.Gray)
+                    Text(if (selectedTab == "Web") "Searching web sources..." else "Querying Torrentio...", color = Color.Gray)
                 }
             }
         } else if (currentSources != null) {
@@ -368,7 +368,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                     modifier = Modifier.fillMaxWidth().weight(1f), 
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    if (selectedTab == "Streams") {
+                    if (selectedTab == "Web") {
                         item {
                             val autoSubPref = viewModel.prefs.getInt("auto_sub_pref", 0)
                             if (autoSubPref == 2) {
@@ -442,7 +442,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                 .fillMaxWidth()
                                 .focusProperties {
                                     if (isFirstItem) {
-                                        up = if (selectedTab == "Streams") {
+                                        up = if (selectedTab == "Web") {
                                             if (isScraping && !isResolving) stopScanningFocusRequester else sortStreamsFocusRequester
                                         } else {
                                             sortTorrentsFocusRequester
@@ -480,7 +480,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        if (selectedTab == "Streams") {
+                                        if (selectedTab == "Web") {
                                             Row(
                                                 modifier = Modifier.weight(1f),
                                                 verticalAlignment = Alignment.CenterVertically,
@@ -534,7 +534,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                         }
                                     }
 
-                                    if (selectedTab == "Streams") {
+                                    if (selectedTab == "Web") {
                                         Spacer(modifier = Modifier.height(4.dp))
                                         if (isBrowser) {
                                             Text(
