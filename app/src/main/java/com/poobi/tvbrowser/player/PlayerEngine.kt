@@ -216,7 +216,7 @@ class PlayerEngine(
         lastFromStreams = fromStreams
         lastAlternativeUrls = alternativeUrls
         lastAlternativeNames = alternativeNames
-
+        lastIsTrailer = isTrailer
         isUpNextDismissed = false
         hasReachedReady = false
         hasTriggeredPlaybackStarted = false
