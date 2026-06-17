@@ -91,6 +91,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _isScraping = MutableStateFlow(false)
     val isScraping: StateFlow<Boolean> = _isScraping.asStateFlow()
 
+    private val _isFetchingTrailer = MutableStateFlow(false)
+    val isFetchingTrailer: StateFlow<Boolean> = _isFetchingTrailer.asStateFlow()
+
     private val _isResolving = MutableStateFlow(false)
     val isResolving: StateFlow<Boolean> = _isResolving.asStateFlow()
 
@@ -2505,21 +2508,18 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
             ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
 
-        _scrapeStatusMsg.value = "Fetching trailer..."
-        _isScraping.value = true
-        _isResolving.value = true
+        _isFetchingTrailer.value = true
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
-                
+
                 val resultStr = scraper.callAttr("get_trailer", mediaType, id, season, episode).toString()
                 val json = JSONObject(resultStr)
 
                 withContext(Dispatchers.Main) {
-                    _isScraping.value = false
-                    _isResolving.value = false
+                    _isFetchingTrailer.value = false
 
                     if (json.has("error")) {
                         _events.value = StreamsEvent.ShowToast(json.getString("error"))
@@ -2552,8 +2552,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    _isScraping.value = false
-                    _isResolving.value = false
+                    _isFetchingTrailer.value = false
                     _events.value = StreamsEvent.ShowToast("Trailer failed to load.")
                 }
             }
