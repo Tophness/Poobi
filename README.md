@@ -49,8 +49,8 @@ The "Torrents" tab (powered by Torrentio) allows for high-bitrate streaming dire
 <img width="1920" height="1080" alt="Screenshot_20260614_234003" src="https://github.com/user-attachments/assets/6eb8b3c3-dbcc-4373-a0c1-d48a623821d7" />
 <img width="1920" height="1080" alt="Screenshot_20260614_234017" src="https://github.com/user-attachments/assets/e93ff9a1-d719-471a-aa0d-c2920216ca1e" />
 <img width="1920" height="1080" alt="Screenshot_20260614_234037" src="https://github.com/user-attachments/assets/0acd6e5e-0fe9-443b-874b-a87b7689851f" />
-<img width="1920" height="1080" alt="Screenshot_20260617_090805" src="https://github.com/user-attachments/assets/96d1a3a5-643c-408c-b415-fc85b4305f93" />
-<img width="1920" height="1080" alt="Screenshot_20260617_091036" src="https://github.com/user-attachments/assets/b56f687b-becd-476b-ae4e-7c0a05c005d1" />
+<img width="1920" height="1080" alt="Screenshot_20260617_102246" src="https://github.com/user-attachments/assets/859988b9-75fb-4296-94dc-cf7049c950d6" />
+<img width="1920" height="1080" alt="Screenshot_20260617_102008" src="https://github.com/user-attachments/assets/70451b9b-9253-4e4e-9898-a41df92c3990" />
 <img width="1920" height="1080" alt="Screenshot_20260614_235452" src="https://github.com/user-attachments/assets/95c28fb6-f325-4203-a41c-b631cd98c01a" />
 <img width="1920" height="1080" alt="Screenshot_20260614_234732" src="https://github.com/user-attachments/assets/67d1998d-ddfc-4b6c-9000-ddc20d763ba6" />
 <img width="1920" height="1080" alt="Screenshot_20260614_234818" src="https://github.com/user-attachments/assets/ddd5bdf3-92ce-4c2a-baf7-52aae4b037ac" />
