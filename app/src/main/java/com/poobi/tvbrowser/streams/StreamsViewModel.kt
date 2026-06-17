@@ -139,6 +139,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     var lastScrapedEpisode: Int? = null
     var lastSelectedSource: JSONObject? = null
 
+    private val _showProgressCounts = MutableStateFlow<Map<String, Pair<Int, Int>>>(emptyMap())
+    val showProgressCounts: StateFlow<Map<String, Pair<Int, Int>>> = _showProgressCounts.asStateFlow()
+
     val interceptedSubtitleUrls = ConcurrentHashMap<String, Map<String, String>>()
     
     private val detailsCache = LruCache<String, JSONObject>(30)
@@ -176,6 +179,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         refreshFavoritesSet()
         loadGenres()
         purgeOldSubtitles()
+        loadProgressCounts()
         startBackgroundTraktCheck()
     }
 
@@ -223,6 +227,38 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     _events.value = StreamsEvent.ShowToast("Pre-Buffering Failed: ${e.message}")
                     resumeScrape()
                 }
+            }
+        }
+    }
+
+    fun loadProgressCounts() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+            if (favsJson == "[]") {
+                withContext(Dispatchers.Main) {
+                    _showProgressCounts.value = emptyMap()
+                }
+                return@launch
+            }
+            try {
+                val py = getPythonInstance()
+                val checker = py.getModule("trakt.episode_check")
+                val progressJsonStr = checker.callAttr("get_all_shows_progress", favsJson).toString()
+                val progressObj = JSONObject(progressJsonStr)
+                
+                val map = mutableMapOf<String, Pair<Int, Int>>()
+                progressObj.keys().forEach { key ->
+                    val showData = progressObj.getJSONObject(key)
+                    val unwatchedTotal = showData.optInt("unwatched_total", 0)
+                    val newerUnwatched = showData.optInt("newer_unwatched", 0)
+                    map[key] = Pair(unwatchedTotal, newerUnwatched)
+                }
+                
+                withContext(Dispatchers.Main) {
+                    _showProgressCounts.value = map
+                }
+            } catch (e: Exception) {
+                Log.e("StreamsViewModel", "Failed loading Trakt progress metrics", e)
             }
         }
     }
@@ -409,6 +445,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun loadFavorites() { 
         cancelLibraryJobs()
+        loadProgressCounts()
         viewModelScope.launch(Dispatchers.IO) {
             val list = JSONArray(prefs.getString("streams_favorites", "[]") ?: "[]")
             withContext(Dispatchers.Main) {
@@ -683,6 +720,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
+        loadProgressCounts()
     }
 
     fun selectMediaItem(item: JSONObject, initialSeason: Int? = null) {
@@ -849,6 +887,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
                 withContext(Dispatchers.Main) {
                     if (success) {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            try {
+                                val py = getPythonInstance()
+                                py.getModule("trakt.episode_check").callAttr("invalidate_show_progress_cache", item.optInt("id"))
+                                loadProgressCounts()
+                            } catch (e: Exception) {}
+                        }
                         _events.value = StreamsEvent.ShowToast(if (isCurrentlyWatched) "Episode marked unwatched" else "Episode marked watched")
                     } else {
                         toggleEpisodeWatchedLocalState(season, episode, isCurrentlyWatched)
@@ -2159,45 +2204,45 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun startBackgroundTraktCheck() {
-        viewModelScope.launch(Dispatchers.IO) {
-            delay(6000)
-            while (isActive) {
-                try {
-                    val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
-                    if (favsJson != "[]") {
-                        val lastCheckJson = prefs.getString("last_episode_check", "{}") ?: "{}"
-                        val py = getPythonInstance()
-                        val checker = py.getModule("trakt.episode_check")
-                        val resultsStr = checker.callAttr("check_new_episodes", favsJson, lastCheckJson).toString()
-                        
-                        val resultObj = JSONObject(resultsStr)
-                        val newEpisodes = resultObj.getJSONArray("new_episodes")
-                        val updatedLastCheck = resultObj.getJSONObject("last_check")
+	private fun startBackgroundTraktCheck() {
+		viewModelScope.launch(Dispatchers.IO) {
+			delay(6000)
+			while (isActive) {
+				try {
+					val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+					if (favsJson != "[]") {
+						val lastCheckJson = prefs.getString("last_episode_check", "{}") ?: "{}"
+						val py = getPythonInstance()
+						val checker = py.getModule("trakt.episode_check")
+						val resultsStr = checker.callAttr("check_new_episodes", favsJson, lastCheckJson).toString()
+						
+						val resultObj = JSONObject(resultsStr)
+						val newEpisodes = resultObj.getJSONArray("new_episodes")
+						val updatedLastCheck = resultObj.getJSONObject("last_check")
 
-                        prefs.edit().putString("last_episode_check", updatedLastCheck.toString()).apply()
+						prefs.edit().putString("last_episode_check", updatedLastCheck.toString()).apply()
 
-                        if (newEpisodes.length() > 0) {
-                            withContext(Dispatchers.Main) {
-                                val epCounts = JSONObject(prefs.getString("new_episode_counts", "{}") ?: "{}")
-                                for (i in 0 until newEpisodes.length()) {
-                                    val ep = newEpisodes.getJSONObject(i)
-                                    val showId = ep.getString("show_id")
-                                    epCounts.put(showId, epCounts.optInt(showId, 0) + 1)
-                                }
-                                prefs.edit().putString("new_episode_counts", epCounts.toString()).apply()
-                                _events.value = StreamsEvent.ShowToast("${newEpisodes.length()} New Episodes Alert!")
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    Log.e("TVBrowser", "Trakt episode sync task error: ${e.message}")
-                }
-                delay(900000)
-            }
-        }
-    }
+						if (newEpisodes.length() > 0) {
+							withContext(Dispatchers.Main) {
+								for (i in 0 until newEpisodes.length()) {
+									val ep = newEpisodes.getJSONObject(i)
+									val showId = ep.getString("show_id")
+									py.getModule("trakt.episode_check").callAttr("invalidate_show_progress_cache", showId)
+								}
+								
+								loadProgressCounts()
+								_events.value = StreamsEvent.ShowToast("${newEpisodes.length()} New Episodes Alert!")
+							}
+						}
+					}
+				} catch (e: Exception) {
+					if (e is CancellationException) throw e
+					Log.e("TVBrowser", "Trakt episode sync task error: ${e.message}")
+				}
+				delay(900000)
+			}
+		}
+	}
 
     private fun getLastWatchedSeason(item: JSONObject): Int? {
         val id = item.optString("id")
@@ -2321,6 +2366,14 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     fun markEpisodeAsWatchedLocal(season: Int, episode: Int) {
         val item = _selectedItem.value ?: return
         val id = item.optInt("id")
+    
+		viewModelScope.launch(Dispatchers.IO) {
+			try {
+				val py = getPythonInstance()
+				py.getModule("trakt.episode_check").callAttr("invalidate_show_progress_cache", id)
+				loadProgressCounts()
+			} catch (e: Exception) {}
+		}
 
         val cacheKey = "${id}_$season"
         val cachedArray = episodesCache.get(cacheKey)

@@ -1,6 +1,7 @@
 package com.poobi.tvbrowser.streams
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,12 +27,13 @@ import org.json.JSONObject
 fun RichMediaCard(
     item: JSONObject,
     viewModel: StreamsViewModel,
-    newCount: Int = 0,
+    unwatchedCount: Int = 0,
+    newerCount: Int = 0,
     season: Int? = null,
     episode: Int? = null,
     isFocused: Boolean = false,
     progress: Float = 0f,
-    isDeletable: Boolean = false // Only show the "✕" button on deletable lists!
+    isDeletable: Boolean = false
 ) {
     val favorites by viewModel.favoritesSet.collectAsState()
     val id = item.optString("id")
@@ -100,21 +102,47 @@ fun RichMediaCard(
 
             Row(
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (newCount > 0) {
-                    Box(modifier = Modifier.size(28.dp).background(Color(0xCC000000), shape = CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(painter = painterResource(id = R.drawable.ic_add), contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(16.dp))
+                if (unwatchedCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(Color(0xFF2E2E35), shape = CircleShape)
+                            .border(1.dp, Color.Gray, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = unwatchedCount.toString(),
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                if (newerCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(Color(0xFFFFB74D), shape = CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "+$newerCount",
+                            color = Color.Black,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
                 if (isFav) {
-                    Box(modifier = Modifier.size(28.dp).background(Color(0xCC000000), shape = CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(painter = painterResource(id = R.drawable.ic_heart_filled), contentDescription = null, tint = Color(0xFF40C4FF), modifier = Modifier.size(16.dp))
+                    Box(modifier = Modifier.size(24.dp).background(Color(0xCC000000), shape = CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(painter = painterResource(id = R.drawable.ic_heart_filled), contentDescription = null, tint = Color(0xFF40C4FF), modifier = Modifier.size(14.dp))
                     }
                 }
             }
 
-            // Close button with circular delete arc only shown on lists configured as deletable (Favs / Recents)
             if (isDeletable && (isFocused || progress > 0f)) {
                 Box(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {
                     HoldToDeleteCloseButton(progress = progress)

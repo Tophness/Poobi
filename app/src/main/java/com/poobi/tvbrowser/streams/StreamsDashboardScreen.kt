@@ -34,15 +34,13 @@ import org.json.JSONArray
 fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
-
     val searchHistory by viewModel.searchHistory.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
     val libraryItems by viewModel.libraryItems.collectAsState()
     val isScraping by viewModel.isScraping.collectAsState()
     val activeCategoryIndex by viewModel.activeCategoryIndex.collectAsState()
-
+    val progressCounts by viewModel.showProgressCounts.collectAsState()
     var searchInput by remember { mutableStateOf("") }
-
     val firstHistoryFocusRequester = remember { FocusRequester() }
 
     val categories = listOf(
@@ -188,6 +186,11 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                             val sNum = if (wrapper.has("season")) wrapper.getInt("season") else null
                             val eNum = if (wrapper.has("episode")) wrapper.getInt("episode") else null
                             
+                            val showId = item.optString("id")
+                            val counts = progressCounts[showId] ?: Pair(0, 0)
+                            val unwatchedCount = counts.first
+                            val newerCount = counts.second
+
                             if (isDeletable) {
                                 TvFocusableHoldToDeleteBox(
                                     modifier = Modifier.wrapContentSize(),
@@ -206,6 +209,8 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                                     RichMediaCard(
                                         item = item,
                                         viewModel = viewModel,
+                                        unwatchedCount = unwatchedCount,
+                                        newerCount = newerCount,
                                         season = sNum,
                                         episode = eNum,
                                         isFocused = isFocused,
@@ -221,6 +226,8 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                                     RichMediaCard(
                                         item = item,
                                         viewModel = viewModel,
+                                        unwatchedCount = unwatchedCount,
+                                        newerCount = newerCount,
                                         season = sNum,
                                         episode = eNum,
                                         isFocused = isFocused,
