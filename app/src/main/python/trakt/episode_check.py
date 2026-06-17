@@ -10,11 +10,13 @@ from trakt.trakt_auth import CLIENT_ID, BASE_URL
 try:
     from com.chaquo.python import Python
     python_context = Python.getPlatform().getApplication()
-    FILES_DIR = str(python_context.getFilesDir())
+    CACHE_DIR = str(python_context.getCacheDir())
+    USERDATA_PATH = os.path.realpath(os.path.join(str(python_context.getFilesDir()), 'userdata'))
 except:
-    FILES_DIR = "."
-USERDATA_PATH = os.path.realpath(os.path.join(FILES_DIR, 'userdata'))
-PROGRESS_CACHE_FILE = os.path.join(USERDATA_PATH, 'trakt_progress_cache.json')
+    CACHE_DIR = "."
+    USERDATA_PATH = "./userdata"
+
+PROGRESS_CACHE_FILE = os.path.realpath(os.path.join(CACHE_DIR, 'trakt_progress_cache.json'))
 
 def check_new_episodes(favorites_json, last_check_json):
     favorites = json.loads(favorites_json)
@@ -40,6 +42,9 @@ def check_new_episodes(favorites_json, last_check_json):
     else:
         url = f"{BASE_URL}/calendars/all/shows/{start_date}/14"
 
+
+    favorites_updated = False
+
     try:
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
@@ -54,6 +59,13 @@ def check_new_episodes(favorites_json, last_check_json):
                 if tmdb_id in fav_map:
                     item = fav_map[tmdb_id]
                     show_title = item.get('title') or show.get('title') or "Unknown Show"
+                    item_imdb = item.get('imdb') or item.get('imdb_id')
+                    if not item_imdb or str(item_imdb).lower() in ['none', 'null', '']:
+                        resolved_id = show_ids.get('imdb') or show_ids.get('trakt')
+                        if resolved_id:
+                            item['imdb'] = str(resolved_id)
+                            favorites_updated = True
+
                     episode = entry.get('episode', {})
                     ep_id = str(episode.get('ids', {}).get('trakt') or '')
                     ep_season = episode.get('season')
@@ -87,6 +99,15 @@ def check_new_episodes(favorites_json, last_check_json):
             print(f"[DEBUG] check_new_episodes: Error reading Trakt Calendar response: {response.text}")
     except Exception as e:
         print(f"[DEBUG] check_new_episodes exception occurred: {e}")
+
+    if favorites_updated:
+        try:
+            from com.chaquo.python import Python
+            context = Python.getPlatform().getApplication()
+            prefs = context.getSharedPreferences("BrowserSettings", 0)
+            prefs.edit().putString("streams_favorites", json.dumps(favorites)).apply()
+        except Exception as e:
+            print(f"[DEBUG] check_new_episodes: Failed to update favorites SharedPreferences: {e}")
         
     return json.dumps({
         "new_episodes": new_episodes,
@@ -132,7 +153,7 @@ def get_all_shows_progress(favorites_json):
 
         imdb_id = item.get('imdb') or item.get('imdb_id')
 
-        if not imdb_id or imdb_id == 'null':
+        if not imdb_id or str(imdb_id).lower() in ['none', 'null', '']:
             results[tmdb_id] = {"unwatched_total": 0, "newer_unwatched": 0}
             continue
 
@@ -149,8 +170,7 @@ def get_all_shows_progress(favorites_json):
                 response = requests.get(url, headers=headers, timeout=8)
                 
                 if response.status_code == 200:
-                    progress_data = response.json()
-                    
+                    progress_data = response.json()                    
                     aired = progress_data.get('aired', 0)
                     completed = progress_data.get('completed', 0)
                     unwatched_total = max(0, aired - completed)
@@ -171,27 +191,27 @@ def get_all_shows_progress(favorites_json):
                                 is_newer = (s_num > last_season) or (s_num == last_season and ep_num > last_number)
                                 if is_newer:
                                     newer_unwatched += 1
-                        else:
-                            newer_unwatched = unwatched_total
-
-                        results[tmdb_id] = {
-                            "unwatched_total": unwatched_total,
-                            "newer_unwatched": newer_unwatched
-                        }
-                        updated_cache[tmdb_id] = {
-                            "unwatched_total": unwatched_total,
-                            "newer_unwatched": newer_unwatched,
-                            "timestamp": current_time
-                        }
                     else:
-                        if cached_entry:
-                            results[tmdb_id] = {
-                                "unwatched_total": cached_entry.get('unwatched_total', 0),
-                                "newer_unwatched": cached_entry.get('newer_unwatched', 0)
-                            }
-                            updated_cache[tmdb_id] = cached_entry
-                        else:
-                            results[tmdb_id] = {"unwatched_total": 0, "newer_unwatched": 0}
+                        newer_unwatched = unwatched_total
+                    
+                    results[tmdb_id] = {
+                        "unwatched_total": unwatched_total,
+                        "newer_unwatched": newer_unwatched
+                    }
+                    updated_cache[tmdb_id] = {
+                        "unwatched_total": unwatched_total,
+                        "newer_unwatched": newer_unwatched,
+                        "timestamp": current_time
+                    }
+                else:
+                    if cached_entry:
+                        results[tmdb_id] = {
+                            "unwatched_total": cached_entry.get('unwatched_total', 0),
+                            "newer_unwatched": cached_entry.get('newer_unwatched', 0)
+                        }
+                        updated_cache[tmdb_id] = cached_entry
+                    else:
+                        results[tmdb_id] = {"unwatched_total": 0, "newer_unwatched": 0}
             except Exception as e:
                 print(f"[DEBUG] Trakt progress fetch exception for {tmdb_id}: {e}")
                 if cached_entry:
@@ -203,15 +223,15 @@ def get_all_shows_progress(favorites_json):
                 else:
                     results[tmdb_id] = {"unwatched_total": 0, "newer_unwatched": 0}
 
-        cleaned_cache = {k: v for k, v in updated_cache.items() if k in fav_ids}
+    cleaned_cache = {k: v for k, v in updated_cache.items() if k in fav_ids}
+    
+    try:
+        with open(PROGRESS_CACHE_FILE, 'w') as f:
+            json.dump(cleaned_cache, f, indent=4)
+    except Exception as e:
+        print(f"[DEBUG] Failed saving progress cache file: {e}")
         
-        try:
-            with open(PROGRESS_CACHE_FILE, 'w') as f:
-                json.dump(cleaned_cache, f, indent=4)
-        except Exception as e:
-            print(f"[DEBUG] Failed saving progress cache file: {e}")
-            
-        return json.dumps(results)
+    return json.dumps(results)
 
 def clear_trakt_module_cache_for_item(tmdb_id):
     try:
@@ -237,11 +257,9 @@ def clear_trakt_module_cache_for_item(tmdb_id):
                                 for col in columns:
                                     if col in ['tmdb', 'tmdb_id', 'show_id', 'id']:
                                         cursor.execute(f"DELETE FROM {table} WHERE {col} = ? OR {col} = ?", (tmdb_str, int(tmdb_str) if tmdb_str.isdigit() else tmdb_str))
-                                        print(f"[DEBUG] clear_trakt_module_cache_for_item: Wiped matching ID rows in '{table}' ({col} matching {tmdb_str})")
                                         deleted = True
                                     elif col in ['key', 'cache_id']:
                                         cursor.execute(f"DELETE FROM {table} WHERE {col} LIKE ? OR {col} LIKE ?", (f"%{tmdb_str}%", f"%{tmdb_str}%"))
-                                        print(f"[DEBUG] clear_trakt_module_cache_for_item: Wiped matching wildcard key rows in '{table}' ({col} matching %{tmdb_str}%)")
                                         deleted = True
 
                                 if not deleted:
@@ -295,4 +313,5 @@ def get_watched_status(tmdb_id, season, episodes_json):
             results.append(is_watched)
         return json.dumps(results)
     except Exception as e:
+        print(f"[DEBUG] get_watched_status failed with error: {e}")
         return json.dumps([False] * len(episodes))

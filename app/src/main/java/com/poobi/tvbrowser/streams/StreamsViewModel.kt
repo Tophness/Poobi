@@ -2223,16 +2223,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 				try {
 					val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
 					if (favsJson != "[]") {
-						val lastCheckJson = prefs.getString("last_episode_check", "{}") ?: "{}"
+						val cacheFile = File(context.cacheDir, "last_episode_check.json")
+						val lastCheckJson = if (cacheFile.exists()) cacheFile.readText() else "{}"
 						val py = getPythonInstance()
 						val checker = py.getModule("trakt.episode_check")
 						val resultsStr = checker.callAttr("check_new_episodes", favsJson, lastCheckJson).toString()
-						
 						val resultObj = JSONObject(resultsStr)
 						val newEpisodes = resultObj.getJSONArray("new_episodes")
 						val updatedLastCheck = resultObj.getJSONObject("last_check")
 
-						prefs.edit().putString("last_episode_check", updatedLastCheck.toString()).apply()
+						cacheFile.writeText(updatedLastCheck.toString())
 
 						if (newEpisodes.length() > 0) {
 							withContext(Dispatchers.Main) {
