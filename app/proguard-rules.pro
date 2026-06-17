@@ -24,3 +24,8 @@
 -dontwarn com.google.android.**
 -dontwarn dalvik.system.**
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-keep class com.chaquo.python.** { *; }
+-keep class com.poobi.tvbrowser.** { *; }
+-keep class com.frostwire.jlibtorrent.** { *; }
+-keep class com.brave.adblock.** { *; }
+-keep class androidx.media3.** { *; }
