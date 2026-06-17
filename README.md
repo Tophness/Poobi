@@ -4,7 +4,8 @@
 
 ## Why use Poobi?
 Sick of Kodi addons having broken sources and a bunch of esoteric code that's hard to debug when they break?
-Sick of every Android TV Browser having the exact same flaws? Me too. So I did something about it.
+Sick of every Android TV Browser having the exact same flaws?
+Sick of torrentio chewing through your TV's storage with a hidden cache you can't delete? Me too. So I did something about it.
 
 The popup blocker on TV Bro and others doesn't work half the time.
 Browsehere's works great, but it asks you if you want to open the popup every time.
