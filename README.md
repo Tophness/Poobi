@@ -32,10 +32,10 @@ None of them grab subtitles from the page, so if the mp4 stream doesn't have emb
 
 Poobi features a powerful scraping engine that searches for high-quality streams without the hassle of navigating ad-ridden websites.
 
-*   **Powered by StreamScraper:** Uses a Python-based engine (Chaquopy) to leverage the robust scraping logic of the Kodi ecosystem.
-*   **Kodi Addon Heritage:** Logic derived from proven providers like `gratisred`, `vidscr`, `free99`, `scrubsv2`, `thecrew`, and more.
-*   **Extensible Sources:** Add more sources by placing Kodi-compatible provider packs in the `app/src/main/python/sources` directory.
-*   **Granular Control:** Configure engine timeouts, per-source limits, and host whitelisting to optimize scraping speed.
+* **Powered by StreamScraper:** The scraping engine uses the libraries from the cross-platform [StreamScraper](https://github.com/Tophness/StreamScraper) Python app.
+* **Kodi Addon Heritage:** The scraping logic is built upon the solid foundation of popular Kodi addons like `gratisred`, `vidscr`, `free99`, `scrubsv2`, `thecrew`, and their various forks.
+* **Extensible Sources:** You can easily add more sources by copying the `sources` folder from Kodi streaming addons into the `app/src/main/python/sources` directory. The app will automatically detect and utilize the new providers.
+* **Smart Sorting:** Sources are automatically sorted by resolution, reliability, etc. Torrents sorted by seeders, file size, etc. and you can set your own ranked, tiered priorities.
 
 ## P2P & Torrents
 
