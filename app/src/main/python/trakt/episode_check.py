@@ -53,32 +53,40 @@ def check_new_episodes(favorites_json, last_check_json):
                 
                 if tmdb_id in fav_map:
                     item = fav_map[tmdb_id]
+                    show_title = item.get('title') or show.get('title') or "Unknown Show"
                     episode = entry.get('episode', {})
                     ep_id = str(episode.get('ids', {}).get('trakt') or '')
+                    ep_season = episode.get('season')
+                    ep_number = episode.get('number')
+                    ep_title = episode.get('title')
                     
                     first_aired_str = entry.get('first_aired')
                     if first_aired_str:
                         clean_date = first_aired_str.replace('Z', '').split('.')[0]
                         try:
                             dt = datetime.strptime(clean_date, '%Y-%m-%dT%H:%M:%S')
-                            if dt <= datetime.utcnow():
-                                last_seen_ep_id = last_check.get(tmdb_id)
+                            is_past = dt <= datetime.utcnow()
+                            last_seen_ep_id = last_check.get(tmdb_id)
+                            
+                            if is_past:
                                 if ep_id != last_seen_ep_id:
                                     new_episodes.append({
                                         "show_id": tmdb_id,
-                                        "show_title": item.get('title') or show.get('title'),
-                                        "episode_name": episode.get('title'),
-                                        "season": episode.get('season'),
-                                        "number": episode.get('number'),
+                                        "show_title": show_title,
+                                        "episode_name": ep_title,
+                                        "season": ep_season,
+                                        "number": ep_number,
                                         "airdate": first_aired_str[:10],
                                         "episode_id": ep_id,
                                         "item": item
                                     })
                                     updated_last_check[tmdb_id] = ep_id
                         except Exception as ex:
-                            print(f"[DEBUG] Error parsing airdate: {ex}")
+                            print(f"[DEBUG] check_new_episodes: Date parse error: {ex}")
+        else:
+            print(f"[DEBUG] check_new_episodes: Error reading Trakt Calendar response: {response.text}")
     except Exception as e:
-        print(f"[DEBUG] check_new_episodes error: {e}")
+        print(f"[DEBUG] check_new_episodes exception occurred: {e}")
         
     return json.dumps({
         "new_episodes": new_episodes,
@@ -119,8 +127,15 @@ def get_all_shows_progress(favorites_json):
             continue
             
         tmdb_id = str(item.get('id'))
+        show_title = item.get('title') or item.get('name') or "Unknown Show"
         fav_ids.add(tmdb_id)
-        
+
+        imdb_id = item.get('imdb') or item.get('imdb_id')
+
+        if not imdb_id or imdb_id == 'null':
+            results[tmdb_id] = {"unwatched_total": 0, "newer_unwatched": 0}
+            continue
+
         cached_entry = cache.get(tmdb_id)
         if cached_entry and (current_time - cached_entry.get('timestamp', 0) < CACHE_EXPIRY):
             results[tmdb_id] = {
@@ -130,8 +145,9 @@ def get_all_shows_progress(favorites_json):
             updated_cache[tmdb_id] = cached_entry
         else:
             try:
-                url = f"{BASE_URL}/shows/{tmdb_id}/progress/watched"
+                url = f"{BASE_URL}/shows/{imdb_id}/progress/watched"
                 response = requests.get(url, headers=headers, timeout=8)
+                
                 if response.status_code == 200:
                     progress_data = response.json()
                     
@@ -140,42 +156,44 @@ def get_all_shows_progress(favorites_json):
                     unwatched_total = max(0, aired - completed)
                     
                     last_episode = progress_data.get('last_episode')
-                    newer_unwatched = 0
                     
+                    newer_unwatched = 0
                     if last_episode:
                         last_season = last_episode.get('season', 0)
                         last_number = last_episode.get('number', 0)
+                        
                         for s in progress_data.get('seasons', []):
                             s_num = s.get('number', 0)
                             if s_num == 0:
                                 continue
                             for ep in s.get('episodes', []):
                                 ep_num = ep.get('number', 0)
-                                if (s_num > last_season) or (s_num == last_season and ep_num > last_number):
+                                is_newer = (s_num > last_season) or (s_num == last_season and ep_num > last_number)
+                                if is_newer:
                                     newer_unwatched += 1
-                    else:
-                        newer_unwatched = unwatched_total
-                        
-                    results[tmdb_id] = {
-                        "unwatched_total": unwatched_total,
-                        "newer_unwatched": newer_unwatched
-                    }
-                    updated_cache[tmdb_id] = {
-                        "unwatched_total": unwatched_total,
-                        "newer_unwatched": newer_unwatched,
-                        "timestamp": current_time
-                    }
-                else:
-                    if cached_entry:
+                        else:
+                            newer_unwatched = unwatched_total
+
                         results[tmdb_id] = {
-                            "unwatched_total": cached_entry.get('unwatched_total', 0),
-                            "newer_unwatched": cached_entry.get('newer_unwatched', 0)
+                            "unwatched_total": unwatched_total,
+                            "newer_unwatched": newer_unwatched
                         }
-                        updated_cache[tmdb_id] = cached_entry
+                        updated_cache[tmdb_id] = {
+                            "unwatched_total": unwatched_total,
+                            "newer_unwatched": newer_unwatched,
+                            "timestamp": current_time
+                        }
                     else:
-                        results[tmdb_id] = {"unwatched_total": 0, "newer_unwatched": 0}
+                        if cached_entry:
+                            results[tmdb_id] = {
+                                "unwatched_total": cached_entry.get('unwatched_total', 0),
+                                "newer_unwatched": cached_entry.get('newer_unwatched', 0)
+                            }
+                            updated_cache[tmdb_id] = cached_entry
+                        else:
+                            results[tmdb_id] = {"unwatched_total": 0, "newer_unwatched": 0}
             except Exception as e:
-                print(f"[DEBUG] Trakt progress fetch failure for {tmdb_id}: {e}")
+                print(f"[DEBUG] Trakt progress fetch exception for {tmdb_id}: {e}")
                 if cached_entry:
                     results[tmdb_id] = {
                         "unwatched_total": cached_entry.get('unwatched_total', 0),
@@ -185,15 +203,15 @@ def get_all_shows_progress(favorites_json):
                 else:
                     results[tmdb_id] = {"unwatched_total": 0, "newer_unwatched": 0}
 
-    cleaned_cache = {k: v for k, v in updated_cache.items() if k in fav_ids}
-    
-    try:
-        with open(PROGRESS_CACHE_FILE, 'w') as f:
-            json.dump(cleaned_cache, f, indent=4)
-    except Exception as e:
-        print(f"[DEBUG] Failed saving progress cache file: {e}")
+        cleaned_cache = {k: v for k, v in updated_cache.items() if k in fav_ids}
         
-    return json.dumps(results)
+        try:
+            with open(PROGRESS_CACHE_FILE, 'w') as f:
+                json.dump(cleaned_cache, f, indent=4)
+        except Exception as e:
+            print(f"[DEBUG] Failed saving progress cache file: {e}")
+            
+        return json.dumps(results)
 
 def clear_trakt_module_cache_for_item(tmdb_id):
     try:
@@ -219,9 +237,11 @@ def clear_trakt_module_cache_for_item(tmdb_id):
                                 for col in columns:
                                     if col in ['tmdb', 'tmdb_id', 'show_id', 'id']:
                                         cursor.execute(f"DELETE FROM {table} WHERE {col} = ? OR {col} = ?", (tmdb_str, int(tmdb_str) if tmdb_str.isdigit() else tmdb_str))
+                                        print(f"[DEBUG] clear_trakt_module_cache_for_item: Wiped matching ID rows in '{table}' ({col} matching {tmdb_str})")
                                         deleted = True
                                     elif col in ['key', 'cache_id']:
                                         cursor.execute(f"DELETE FROM {table} WHERE {col} LIKE ? OR {col} LIKE ?", (f"%{tmdb_str}%", f"%{tmdb_str}%"))
+                                        print(f"[DEBUG] clear_trakt_module_cache_for_item: Wiped matching wildcard key rows in '{table}' ({col} matching %{tmdb_str}%)")
                                         deleted = True
 
                                 if not deleted:
@@ -233,7 +253,7 @@ def clear_trakt_module_cache_for_item(tmdb_id):
                         conn.commit()
                         conn.close()
                     except Exception as e:
-                        print(f"[DEBUG] Failed to partially clear DB {file}: {e}")
+                        print(f"[DEBUG] Failed to clear DB {file}: {e}")
     except Exception as e:
         print(f"[DEBUG] clear_trakt_module_cache_for_item error: {e}")
 
@@ -262,7 +282,7 @@ def get_watched_status(tmdb_id, season, episodes_json):
         show_watched = None
         for s in watched_shows:
             if str(s[0]) == str(tmdb_id):
-                show_watched = s[2] # List of (s, e)
+                show_watched = s[2]
                 break
 
         if not show_watched:
@@ -274,5 +294,5 @@ def get_watched_status(tmdb_id, season, episodes_json):
             is_watched = (int(season), int(ep_num)) in show_watched
             results.append(is_watched)
         return json.dumps(results)
-    except:
+    except Exception as e:
         return json.dumps([False] * len(episodes))

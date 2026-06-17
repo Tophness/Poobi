@@ -708,6 +708,18 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
                 }
+
+                if (item.optString("imdb").isEmpty()) {
+                    _itemDetails.value?.let { details ->
+                        if (details.optInt("id") == item.optInt("id")) {
+                            val imdbId = details.optJSONObject("external_ids")?.optString("imdb_id") ?: ""
+                            if (imdbId.isNotEmpty()) {
+                                item.put("imdb", imdbId)
+                            }
+                        }
+                    }
+                }
+
                 array.put(item)
                 _events.value = StreamsEvent.ShowToast("Added to Favorites")
             }
