@@ -6,11 +6,12 @@
 Sick of Kodi addons having broken sources and a bunch of esoteric code that's hard to debug when they break?
 Sick of every Android TV Browser having the exact same flaws? Me too. So I did something about it.
 
-The popup blocker on TV Bro and others doesn't work half the time. Poobi uses a native Rust-powered adblock engine (Brave) to neutralize popups and click-hijacking overlays automatically.
-
-Most browser native video players don't work half the time. Poobi uses an optimized ExoPlayer implementation that handles HLS, DASH, MP4, and MKV with ease, including quadrant-based seeking and smart subtitle extraction.
-
-Poobi is now more than just a browser—it's a complete media hub.
+The popup blocker on TV Bro and others doesn't work half the time.
+Browsehere's works great, but it asks you if you want to open the popup every time.
+Why in the fuck would I want to open it? Even if I did, streaming video sites will often hit you with 10 popups in a row, and you just have to say no 10 times to fullscreen the video.
+It was closed source, so I made my own. Eventually I found out there was a lot of things to improve. Poobi is now more than just a browser—it's a complete media hub.
+Most browser native video players don't work half the time. I did it properly.
+None of them grab subtitles from the page, so if the mp4 stream doesn't have embedded subs, you're out of luck. So I made it scrape those from the page and add them to the subs list.
 
 ## Key Features
 
