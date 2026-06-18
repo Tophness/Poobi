@@ -3,8 +3,8 @@
 **Poobi** is a fast, modern, and highly optimized web browser and media streamer designed specifically for Android TV, Google TV, and Android set-top boxes. It combines a powerful ad-blocking browser with a comprehensive stream scraping engine and P2P torrent streaming capabilities.
 
 ## Why use Poobi?
-Sick of Kodi addons having broken sources and a bunch of esoteric code that's hard to debug when they break?
-Sick of every Android TV Browser having the exact same flaws?
+Sick of Kodi addons having broken sources and alerting you when it errored out trying to process them?
+Sick of every Android TV Browser being a piece of shit?
 Sick of torrentio chewing through your TV's storage with a hidden cache you can't delete? Me too. So I did something about it.
 
 The popup blocker on TV Bro and others doesn't work half the time.
