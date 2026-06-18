@@ -10,9 +10,12 @@ Sick of torrentio chewing through your TV's storage with a hidden cache you can'
 The popup blocker on TV Bro and others doesn't work half the time.
 Browsehere's works great, but it asks you if you want to open the popup every time.
 Why in the fuck would I want to open it? Even if I did, streaming video sites will often hit you with 10 popups in a row, and you just have to say no 10 times to fullscreen the video.
-It was closed source, so I made my own. Eventually I found out there was a lot of things to improve. Poobi is now more than just a browser—it's a complete media hub.
+It was closed source, so I made my own. Eventually I found out there was a lot of things to improve.
 Most browser native video players don't work half the time. I did it properly.
-None of them grab subtitles from the page, so if the mp4 stream doesn't have embedded subs, you're out of luck. So I made it scrape those from the page and add them to the subs list.
+None of them grab subtitles from the page, so if the mp4 stream doesn't have embedded subs, you're out of luck.
+So I made it scrape those from the page and add them to the subs list.
+Kodi pops up an alert every time a source fails to resolve. Mine brute forces through the entire list.
+Any frustration you've had with these apps, I've probably fixed it. And if I haven't, post an issue.
 
 ## Key Features
 
