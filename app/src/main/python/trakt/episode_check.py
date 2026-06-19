@@ -42,6 +42,15 @@ def check_new_episodes(favorites_json, last_check_json):
     else:
         url = f"{BASE_URL}/calendars/all/shows/{start_date}/14"
 
+    watched_map = {}
+    if is_authed:
+        try:
+            from modules import trakt
+            watched_shows = trakt.cachesyncTVShows() or []
+            for s in watched_shows:
+                watched_map[str(s[0])] = s[2]
+        except Exception as e:
+            print(f"[DEBUG_EP_CHECK] Failed to retrieve Trakt syncTVShows: {e}")
 
     favorites_updated = False
 
@@ -78,21 +87,48 @@ def check_new_episodes(favorites_json, last_check_json):
                         try:
                             dt = datetime.strptime(clean_date, '%Y-%m-%dT%H:%M:%S')
                             is_past = dt <= datetime.utcnow()
-                            last_seen_ep_id = last_check.get(tmdb_id)
+                            is_new_show = tmdb_id not in last_check
+                            last_seen = updated_last_check.get(tmdb_id)
+                            if isinstance(last_seen, list):
+                                seen_ids = [str(x) for x in last_seen]
+                            elif last_seen:
+                                seen_ids = [str(last_seen)]
+                            else:
+                                seen_ids = []
+
+                            is_watched_on_trakt = False
+                            if is_authed:
+                                show_watched = watched_map.get(tmdb_id) or []
+                                try:
+                                    is_watched_on_trakt = (int(ep_season), int(ep_number)) in show_watched
+                                except Exception:
+                                    pass
                             
                             if is_past:
-                                if ep_id != last_seen_ep_id:
-                                    new_episodes.append({
-                                        "show_id": tmdb_id,
-                                        "show_title": show_title,
-                                        "episode_name": ep_title,
-                                        "season": ep_season,
-                                        "number": ep_number,
-                                        "airdate": first_aired_str[:10],
-                                        "episode_id": ep_id,
-                                        "item": item
-                                    })
-                                    updated_last_check[tmdb_id] = ep_id
+                                if is_watched_on_trakt:
+                                    if ep_id not in seen_ids:
+                                        seen_ids.append(ep_id)
+                                        if len(seen_ids) > 5000:
+                                            seen_ids = seen_ids[-5000:]
+                                        updated_last_check[tmdb_id] = seen_ids
+                                else:
+                                    if ep_id not in seen_ids:
+                                        if is_authed or not is_new_show:
+                                            new_episodes.append({
+                                                "show_id": tmdb_id,
+                                                "show_title": show_title,
+                                                "episode_name": ep_title,
+                                                "season": ep_season,
+                                                "number": ep_number,
+                                                "airdate": first_aired_str[:10],
+                                                "episode_id": ep_id,
+                                                "item": item
+                                            })
+                                        
+                                        seen_ids.append(ep_id)
+                                        if len(seen_ids) > 5000:
+                                            seen_ids = seen_ids[-5000:]
+                                        updated_last_check[tmdb_id] = seen_ids
                         except Exception as ex:
                             print(f"[DEBUG] check_new_episodes: Date parse error: {ex}")
         else:
@@ -108,7 +144,6 @@ def check_new_episodes(favorites_json, last_check_json):
             prefs.edit().putString("streams_favorites", json.dumps(favorites)).apply()
         except Exception as e:
             print(f"[DEBUG] check_new_episodes: Failed to update favorites SharedPreferences: {e}")
-        
     return json.dumps({
         "new_episodes": new_episodes,
         "last_check": updated_last_check

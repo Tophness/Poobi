@@ -9,12 +9,12 @@ import six
 from six.moves import urllib_parse
 import simplejson as json
 
-from resources.lib.modules import cache
-from resources.lib.modules import cleandate
-from resources.lib.modules import client
-from resources.lib.modules import client_utils
-from resources.lib.modules import control
-from resources.lib.modules import log_utils
+import cache
+import cleandate
+import client
+import client_utils
+import control
+import log_utils
 
 if six.PY2:
     str = unicode
