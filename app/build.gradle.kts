@@ -23,13 +23,14 @@ extensions.configure<ApplicationExtension> {
 
     flavorDimensions += "abi"
     productFlavors {
+        create("armv7") {
+            dimension = "abi"
+            isDefault = true
+            ndk { abiFilters.add("armeabi-v7a") }
+        }
         create("arm64") {
             dimension = "abi"
             ndk { abiFilters.add("arm64-v8a") }
-        }
-        create("armv7") {
-            dimension = "abi"
-            ndk { abiFilters.add("armeabi-v7a") }
         }
         create("x86") {
             dimension = "abi"

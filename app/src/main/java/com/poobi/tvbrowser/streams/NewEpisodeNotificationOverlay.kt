@@ -91,12 +91,24 @@ fun NewEpisodeNotificationOverlay(
             val formattedDate = remember(airdateStr) {
                 if (airdateStr.isNotEmpty()) {
                     try {
-                        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                        val date = sdf.parse(airdateStr)
+                        val parser = if (airdateStr.contains("T")) {
+                            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+                                timeZone = TimeZone.getTimeZone("UTC")
+                            }
+                        } else {
+                            SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                        }
+
+                        val cleanDateStr = airdateStr.replace("Z", "").split(".")[0]
+                        val date = parser.parse(cleanDateStr)
                         if (date != null) {
-                            val localFormatter = SimpleDateFormat.getDateInstance(SimpleDateFormat.MEDIUM, Locale.getDefault())
+                            val localFormatter = SimpleDateFormat("d MMMM h:mm a", Locale.getDefault()).apply {
+                                timeZone = TimeZone.getDefault()
+                            }
                             localFormatter.format(date)
-                        } else airdateStr
+                        } else {
+                            airdateStr
+                        }
                     } catch (e: Exception) {
                         airdateStr
                     }
