@@ -724,6 +724,24 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
             isPlayingFromSavedLink = true
 
+            var nextEp: JSONObject? = null
+            if (season != null && episode != null) {
+                val cacheKey = "${item.optInt("id")}_$season"
+                val episodes = episodesCache.get(cacheKey)
+                if (episodes != null) {
+                    for (i in 0 until episodes.length()) {
+                        val ep = episodes.getJSONObject(i)
+                        if (ep.optInt("episode_number") == episode + 1) {
+                            val airDate = ep.optString("air_date", "")
+                            if (airDate.isNotEmpty() && !com.poobi.tvbrowser.shared.isFutureDate(airDate)) {
+                                nextEp = ep
+                            }
+                            break
+                        }
+                    }
+                }
+            }
+
             _events.value = StreamsEvent.PlayVideo(
                 url = videoUrl,
                 title = title,
@@ -732,7 +750,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 item = item,
                 season = season,
                 episode = episode,
-                nextEpisode = null 
+                nextEpisode = nextEp
             )
         } else {
             isPlayingFromSavedLink = false
