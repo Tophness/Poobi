@@ -1,5 +1,7 @@
 package com.poobi.tvbrowser.player
 
+import android.view.KeyEvent
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -17,6 +19,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -26,26 +29,34 @@ import androidx.compose.ui.window.PopupProperties
 import com.poobi.tvbrowser.shared.RemoteImage
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import org.json.JSONObject
+import kotlinx.coroutines.delay
 
 @Composable
 fun UpNextOverlay(
     isVisible: Boolean,
     nextEpisodeJson: JSONObject?,
     onTriggerAutoplay: () -> Unit,
-    onDismissOverlay: () -> Unit
+    onDismissOverlay: () -> Unit,
+    onSeek: (direction: Int, repeatCount: Int) -> Unit
 ) {
     if (isVisible && nextEpisodeJson != null) {
         val focusRequester = remember { FocusRequester() }
 
         LaunchedEffect(isVisible) {
             if (isVisible) {
+                delay(150)
                 focusRequester.requestFocus()
             }
         }
 
         Popup(
             alignment = Alignment.BottomEnd,
-            properties = PopupProperties(focusable = true)
+            onDismissRequest = onDismissOverlay,
+            properties = PopupProperties(
+                focusable = true,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false
+            )
         ) {
             AnimatedVisibility(
                 visible = isVisible,
@@ -63,7 +74,7 @@ fun UpNextOverlay(
 
                     if (isDismissing) {
                         LaunchedEffect(Unit) {
-                            kotlinx.coroutines.delay(400)
+                            delay(400)
                             onDismissOverlay()
                             isDismissing = false
                         }
@@ -73,7 +84,30 @@ fun UpNextOverlay(
                         modifier = Modifier
                             .focusRequester(focusRequester)
                             .width(420.dp)
-                            .wrapContentHeight(),
+                            .wrapContentHeight()
+                            .onPreviewKeyEvent { keyEvent ->
+                                val nativeEvent = keyEvent.nativeKeyEvent
+                                val keyCode = nativeEvent.keyCode
+                                val isDown = nativeEvent.action == KeyEvent.ACTION_DOWN
+
+                                if (isDown) {
+                                    when (keyCode) {
+                                        KeyEvent.KEYCODE_BACK -> {
+                                            onDismissOverlay()
+                                            return@onPreviewKeyEvent true
+                                        }
+                                        KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                            onSeek(-1, nativeEvent.repeatCount)
+                                            return@onPreviewKeyEvent true
+                                        }
+                                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                            onSeek(1, nativeEvent.repeatCount)
+                                            return@onPreviewKeyEvent true
+                                        }
+                                    }
+                                }
+                                false
+                            },
                         onClick = onTriggerAutoplay,
                         onLongClick = {
                             isDismissing = true

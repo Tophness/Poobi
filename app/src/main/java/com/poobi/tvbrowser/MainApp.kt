@@ -539,6 +539,9 @@ fun MainApp(
                     },
                     onDismissOverlay = {
                         playerEngine.dismissUpNext()
+                    },
+                    onSeek = { direction, repeatCount ->
+                        playerEngine.seekVideo(direction, repeatCount)
                     }
                 )
 
