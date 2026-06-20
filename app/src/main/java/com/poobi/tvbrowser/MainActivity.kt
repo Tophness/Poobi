@@ -549,6 +549,17 @@ class MainActivity : AppCompatActivity() {
         if (playerEngine.isPlayerActive.value) {
             val pView = playerEngine.playerView
 
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    if (pView != null && pView.isControllerFullyVisible()) {
+                        pView.hideController()
+                    } else {
+                        playerEngine.stopAndRelease()
+                    }
+                }
+                return true
+            }
+
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
                 if (pView != null) {
                     return pView.dispatchKeyEvent(event)
@@ -557,11 +568,6 @@ class MainActivity : AppCompatActivity() {
             }
 
             if (event.action == KeyEvent.ACTION_DOWN) {
-                if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-                    playerEngine.stopAndRelease()
-                    return true
-                }
-
                 if (event.keyCode == KeyEvent.KEYCODE_MENU) {
                     playerEngine.showResolutionSelector()
                     return true
