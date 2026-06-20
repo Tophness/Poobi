@@ -72,8 +72,8 @@ fun UpNextOverlay(
                     TvFocusableBox(
                         modifier = Modifier
                             .focusRequester(focusRequester)
-                            .width(340.dp)
-                            .height(100.dp),
+                            .width(420.dp)
+                            .wrapContentHeight(),
                         onClick = onTriggerAutoplay,
                         onLongClick = {
                             isDismissing = true
@@ -81,16 +81,16 @@ fun UpNextOverlay(
                     ) { isFocused ->
                         Row(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .fillMaxWidth()
                                 .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.Top
                         ) {
                             val thumbPath = nextEpisodeJson.optString("still_path") ?: ""
                             RemoteImage(
                                 url = "https://image.tmdb.org/t/p/w300$thumbPath",
                                 contentDescription = "Next Episode Thumbnail",
                                 modifier = Modifier
-                                    .size(120.dp, 72.dp)
+                                    .size(120.dp, 80.dp)
                                     .clip(RoundedCornerShape(6.dp))
                             )
 
@@ -98,37 +98,89 @@ fun UpNextOverlay(
 
                             Column(
                                 modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.Center
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
-                                Text(
-                                    text = "UP NEXT",
-                                    color = Color(0xFF00BCD4),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "UP NEXT",
+                                        color = if (isFocused) Color(0xFF0D47A1) else Color(0xFF00BCD4),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    val rating = nextEpisodeJson.optDouble("vote_average", 0.0)
+                                    if (rating > 0.0) {
+                                        Text(
+                                            text = "⭐ %.1f".format(rating),
+                                            color = if (isFocused) Color.Black else Color(0xFFFFB74D),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
 
                                 val epName = nextEpisodeJson.optString("name") ?: "Next Episode"
                                 val epNum = nextEpisodeJson.optInt("episode_number")
                                 Text(
                                     text = "E$epNum: $epName",
-                                    color = Color.White,
+                                    color = if (isFocused) Color.Black else Color.White,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+
+                                val airDate = nextEpisodeJson.optString("air_date") ?: ""
+                                if (airDate.isNotEmpty()) {
+                                    val formattedDate = try {
+                                        val parser = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                        val formatter = java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault())
+                                        val date = parser.parse(airDate)
+                                        if (date != null) formatter.format(date) else airDate
+                                    } catch (e: Exception) {
+                                        airDate
+                                    }
+                                    Text(
+                                        text = "Aired: $formattedDate",
+                                        color = if (isFocused) Color(0xFF1B5E20) else Color(0xFF81C784),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                val overview = nextEpisodeJson.optString("overview") ?: ""
+                                if (overview.isNotEmpty()) {
+                                    Text(
+                                        text = overview,
+                                        color = if (isFocused) Color(0xFF333333) else Color.LightGray,
+                                        fontSize = 11.sp,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
                             }
+
+                            Spacer(modifier = Modifier.width(8.dp))
 
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .scale(xButtonScale)
                                     .clip(RoundedCornerShape(18.dp))
-                                    .background(if (isDismissing) Color.Red else Color.White.copy(alpha = 0.15f))
+                                    .background(if (isDismissing) Color.Red else (if (isFocused) Color.Black.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.15f)))
                                     .clickable { onDismissOverlay() },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("✕", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "✕", 
+                                    color = if (isFocused && !isDismissing) Color.Black else Color.White, 
+                                    fontSize = 12.sp, 
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }
