@@ -24,6 +24,7 @@ import com.poobi.tvbrowser.player.PlayerEngine
 import com.poobi.tvbrowser.shared.PythonDialogListener
 import com.poobi.tvbrowser.shared.cleanKodiText
 import com.poobi.tvbrowser.shared.isFutureDate
+import com.poobi.tvbrowser.shared.KeyTracker
 import com.poobi.tvbrowser.streams.StreamsEvent
 import com.poobi.tvbrowser.streams.StreamsViewModel
 import com.poobi.tvbrowser.torrent.TorrentStreamServer
@@ -515,6 +516,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            KeyTracker.lastKeyCode = event.keyCode
+            KeyTracker.lastKeyPressTime = System.currentTimeMillis()
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val isImeVisible = window.decorView.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true
             if (isImeVisible && event.keyCode != KeyEvent.KEYCODE_BACK) {

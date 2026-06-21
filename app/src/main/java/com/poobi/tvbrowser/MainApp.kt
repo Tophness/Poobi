@@ -62,6 +62,7 @@ import com.poobi.tvbrowser.player.PlayerEngine
 import com.poobi.tvbrowser.player.UpNextOverlay
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvInputField
+import com.poobi.tvbrowser.shared.KeyTracker
 import com.poobi.tvbrowser.streams.MediaDetailsScreen
 import com.poobi.tvbrowser.streams.ScrapeProgressScreen
 import com.poobi.tvbrowser.streams.StreamsDashboardScreen
@@ -71,12 +72,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 enum class AppTab { Browser, Streams }
-
-// Synchronous, lag-proof key state tracking to prevent Compose state race conditions
-class KeyTracker {
-    var lastKeyCode: Int = -1
-    var lastKeyPressTime: Long = 0L
-}
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -101,6 +96,18 @@ fun ModernTab(
                 focusRequester.requestFocus()
             } catch (e: Exception) {}
         }
+    }
+
+    val lastKey = keyTracker.lastKeyCode
+    val isDpadLeft = lastKey == KeyEvent.KEYCODE_DPAD_LEFT
+    val isDpadRight = lastKey == KeyEvent.KEYCODE_DPAD_RIGHT
+    val isDpadUp = lastKey == KeyEvent.KEYCODE_DPAD_UP
+    val isStartup = lastKey == -1
+
+    val computedCanFocus = if (text == "Browser") {
+        currentIsSelected || isDpadLeft || isDpadUp || isStartup
+    } else {
+        currentIsSelected || isDpadRight || isDpadUp || isStartup
     }
 
     val backgroundColor = when {
@@ -128,9 +135,7 @@ fun ModernTab(
             val keyCode = keyTracker.lastKeyCode
             val isUserInitiated = keyCode == KeyEvent.KEYCODE_DPAD_UP ||
                                   keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
-                                  keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
-                                  keyCode == -1
-
+                                  keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
 
             if (isUserInitiated) {
                 currentOnFocus()
@@ -145,27 +150,16 @@ fun ModernTab(
             .clip(RoundedCornerShape(20.dp))
             .background(backgroundColor)
             .then(borderModifier)
-            .focusProperties {
-                // Evaluated dynamically and synchronously by the focus engine to bypass Compose recomposition latency
-                val lastKey = keyTracker.lastKeyCode
-                val isStartup = lastKey == -1
-                val isDpadLeft = lastKey == KeyEvent.KEYCODE_DPAD_LEFT
-                val isDpadRight = lastKey == KeyEvent.KEYCODE_DPAD_RIGHT
-
-                val computedCanFocus = if (text == "Browser") {
-                    currentIsSelected || isStartup || isDpadLeft
-                } else {
-                    currentIsSelected || isStartup || isDpadRight
-                }
-
-                this.canFocus = computedCanFocus || isFocused
-            }
             .clickable(
+                enabled = computedCanFocus,
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
-            .focusable(interactionSource = interactionSource),
+            .focusable(
+                enabled = computedCanFocus,
+                interactionSource = interactionSource
+            ),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -210,19 +204,10 @@ fun MainApp(
     val torrentBufferProgress by streamsViewModel.torrentBufferProgress.collectAsState()
     val torrentBufferSeeders by streamsViewModel.torrentBufferSeeders.collectAsState()
 
-    val keyTracker = remember { KeyTracker() }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF1A1A1D))
-            .onPreviewKeyEvent { keyEvent ->
-                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                    keyTracker.lastKeyCode = keyEvent.nativeKeyEvent.keyCode
-                    keyTracker.lastKeyPressTime = System.currentTimeMillis()
-                }
-                false
-            }
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
@@ -263,7 +248,7 @@ fun MainApp(
                         onFocus = { browserViewModel.currentAppTab.value = 0 },
                         onClick = { browserViewModel.currentAppTab.value = 0 },
                         focusRequester = browserTabFocusRequester,
-                        keyTracker = keyTracker
+                        keyTracker = KeyTracker
                     )
 
                     ModernTab(
@@ -272,7 +257,7 @@ fun MainApp(
                         onFocus = { browserViewModel.currentAppTab.value = 1 },
                         onClick = { browserViewModel.currentAppTab.value = 1 },
                         focusRequester = streamsTabFocusRequester,
-                        keyTracker = keyTracker
+                        keyTracker = KeyTracker
                     )
                     
                     Spacer(modifier = Modifier.weight(1f))
