@@ -98,18 +98,6 @@ fun ModernTab(
         }
     }
 
-    val lastKey = keyTracker.lastKeyCode
-    val isDpadLeft = lastKey == KeyEvent.KEYCODE_DPAD_LEFT
-    val isDpadRight = lastKey == KeyEvent.KEYCODE_DPAD_RIGHT
-    val isDpadUp = lastKey == KeyEvent.KEYCODE_DPAD_UP
-    val isStartup = lastKey == -1
-
-    val computedCanFocus = if (text == "Browser") {
-        currentIsSelected || isDpadLeft || isDpadUp || isStartup
-    } else {
-        currentIsSelected || isDpadRight || isDpadUp || isStartup
-    }
-
     val backgroundColor = when {
         isFocused -> Color(0xFF00BCD4) // Vibrant Cyan on focus
         isSelected -> Color(0xFF00BCD4).copy(alpha = 0.25f) // Subtle Cyan background on selection
@@ -150,15 +138,25 @@ fun ModernTab(
             .clip(RoundedCornerShape(20.dp))
             .background(backgroundColor)
             .then(borderModifier)
+            .focusProperties {
+                val lastKey = keyTracker.lastKeyCode
+                val isDpadLeft = lastKey == KeyEvent.KEYCODE_DPAD_LEFT
+                val isDpadRight = lastKey == KeyEvent.KEYCODE_DPAD_RIGHT
+                val isDpadUp = lastKey == KeyEvent.KEYCODE_DPAD_UP
+                val isStartup = lastKey == -1
+
+                val computedCanFocus = if (text == "Browser") {
+                    currentIsSelected || isDpadLeft || isDpadUp || isStartup
+                } else {
+                    currentIsSelected || isDpadRight || isDpadUp || isStartup
+                }
+
+                this.canFocus = computedCanFocus || isFocused
+            }
             .clickable(
-                enabled = computedCanFocus,
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
-            )
-            .focusable(
-                enabled = computedCanFocus,
-                interactionSource = interactionSource
             ),
         contentAlignment = Alignment.Center
     ) {
