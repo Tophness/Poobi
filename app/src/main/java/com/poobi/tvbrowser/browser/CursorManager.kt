@@ -75,6 +75,15 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
         }
     }
 
+    fun clearKeyStates() {
+        keyStates.clear()
+        cursorVelocityX = 0f
+        cursorVelocityY = 0f
+        scrollVelocityY = 0f
+        isMovementLoopRunning = false
+        lastMovementTime = 0L
+    }
+
     fun wakeCursor() {
         if (viewModel.isBrowsing.value && !viewModel.topBarVisible.value && viewModel.customView.value == null) {
             if (viewModel.navigationModePref.value == 1 || isSelectionMode) {
@@ -196,9 +205,9 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
             if (viewModel.scrollTopbarEnabled.value && _cursorY.value <= 0 && (wv?.scrollY ?: 0) == 0 && dy < 0 && !isLongPressing) {
                 viewModel.showTopBar()
                 _cursorVisible.value = false
+                clearKeyStates()
             }
 
-            // Fixed bounds check: vertical offset evaluated against maxY vertical limit!
             if (_cursorY.value >= maxY - 1f && dy > 0) { 
                 wv?.scrollBy(0, 15)
             } else if (_cursorY.value <= 0f && (wv?.scrollY ?: 0) > 0 && dy < 0) {

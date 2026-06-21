@@ -322,6 +322,7 @@ fun MainApp(
                                         viewModel = browserViewModel,
                                         onNavigateDown = {
                                             browserViewModel.hideTopBar()
+                                            cursorManager.clearKeyStates()
                                             cursorManager.wakeCursor()
                                         }
                                     )

@@ -539,8 +539,10 @@ class MainActivity : AppCompatActivity() {
             if (!isNativeVideoActive && !isCustomViewActive) {
                 if (browserViewModel.topBarVisible.value) {
                     browserViewModel.hideTopBar()
+                    cursorManager.clearKeyStates()
                 } else {
                     browserViewModel.showTopBar()
+                    cursorManager.clearKeyStates()
                 }
                 return true
             }
@@ -685,6 +687,8 @@ class MainActivity : AppCompatActivity() {
             if (browserViewModel.currentAppTab.value == 0 && browserViewModel.isBrowsing.value) {
                 if (browserViewModel.topBarVisible.value) {
                     browserViewModel.hideTopBar()
+                    cursorManager.clearKeyStates()
+                    cursorManager.wakeCursor()
                     return true
                 }
                 if (browserViewModel.currentWebView?.canGoBack() == true) {
