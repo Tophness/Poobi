@@ -28,6 +28,7 @@ import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.LanguageHelper
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvMarqueeText
+import com.poobi.tvbrowser.shared.KeyTracker
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
@@ -138,9 +139,12 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
 
     LaunchedEffect(isScraping, isResolving) {
         if (isScraping && !isResolving) {
+            val startTime = System.currentTimeMillis()
             try {
                 delay(250)
-                stopScanningFocusRequester.requestFocus()
+                if (KeyTracker.lastKeyPressTime < startTime) {
+                    stopScanningFocusRequester.requestFocus()
+                }
             } catch (e: Exception) {}
         }
     }

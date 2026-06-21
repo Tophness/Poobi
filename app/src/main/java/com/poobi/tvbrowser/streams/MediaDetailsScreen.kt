@@ -40,6 +40,7 @@ import com.poobi.tvbrowser.shared.RemoteImage
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvMarqueeText
 import com.poobi.tvbrowser.shared.isFutureDate
+import com.poobi.tvbrowser.shared.KeyTracker
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -271,11 +272,14 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
     LaunchedEffect(item) {
         autoFocusCancelled = false
+        val startTime = System.currentTimeMillis()
         kotlinx.coroutines.delay(500)
-        if (mediaType == "movie") {
-            try { playButtonFocusRequester.requestFocus() } catch (e: Exception) {}
-        } else if (mediaType == "tv") {
-            try { seasonSelectorFocusRequester.requestFocus() } catch (e: Exception) {}
+        if (KeyTracker.lastKeyPressTime < startTime) {
+            if (mediaType == "movie") {
+                try { playButtonFocusRequester.requestFocus() } catch (e: Exception) {}
+            } else if (mediaType == "tv") {
+                try { seasonSelectorFocusRequester.requestFocus() } catch (e: Exception) {}
+            }
         }
     }
 
@@ -293,9 +297,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                 lazyListState.animateScrollToItem(targetIndex)
             }
 
+            val startTime = System.currentTimeMillis()
             delay(800)
             try {
-                if (!autoFocusCancelled) {
+                if (!autoFocusCancelled && KeyTracker.lastKeyPressTime < startTime) {
                     targetEpisodeFocusRequester.requestFocus()
                     autoFocusCancelled = true
                 }

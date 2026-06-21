@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +26,7 @@ import com.poobi.tvbrowser.browser.HoldToDeleteCloseButton
 import com.poobi.tvbrowser.browser.TvFocusableHoldToDeleteBox
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvSearchField
+import com.poobi.tvbrowser.shared.KeyTracker
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 
@@ -62,15 +61,20 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
 
     LaunchedEffect(activeCategoryIndex, searchResults) {
         if (activeCategoryIndex == 0) {
+            val startTime = System.currentTimeMillis()
             if (searchResults == null) {
                 try {
                     delay(100)
-                    searchFieldFocusRequester.requestFocus()
+                    if (KeyTracker.lastKeyPressTime < startTime) {
+                        searchFieldFocusRequester.requestFocus()
+                    }
                 } catch (e: Exception) {}
             } else if (searchResults!!.length() > 0) {
                 try {
                     delay(200)
-                    firstResultFocusRequester.requestFocus()
+                    if (KeyTracker.lastKeyPressTime < startTime) {
+                        firstResultFocusRequester.requestFocus()
+                    }
                 } catch (e: Exception) {}
             }
         }
