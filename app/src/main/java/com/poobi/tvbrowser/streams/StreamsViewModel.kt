@@ -547,21 +547,22 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val entry = array.getJSONObject(index)
                 val displayTitle = entry.optString("display_title")
                 
-                val subtitlesArr = entry.optJSONArray("subtitles")
-                if (subtitlesArr != null) {
-                    for (i in 0 until subtitlesArr.length()) {
+                val item = entry.optJSONObject("item")
+                if (item != null) {
+                    val itemId = item.optInt("id")
+                    val season = if (entry.has("season")) entry.getInt("season") else 0
+                    val episode = if (entry.has("episode")) entry.getInt("episode") else 0
+                    val itemKey = "${itemId}_${season}_${episode}"
+                    val cachedSubs = loadSubtitlesFromCache(itemKey)
+                    cachedSubs.forEach { sub ->
                         try {
-                            val subObj = subtitlesArr.getJSONObject(i)
-                            val subUrl = subObj.optString("url")
-                            if (subUrl.isNotEmpty()) {
-                                val uri = android.net.Uri.parse(subUrl)
-                                if (uri.scheme == "file") {
-                                    val path = uri.path
-                                    if (path != null) {
-                                        val file = File(path)
-                                        if (file.exists() && file.isFile) {
-                                            file.delete()
-                                        }
+                            val uri = android.net.Uri.parse(sub.url)
+                            if (uri.scheme == "file") {
+                                val path = uri.path
+                                if (path != null) {
+                                    val file = File(path)
+                                    if (file.exists() && file.isFile) {
+                                        file.delete()
                                     }
                                 }
                             }
@@ -569,14 +570,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                             Log.e("StreamsViewModel", "Failed to delete subtitle file: ${e.message}")
                         }
                     }
-                }
-
-                val item = entry.optJSONObject("item")
-                if (item != null) {
-                    val itemId = item.optInt("id")
-                    val season = if (entry.has("season")) entry.getInt("season") else 0
-                    val episode = if (entry.has("episode")) entry.getInt("episode") else 0
-                    val itemKey = "${itemId}_${season}_${episode}"
                     removeSubtitlesFromCacheMap(itemKey)
                 }
                 
@@ -610,6 +603,23 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             val copiedSubtitles = subtitles.toMap()
             interceptedSubtitleUrls.clear()
             interceptedSubtitleUrls.putAll(copiedSubtitles)
+
+            val itemKey = "${item.optInt("id")}_${season ?: 0}_${episode ?: 0}"
+            val newlyDownloadedSubs = subtitles.map { (subUrl, infoMap) ->
+                SubtitleData(
+                    url = subUrl,
+                    label = infoMap["label"] ?: "Web Subtitle",
+                    lang = infoMap["lang"] ?: "und"
+                )
+            }
+            val cached = loadSubtitlesFromCache(itemKey)
+            val combinedList = cached.toMutableList()
+            newlyDownloadedSubs.forEach { newSub ->
+                if (combinedList.none { it.url == newSub.url }) {
+                    combinedList.add(newSub)
+                }
+            }
+            saveSubtitlesToCache(itemKey, combinedList)
         }
 
         addToRecentlyPlayed(displayTitle, item, season, episode, url, headers)
@@ -666,21 +676,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                 val finalHeaders = if (headers != null) JSONObject(headers) else existing?.optJSONObject("headers")
                 if (finalHeaders != null) put("headers", finalHeaders)
-
-                if (interceptedSubtitleUrls.isNotEmpty()) {
-                    val subsArray = JSONArray()
-                    interceptedSubtitleUrls.forEach { (url, info) ->
-                        val subObj = JSONObject()
-                        subObj.put("url", url)
-                        val infoObj = JSONObject()
-                        info.forEach { (k, v) -> infoObj.put(k, v) }
-                        subObj.put("info", infoObj)
-                        subsArray.put(subObj)
-                    }
-                    put("subtitles", subsArray)
-                } else if (existing?.has("subtitles") == true) {
-                    put("subtitles", existing.getJSONArray("subtitles"))
-                }
             }
             newList.add(0, newEntry)
             if (newList.size > 20) newList.removeAt(newList.size - 1)
@@ -708,15 +703,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
             
             val subtitleUrls = mutableMapOf<String, Map<String, String>>()
-            entry.optJSONArray("subtitles")?.let { subs ->
-                for (i in 0 until subs.length()) {
-                    val sub = subs.getJSONObject(i)
-                    val url = sub.getString("url")
-                    val info = sub.getJSONObject("info")
-                    val infoMap = mutableMapOf<String, String>()
-                    info.keys().forEach { infoMap[it] = info.getString(it) }
-                    subtitleUrls[url] = infoMap
-                }
+            val itemKey = "${item.optInt("id")}_${season ?: 0}_${episode ?: 0}"
+            val cachedSubs = loadSubtitlesFromCache(itemKey)
+            cachedSubs.forEach { sub ->
+                subtitleUrls[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
             }
             
             interceptedSubtitleUrls.clear()
@@ -1801,6 +1791,31 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         pendingPlayVideoSourceData = null
     }
 
+    private fun getCurrentEpisodeTitle(season: Int?, episode: Int?): String {
+        val episodesList = _itemEpisodes.value ?: return ""
+        if (season == null || episode == null) return ""
+        for (i in 0 until episodesList.length()) {
+            val ep = episodesList.getJSONObject(i)
+            if (ep.optInt("episode_number") == episode) {
+                return ep.optString("name", "")
+            }
+        }
+        return ""
+    }
+
+    private fun matchesEpisodeTitle(subName: String, episodeTitle: String): String {
+        if (episodeTitle.isEmpty() || subName.isEmpty()) return ""
+        val cleanSub = subName.lowercase().replace(Regex("[^a-zA-Z0-9\\s]"), " ")
+        val cleanEp = episodeTitle.lowercase().replace(Regex("[^a-zA-Z0-9\\s]"), " ")
+        
+        if (cleanSub.contains(cleanEp)) return "exact"
+        
+        val epWords = cleanEp.split("\\s+".toRegex()).filter { it.length > 3 }
+        if (epWords.isNotEmpty() && epWords.all { cleanSub.contains(it) }) return "words"
+        
+        return ""
+    }
+
     private fun performAutoSubtitleSearch(item: JSONObject, season: Int?, episode: Int?) {
         val itemKey = "${item.optInt("id")}_${season ?: 0}_${episode ?: 0}"
         if (_isDownloadingSubs.value || lastSubtitledItemKey == itemKey) return
@@ -1850,20 +1865,35 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 if (subs.length() > 0) {
                     val countToGet = if (countPref == 0) subs.length() else countPref.coerceAtMost(subs.length())
                     
-                    val prioritizedSubs = mutableListOf<JSONObject>()
+                    val episodeTitle = getCurrentEpisodeTitle(season, episode)
+                    val exactMatchSubs = mutableListOf<JSONObject>()
+                    val partialMatchSubs = mutableListOf<JSONObject>()
+                    val mismatchedSubs = mutableListOf<JSONObject>()
+                    
                     for (i in 0 until subs.length()) {
                         val sub = subs.getJSONObject(i)
-                        if (sub.optString("sync") == "true") prioritizedSubs.add(sub)
+                        val name = sub.optString("name", "")
+                        when (matchesEpisodeTitle(name, episodeTitle)) {
+                            "exact" -> exactMatchSubs.add(sub)
+                            "words" -> partialMatchSubs.add(sub)
+                            else -> mismatchedSubs.add(sub)
+                        }
                     }
-                    for (i in 0 until subs.length()) {
-                        val sub = subs.getJSONObject(i)
-                        if (sub.optString("sync") != "true") prioritizedSubs.add(sub)
-                    }
+
+                    val finalSortedSubs = mutableListOf<JSONObject>()
+
+                    exactMatchSubs.filter { it.optString("sync") == "true" }.forEach { finalSortedSubs.add(it) }
+                    exactMatchSubs.filter { it.optString("sync") != "true" }.forEach { finalSortedSubs.add(it) }
+
+                    partialMatchSubs.filter {it.optString("sync") == "true" }.forEach { finalSortedSubs.add(it) }
+                    partialMatchSubs.filter {it.optString("sync") != "true" }.forEach { finalSortedSubs.add(it) }
+
+                    mismatchedSubs.filter { it.optString("sync") == "true" }.forEach { finalSortedSubs.add(it) }
+                    mismatchedSubs.filter { it.optString("sync") != "true" }.forEach { finalSortedSubs.add(it) }
 
                     var downloadedCount = cached.size
                     val newlyDownloadedSubs = mutableListOf<SubtitleData>()
 
-                    // Register existing cached subtitles right away so playback starts with them
                     cached.forEach { sub ->
                         interceptedSubtitleUrls[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
                     }
@@ -1878,17 +1908,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         _subProgress.value = if (countToGet > 0) downloadedCount.toFloat() / countToGet.toFloat() else 0f
                     }
 
-                    for (i in 0 until prioritizedSubs.size) {
+                    for (i in 0 until finalSortedSubs.size) {
                         if (downloadedCount >= countToGet || !_isDownloadingSubs.value) break
                         
-                        val sub = prioritizedSubs[i]
+                        val sub = finalSortedSubs[i]
                         val serviceName = sub.getString("service")
                         val actionArgs = sub.getString("action_args")
                         val subName = sub.optString("name", "Subtitle")
                         val subLang = sub.optString("lang", "und")
                         val expectedLabel = "[$serviceName] $subName"
 
-                        // Skip downloading if we already have this exact subtitle in cache
                         val isAlreadyCached = cached.any { 
                             it.label == expectedLabel && it.lang == subLang
                         }
@@ -2430,10 +2459,11 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val results = mutableListOf<SubtitleData>()
                 for (i in 0 until array.length()) {
                     val obj = array.getJSONObject(i)
-                    val filePath = android.net.Uri.parse(obj.getString("url")).path
+                    val urlStr = obj.getString("url")
+                    val filePath = android.net.Uri.parse(urlStr).path
                     if (filePath != null && File(filePath).exists()) {
                         results.add(SubtitleData(
-                            obj.getString("url"),
+                            urlStr,
                             obj.getString("label"),
                             obj.getString("lang")
                         ))

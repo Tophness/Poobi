@@ -354,7 +354,6 @@ class PlayerEngine(
 					.setUri(videoUri)
 					.setSubtitleConfigurations(subtitleConfigs)
 
-				// Updated HLS and DASH detection using robust checks
 				if (isHlsUrl(urls[0])) {
 					videoMediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
 				} else if (isDashUrl(urls[0])) {
@@ -373,8 +372,7 @@ class PlayerEngine(
 			} else {
 				val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
 				mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
-				
-				// Updated HLS and DASH detection using robust checks
+
 				if (isHlsUrl(videoUrl)) {
 					mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
 				} else if (isDashUrl(videoUrl)) {
