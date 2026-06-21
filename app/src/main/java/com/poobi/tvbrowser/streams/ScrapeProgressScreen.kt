@@ -28,6 +28,7 @@ import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.LanguageHelper
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvMarqueeText
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -134,6 +135,15 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
 
     val currentSources = if (selectedTab == "Web") sources else torrentioSources
     val isCurrentTabScraping = if (selectedTab == "Web") isScraping else isScrapingTorrents
+
+    LaunchedEffect(isScraping, isResolving) {
+        if (isScraping && !isResolving) {
+            try {
+                delay(250)
+                stopScanningFocusRequester.requestFocus()
+            } catch (e: Exception) {}
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
 

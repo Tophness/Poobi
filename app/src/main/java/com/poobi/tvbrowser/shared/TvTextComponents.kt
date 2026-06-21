@@ -12,14 +12,16 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -59,6 +61,7 @@ fun TvInputField(
     isPassword: Boolean = false,
     containerColor: Color = Color(0xFF333333),
     imeAction: ImeAction = ImeAction.Search,
+    focusRequester: FocusRequester? = null,
     onAction: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -77,6 +80,7 @@ fun TvInputField(
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
                 .onFocusChanged { state ->
                     if (state.isFocused) {
                         keyboardController?.hide()
@@ -120,6 +124,7 @@ fun TvSearchField(
     onValueChange: (String) -> Unit,
     placeholder: String,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
     onSearch: () -> Unit
 ) {
     TvInputField(
@@ -128,6 +133,7 @@ fun TvSearchField(
         placeholder = placeholder,
         modifier = modifier,
         imeAction = ImeAction.Search,
+        focusRequester = focusRequester,
         onAction = onSearch
     )
 }

@@ -28,6 +28,7 @@ import com.poobi.tvbrowser.browser.HoldToDeleteCloseButton
 import com.poobi.tvbrowser.browser.TvFocusableHoldToDeleteBox
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvSearchField
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 
 @Composable
@@ -43,6 +44,9 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
     var searchInput by remember { mutableStateOf("") }
     val firstHistoryFocusRequester = remember { FocusRequester() }
 
+    val searchFieldFocusRequester = remember { FocusRequester() }
+    val firstResultFocusRequester = remember { FocusRequester() }
+
     val categories = listOf(
         "Search" to { viewModel.loadSearchHistory() },
         "Favourites" to { viewModel.loadFavorites() },
@@ -56,6 +60,22 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
 
     val isDeletable = activeCategoryIndex == 1 || activeCategoryIndex == 2
 
+    LaunchedEffect(activeCategoryIndex, searchResults) {
+        if (activeCategoryIndex == 0) {
+            if (searchResults == null) {
+                try {
+                    delay(100)
+                    searchFieldFocusRequester.requestFocus()
+                } catch (e: Exception) {}
+            } else if (searchResults!!.length() > 0) {
+                try {
+                    delay(200)
+                    firstResultFocusRequester.requestFocus()
+                } catch (e: Exception) {}
+            }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
         if (activeCategoryIndex == 0 && searchResults == null) {
             Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -64,6 +84,7 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                     onValueChange = { searchInput = it },
                     placeholder = "Search Movie or TV Show...",
                     onSearch = { viewModel.performSearch(searchInput) },
+                    focusRequester = searchFieldFocusRequester,
                     modifier = Modifier
                         .weight(1f)
                         .height(60.dp)
@@ -191,9 +212,12 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                             val unwatchedCount = counts.first
                             val newerCount = counts.second
 
+                            val isFirstResult = index == 0 && activeCategoryIndex == 0 && searchResults != null
+                            val itemFocusModifier = if (isFirstResult) Modifier.focusRequester(firstResultFocusRequester) else Modifier
+
                             if (isDeletable) {
                                 TvFocusableHoldToDeleteBox(
-                                    modifier = Modifier.wrapContentSize(),
+                                    modifier = Modifier.wrapContentSize().then(itemFocusModifier),
                                     onTriggerDelete = {
                                         if (activeCategoryIndex == 1) {
                                             viewModel.toggleFavorite(item, isCurrentlyViewingFavorites = true)
@@ -220,7 +244,7 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                                 }
                             } else {
                                 TvFocusableBox(
-                                    modifier = Modifier.wrapContentSize(),
+                                    modifier = Modifier.wrapContentSize().then(itemFocusModifier),
                                     onClick = { viewModel.selectMediaItem(item) }
                                 ) { isFocused ->
                                     RichMediaCard(
@@ -294,7 +318,7 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
-                                    .fillMaxWidth(0.5f) // Centered short accent line
+                                    .fillMaxWidth(0.5f)
                                     .height(3.dp)
                                     .background(Color(0xFFFFB74D), shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
                             )
