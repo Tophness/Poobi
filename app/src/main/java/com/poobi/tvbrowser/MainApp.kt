@@ -142,13 +142,12 @@ fun ModernTab(
                 val lastKey = keyTracker.lastKeyCode
                 val isDpadLeft = lastKey == KeyEvent.KEYCODE_DPAD_LEFT
                 val isDpadRight = lastKey == KeyEvent.KEYCODE_DPAD_RIGHT
-                val isDpadUp = lastKey == KeyEvent.KEYCODE_DPAD_UP
                 val isStartup = lastKey == -1
 
                 val computedCanFocus = if (text == "Browser") {
-                    currentIsSelected || isDpadLeft || isDpadUp || isStartup
+                    currentIsSelected || isDpadLeft || isStartup
                 } else {
-                    currentIsSelected || isDpadRight || isDpadUp || isStartup
+                    currentIsSelected || isDpadRight || isStartup
                 }
 
                 this.canFocus = computedCanFocus || isFocused
