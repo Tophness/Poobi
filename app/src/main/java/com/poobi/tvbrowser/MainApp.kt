@@ -202,6 +202,8 @@ fun MainApp(
     val torrentBufferProgress by streamsViewModel.torrentBufferProgress.collectAsState()
     val torrentBufferSeeders by streamsViewModel.torrentBufferSeeders.collectAsState()
 
+    val isScrapeScreenActive = (isScraping && selectedMedia != null) || scrapedSources != null
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -256,7 +258,11 @@ fun MainApp(
                         onClick = { browserViewModel.currentAppTab.value = 1 },
                         focusRequester = streamsTabFocusRequester,
                         keyTracker = KeyTracker,
-                        modifier = Modifier.focusProperties {down = streamsContentTabFocusRequester}
+                        modifier = Modifier.focusProperties {
+                            if (isScrapeScreenActive) {
+                                down = streamsContentTabFocusRequester
+                            }
+                        }
                     )
                     
                     Spacer(modifier = Modifier.weight(1f))
@@ -354,7 +360,7 @@ fun MainApp(
                     }
                     AppTab.Streams -> {
                         when {
-                            (isScraping && selectedMedia != null) || scrapedSources != null -> {
+                            isScrapeScreenActive -> {
                                 ScrapeProgressScreen(viewModel = streamsViewModel, streamsContentTabFocusRequester = streamsContentTabFocusRequester)
                             }
                             selectedMedia != null -> {
