@@ -195,6 +195,7 @@ fun MainApp(
 
     val browserTabFocusRequester = remember { FocusRequester() }
     val streamsTabFocusRequester = remember { FocusRequester() }
+    val streamsContentTabFocusRequester = remember { FocusRequester() }
 
     val isBufferingTorrent by streamsViewModel.isBufferingTorrent.collectAsState()
     val torrentBufferStatus by streamsViewModel.torrentBufferStatus.collectAsState()
@@ -254,7 +255,8 @@ fun MainApp(
                         onFocus = { browserViewModel.currentAppTab.value = 1 },
                         onClick = { browserViewModel.currentAppTab.value = 1 },
                         focusRequester = streamsTabFocusRequester,
-                        keyTracker = KeyTracker
+                        keyTracker = KeyTracker,
+                        modifier = Modifier.focusProperties {down = streamsContentTabFocusRequester}
                     )
                     
                     Spacer(modifier = Modifier.weight(1f))
@@ -353,7 +355,7 @@ fun MainApp(
                     AppTab.Streams -> {
                         when {
                             (isScraping && selectedMedia != null) || scrapedSources != null -> {
-                                ScrapeProgressScreen(streamsViewModel)
+                                ScrapeProgressScreen(viewModel = streamsViewModel, streamsContentTabFocusRequester = streamsContentTabFocusRequester)
                             }
                             selectedMedia != null -> {
                                 MediaDetailsScreen(streamsViewModel)

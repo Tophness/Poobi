@@ -104,7 +104,7 @@ fun ScrapeTab(
 }
 
 @Composable
-fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
+fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequester: FocusRequester? = null) {
     val status by viewModel.scrapeStatusMsg.collectAsState()
     val progress by viewModel.scrapeProgress.collectAsState()
     val total by viewModel.scrapeTotal.collectAsState()
@@ -133,9 +133,24 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
     val stopScanningFocusRequester = remember { FocusRequester() }
     val sortStreamsFocusRequester = remember { FocusRequester() }
     val sortTorrentsFocusRequester = remember { FocusRequester() }
+    val firstSourceFocusRequester = remember { FocusRequester() }
 
     val currentSources = if (selectedTab == "Web") sources else torrentioSources
     val isCurrentTabScraping = if (selectedTab == "Web") isScraping else isScrapingTorrents
+
+    var userNavigatedAway by remember { mutableStateOf(false) }
+    var stopButtonHadFocus by remember { mutableStateOf(false) }
+
+    val webTabFocusTarget = remember(streamsContentTabFocusRequester) {
+        streamsContentTabFocusRequester ?: tabFocusRequesters.getOrNull(0) ?: FocusRequester.Default
+    }
+
+    LaunchedEffect(isScraping) {
+        if (isScraping) {
+            userNavigatedAway = false
+            stopButtonHadFocus = false
+        }
+    }
 
     LaunchedEffect(isScraping, isResolving) {
         if (isScraping && !isResolving) {
@@ -144,6 +159,18 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                 delay(250)
                 if (KeyTracker.lastKeyPressTime < startTime) {
                     stopScanningFocusRequester.requestFocus()
+                }
+            } catch (e: Exception) {}
+        }
+    }
+
+    LaunchedEffect(isScraping, currentSources) {
+        if (!isScraping && !userNavigatedAway && currentSources != null && currentSources.length() > 0) {
+            val startTime = System.currentTimeMillis()
+            try {
+                delay(200)
+                if (KeyTracker.lastKeyPressTime < startTime) {
+                    firstSourceFocusRequester.requestFocus()
                 }
             } catch (e: Exception) {}
         }
@@ -173,12 +200,18 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                     )
                 }
 
+                val tabRequester = if (index == 0 && streamsContentTabFocusRequester != null) {
+                    streamsContentTabFocusRequester
+                } else {
+                    tabFocusRequesters[index]
+                }
+
                 ScrapeTab(
                     text = tabName,
                     isSelected = isTabSelected,
                     onFocus = { selectedTabIndex = index },
                     onClick = { selectedTabIndex = index },
-                    modifier = Modifier.focusRequester(tabFocusRequesters[index])
+                    modifier = Modifier.focusRequester(tabRequester)
                 ) {
                     val textColor = if (isTabSelected) Color(0xFF00BCD4) else Color.Gray
                     val count = if (tabName == "Web") sources?.length() ?: 0 else torrentioSources?.length() ?: 0
@@ -222,8 +255,15 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                 .height(44.dp)
                                 .wrapContentWidth()
                                 .focusRequester(stopScanningFocusRequester)
+                                .onFocusChanged { state ->
+                                    if (state.isFocused) {
+                                        stopButtonHadFocus = true
+                                    } else if (stopButtonHadFocus && isScraping) {
+                                        userNavigatedAway = true
+                                    }
+                                }
                                 .focusProperties {
-                                    up = tabFocusRequesters.getOrNull(0) ?: FocusRequester.Default
+                                    up = webTabFocusTarget
                                 },
                             onClick = { viewModel.stopScrape(triggerSubtitles = true) }
                         ) { isFocused ->
@@ -259,7 +299,12 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                 ) {
                     if (sources != null && sources!!.length() > 0) {
                         TvFocusableBox(
-                            modifier = Modifier.height(44.dp).wrapContentWidth(),
+                            modifier = Modifier
+                                .height(44.dp)
+                                .wrapContentWidth()
+                                .focusProperties {
+                                    up = webTabFocusTarget
+                                },
                             onClick = { viewModel.startTryAll() }
                         ) { isFocused ->
                             Row(
@@ -283,7 +328,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                 .wrapContentWidth()
                                 .focusRequester(sortStreamsFocusRequester)
                                 .focusProperties {
-                                    up = tabFocusRequesters.getOrNull(0) ?: FocusRequester.Default
+                                    up = webTabFocusTarget
                                 },
                             onClick = { showSortDialog = true }
                         ) { isFocused ->
@@ -391,6 +436,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                                         .fillMaxWidth()
                                         .height(48.dp)
                                         .padding(bottom = 8.dp)
+                                        .focusRequester(firstSourceFocusRequester)
                                         .focusProperties {
                                             up = if (isScraping && !isResolving) stopScanningFocusRequester else sortStreamsFocusRequester
                                         },
@@ -454,6 +500,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel) {
                         TvFocusableBox(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .then(if (isFirstItem) Modifier.focusRequester(firstSourceFocusRequester) else Modifier)
                                 .focusProperties {
                                     if (isFirstItem) {
                                         up = if (selectedTab == "Web") {
