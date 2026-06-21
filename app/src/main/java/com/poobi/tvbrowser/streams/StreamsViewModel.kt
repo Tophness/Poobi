@@ -1806,7 +1806,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         if (_isDownloadingSubs.value || lastSubtitledItemKey == itemKey) return
         
         val cached = loadSubtitlesFromCache(itemKey)
-        if (cached.isNotEmpty()) {
+        val countPref = prefs.getInt("auto_sub_count", 1)
+        val hasEnoughCached = countPref > 0 && cached.size >= countPref
+
+        if (cached.isNotEmpty() && hasEnoughCached) {
             lastSubtitledItemKey = itemKey
             _subStatusMsg.value = "Using cached subtitles..."
             _isDownloadingSubs.value = true
@@ -1845,7 +1848,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val subs = JSONArray(subsJson)
 
                 if (subs.length() > 0) {
-                    val countPref = prefs.getInt("auto_sub_count", 1)
                     val countToGet = if (countPref == 0) subs.length() else countPref.coerceAtMost(subs.length())
                     
                     val prioritizedSubs = mutableListOf<JSONObject>()
@@ -1858,12 +1860,22 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         if (sub.optString("sync") != "true") prioritizedSubs.add(sub)
                     }
 
-                    var downloadedCount = 0
+                    var downloadedCount = cached.size
                     val newlyDownloadedSubs = mutableListOf<SubtitleData>()
 
+                    // Register existing cached subtitles right away so playback starts with them
+                    cached.forEach { sub ->
+                        interceptedSubtitleUrls[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
+                    }
+                    if (cached.isNotEmpty()) {
+                        withContext(Dispatchers.Main) {
+                            _events.value = StreamsEvent.AddSubtitlesBatch(cached)
+                        }
+                    }
+
                     withContext(Dispatchers.Main) {
-                        _subStatusMsg.value = "Downloading subtitles: 0 / $countToGet"
-                        _subProgress.value = 0f
+                        _subStatusMsg.value = "Downloading subtitles: $downloadedCount / $countToGet"
+                        _subProgress.value = if (countToGet > 0) downloadedCount.toFloat() / countToGet.toFloat() else 0f
                     }
 
                     for (i in 0 until prioritizedSubs.size) {
@@ -1872,6 +1884,18 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         val sub = prioritizedSubs[i]
                         val serviceName = sub.getString("service")
                         val actionArgs = sub.getString("action_args")
+                        val subName = sub.optString("name", "Subtitle")
+                        val subLang = sub.optString("lang", "und")
+                        val expectedLabel = "[$serviceName] $subName"
+
+                        // Skip downloading if we already have this exact subtitle in cache
+                        val isAlreadyCached = cached.any { 
+                            it.label == expectedLabel && it.lang == subLang
+                        }
+                        if (isAlreadyCached) {
+                            continue
+                        }
+
                         val filePath = scraper.callAttr("get_subtitle_file", serviceName, actionArgs).toString()
 
                         if (filePath.isNotEmpty()) {
@@ -1886,10 +1910,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                                 try {
                                     originalFile.copyTo(uniqueFile, overwrite = true)
                                     val subUri = android.net.Uri.fromFile(uniqueFile).toString()
-                                    val source = sub.optString("service", "Unknown")
-                                    val name = sub.optString("name", "Subtitle")
-                                    val label = "[$source] $name"
-                                    val lang = sub.optString("lang", "und")
+                                    val label = expectedLabel
+                                    val lang = subLang
 
                                     interceptedSubtitleUrls[subUri] = mapOf("label" to label, "lang" to lang)
                                     newlyDownloadedSubs.add(SubtitleData(subUri, label, lang))
@@ -1912,7 +1934,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         _showSubProgressBar.value = false
                         
                         if (newlyDownloadedSubs.isNotEmpty()) {
-                            saveSubtitlesToCache(itemKey, newlyDownloadedSubs)
+                            val combinedList = cached + newlyDownloadedSubs
+                            saveSubtitlesToCache(itemKey, combinedList)
                             _events.value = StreamsEvent.AddSubtitlesBatch(newlyDownloadedSubs)
                         }
 
