@@ -2132,6 +2132,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun handleNextEpisodeAutoPlay(item: JSONObject, season: Int, episode: Int) {
         isAutoplayStarting = true
+        isPlayingFromSavedLink = false
         stopScrape()
         val nextEp = episode + 1
 
@@ -2187,7 +2188,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                 var foundSource: JSONObject? = null
                 val startTime = System.currentTimeMillis()
-                val timeout = 45000L
+
+                val userTimeoutSec = prefs.getInt("global_timeout", 30)
+                val timeout = userTimeoutSec * 1000L
                 var frameCount = 0
 
                 delay(2000)
@@ -2204,12 +2207,11 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     frameCount++
 
                     val isNewScrapeStarted = total > 0 || frameCount > 8
-
                     val isFinished = message.startsWith("Finished") || 
                                      message.startsWith("Stopped") || 
                                      message.startsWith("Timeout") ||
                                      (total > 0 && current >= total) ||
-                                     (message == "No active scrape" && frameCount > 15)
+                                     (total > 0 && message == "No active scrape" && frameCount > 30)
 
                     val sortedSources = if (isNewScrapeStarted && sources != null && sources.length() > 0) {
                         sortSources(sources)
@@ -2268,11 +2270,24 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     if (foundSource == null) delay(1500)
                 }
 
+                if (foundSource == null && !finalSourcesDeferred.isCompleted) {
+                    withTimeoutOrNull(1500) {
+                        finalSourcesDeferred.await()
+                    }
+                }
+
                 if (foundSource == null && finalSourcesDeferred.isCompleted) {
                     val finalSources = finalSourcesDeferred.getCompleted()
                     if (finalSources != null && finalSources.length() > 0) {
                         val sorted = sortSources(finalSources)
                         foundSource = JSONObject(sorted.getJSONObject(0).getString("source_data"))
+                    }
+                }
+
+                if (foundSource == null) {
+                    val accumulated = _scrapedSources.value
+                    if (accumulated != null && accumulated.length() > 0) {
+                        foundSource = JSONObject(accumulated.getJSONObject(0).getString("source_data"))
                     }
                 }
 
@@ -2288,6 +2303,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 withContext(Dispatchers.Main) {
+                    _isScraping.value = false
                     performScrape(item, season, episode)
                 }
             }

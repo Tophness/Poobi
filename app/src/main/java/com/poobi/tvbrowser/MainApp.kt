@@ -121,9 +121,10 @@ fun ModernTab(
     LaunchedEffect(isFocused) {
         if (isFocused) {
             val keyCode = keyTracker.lastKeyCode
-            val isUserInitiated = keyCode == KeyEvent.KEYCODE_DPAD_UP ||
+            val isUserInitiated = (keyCode == KeyEvent.KEYCODE_DPAD_UP ||
                                   keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
-                                  keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                                  keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) &&
+                                  keyTracker.isKeyFresh()
 
             if (isUserInitiated) {
                 currentOnFocus()
