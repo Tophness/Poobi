@@ -199,7 +199,13 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
             } else {
                 val itemsToShow = if (activeCategoryIndex == 0) searchResults else libraryItems
                 if (itemsToShow != null) {
-                    val objList = (0 until itemsToShow.length()).map { itemsToShow.getJSONObject(it) }
+                    val isFavorites = activeCategoryIndex == 1
+                    val objList = if (isFavorites) {
+                        (itemsToShow.length() - 1 downTo 0).map { itemsToShow.getJSONObject(it) }
+                    } else {
+                        (0 until itemsToShow.length()).map { itemsToShow.getJSONObject(it) }
+                    }
+
                     LazyRow(
                         modifier = Modifier.fillMaxSize(), 
                         horizontalArrangement = Arrangement.spacedBy(10.dp), 
