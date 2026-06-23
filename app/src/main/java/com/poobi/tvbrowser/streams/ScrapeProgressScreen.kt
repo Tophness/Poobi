@@ -471,21 +471,9 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                         val seeders = rawData.optInt("seeders", -1)
                         val sourceName = s.optString("source", rawData.optString("source", "Unknown"))
                         val providerName = s.optString("provider", rawData.optString("provider", "Unknown"))
-                        val rawTitle = s.optString("title", rawData.optString("title", "")).substringBefore("\n").trim()
                         
-                        val (displayTitle, quality) = if (selectedTab == "Torrents") {
-                            val parsed = parseResolution(rawTitle)
-                            val titleClean = if (parsed.first.isNotEmpty()) parsed.first else "Torrent Stream"
-                            Pair(titleClean, parsed.second)
-                        } else {
-                            val titleClean = if (rawTitle.isNotEmpty() && !rawTitle.equals(sourceName, ignoreCase = true)) {
-                                rawTitle
-                            } else {
-                                sourceName
-                            }
-                            val q = s.optString("quality", rawData.optString("quality", "SD")).uppercase()
-                            Pair(titleClean, q)
-                        }
+                        val rawTitle = s.optString("title", "").substringBefore("\n").trim()
+                        val quality = s.optString("quality", rawData.optString("quality", "SD")).uppercase()
 
                         val logoResId = when {
                             quality.contains("4K") || quality.contains("2160P") -> R.drawable.res_4k
@@ -524,24 +512,52 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     if (selectedTab == "Torrents") {
-                                        val parsedLangs = LanguageHelper.parseLanguages(rawTitle)
-                                        if (parsedLangs.isNotEmpty()) {
+                                        val filenameWithExt = rawData.optString("filename", "")
+                                        val filename = if (filenameWithExt.contains(".")) filenameWithExt.substringBeforeLast(".") else filenameWithExt
+                                        val torrentName = rawData.optString("torrent_name", "")
+
+                                        val languagesDisplay = rawData.optString("languages_display", "")
+                                        if (languagesDisplay.isNotEmpty()) {
                                             Text(
-                                                text = parsedLangs,
+                                                text = languagesDisplay,
                                                 color = Color(0xFF4CAF50),
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 modifier = Modifier.padding(bottom = 2.dp)
                                             )
                                         }
-                                    }
 
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        if (selectedTab == "Web") {
+                                        TvMarqueeText(
+                                            text = filename, 
+                                            color = if (isFocused) Color.Black else Color.White, 
+                                            fontSize = 18.sp, 
+                                            fontWeight = FontWeight.Bold,
+                                            isFocused = isFocused,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        Spacer(modifier = Modifier.height(2.dp))
+
+                                        TvMarqueeText(
+                                            text = torrentName,
+                                            color = if (isFocused) Color(0xFF1B5E20) else Color(0xFF4CAF50),
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            isFocused = isFocused,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    } else {
+                                        val displayTitle = if (rawTitle.isNotEmpty() && !rawTitle.equals(sourceName, ignoreCase = true)) {
+                                            rawTitle
+                                        } else {
+                                            sourceName
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             Row(
                                                 modifier = Modifier.weight(1f),
                                                 verticalAlignment = Alignment.CenterVertically,
@@ -583,19 +599,8 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                                     )
                                                 }
                                             }
-                                        } else {
-                                            TvMarqueeText(
-                                                text = displayTitle, 
-                                                color = if (isFocused) Color.Black else Color.White, 
-                                                fontSize = 18.sp, 
-                                                fontWeight = FontWeight.Bold,
-                                                isFocused = isFocused,
-                                                modifier = Modifier.weight(1f)
-                                            )
                                         }
-                                    }
 
-                                    if (selectedTab == "Web") {
                                         Spacer(modifier = Modifier.height(4.dp))
                                         if (isBrowser) {
                                             Text(
@@ -642,11 +647,11 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                             }
                                         }
 
-                                        val size = parseSize(rawTitle)
-                                        if (size.isNotEmpty()) {
+                                        val sizeStr = rawData.optString("size", "")
+                                        if (sizeStr.isNotEmpty()) {
                                             Text(
-                                                text = size,
-                                                color = Color(0xFF4CAF50),
+                                                text = sizeStr,
+                                                color = if (isFocused) Color.Black else Color(0xFF4CAF50),
                                                 fontSize = 20.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -750,29 +755,4 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
             }
         )
     }
-}
-
-private fun parseResolution(title: String): Pair<String, String> {
-    val resolutions = listOf("4k", "2160p", "1080p", "2k", "720p", "480p", "360p", "hd", "sd", "cam", "scr")
-    for (res in resolutions) {
-        val regex = "(?i)\\[$res\\]|\\b$res\\b".toRegex()
-        val match = regex.find(title)
-        if (match != null) {
-            val cleaned = title.replace(regex, "")
-                .replace("[]", "")
-                .replace("()", "")
-                .replace(Regex("^[-_\\s]+|[-_\\s]+$"), "")
-                .replace(Regex("\\s+"), " ")
-                .trim()
-            return Pair(cleaned, res.uppercase())
-        }
-    }
-    return Pair(title, "SD")
-}
-
-private fun parseSize(title: String): String {
-    if (title.isEmpty()) return ""
-    val sizeRegex = """💾\s*([\d\.]+\s*(?:GB|MB|KB))""".toRegex(RegexOption.IGNORE_CASE)
-    val match = sizeRegex.find(title)
-    return match?.groupValues?.get(1) ?: ""
 }

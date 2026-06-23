@@ -1604,20 +1604,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     val finalStreams = JSONArray()
                     for (i in 0 until rawStreams.length()) {
                         val r = rawStreams.getJSONObject(i)
-                        val obj = JSONObject()
-                        val source = r.optString("source", "Unknown")
-                        val quality = r.optString("quality", "SD")
-                        val provider = r.optString("provider", "Torrentio")
-                        val torrentTitle = r.optString("title", "")
-                        
-                        val displayTitle = if (torrentTitle.isNotEmpty()) {
-                            torrentTitle
-                        } else {
-                            "[$quality] $source ($provider)"
+                        val obj = JSONObject().apply {
+                            put("title", r.optString("title", ""))
+                            put("source_data", r.toString())
                         }
-                        
-                        obj.put("title", displayTitle)
-                        obj.put("source_data", r.toString())
                         finalStreams.put(obj)
                     }
 

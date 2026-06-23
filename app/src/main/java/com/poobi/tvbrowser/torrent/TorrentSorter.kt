@@ -25,19 +25,6 @@ class TorrentSorter(
             TorrentSortCriteria.RESOLUTION
         )
 
-        fun parseSizeToBytes(title: String): Long {
-            val sizeRegex = """💾\s*([\d\.]+)\s*(GB|MB|KB)""".toRegex(RegexOption.IGNORE_CASE)
-            val match = sizeRegex.find(title) ?: return Long.MAX_VALUE
-            val value = match.groupValues[1].toDoubleOrNull() ?: return Long.MAX_VALUE
-            val unit = match.groupValues[2].uppercase()
-            return when (unit) {
-                "GB" -> (value * 1024 * 1024 * 1024).toLong()
-                "MB" -> (value * 1024 * 1024).toLong()
-                "KB" -> (value * 1024).toLong()
-                else -> Long.MAX_VALUE
-            }
-        }
-
         fun matchesPreferredLanguage(title: String, data: JSONObject, preferredLanguage: String): Boolean {
             val langCode = when (preferredLanguage.lowercase()) {
                 "english" -> "en"
@@ -85,8 +72,8 @@ class TorrentSorter(
                         if (matchA == matchB) 0 else if (matchA) -1 else 1
                     }
                     TorrentSortCriteria.SIZE -> {
-                        val sizeA = parseSizeToBytes(titleA)
-                        val sizeB = parseSizeToBytes(titleB)
+                        val sizeA = dataA.optLong("size_bytes", 0L)
+                        val sizeB = dataB.optLong("size_bytes", 0L)
                         sizeA.compareTo(sizeB)
                     }
                     TorrentSortCriteria.SEEDERS -> {

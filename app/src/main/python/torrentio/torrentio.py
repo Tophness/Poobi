@@ -23,6 +23,49 @@ def detect_language(torrent_info):
             
     return 'en'
 
+def parse_languages_display(torrent_info):
+    info_lower = torrent_info.lower()
+    detected = []
+
+    flag_to_lang = {
+        "🇺🇸": "English", "🇬🇧": "English", "🇮🇹": "Italian", "🇷🇺": "Russian",
+        "🇺🇦": "Ukrainian", "🇪🇸": "Spanish", "🇲🇽": "Spanish", "🇵🇹": "Portuguese",
+        "🇧🇷": "Portuguese", "🇫🇷": "French", "🇩🇪": "German", "🇵🇱": "Polish",
+        "🇮🇳": "Hindi"
+    }
+    lang_to_flag = {
+        "English": "🇬🇧", "Italian": "🇮🇹", "Russian": "🇷🇺", "Ukrainian": "🇺🇦",
+        "Spanish": "🇪🇸", "Portuguese": "🇵🇹", "French": "🇫🇷", "German": "🇩🇪",
+        "Polish": "🇵🇱", "Hindi": "🇮🇳"
+    }
+
+    for flag, lang in flag_to_lang.items():
+        if flag in torrent_info:
+            display = f"{flag} {lang}"
+            if display not in detected:
+                detected.append(display)
+
+    codes = {
+        "eng": "English", "ita": "Italian", "rus": "Russian", "ukr": "Ukrainian",
+        "spa": "Spanish", "por": "Portuguese", "fra": "French", "ger": "German",
+        "pol": "Polish", "hin": "Hindi"
+    }
+    for code, lang in codes.items():
+        if re.search(r'\b' + re.escape(code) + r'\b', info_lower):
+            flag = lang_to_flag.get(lang, "")
+            display = f"{flag} {lang}".strip()
+            if display not in detected:
+                detected.append(display)
+
+    if not detected:
+        has_cyrillic = any('\u0400' <= char <= '\u04FF' for char in torrent_info)
+        if has_cyrillic:
+            detected.append("🇷🇺 Russian")
+        else:
+            detected.append("🇬🇧 English")
+
+    return " / ".join(detected)
+
 class source:
     def __init__(self):
         self.priority = 1
@@ -88,24 +131,43 @@ class source:
 
                 quality = 'SD'
                 full_text = (name + " " + torrent_info).lower()
-                if '4k' in full_text or '2160p' in full_text:
+                if '4k' in full_text:
                     quality = '4K'
+                if '2160p' in full_text:
+                    quality = '2K'
                 elif '1080p' in full_text:
                     quality = '1080p'
                 elif '720p' in full_text:
                     quality = '720p'
 
-                display_title = torrent_info.split('\n')[0]
-                metadata = ""
-                lines = torrent_info.split('\n')
-                if len(lines) > 2:
-                    metadata = " (" + lines[2].strip() + ")"
+                size_str = ""
+                size_bytes = 0
+                size_match = re.search(r'💾\s*([\d\.,]+)\s*(GB|MB|KB)', torrent_info, re.IGNORECASE)
+                if size_match:
+                    val_str = size_match.group(1).replace(',', '')
+                    val = float(val_str)
+                    unit = size_match.group(2).upper()
+                    size_str = f"{val_str} {unit}"
+                    if unit == "GB":
+                        size_bytes = int(val * 1024 * 1024 * 1024)
+                    elif unit == "MB":
+                        size_bytes = int(val * 1024 * 1024)
+                    elif unit == "KB":
+                        size_bytes = int(val * 1024)
+
+                lines = [line.strip() for line in torrent_info.split('\n') if line.strip()]
+                torrent_name = lines[0] if len(lines) > 0 else "Unknown Torrent"
+
+                filename = stream.get('behaviorHints', {}).get('filename', '')
+                if not filename and len(lines) > 1:
+                    if not any(sym in lines[1] for sym in ['👤', '💾', '⚙️']):
+                        filename = lines[1]
+                if not filename:
+                    filename = "video.mkv"
 
                 stream_url = stream.get('url')
                 info_hash = stream.get('infoHash')
                 file_idx = stream.get('fileIdx', 0)
-
-                filename = stream.get('behaviorHints', {}).get('filename', 'video.mkv')
 
                 if not stream_url and info_hash:
                     safe_filename = urllib.parse.quote(filename)
@@ -113,17 +175,17 @@ class source:
 
                 if stream_url:
                     sources.append({
-                        'source': name.replace('\n', ' '),
                         'quality': quality,
                         'language': detect_language(torrent_info),
+                        'languages_display': parse_languages_display(torrent_info),
                         'url': stream_url,
-                        'direct': True,
-                        'provider': 'Torrentio',
-                        'title': f"[{quality}] {torrent_info}",
                         'infoHash': info_hash,
                         'fileIdx': file_idx,
-                        'trackers': stream.get('sources', []),
-                        'seeders': seeders
+                        'seeders': seeders,
+                        'size': size_str,
+                        'size_bytes': size_bytes,
+                        'filename': filename,
+                        'torrent_name': torrent_name
                     })
         except Exception as e:
             print(f"Torrentio error: {e}")
