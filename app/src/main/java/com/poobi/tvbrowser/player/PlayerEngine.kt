@@ -206,6 +206,12 @@ class PlayerEngine(
         mergedHeaders.putAll(parsedHeaders)
         val finalHeaders = sanitizeHeaders(cleanUrl, mergedHeaders)
 
+        // Dynamically align ExoPlayer's request User-Agent with the WebView's active User-Agent
+        val uaKey = finalHeaders.keys.find { it.equals("user-agent", ignoreCase = true) }
+        val activeUserAgent = uaKey?.let { finalHeaders[it] } 
+            ?: prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+            ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+
         lastVideoUrl = cleanUrl
         lastVideoTitle = title
         lastScrapedItem = item
@@ -234,7 +240,7 @@ class PlayerEngine(
         val readTimeout = if (isLocalHost) 120000 else DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS
 
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"))
+            .setUserAgent(activeUserAgent)
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(finalHeaders)
             .setConnectTimeoutMs(connectTimeout)

@@ -446,6 +446,82 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private fun downloadAndCacheHlsPlaylist(
+        playlistUrl: String, 
+        headers: Map<String, String>
+    ): Triple<String, ByteArray, Map<String, String>>? {
+        try {
+            val connection = URL(playlistUrl).openConnection() as HttpURLConnection
+            headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
+            connection.connectTimeout = 6000
+            connection.readTimeout = 6000
+            
+            val responseCode = connection.responseCode
+            val responseMessage = connection.responseMessage ?: "OK"
+            
+            if (responseCode in 200..299) {
+                val content = connection.inputStream.bufferedReader().use { it.readText() }
+                
+                // Inspect HLS content to determine if it is a subtitle track list rather than video
+                val isSubtitlePlaylist = content.contains(".vtt", ignoreCase = true) || 
+                                         content.contains(".srt", ignoreCase = true) || 
+                                         content.contains(".webvtt", ignoreCase = true) ||
+                                         content.contains(".ass", ignoreCase = true)
+                
+                if (isSubtitlePlaylist) {
+                    interceptedSubtitleUrls[playlistUrl] = headers
+                    return null
+                }
+
+                // Convert relative paths to absolute URLs, while dropping optional trick-play I-Frame tracks
+                val lines = content.lines()
+                val resolvedLines = mutableListOf<String>()
+                for (line in lines) {
+                    val trimmed = line.trim()
+                    if (trimmed.startsWith("#EXT-X-I-FRAME-STREAM-INF")) {
+                        continue // Prevent ExoPlayer from making network requests to optional I-Frame variants
+                    }
+                    if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
+                        if (!trimmed.startsWith("http") && !trimmed.startsWith("data:")) {
+                            try {
+                                resolvedLines.add(URL(URL(playlistUrl), trimmed).toString())
+                            } catch (e: Exception) {
+                                resolvedLines.add(trimmed)
+                            }
+                        } else {
+                            resolvedLines.add(trimmed)
+                        }
+                    } else {
+                        resolvedLines.add(line)
+                    }
+                }
+                
+                val resolvedContent = resolvedLines.joinToString("\n")
+                val uniqueFilename = "cached_playlist_${playlistUrl.hashCode()}.m3u8"
+                val localFile = File(appContext.cacheDir, uniqueFilename)
+                localFile.writeText(resolvedContent)
+                
+                val responseHeaders = mutableMapOf<String, String>()
+                connection.headerFields.forEach { (key, values) ->
+                    if (key != null && values.isNotEmpty()) {
+                        responseHeaders[key] = values.joinToString(", ")
+                    }
+                }
+                
+                return Triple(
+                    Uri.fromFile(localFile).toString(), 
+                    resolvedContent.toByteArray(Charsets.UTF_8), 
+                    responseHeaders
+                )
+            } else {
+                Log.w("BrowserViewModel", "Failed synchronous m3u8 download. Response code: $responseCode")
+            }
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Exception during synchronous m3u8 download", e)
+        }
+        return null
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView(wv: WebView) {
 		wv.isFocusable = true
@@ -566,8 +642,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                                  urlLower.contains("mpd") ||
                                  urlLower.contains("/hls/") ||
                                  urlLower.contains(".mp4") || 
-                                 urlLower.contains(".mkv") ||
-                                 urlLower.contains(".ts")
+                                 urlLower.contains(".mkv")
 
                     if (isVideo) {
                         val wasEmpty = interceptedMediaUrls.isEmpty()
@@ -596,8 +671,30 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }
 
+                        // Catch m3u8 playlist requests synchronously to avoid double network/single-use token issues
+                        if (urlLower.contains("m3u8") && !urlLower.contains(".ts")) {
+                            val cachedData = downloadAndCacheHlsPlaylist(requestedUrl, headers)
+                            if (cachedData != null) {
+                                val (localFileUrl, contentBytes, responseHeaders) = cachedData
+                                
+                                interceptedMediaUrls[localFileUrl] = headers
+                                
+                                if (videoTriggerPref.value == 0 && _isBrowsing.value && wasEmpty) {
+                                    view?.post { attemptVideoExtraction(null, null) }
+                                }
+                                
+                                return WebResourceResponse(
+                                    "application/x-mpegURL",
+                                    "UTF-8",
+                                    200,
+                                    "OK",
+                                    responseHeaders,
+                                    ByteArrayInputStream(contentBytes)
+                                )
+                            }
+                        }
+
                         interceptedMediaUrls[requestedUrl] = headers
-                        
                         if (videoTriggerPref.value == 0 && _isBrowsing.value && wasEmpty) {
                             view?.post { attemptVideoExtraction(null, null) }
                         }
@@ -886,7 +983,25 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             }
             candidates.addAll(interceptedMediaUrls.keys)
 
-            val finalCandidates = candidates.distinct()
+            var finalCandidates = candidates.distinct()
+
+            val hasPlaylist = finalCandidates.any { it.contains(".m3u8", ignoreCase = true) || it.contains(".mpd", ignoreCase = true) || it.contains("cached_playlist") }
+            if (hasPlaylist) {
+                finalCandidates = finalCandidates.filterNot { 
+                    it.contains(".ts", ignoreCase = true) || 
+                    it.contains(".m4s", ignoreCase = true) || 
+                    it.contains("seg-", ignoreCase = true) || 
+                    it.contains("segment", ignoreCase = true)
+                }
+
+                // If both the local cached HLS file and its original remote URL are present, keep only the local cached HLS file copy
+                val hasLocalCache = finalCandidates.any { it.startsWith("file://") && it.contains("cached_playlist") }
+                if (hasLocalCache) {
+                    finalCandidates = finalCandidates.filterNot {
+                        it.startsWith("http") && (it.contains(".m3u8", ignoreCase = true) || it.contains(".mpd", ignoreCase = true))
+                    }
+                }
+            }
 
             if (finalCandidates.isNotEmpty()) {
                 val pref = extractVideoPref.value
@@ -930,6 +1045,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         } else {
             if (ask.view != null) {
                 _customView.value = ask.view
+                isExtractionActive = false
             } else {
                 resumeTimersOnCurrent()
             }
@@ -948,7 +1064,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             for (url in streams) {
                 val headers = interceptedMediaUrls[url] ?: emptyMap()
-                if (url.contains(".m3u8") || url.contains("/streamsvr/") || url.contains("m3u8-proxy")) {
+                if (url.contains(".m3u8") || url.contains("/streamsvr/") || url.contains("m3u8-proxy") || url.contains("cached_playlist")) {
                     try {
                         val connection = URL(url).openConnection() as HttpURLConnection
                         headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
@@ -1035,6 +1151,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     } else if (pref == 2) {
                         if (view != null) {
                             _customView.value = view
+                            isExtractionActive = false
                         } else {
                             resumeTimersOnCurrent()
                         }
