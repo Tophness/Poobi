@@ -479,7 +479,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 for (line in lines) {
                     val trimmed = line.trim()
                     if (trimmed.startsWith("#EXT-X-I-FRAME-STREAM-INF")) {
-                        continue // Prevent ExoPlayer from making network requests to optional I-Frame variants
+                        continue
                     }
                     if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
                         if (!trimmed.startsWith("http") && !trimmed.startsWith("data:")) {
@@ -500,7 +500,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val uniqueFilename = "cached_playlist_${playlistUrl.hashCode()}.m3u8"
                 val localFile = File(appContext.cacheDir, uniqueFilename)
                 localFile.writeText(resolvedContent)
-                
                 val responseHeaders = mutableMapOf<String, String>()
                 connection.headerFields.forEach { (key, values) ->
                     if (key != null && values.isNotEmpty()) {
@@ -1188,21 +1187,35 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         alternativeUrls: List<String>? = null, 
         alternativeNames: List<String>? = null
     ) {
-        currentWebView?.apply {
-            onPause()
-            pauseTimers()
-            evaluateJavascript("""
+        val wv = currentWebView
+        if (wv != null) {
+            wv.onPause()
+            wv.pauseTimers()
+            wv.evaluateJavascript("""
                 (function() {
                     var videos = document.getElementsByTagName('video');
                     for (var i = 0; i < videos.length; i++) {
-                        videos[i].pause();
-                        videos[i].src = "";
-                        videos[i].load();
+                        try {
+                            videos[i].pause();
+                            videos[i].src = "";
+                            videos[i].load();
+                        } catch(e) {}
                     }
+
+                    var iframes = document.querySelectorAll('iframe');
+                    for (var j = 0; j < iframes.length; j++) {
+                        try {
+                            iframes[j].src = "about:blank";
+                        } catch(e) {}
+                    }
+                    return true;
                 })();
-            """.trimIndent(), null)
+            """.trimIndent()) {
+                onPlayNativeVideo?.invoke(url, title, alternativeUrls, alternativeNames)
+            }
+        } else {
+            onPlayNativeVideo?.invoke(url, title, alternativeUrls, alternativeNames)
         }
-        onPlayNativeVideo?.invoke(url, title, alternativeUrls, alternativeNames)
     }
 
     fun dismissStreamPicker() {
