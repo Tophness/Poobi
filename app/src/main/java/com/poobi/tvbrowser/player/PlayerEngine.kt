@@ -141,6 +141,11 @@ class PlayerEngine(
 		return mergedHeaders
 	}
 
+	fun resetUpNextDismissed() {
+        isUpNextDismissed = false
+        _showUpNext.value = true
+    }
+
     fun setControllerVisible(visible: Boolean) {
         _isControllerVisible.value = visible
     }

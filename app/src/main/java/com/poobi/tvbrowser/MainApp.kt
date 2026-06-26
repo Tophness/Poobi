@@ -546,30 +546,32 @@ fun MainApp(
 
                 val showUpNext by playerEngine.showUpNext.collectAsState()
                 val nextEpisodeData by playerEngine.nextEpisodeData.collectAsState()
-
-                UpNextOverlay(
-                    isVisible = showUpNext,
-                    isControllerVisible = isControllerVisible,
-                    nextEpisodeJson = nextEpisodeData,
-                    playerEngine = playerEngine,
-                    onTriggerAutoplay = {
-                        playerEngine.dismissUpNext()
-                        playerEngine.stopAndRelease()
-                        streamsViewModel.selectedItem.value?.let { item ->
-                            val season = streamsViewModel.lastScrapedSeason
-                            val episode = streamsViewModel.lastScrapedEpisode
-                            if (season != null && episode != null) {
-                                streamsViewModel.handleNextEpisodeAutoPlay(item, season, episode)
+                val nextEpisodeStr = remember(nextEpisodeData) { nextEpisodeData?.toString() ?: "" }
+                key(nextEpisodeStr) {
+                    UpNextOverlay(
+                        isVisible = showUpNext,
+                        isControllerVisible = isControllerVisible,
+                        nextEpisodeJson = nextEpisodeData,
+                        playerEngine = playerEngine,
+                        onTriggerAutoplay = {
+                            playerEngine.dismissUpNext()
+                            playerEngine.stopAndRelease()
+                            streamsViewModel.selectedItem.value?.let { item ->
+                                val season = streamsViewModel.lastScrapedSeason
+                                val episode = streamsViewModel.lastScrapedEpisode
+                                if (season != null && episode != null) {
+                                    streamsViewModel.handleNextEpisodeAutoPlay(item, season, episode)
+                                }
                             }
+                        },
+                        onDismissOverlay = {
+                            playerEngine.dismissUpNext()
+                        },
+                        onSeek = { direction, repeatCount ->
+                            playerEngine.seekVideo(direction, repeatCount)
                         }
-                    },
-                    onDismissOverlay = {
-                        playerEngine.dismissUpNext()
-                    },
-                    onSeek = { direction, repeatCount ->
-                        playerEngine.seekVideo(direction, repeatCount)
-                    }
-                )
+                    )
+                }
 
                 val showQualitySelector by playerEngine.showQualitySelector.collectAsState()
                 val qualityOptions by playerEngine.qualityOptions.collectAsState()

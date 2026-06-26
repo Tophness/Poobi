@@ -520,6 +520,14 @@ class MainActivity : AppCompatActivity() {
         if (event.action == KeyEvent.ACTION_DOWN) {
             KeyTracker.lastKeyCode = event.keyCode
             KeyTracker.lastKeyPressTime = System.currentTimeMillis()
+            if (playerEngine.isPlayerActive.value && 
+                (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER)) {
+                if (playerEngine.isUpNextDismissed) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        playerEngine.resetUpNextDismissed()
+                    }
+                }
+            }
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -560,7 +568,11 @@ class MainActivity : AppCompatActivity() {
 
             if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                 if (event.action == KeyEvent.ACTION_DOWN) {
-                    if (pView != null && pView.isControllerFullyVisible()) {
+                    val isUpNextFocused = playerEngine.showUpNext.value && currentFocus?.javaClass?.name?.contains("Compose") == true
+
+                    if (isUpNextFocused) {
+                        playerEngine.dismissUpNext()
+                    } else if (pView != null && pView.isControllerFullyVisible()) {
                         pView.hideController()
                     } else {
                         playerEngine.stopAndRelease()
@@ -607,28 +619,25 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     null
                 }
-                val focusedName = focusedView?.javaClass?.simpleName
-                
-                val shouldSeek = if (!isControllerVisible) {
-                    true
-                } else {
-                    focusedView != null && (
-                        idName == "exo_play_pause" || 
-                        idName == "exo_play" || 
-                        idName == "exo_pause" || 
-                        idName == "exo_progress" || 
-                        idName == "exo_timebar" || 
-                        idName == "exo_time_bar"
-                    )
-                }
+				val isUpNextFocused = playerEngine.showUpNext.value && 
+									  currentFocus?.javaClass?.name?.contains("Compose") == true
 
-                if (shouldSeek) {
-                    if (event.action == KeyEvent.ACTION_DOWN) {
-                        val direction = if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
-                        playerEngine.seekVideo(direction, event.repeatCount)
-                    }
-                    return true
-                }
+				val shouldSeek = !isUpNextFocused && (
+								 !isControllerVisible || 
+								 focusedView == null || 
+								 idName == "exo_play_pause" || 
+								 idName == "exo_play" || 
+								 idName == "exo_pause" || 
+								 idName == "exo_progress" || 
+								 idName == "exo_timebar" || 
+								 idName == "exo_time_bar"
+								 )
+
+				if (shouldSeek) {
+					val direction = if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
+					playerEngine.seekVideo(direction, event.repeatCount)
+					return true
+				}
             }
 
             if (event.action == KeyEvent.ACTION_DOWN && playerEngine.showUpNext.value) {

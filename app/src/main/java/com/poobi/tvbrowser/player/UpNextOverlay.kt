@@ -30,6 +30,23 @@ import androidx.compose.ui.unit.sp
 import com.poobi.tvbrowser.shared.RemoteImage
 import org.json.JSONObject
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+private fun findViewByResourceName(root: android.view.View, name: String): android.view.View? {
+    if (root.id != android.view.View.NO_ID) {
+        try {
+            val entryName = root.resources.getResourceEntryName(root.id)
+            if (entryName == name) return root
+        } catch (e: Exception) {}
+    }
+    if (root is android.view.ViewGroup) {
+        for (i in 0 until root.childCount) {
+            val found = findViewByResourceName(root.getChildAt(i), name)
+            if (found != null) return found
+        }
+    }
+    return null
+}
 
 @Composable
 fun UpNextFocusableBox(
@@ -37,6 +54,7 @@ fun UpNextFocusableBox(
     focusRequester: FocusRequester? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    onUserInteract: () -> Unit = {},
     onUpKeyRedirect: () -> Unit = {},
     onDownKeyRedirect: () -> Unit = {},
     onBackRedirect: () -> Unit = {},
@@ -64,6 +82,7 @@ fun UpNextFocusableBox(
             .onPreviewKeyEvent { keyEvent ->
                 val nativeEvent = keyEvent.nativeKeyEvent
                 if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
+                    onUserInteract()
                     when (nativeEvent.keyCode) {
                         KeyEvent.KEYCODE_DPAD_UP -> {
                             onUpKeyRedirect()
@@ -84,7 +103,10 @@ fun UpNextFocusableBox(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick
+                onClick = {
+                    onUserInteract()
+                    onClick()
+                }
             )
             .focusable(interactionSource = interactionSource),
         content = { content(isFocused) }
@@ -101,22 +123,75 @@ fun UpNextOverlay(
     onDismissOverlay: () -> Unit,
     onSeek: (direction: Int, repeatCount: Int) -> Unit
 ) {
-    val actualVisible = isVisible
+    var hasFinishedFirstRun by remember { mutableStateOf(false) }
+    var isDismissedByUser by remember { mutableStateOf(false) }
+    var isHiddenLocally by remember { mutableStateOf(false) }
+    var isCompressed by remember { mutableStateOf(false) }
+    var hasAutoCompressed by remember { mutableStateOf(false) }
+    var isDismissing by remember { mutableStateOf(false) }
+
+    var interactionTrigger by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
+
+    val onUserInteract: () -> Unit = {
+        interactionTrigger++
+    }
+
+    LaunchedEffect(isVisible) {
+        if (!isVisible) {
+            isDismissing = false
+        }
+    }
+
+    LaunchedEffect(isControllerVisible) {
+        if (isControllerVisible && isVisible) {
+            isHiddenLocally = false
+            isDismissedByUser = false
+            interactionTrigger = 0
+        }
+    }
+
+    LaunchedEffect(isDismissedByUser) {
+        if (isDismissedByUser) {
+            hasFinishedFirstRun = true
+        }
+    }
+
+    val actualVisible = if (hasFinishedFirstRun) {
+        isVisible && isControllerVisible && !isDismissedByUser
+    } else {
+        isVisible && !isDismissedByUser && !isHiddenLocally
+    }
+
+    LaunchedEffect(actualVisible, interactionTrigger, hasFinishedFirstRun) {
+        if (actualVisible && !hasFinishedFirstRun) {
+            delay(5000)
+            if (!isCompressed && !hasAutoCompressed) {
+                isCompressed = true
+                hasAutoCompressed = true
+            }
+        }
+    }
+
+    LaunchedEffect(isCompressed, interactionTrigger, hasFinishedFirstRun) {
+        if (isCompressed && actualVisible && !hasFinishedFirstRun) {
+            delay(5000)
+            isHiddenLocally = true
+            hasFinishedFirstRun = true
+            onDismissOverlay()
+        }
+    }
 
     if (actualVisible && nextEpisodeJson != null) {
         val mainCardFocusRequester = remember { FocusRequester() }
         val leftTabFocusRequester = remember { FocusRequester() }
         val rightTabFocusRequester = remember { FocusRequester() }
 
-        var isCompressed by remember { mutableStateOf(false) }
-        var hasAutoCompressed by remember { mutableStateOf(false) }
-        var isDismissing by remember { mutableStateOf(false) }
-
         LaunchedEffect(isCompressed) {
             playerEngine.upNextFocusRequester = if (isCompressed) leftTabFocusRequester else mainCardFocusRequester
         }
 
-        LaunchedEffect(actualVisible, isCompressed) {
+        LaunchedEffect(actualVisible, isCompressed, isControllerVisible) {
             if (actualVisible) {
                 if (!isControllerVisible) {
                     delay(150)
@@ -127,18 +202,6 @@ fun UpNextOverlay(
                             mainCardFocusRequester.requestFocus()
                         }
                     } catch (e: Exception) {}
-                }
-            }
-        }
-
-        LaunchedEffect(actualVisible) {
-            if (actualVisible) {
-                isCompressed = false
-                hasAutoCompressed = false
-                delay(5000)
-                if (!isCompressed && !hasAutoCompressed) {
-                    isCompressed = true
-                    hasAutoCompressed = true
                 }
             }
         }
@@ -168,31 +231,30 @@ fun UpNextOverlay(
             bottomEnd = 0.dp
         )
 
-        val parentBgColor = if (isCompressed) Color(0xFF00BCD4) else Color(0xFF1E1E24).copy(alpha = 0.95f)
+        val parentBgColor = Color(0xFF1E1E24).copy(alpha = 0.95f)
 
         val navigateUpToPlayerControls = {
             val pView = playerEngine.playerView
-            val playPauseBtn = pView?.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
-                ?: pView?.findViewById<android.view.View>(pView.resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui"))
-            playPauseBtn?.requestFocus()
+            if (pView != null) {
+                val playPauseBtn = findViewByResourceName(pView, "exo_play_pause")
+                    ?: findViewByResourceName(pView, "exo_play")
+                    ?: findViewByResourceName(pView, "exo_pause")
+                playPauseBtn?.requestFocus()
+            }
         }
 
         val navigateDownToPlayerControls = {
             val pView = playerEngine.playerView
             if (pView != null) {
-                val progressId = try {
-                    androidx.media3.ui.R.id.exo_progress
-                } catch (e: Throwable) {
-                    pView.resources.getIdentifier("exo_progress", "id", "androidx.media3.ui")
-                        .takeIf { it != 0 }
-                        ?: pView.resources.getIdentifier("exo_progress", "id", pView.context.packageName)
-                }
-                val progressBtn = if (progressId != 0) pView.findViewById<android.view.View>(progressId) else null
+                val progressBtn = findViewByResourceName(pView, "exo_progress")
+                    ?: findViewByResourceName(pView, "exo_timebar")
+                    ?: findViewByResourceName(pView, "exo_time_bar")
                 if (progressBtn != null && progressBtn.isFocusable && progressBtn.visibility == android.view.View.VISIBLE) {
                     progressBtn.requestFocus()
                 } else {
-                    val playPauseBtn = pView.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
-                        ?: pView.findViewById<android.view.View>(pView.resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui"))
+                    val playPauseBtn = findViewByResourceName(pView, "exo_play_pause")
+                        ?: findViewByResourceName(pView, "exo_play")
+                        ?: findViewByResourceName(pView, "exo_pause")
                     playPauseBtn?.requestFocus()
                 }
             }
@@ -222,9 +284,17 @@ fun UpNextOverlay(
                         modifier = Modifier.fillMaxSize(),
                         focusRequester = leftTabFocusRequester,
                         onClick = { 
+                            onUserInteract()
                             isCompressed = false
-                            hasAutoCompressed = true
+                            hasAutoCompressed = false
+                            scope.launch {
+                                delay(50)
+                                try {
+                                    mainCardFocusRequester.requestFocus()
+                                } catch (e: Exception) {}
+                            }
                         },
+                        onUserInteract = onUserInteract,
                         onUpKeyRedirect = { navigateUpToPlayerControls() },
                         onDownKeyRedirect = { navigateDownToPlayerControls() },
                         onBackRedirect = onDismissOverlay
@@ -254,7 +324,11 @@ fun UpNextOverlay(
                                 .weight(1f)
                                 .fillMaxHeight(),
                             focusRequester = mainCardFocusRequester,
-                            onClick = onTriggerAutoplay,
+                            onClick = {
+                                onUserInteract()
+                                onTriggerAutoplay()
+                            },
+                            onUserInteract = onUserInteract,
                             onLongClick = { isDismissing = true },
                             onUpKeyRedirect = { navigateUpToPlayerControls() },
                             onDownKeyRedirect = { navigateDownToPlayerControls() },
@@ -338,9 +412,17 @@ fun UpNextOverlay(
                                 .fillMaxHeight(),
                             focusRequester = rightTabFocusRequester,
                             onClick = { 
+                                onUserInteract()
                                 isCompressed = true
                                 hasAutoCompressed = true
+                                scope.launch {
+                                    delay(50)
+                                    try {
+                                        leftTabFocusRequester.requestFocus()
+                                    } catch (e: Exception) {}
+                                }
                             },
+                            onUserInteract = onUserInteract,
                             onUpKeyRedirect = { navigateUpToPlayerControls() },
                             onDownKeyRedirect = { navigateDownToPlayerControls() },
                             onBackRedirect = onDismissOverlay
