@@ -430,10 +430,12 @@ fun MainApp(
                                 playerEngine.setControllerVisible(visible)
                                 if (visible) {
                                     post {
-                                        val playPauseBtn = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
-                                            ?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui"))
-                                            ?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", context.packageName))
-                                        playPauseBtn?.requestFocus()
+                                        if (!playerEngine.showUpNext.value) {
+                                            val playPauseBtn = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
+                                                ?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui"))
+                                                ?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", context.packageName))
+                                            playPauseBtn?.requestFocus()
+                                        }
                                     }
                                 }
                             })

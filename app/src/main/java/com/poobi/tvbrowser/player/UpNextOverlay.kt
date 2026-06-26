@@ -38,6 +38,7 @@ fun UpNextFocusableBox(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     onUpKeyRedirect: () -> Unit = {},
+    onDownKeyRedirect: () -> Unit = {},
     onBackRedirect: () -> Unit = {},
     content: @Composable BoxScope.(isFocused: Boolean) -> Unit
 ) {
@@ -68,6 +69,10 @@ fun UpNextFocusableBox(
                             onUpKeyRedirect()
                             true
                         }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            onDownKeyRedirect()
+                            true
+                        }
                         KeyEvent.KEYCODE_BACK -> {
                             onBackRedirect()
                             true
@@ -81,10 +86,9 @@ fun UpNextFocusableBox(
                 indication = null,
                 onClick = onClick
             )
-            .focusable(interactionSource = interactionSource)
-    ) {
-        content(isFocused)
-    }
+            .focusable(interactionSource = interactionSource),
+        content = { content(isFocused) }
+    )
 }
 
 @Composable
@@ -97,7 +101,7 @@ fun UpNextOverlay(
     onDismissOverlay: () -> Unit,
     onSeek: (direction: Int, repeatCount: Int) -> Unit
 ) {
-    val actualVisible = isVisible && isControllerVisible
+    val actualVisible = isVisible
 
     if (actualVisible && nextEpisodeJson != null) {
         val mainCardFocusRequester = remember { FocusRequester() }
@@ -107,21 +111,23 @@ fun UpNextOverlay(
         var isCompressed by remember { mutableStateOf(false) }
         var hasAutoCompressed by remember { mutableStateOf(false) }
         var isDismissing by remember { mutableStateOf(false) }
-        
-        LaunchedEffect(mainCardFocusRequester) {
-            playerEngine.upNextFocusRequester = mainCardFocusRequester
+
+        LaunchedEffect(isCompressed) {
+            playerEngine.upNextFocusRequester = if (isCompressed) leftTabFocusRequester else mainCardFocusRequester
         }
 
         LaunchedEffect(actualVisible, isCompressed) {
             if (actualVisible) {
-                delay(150)
-                try {
-                    if (isCompressed) {
-                        leftTabFocusRequester.requestFocus()
-                    } else {
-                        mainCardFocusRequester.requestFocus()
-                    }
-                } catch (e: Exception) {}
+                if (!isControllerVisible) {
+                    delay(150)
+                    try {
+                        if (isCompressed) {
+                            leftTabFocusRequester.requestFocus()
+                        } else {
+                            mainCardFocusRequester.requestFocus()
+                        }
+                    } catch (e: Exception) {}
+                }
             }
         }
 
@@ -171,6 +177,27 @@ fun UpNextOverlay(
             playPauseBtn?.requestFocus()
         }
 
+        val navigateDownToPlayerControls = {
+            val pView = playerEngine.playerView
+            if (pView != null) {
+                val progressId = try {
+                    androidx.media3.ui.R.id.exo_progress
+                } catch (e: Throwable) {
+                    pView.resources.getIdentifier("exo_progress", "id", "androidx.media3.ui")
+                        .takeIf { it != 0 }
+                        ?: pView.resources.getIdentifier("exo_progress", "id", pView.context.packageName)
+                }
+                val progressBtn = if (progressId != 0) pView.findViewById<android.view.View>(progressId) else null
+                if (progressBtn != null && progressBtn.isFocusable && progressBtn.visibility == android.view.View.VISIBLE) {
+                    progressBtn.requestFocus()
+                } else {
+                    val playPauseBtn = pView.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
+                        ?: pView.findViewById<android.view.View>(pView.resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui"))
+                    playPauseBtn?.requestFocus()
+                }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -199,6 +226,7 @@ fun UpNextOverlay(
                             hasAutoCompressed = true
                         },
                         onUpKeyRedirect = { navigateUpToPlayerControls() },
+                        onDownKeyRedirect = { navigateDownToPlayerControls() },
                         onBackRedirect = onDismissOverlay
                     ) { isFocused ->
                         Box(
@@ -229,6 +257,7 @@ fun UpNextOverlay(
                             onClick = onTriggerAutoplay,
                             onLongClick = { isDismissing = true },
                             onUpKeyRedirect = { navigateUpToPlayerControls() },
+                            onDownKeyRedirect = { navigateDownToPlayerControls() },
                             onBackRedirect = onDismissOverlay
                         ) { isFocused ->
                             val dismissColor = if (isDismissing) Color.Red.copy(alpha = 0.8f) else Color.Transparent
@@ -313,6 +342,7 @@ fun UpNextOverlay(
                                 hasAutoCompressed = true
                             },
                             onUpKeyRedirect = { navigateUpToPlayerControls() },
+                            onDownKeyRedirect = { navigateDownToPlayerControls() },
                             onBackRedirect = onDismissOverlay
                         ) { isFocused ->
                             Box(
