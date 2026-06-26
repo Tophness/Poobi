@@ -136,6 +136,9 @@ class MainActivity : AppCompatActivity() {
             onPlaybackStarted = { url, title, item, season, episode, headers, subtitles ->
                 streamsViewModel.stopTryAll(resume = false)
                 streamsViewModel.onVideoPlaybackStarted(url, title, item, season, episode, headers, subtitles)
+                if (streamsViewModel.isPlayingFromSavedLink) {
+                    streamsViewModel.clearScrapedSources()
+                }
             },
             onUpNextTriggered = { },
             onVideoEnded = {
@@ -557,6 +560,7 @@ class MainActivity : AppCompatActivity() {
         if (playerEngine.isPlayerActive.value) {
             val pView = playerEngine.playerView
 
+            // 1. Intercept Back key first to prevent accidental application exit
             if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                 if (event.action == KeyEvent.ACTION_DOWN) {
                     if (pView != null && pView.isControllerFullyVisible()) {
@@ -568,6 +572,32 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
+            // 2. Handle native to Compose focus redirection when pressing DOWN on controls
+            if (event.action == KeyEvent.ACTION_DOWN && playerEngine.showUpNext.value) {
+                val keyCode = event.keyCode
+                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    val focusedView = pView?.findFocus()
+                    if (focusedView != null) {
+                        val idName = try { pView.resources.getResourceEntryName(focusedView.id) } catch (e: Exception) { null }
+                        if (idName == "exo_play_pause" || idName == "exo_play" || idName == "exo_pause" || 
+                            idName == "exo_progress" || idName == "exo_timebar" || idName == "exo_time_bar") {
+                            try {
+                                playerEngine.upNextFocusRequester?.requestFocus()
+                                return true
+                            } catch (e: Exception) {}
+                        }
+                    }
+                }
+            }
+
+            // 3. Delegate to Compose overlay ONLY when the Up Next notification is active
+            if (playerEngine.showUpNext.value) {
+                if (super.dispatchKeyEvent(event)) {
+                    return true
+                }
+            }
+
+            // 4. Fall back to standard native ExoPlayer controls
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
                 if (pView != null) {
                     return pView.dispatchKeyEvent(event)

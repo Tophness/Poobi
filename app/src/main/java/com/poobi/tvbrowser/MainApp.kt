@@ -99,8 +99,8 @@ fun ModernTab(
     }
 
     val backgroundColor = when {
-        isFocused -> Color(0xFF00BCD4) // Vibrant Cyan on focus
-        isSelected -> Color(0xFF00BCD4).copy(alpha = 0.25f) // Subtle Cyan background on selection
+        isFocused -> Color(0xFF00BCD4)
+        isSelected -> Color(0xFF00BCD4).copy(alpha = 0.25f)
         else -> Color.Transparent
     }
 
@@ -203,6 +203,7 @@ fun MainApp(
     val torrentBufferProgress by streamsViewModel.torrentBufferProgress.collectAsState()
     val torrentBufferSeeders by streamsViewModel.torrentBufferSeeders.collectAsState()
 
+    val isControllerVisible by playerEngine.isControllerVisible.collectAsState()
     val isScrapeScreenActive = (isScraping && selectedMedia != null) || scrapedSources != null
 
     Box(
@@ -390,7 +391,6 @@ fun MainApp(
             )
         }
 
-        // website custom fullscreen HTML5 video container
         if (customView != null) {
             Box(
                 modifier = Modifier
@@ -426,7 +426,9 @@ fun MainApp(
                             playerEngine.playerView = this
                             
                             setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
-                                if (visibility == android.view.View.VISIBLE) {
+                                val visible = visibility == android.view.View.VISIBLE
+                                playerEngine.setControllerVisible(visible)
+                                if (visible) {
                                     post {
                                         val playPauseBtn = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
                                             ?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui"))
@@ -454,30 +456,58 @@ fun MainApp(
                                 if (basicControls != null) {
                                     val existingBtn = basicControls.findViewWithTag<android.view.View>("exo_quality_button_tag")
                                     if (existingBtn == null) {
-                                        val qualityBtn = android.widget.ImageButton(ctx).apply {
+                                        val qualityBtn = android.widget.TextView(ctx).apply {
                                             tag = "exo_quality_button_tag"
 
-                                            val attrs = intArrayOf(android.R.attr.selectableItemBackgroundBorderless)
-                                            val typedArray = ctx.obtainStyledAttributes(attrs)
-                                            val backgroundDrawable = typedArray.getDrawable(0)
-                                            typedArray.recycle()
-                                            background = backgroundDrawable
+                                            val format = playerEngine.exoPlayer?.videoFormat
+                                            val height = format?.height
+                                            text = if (height != null && height > 0) "${height}P" else "AUTO"
                                             
-                                            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                                            gravity = android.view.Gravity.CENTER
                                             val density = resources.displayMetrics.density
-                                            val padding = (8 * density).toInt()
-                                            setPadding(padding, padding, padding, padding)
-                                            setImageResource(com.poobi.tvbrowser.R.drawable.ic_auto_play)
-                                            setColorFilter(android.graphics.Color.WHITE)
-                                            if (settingsBtn != null) {
-                                                layoutParams = android.widget.LinearLayout.LayoutParams(settingsBtn.layoutParams).apply {
-                                                    gravity = android.view.Gravity.CENTER_VERTICAL
-                                                }
-                                            } else {
-                                                val size = (40 * density).toInt()
-                                                layoutParams = android.widget.LinearLayout.LayoutParams(size, size).apply {
-                                                    gravity = android.view.Gravity.CENTER_VERTICAL
-                                                }
+                                            val padH = (14 * density).toInt()
+                                            val padV = (6 * density).toInt()
+                                            setPadding(padH, padV, padH, padV)
+                                            textSize = 13f
+                                            setTypeface(null, android.graphics.Typeface.BOLD)
+                                            setMinWidth((70 * density).toInt())
+
+                                            val normalDrawable = android.graphics.drawable.GradientDrawable().apply {
+                                                setColor(android.graphics.Color.TRANSPARENT)
+                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+                                                cornerRadius = 4f * density
+                                            }
+                                            val focusedDrawable = android.graphics.drawable.GradientDrawable().apply {
+                                                setColor(android.graphics.Color.parseColor("#00BCD4"))
+                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+                                                cornerRadius = 4f * density
+                                            }
+
+                                            val sld = android.graphics.drawable.StateListDrawable().apply {
+                                                addState(intArrayOf(android.R.attr.state_focused), focusedDrawable)
+                                                addState(intArrayOf(), normalDrawable)
+                                            }
+                                            background = sld
+
+                                            val colorStateList = android.content.res.ColorStateList(
+                                                arrayOf(
+                                                    intArrayOf(android.R.attr.state_focused),
+                                                    intArrayOf()
+                                                ),
+                                                intArrayOf(
+                                                    android.graphics.Color.BLACK,
+                                                    android.graphics.Color.WHITE
+                                                )
+                                            )
+                                            setTextColor(colorStateList)
+
+                                            layoutParams = android.widget.LinearLayout.LayoutParams(
+                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                                            ).apply {
+                                                gravity = android.view.Gravity.CENTER_VERTICAL
+                                                rightMargin = (10 * density).toInt()
+                                                leftMargin = (10 * density).toInt()
                                             }
                                             
                                             setOnClickListener {
@@ -517,7 +547,9 @@ fun MainApp(
 
                 UpNextOverlay(
                     isVisible = showUpNext,
+                    isControllerVisible = isControllerVisible,
                     nextEpisodeJson = nextEpisodeData,
+                    playerEngine = playerEngine,
                     onTriggerAutoplay = {
                         playerEngine.dismissUpNext()
                         playerEngine.stopAndRelease()
@@ -591,7 +623,6 @@ fun MainApp(
             }
         }
 
-        // --- Context Menu Dialog ---
         if (dialogState is BrowserDialogState.ContextMenu) {
             val contextMenu = dialogState as BrowserDialogState.ContextMenu
             com.poobi.tvbrowser.browser.ContextMenuOverlay(
@@ -615,7 +646,6 @@ fun MainApp(
             )
         }
 
-        // --- Save Block Rule Dialog ---
         if (dialogState is BrowserDialogState.SaveBlockRule) {
             val saveRule = dialogState as BrowserDialogState.SaveBlockRule
             var ruleName by remember { 
@@ -660,7 +690,6 @@ fun MainApp(
             )
         }
 
-        // Download Confirmation Dialog
         if (dialogState is BrowserDialogState.Download) {
             val download = dialogState as BrowserDialogState.Download
             AlertDialog(
@@ -695,7 +724,6 @@ fun MainApp(
             )
         }
 
-        // PopupBlocked Dialog
         if (dialogState is BrowserDialogState.PopupBlocked) {
             val popup = dialogState as BrowserDialogState.PopupBlocked
             var rememberDecision by remember { mutableStateOf(false) }
@@ -844,7 +872,6 @@ fun MainApp(
             )
         }
 
-        // SaveAutoplayProfile Dialog
         if (dialogState is BrowserDialogState.SaveAutoplayProfile) {
             val profile = dialogState as BrowserDialogState.SaveAutoplayProfile
             var profileName by remember { mutableStateOf(Uri.parse(profile.url).host ?: "Custom Autoplay") }
@@ -885,7 +912,6 @@ fun MainApp(
             )
         }
 
-        // --- Playback Hijack Ask Dialog ---
         if (dialogState is BrowserDialogState.PlaybackHijackAsk) {
             val ask = dialogState as BrowserDialogState.PlaybackHijackAsk
             var rememberDecision by remember { mutableStateOf(false) }
@@ -952,7 +978,6 @@ fun MainApp(
             )
         }
 
-        // Error Dialog
         if (dialogState is BrowserDialogState.Error) {
             val error = dialogState as BrowserDialogState.Error
             AlertDialog(

@@ -83,6 +83,11 @@ class PlayerEngine(
     private val _currentQuality = MutableStateFlow<QualityOption?>(null)
     val currentQuality: StateFlow<QualityOption?> = _currentQuality.asStateFlow()
 
+    private val _isControllerVisible = MutableStateFlow(false)
+    val isControllerVisible: StateFlow<Boolean> = _isControllerVisible.asStateFlow()
+
+    var upNextFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
+
     private var lastVideoTitle: String? = null
     private var lastVideoUrl: String? = null
     private var lastScrapedItem: JSONObject? = null
@@ -135,6 +140,26 @@ class PlayerEngine(
 		}
 		return mergedHeaders
 	}
+
+    fun setControllerVisible(visible: Boolean) {
+        _isControllerVisible.value = visible
+    }
+
+    fun updateQualityButtonText(textValue: String) {
+        val view = playerView ?: return
+        view.post {
+            val basicControlsId = try {
+                androidx.media3.ui.R.id.exo_basic_controls
+            } catch (e: Throwable) {
+                view.resources.getIdentifier("exo_basic_controls", "id", "androidx.media3.ui")
+            }
+            val basicControls = view.findViewById<android.widget.LinearLayout>(basicControlsId)
+            val qualityBtn = basicControls?.findViewWithTag<android.widget.TextView>("exo_quality_button_tag")
+            if (qualityBtn != null) {
+                qualityBtn.text = textValue
+            }
+        }
+    }
 
     private val checkUpNextRunnable = object : Runnable {
         override fun run() {
@@ -206,7 +231,6 @@ class PlayerEngine(
         mergedHeaders.putAll(parsedHeaders)
         val finalHeaders = sanitizeHeaders(cleanUrl, mergedHeaders)
 
-        // Dynamically align ExoPlayer's request User-Agent with the WebView's active User-Agent
         val uaKey = finalHeaders.keys.find { it.equals("user-agent", ignoreCase = true) }
         val activeUserAgent = uaKey?.let { finalHeaders[it] } 
             ?: prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
@@ -293,6 +317,20 @@ class PlayerEngine(
             override fun onTracksChanged(tracks: Tracks) {
                 if (isReleasing || !_isPlayerActive.value) return
                 updateQualityOptions(tracks)
+
+                for (group in tracks.groups) {
+                    if (group.type == C.TRACK_TYPE_VIDEO && group.isSelected) {
+                        for (i in 0 until group.length) {
+                            if (group.isTrackSelected(i)) {
+                                val format = group.getTrackFormat(i)
+                                if (format.height > 0) {
+                                    val res = "${format.height}P"
+                                    updateQualityButtonText(res)
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -327,14 +365,13 @@ class PlayerEngine(
             val videoUri = Uri.parse(urls[0])
             val audioUri = Uri.parse(urls[1])
 
-            val videoUrlLower = urls[0].lowercase()
             val videoMediaItemBuilder = MediaItem.Builder()
                 .setUri(videoUri)
                 .setSubtitleConfigurations(subtitleConfigs)
 
-            if (videoUrlLower.contains("m3u8") || videoUrlLower.contains("/hls/")) {
+            if (isHlsUrl(urls[0])) {
                 videoMediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
-            } else if (videoUrlLower.contains("mpd")) {
+            } else if (isDashUrl(urls[0])) {
                 videoMediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
             }
 
@@ -348,45 +385,17 @@ class PlayerEngine(
             val mergedSource = MergingMediaSource(videoSource, audioSource)
             exoPlayer?.setMediaSource(mergedSource)
         } else {
-            val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
-            mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
+            val mediaItemBuilder = MediaItem.Builder()
+                .setUri(Uri.parse(videoUrl))
+                .setSubtitleConfigurations(subtitleConfigs)
+
+            if (isHlsUrl(videoUrl)) {
+                mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
+            } else if (isDashUrl(videoUrl)) {
+                mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
+            }
             
-			if (videoUrl.contains("|")) {
-				val urls = videoUrl.split("|")
-				val videoUri = Uri.parse(urls[0])
-				val audioUri = Uri.parse(urls[1])
-
-				val videoMediaItemBuilder = MediaItem.Builder()
-					.setUri(videoUri)
-					.setSubtitleConfigurations(subtitleConfigs)
-
-				if (isHlsUrl(urls[0])) {
-					videoMediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
-				} else if (isDashUrl(urls[0])) {
-					videoMediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
-				}
-
-				val videoSource = DefaultMediaSourceFactory(context)
-					.setDataSourceFactory(dataSourceFactory)
-					.createMediaSource(videoMediaItemBuilder.build())
-
-				val audioSource = ProgressiveMediaSource.Factory(dataSourceFactory)
-					.createMediaSource(MediaItem.fromUri(audioUri))
-
-				val mergedSource = MergingMediaSource(videoSource, audioSource)
-				exoPlayer?.setMediaSource(mergedSource)
-			} else {
-				val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
-				mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
-
-				if (isHlsUrl(videoUrl)) {
-					mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
-				} else if (isDashUrl(videoUrl)) {
-					mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
-				}
-				
-				exoPlayer?.setMediaItem(mediaItemBuilder.build())
-			}
+            exoPlayer?.setMediaItem(mediaItemBuilder.build())
         }
 
         val resumeKey = if (title != null) "resume_stream_$title" else null
@@ -587,6 +596,7 @@ class PlayerEngine(
         }
         exoPlayer = null
         _isPlayerActive.value = false
+        _isControllerVisible.value = false
         onPlayerReleased()
         isReleasing = false
     }
@@ -600,7 +610,7 @@ class PlayerEngine(
             if (resumeKey != null) {
                 val pos = player.currentPosition
                 val dur = player.duration
-                val threshold = getUpNextThreshold()
+                val threshold = getUpNextThreshold().toLong() * 1000L
                 val isCompleted = pos >= (dur - threshold)
                 if (dur > 0) {
                     if (isCompleted) {
