@@ -318,7 +318,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun initPythonAsync() {
         lifecycleScope.launch(Dispatchers.IO) {
-            // Stagger Python engine start by 1.5 seconds to ensure Compose initializes and draws without I/O blocking
             delay(1500)
             if (!Python.isStarted()) {
                 Python.start(AndroidPlatform(this@MainActivity))
@@ -565,11 +564,11 @@ class MainActivity : AppCompatActivity() {
 
         if (playerEngine.isPlayerActive.value) {
             val pView = playerEngine.playerView
+            val isUpNextFocused = playerEngine.showUpNext.value && 
+                                  currentFocus?.javaClass?.name?.contains("Compose") == true
 
             if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                 if (event.action == KeyEvent.ACTION_DOWN) {
-                    val isUpNextFocused = playerEngine.showUpNext.value && currentFocus?.javaClass?.name?.contains("Compose") == true
-
                     if (isUpNextFocused) {
                         playerEngine.dismissUpNext()
                     } else if (pView != null && pView.isControllerFullyVisible()) {
@@ -619,8 +618,6 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     null
                 }
-				val isUpNextFocused = playerEngine.showUpNext.value && 
-									  currentFocus?.javaClass?.name?.contains("Compose") == true
 
 				val shouldSeek = !isUpNextFocused && (
 								 !isControllerVisible || 
@@ -672,7 +669,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
-                if (pView != null) {
+                if (pView != null && !isUpNextFocused) {
                     return pView.dispatchKeyEvent(event)
                 }
                 return true
@@ -685,7 +682,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            if (pView != null) {
+            if (pView != null && !isUpNextFocused) {
                 return pView.dispatchKeyEvent(event)
             }
             return super.dispatchKeyEvent(event)
