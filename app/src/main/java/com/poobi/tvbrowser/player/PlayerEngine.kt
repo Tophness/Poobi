@@ -323,18 +323,14 @@ class PlayerEngine(
                 if (isReleasing || !_isPlayerActive.value) return
                 updateQualityOptions(tracks)
 
-                for (group in tracks.groups) {
-                    if (group.type == C.TRACK_TYPE_VIDEO && group.isSelected) {
-                        for (i in 0 until group.length) {
-                            if (group.isTrackSelected(i)) {
-                                val format = group.getTrackFormat(i)
-                                if (format.height > 0) {
-                                    val res = "${format.height}P"
-                                    updateQualityButtonText(res)
-                                }
-                            }
-                        }
+                val activeQuality = _currentQuality.value
+                if (activeQuality != null) {
+                    val displayName = if (activeQuality is QualityOption.Native && activeQuality.name.contains(" ")) {
+                        activeQuality.name.substringBefore(" ").uppercase()
+                    } else {
+                        activeQuality.name.uppercase()
                     }
+                    updateQualityButtonText(displayName)
                 }
             }
 
@@ -474,18 +470,27 @@ class PlayerEngine(
         if (currentDistinct != null) {
             _currentQuality.value = currentDistinct
         } else {
-            var selectedNative: QualityOption? = null
+            var selectedTrackCount = 0
+            var singleSelectedTrack: QualityOption? = null
+            
             for (opt in options) {
                 if (opt is QualityOption.Native) {
                     for (group in tracks.groups) {
                         if (group.mediaTrackGroup == opt.trackGroup && group.isTrackSelected(opt.trackIndex)) {
-                            selectedNative = opt
-                            break
+                            selectedTrackCount++
+                            if (singleSelectedTrack == null) {
+                                singleSelectedTrack = opt
+                            }
                         }
                     }
                 }
             }
-            _currentQuality.value = selectedNative ?: options.firstOrNull { it is QualityOption.Auto }
+
+            _currentQuality.value = if (selectedTrackCount == 1) {
+                singleSelectedTrack
+            } else {
+                options.firstOrNull { it is QualityOption.Auto }
+            }
         }
     }
 
@@ -498,6 +503,7 @@ class PlayerEngine(
                     .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
                     .build()
                 _currentQuality.value = option
+                updateQualityButtonText("AUTO")
             }
             is QualityOption.Native -> {
                 player.trackSelectionParameters = player.trackSelectionParameters
@@ -506,6 +512,8 @@ class PlayerEngine(
                     .addOverride(TrackSelectionOverride(option.trackGroup, option.trackIndex))
                     .build()
                 _currentQuality.value = option
+                val displayName = if (option.name.contains(" ")) option.name.substringBefore(" ").uppercase() else option.name.uppercase()
+                updateQualityButtonText(displayName)
             }
             is QualityOption.DistinctUrl -> {
                 val currentPos = player.currentPosition
