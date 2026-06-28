@@ -104,7 +104,7 @@ Download the Android Platform Tools for your system:
 * **Windows:** [Platform Tools (Windows)](https://dl.google.com/android/repository/platform-tools-latest-windows.zip)
 * **Linux:** [Platform Tools (Linux)](https://dl.google.com/android/repository/platform-tools-latest-linux.zip)
 
-Extract the archive and copy your architecture's APK (e.g., `app-arm64-debug.apk`) into the extracted `platform-tools` folder.
+Extract the archive and copy your APK (e.g., `app-arm64-debug.apk`) into the extracted `platform-tools` folder.
 
 ---
 
@@ -127,17 +127,17 @@ Enable:
 ---
 
 ### 4. Connect & Install
-
+(Assuming app-arm64-debug.apk is your architecture)
 #### Windows
 ```bat
 adb connect <YourTVsIP>
-adb install app-arm64-debug.apk  # Replace with your architecture's APK
+adb install app-arm64-debug.apk
 ```
 
 #### Linux
 ```bash
 ./adb connect <YourTVsIP>
-./adb install app-arm64-debug.apk  # Replace with your architecture's APK
+./adb install app-arm64-debug.apk
 ```
 
 ## Settings & Configuration
