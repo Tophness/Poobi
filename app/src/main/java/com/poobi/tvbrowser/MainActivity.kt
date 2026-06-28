@@ -587,16 +587,35 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
 
-                if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && idName == "exo_progress") {
+                val isQualityFocused = focusedView?.tag == "exo_quality_button_tag"
+
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && 
+                    (idName == "exo_progress" || idName == "exo_timebar" || idName == "exo_time_bar" || idName == "exo_position")) {
                     val subtitleId = try { androidx.media3.ui.R.id.exo_subtitle } catch (e: Throwable) { pView?.resources?.getIdentifier("exo_subtitle", "id", "androidx.media3.ui") ?: 0 }
                     val subtitleBtn = pView?.findViewById<android.view.View>(subtitleId)
-                    if (subtitleBtn != null && subtitleBtn.isFocusable && subtitleBtn.visibility == View.VISIBLE) {
+                    if (subtitleBtn != null && subtitleBtn.isFocusable && subtitleBtn.isEnabled && subtitleBtn.visibility == View.VISIBLE) {
                         subtitleBtn.requestFocus()
                         return true
+                    } else {
+                        val qualityBtn = pView?.findViewWithTag<android.view.View>("exo_quality_button_tag")
+                        if (qualityBtn != null && qualityBtn.isFocusable && qualityBtn.isEnabled && qualityBtn.visibility == View.VISIBLE) {
+                            qualityBtn.requestFocus()
+                            return true
+                        }
+                        val settingsBtnId = try {
+                            androidx.media3.ui.R.id.exo_settings
+                        } catch (e: Throwable) {
+                            pView?.resources?.getIdentifier("exo_settings", "id", "androidx.media3.ui") ?: 0
+                        }
+                        val settingsBtn = if (settingsBtnId != 0) pView?.findViewById<android.view.View>(settingsBtnId) else null
+                        if (settingsBtn != null && settingsBtn.isFocusable && settingsBtn.isEnabled && settingsBtn.visibility == View.VISIBLE) {
+                            settingsBtn.requestFocus()
+                            return true
+                        }
                     }
                 }
 
-                if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP && idName == "exo_subtitle") {
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP && (idName == "exo_subtitle" || isQualityFocused)) {
                     val progressId = try { androidx.media3.ui.R.id.exo_progress } catch (e: Throwable) { pView?.resources?.getIdentifier("exo_progress", "id", "androidx.media3.ui") ?: 0 }
                     val progressBtn = pView?.findViewById<android.view.View>(progressId)
                     if (progressBtn != null && progressBtn.isFocusable && progressBtn.visibility == View.VISIBLE) {
