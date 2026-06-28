@@ -127,7 +127,7 @@ Enable:
 ---
 
 ### 4. Connect & Install
-(Assuming app-arm64-debug.apk is your architecture)
+(Assuming app-arm64-debug.apk is the correct apk for your architecture)
 #### Windows
 ```bat
 adb connect <YourTVsIP>
