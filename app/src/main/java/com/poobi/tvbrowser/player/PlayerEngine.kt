@@ -615,7 +615,7 @@ class PlayerEngine(
             if (resumeKey != null) {
                 val pos = player.currentPosition
                 val dur = player.duration
-                val threshold = getUpNextThreshold().toLong() * 1000L
+                val threshold = getUpNextThreshold()
                 val isCompleted = pos >= (dur - threshold)
                 if (dur > 0) {
                     if (isCompleted) {
