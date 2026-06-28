@@ -665,9 +665,55 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 existing = newList.removeAt(existingIndex)
             }
 
+            val savedItem = JSONObject(item.toString())
+            if (season != null && episode != null) {
+                var epFound = false
+
+                val episodes = _itemEpisodes.value
+                if (episodes != null) {
+                    for (i in 0 until episodes.length()) {
+                        val ep = episodes.optJSONObject(i) ?: continue
+                        if (ep.optInt("episode_number") == episode) {
+                            val epOverview = ep.optString("overview")
+                            if (epOverview.isNotEmpty() && epOverview != "null") {
+                                savedItem.put("overview", epOverview)
+                            }
+                            val stillPath = ep.optString("still_path")
+                            if (stillPath.isNotEmpty() && stillPath != "null") {
+                                savedItem.put("poster_path", stillPath)
+                            }
+                            epFound = true
+                            break
+                        }
+                    }
+                }
+
+                if (!epFound) {
+                    val itemId = item.optInt("id")
+                    val cacheKey = "${itemId}_$season"
+                    val cachedEpisodes = episodesCache.get(cacheKey)
+                    if (cachedEpisodes != null) {
+                        for (i in 0 until cachedEpisodes.length()) {
+                            val ep = cachedEpisodes.optJSONObject(i) ?: continue
+                            if (ep.optInt("episode_number") == episode) {
+                                val epOverview = ep.optString("overview")
+                                if (epOverview.isNotEmpty() && epOverview != "null") {
+                                    savedItem.put("overview", epOverview)
+                                }
+                                val stillPath = ep.optString("still_path")
+                                if (stillPath.isNotEmpty() && stillPath != "null") {
+                                    savedItem.put("poster_path", stillPath)
+                                }
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
             val newEntry = JSONObject().apply {
                 put("display_title", displayTitle)
-                put("item", item)
+                put("item", savedItem)
                 if (season != null) put("season", season)
                 if (episode != null) put("episode", episode)
 
