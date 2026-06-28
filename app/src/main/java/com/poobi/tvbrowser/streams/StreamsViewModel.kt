@@ -2046,6 +2046,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         if (infoHash.isNotEmpty() && fileIdx != -1) {
             performTorrentPreBuffering(infoHash, fileIdx, sourceDataJson)
         } else {
+            if (_isScraping.value && !_isDownloadingSubs.value && lastSubtitledItemKey == null) {
+                val item = _selectedItem.value
+                if (item != null && prefs.getInt("auto_sub_pref", 0) == 1) {
+                    performAutoSubtitleSearch(item, lastScrapedSeason, lastScrapedEpisode)
+                }
+            }
+
             if (_isDownloadingSubs.value) {
                 when (prefs.getInt("auto_sub_wait_pref", 1)) {
                     0 -> {
@@ -2133,8 +2140,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     fun handleNextEpisodeAutoPlay(item: JSONObject, season: Int, episode: Int) {
         isAutoplayStarting = true
         isPlayingFromSavedLink = false
-        stopScrape()
         val nextEp = episode + 1
+        interceptedSubtitleUrls.clear()
+        lastSubtitledItemKey = null
+        _subStatusMsg.value = ""
+        _isDownloadingSubs.value = false
+        _showSubProgressBar.value = false
+        lastScrapedSeason = season
+        lastScrapedEpisode = nextEp
+
+        stopScrape(triggerSubtitles = true)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -2293,8 +2308,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                 withContext(Dispatchers.Main) {
                     if (foundSource != null) {
-                        stopScrape()
-                        resolveAndPlayInternal(foundSource.toString())
+                        stopScrape(triggerSubtitles = true)
+                        resolveAndPlay(foundSource.toString(), item)
                     } else {
                         _isScraping.value = false
                         performScrape(item, season, episode)
