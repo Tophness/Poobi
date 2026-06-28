@@ -68,6 +68,7 @@ import com.poobi.tvbrowser.streams.ScrapeProgressScreen
 import com.poobi.tvbrowser.streams.StreamsDashboardScreen
 import com.poobi.tvbrowser.streams.StreamsViewModel
 import com.poobi.tvbrowser.streams.NewEpisodeNotificationOverlay
+import com.poobi.tvbrowser.streams.SubtitleWaitOverlay
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -205,6 +206,7 @@ fun MainApp(
 
     val isControllerVisible by playerEngine.isControllerVisible.collectAsState()
     val isScrapeScreenActive = (isScraping && selectedMedia != null) || scrapedSources != null
+    val showSubtitleWaitDialog by streamsViewModel.showSubtitleWaitDialog.collectAsState()
 
     Box(
         modifier = Modifier
@@ -1069,6 +1071,15 @@ fun MainApp(
                 dismissButton = null
             )
         }
+
+        showSubtitleWaitDialog?.let { sourceDataJson ->
+            SubtitleWaitOverlay(
+                viewModel = streamsViewModel,
+                sourceDataJson = sourceDataJson,
+                onDismiss = { streamsViewModel.dismissSubtitleWaitDialog() }
+            )
+        }
+
         val activeNotifications by streamsViewModel.activeNotifications.collectAsState()
 
         NewEpisodeNotificationOverlay(

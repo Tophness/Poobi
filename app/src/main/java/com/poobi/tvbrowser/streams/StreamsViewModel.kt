@@ -41,11 +41,13 @@ sealed class StreamsEvent {
     ) : StreamsEvent()
     data class ShowToast(val message: String) : StreamsEvent()
     data class ShowSubtitlePicker(val subs: JSONArray) : StreamsEvent()
-    data class AskSubtitleWait(val sourceDataJson: String) : StreamsEvent()
     data class AddSubtitlesBatch(val subtitles: List<SubtitleData>) : StreamsEvent()
 }
 
 class StreamsViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val _showSubtitleWaitDialog = MutableStateFlow<String?>(null)
+    val showSubtitleWaitDialog: StateFlow<String?> = _showSubtitleWaitDialog.asStateFlow()
 
     private val context = application.applicationContext
     val prefs: SharedPreferences = context.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
@@ -236,6 +238,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
+    }
+
+    fun dismissSubtitleWaitDialog() {
+        _showSubtitleWaitDialog.value = null
     }
 
     fun dismissNotificationAt(index: Int) {
@@ -1825,6 +1831,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _showSubProgressBar.value = false
         _subProgress.value = 0f
         pendingPlayVideoSourceData = null
+        _showSubtitleWaitDialog.value = null
     }
 
     private fun getCurrentEpisodeTitle(season: Int?, episode: Int?): String {
@@ -1875,6 +1882,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 _events.value = StreamsEvent.AddSubtitlesBatch(cached)
                 
                 pendingPlayVideoSourceData?.let { pendingSource ->
+                    _showSubtitleWaitDialog.value = null
                     resolveAndPlayInternal(pendingSource)
                     pendingPlayVideoSourceData = null
                 }
@@ -1997,6 +2005,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         _subProgress.value = 1f
                         _isDownloadingSubs.value = false 
                         _showSubProgressBar.value = false
+                        _showSubtitleWaitDialog.value = null
                         
                         if (newlyDownloadedSubs.isNotEmpty()) {
                             val combinedList = cached + newlyDownloadedSubs
@@ -2015,6 +2024,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         delay(2000)
                         _isDownloadingSubs.value = false
                         _showSubProgressBar.value = false
+                        _showSubtitleWaitDialog.value = null
                         pendingPlayVideoSourceData?.let { pendingSource ->
                             resolveAndPlayInternal(pendingSource)
                             pendingPlayVideoSourceData = null
@@ -2025,6 +2035,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 withContext(Dispatchers.Main) { 
                     _isDownloadingSubs.value = false
                     _showSubProgressBar.value = false
+                    _showSubtitleWaitDialog.value = null
                     pendingPlayVideoSourceData?.let { pendingSource ->
                         resolveAndPlayInternal(pendingSource)
                         pendingPlayVideoSourceData = null
@@ -2106,7 +2117,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         resolveAndPlayInternal(sourceDataJson)
                     }
                     1 -> {
-                        _events.value = StreamsEvent.AskSubtitleWait(sourceDataJson)
+                        _showSubtitleWaitDialog.value = sourceDataJson
                     }
                     2 -> {
                         resolveAndPlayInternal(sourceDataJson)

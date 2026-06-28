@@ -276,10 +276,6 @@ class MainActivity : AppCompatActivity() {
                             displaySubtitlePickerDialog(event.subs)
                             streamsViewModel.consumeEvent()
                         }
-                        is StreamsEvent.AskSubtitleWait -> {
-                            displaySubtitleWaitDialog(event.sourceDataJson)
-                            streamsViewModel.consumeEvent()
-                        }
                         is StreamsEvent.AddSubtitlesBatch -> {
                             if (playerEngine.isPlayerActive.value) {
                                 playerEngine.addSubtitlesBatch(event.subtitles)
