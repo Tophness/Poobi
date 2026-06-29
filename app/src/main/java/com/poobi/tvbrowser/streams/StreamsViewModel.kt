@@ -192,6 +192,93 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         startBackgroundTraktCheck()
     }
 
+    fun getTraktNextEpisode(item: JSONObject): Pair<Int, Int>? {
+        if (!isTraktAuthorized()) return null
+        return try {
+            val py = Python.getInstance()
+            val traktModule = py.getModule("modules.trakt")
+            val watchedShows = traktModule.callAttr("cachesyncTVShows")?.asList() ?: return null
+            val showId = item.optString("id")
+            val imdb = item.optString("imdb")
+            var matchedShow: com.chaquo.python.PyObject? = null
+            for (show in watchedShows) {
+                val showAsList = show.asList()
+                val cachedId = showAsList[0].toString()
+                if (cachedId == showId || (imdb.isNotEmpty() && cachedId == imdb)) {
+                    matchedShow = show
+                    break
+                }
+            }
+            
+            if (matchedShow != null) {
+                val watchedList = matchedShow.asList()[2].asList()
+                if (watchedList.isEmpty()) {
+                    return Pair(1, 1)
+                }
+                
+                var maxSeason = 1
+                var maxEpisode = 1
+                
+                for (epObj in watchedList) {
+                    val epPair = epObj.asList()
+                    val s = epPair[0].toInt()
+                    val e = epPair[1].toInt()
+                    
+                    if (s > 0) {
+                        if (s > maxSeason) {
+                            maxSeason = s
+                            maxEpisode = e
+                        } else if (s == maxSeason && e > maxEpisode) {
+                            maxEpisode = e
+                        }
+                    }
+                }
+                Pair(maxSeason, maxEpisode + 1)
+            } else null
+        } catch (e: Exception) {
+            Log.e("StreamsDebug", "Error getting Trakt next episode: ${e.message}")
+            null
+        }
+    }
+
+    private fun adjustSeasonAndEpisodeBoundaries(
+        seasons: JSONArray,
+        targetSeason: Int,
+        targetEpisode: Int
+    ): Pair<Int, Int> {
+        var adjustedSeason = targetSeason
+        var adjustedEpisode = targetEpisode
+        var seasonObj: JSONObject? = null
+        for (i in 0 until seasons.length()) {
+            val s = seasons.getJSONObject(i)
+            if (s.optInt("season_number") == targetSeason) {
+                seasonObj = s
+                break
+            }
+        }
+
+        if (seasonObj != null) {
+            val epCount = seasonObj.optInt("episode_count", 0)
+            if (epCount > 0 && targetEpisode > epCount) {
+                var nextSeasonObj: JSONObject? = null
+                for (i in 0 until seasons.length()) {
+                    val s = seasons.getJSONObject(i)
+                    if (s.optInt("season_number") == targetSeason + 1) {
+                        nextSeasonObj = s
+                        break
+                    }
+                }
+                if (nextSeasonObj != null) {
+                    adjustedSeason = targetSeason + 1
+                    adjustedEpisode = 1
+                } else {
+                    adjustedEpisode = epCount
+                }
+            }
+        }
+        return Pair(adjustedSeason, adjustedEpisode)
+    }
+
     private fun performTorrentPreBuffering(infoHash: String, fileIdx: Int, sourceDataJson: String) {
         _isBufferingTorrent.value = true
         _torrentBufferProgress.value = 0f
@@ -898,8 +985,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val sortedSeasons = if (seasons != null) sortSeasons(seasons) else null
                 _itemSeasons.value = sortedSeasons
                 if (sortedSeasons != null && sortedSeasons.length() > 0) {
-                    val seasonToLoad = initialSeason ?: getLastWatchedSeason(item) ?: sortedSeasons.getJSONObject(0).optInt("season_number")
-                    loadEpisodes(item, seasonToLoad, isAutoSelect = true)
+                    viewModelScope.launch(Dispatchers.IO) {
+                        val nextEpPairRaw = getTraktNextEpisode(item)
+                        val nextEpPair = if (nextEpPairRaw != null) {
+                            adjustSeasonAndEpisodeBoundaries(sortedSeasons, nextEpPairRaw.first, nextEpPairRaw.second)
+                        } else null
+                        val seasonToLoad = initialSeason ?: nextEpPair?.first ?: sortedSeasons.getJSONObject(0).optInt("season_number")
+                        withContext(Dispatchers.Main) {
+                            loadEpisodes(item, seasonToLoad, isAutoSelect = true, targetEpFromTrakt = nextEpPair?.second)
+                        }
+                    }
                 }
             }
             return
@@ -916,7 +1011,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     val seasons = details.optJSONArray("seasons")
                     if (seasons != null) details.put("seasons", sortSeasons(seasons))
                 }
-                
                 detailsCache.put(cacheKey, details)
 
                 withContext(Dispatchers.Main) {
@@ -928,8 +1022,17 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         val seasons = details.optJSONArray("seasons")
                         _itemSeasons.value = seasons
                         if (seasons != null && seasons.length() > 0) {
-                            val seasonToLoad = initialSeason ?: getLastWatchedSeason(item) ?: seasons.getJSONObject(0).optInt("season_number")
-                            loadEpisodes(item, seasonToLoad, isAutoSelect = true)
+                            viewModelScope.launch(Dispatchers.IO) {
+                                val nextEpPairRaw = getTraktNextEpisode(item)
+                                val nextEpPair = if (nextEpPairRaw != null) {
+                                    adjustSeasonAndEpisodeBoundaries(seasons, nextEpPairRaw.first, nextEpPairRaw.second)
+                                } else null
+
+                                val seasonToLoad = initialSeason ?: nextEpPair?.first ?: seasons.getJSONObject(0).optInt("season_number")
+                                withContext(Dispatchers.Main) {
+                                    loadEpisodes(item, seasonToLoad, isAutoSelect = true, targetEpFromTrakt = nextEpPair?.second)
+                                }
+                            }
                         }
                     }
                 }
@@ -1145,13 +1248,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun loadEpisodes(item: JSONObject, seasonNumber: Int, isAutoSelect: Boolean = false) {
+    fun loadEpisodes(item: JSONObject, seasonNumber: Int, isAutoSelect: Boolean = false, targetEpFromTrakt: Int? = null) {
         val id = item.optInt("id")
         _itemEpisodes.value = null
 
         if (isAutoSelect) {
-            val lastEp = getLastWatchedEpisode(item, seasonNumber)
-            _lastWatchedEpisode.value = if (lastEp != null) lastEp + 1 else null
+            _lastWatchedEpisode.value = targetEpFromTrakt
         } else {
             _lastWatchedEpisode.value = null
         }
@@ -2488,38 +2590,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 			}
 		}
 	}
-
-    private fun getLastWatchedSeason(item: JSONObject): Int? {
-        val id = item.optString("id")
-        val imdb = item.optString("imdb")
-        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
-        val array = JSONArray(recentJson)
-        for (i in 0 until array.length()) {
-            val entry = array.getJSONObject(i)
-            val itItem = entry.optJSONObject("item")
-            if (itItem?.optString("id") == id || (imdb.isNotEmpty() && itItem?.optString("imdb") == imdb)) {
-                if (entry.has("season")) return entry.getInt("season")
-            }
-        }
-        return null
-    }
-
-    private fun getLastWatchedEpisode(item: JSONObject, season: Int): Int? {
-        val id = item.optString("id")
-        val imdb = item.optString("imdb")
-        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
-        val array = JSONArray(recentJson)
-        for (i in 0 until array.length()) {
-            val entry = array.getJSONObject(i)
-            val itItem = entry.optJSONObject("item")
-            if (itItem?.optString("id") == id || (imdb.isNotEmpty() && itItem?.optString("imdb") == imdb)) {
-                if (entry.has("season") && entry.getInt("season") == season) {
-                    if (entry.has("episode")) return entry.getInt("episode")
-                }
-            }
-        }
-        return null
-    }
 
     private fun getSubtitleCacheFile(): File {
         val dir = File(context.filesDir, "userdata/subtitles")

@@ -44,16 +44,6 @@ import com.poobi.tvbrowser.shared.KeyTracker
 import org.json.JSONArray
 import org.json.JSONObject
 
-private fun findFirstUnwatchedEpisode(episodes: JSONArray): Int {
-    for (i in 0 until episodes.length()) {
-        val ep = episodes.getJSONObject(i)
-        if (!ep.optBoolean("is_watched", false)) {
-            return ep.optInt("episode_number", 1)
-        }
-    }
-    return 1
-}
-
 private fun formatDateToDMY(dateStr: String?): String {
     if (dateStr.isNullOrEmpty() || dateStr == "null" || dateStr == "0000") return dateStr ?: ""
     return try {
@@ -167,33 +157,8 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     }
     val leftColumnScrollState = rememberScrollState()
     val lazyListState = rememberLazyListState()
-    val locallyWatchedEpisodes = remember(item, selectedSeasonIndex, seasons, localEpisodes) {
-        val watched = mutableSetOf<Int>()
-        val showId = item?.optString("id") ?: ""
-        val imdb = item?.optString("imdb") ?: ""
-        val activeSeasonNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number")
-        if (showId.isNotEmpty() || imdb.isNotEmpty()) {
-            try {
-                val recentJson = viewModel.prefs.getString("streams_recently_played", "[]") ?: "[]"
-                val array = JSONArray(recentJson)
-                for (i in 0 until array.length()) {
-                    val entry = array.getJSONObject(i)
-                    val itItem = entry.optJSONObject("item")
-                    val itId = itItem?.optString("id") ?: ""
-                    val itImdb = itItem?.optString("imdb") ?: ""
-                    if ((showId.isNotEmpty() && itId == showId) || (imdb.isNotEmpty() && itImdb == imdb)) {
-                        if (entry.has("season") && entry.getInt("season") == activeSeasonNum) {
-                            if (entry.has("episode")) {
-                                watched.add(entry.getInt("episode"))
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {}
-        }
-        watched
-    }
-    val targetEpisodeToFocus = remember(localEpisodes, locallyWatchedEpisodes, viewModel.lastScrapedSeason, viewModel.lastScrapedEpisode) {
+
+    val targetEpisodeToFocus = remember(localEpisodes, lastWatchedEpisode, viewModel.lastScrapedSeason, viewModel.lastScrapedEpisode) {
         if (localEpisodes != null && localEpisodes.length() > 0) {
             val activeSeasonNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number")
 
@@ -209,9 +174,14 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     return@remember viewModel.lastScrapedEpisode
                 }
             }
+
+            if (lastWatchedEpisode != null) {
+                return@remember lastWatchedEpisode
+            }
+
             val focusMode = viewModel.prefs.getInt("episode_focus_mode", 0) // 0 = Next after latest watched, 1 = First unwatched
             val isWatched = { ep: JSONObject ->
-                ep.optBoolean("is_watched", false) || locallyWatchedEpisodes.contains(ep.optInt("episode_number"))
+                ep.optBoolean("is_watched", false)
             }
             val isEpisodeAired = { ep: JSONObject ->
                 val airDate = ep.optString("air_date", "")
