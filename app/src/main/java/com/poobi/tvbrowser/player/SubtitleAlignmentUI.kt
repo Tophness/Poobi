@@ -108,7 +108,7 @@ fun SubtitleAlignmentOverlay(
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.40f))
     ) {
-        when (screen) {
+                when (screen) {
             AlignmentScreen.Menu -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -139,7 +139,13 @@ fun SubtitleAlignmentOverlay(
                         )
 
                         TvFocusableBox(
-                            modifier = Modifier.fillMaxWidth().height(40.dp).focusRequester(focusRequester),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .focusRequester(focusRequester)
+                                .focusProperties {
+                                    up = FocusRequester.Cancel
+                                },
                             onClick = { screen = AlignmentScreen.Waveform }
                         ) { isFocused ->
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -166,7 +172,12 @@ fun SubtitleAlignmentOverlay(
                         }
 
                         TvFocusableBox(
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .focusProperties {
+                                    down = FocusRequester.Cancel
+                                },
                             onClick = { onDismiss() }
                         ) { isFocused ->
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -211,6 +222,9 @@ fun SubtitleAlignmentOverlay(
                             onValueChange = { searchQuery = it },
                             placeholder = "e.g. jumped off",
                             focusRequester = focusRequester,
+                            modifier = Modifier.focusProperties {
+                                up = FocusRequester.Cancel
+                            },
                             onAction = {
                                 if (searchQuery.isNotBlank()) {
                                     manager.findAndJumpToCue(player, searchQuery)
@@ -224,7 +238,12 @@ fun SubtitleAlignmentOverlay(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             TvFocusableBox(
-                                modifier = Modifier.weight(1f).height(40.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                                    .focusProperties {
+                                        down = FocusRequester.Cancel
+                                    },
                                 onClick = {
                                     if (searchQuery.isNotBlank()) {
                                         manager.findAndJumpToCue(player, searchQuery)
@@ -238,7 +257,12 @@ fun SubtitleAlignmentOverlay(
                             }
 
                             TvFocusableBox(
-                                modifier = Modifier.weight(1f).height(40.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                                    .focusProperties {
+                                        down = FocusRequester.Cancel
+                                    },
                                 onClick = { screen = AlignmentScreen.Menu }
                             ) { isFocused ->
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
