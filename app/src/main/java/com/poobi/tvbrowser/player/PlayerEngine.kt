@@ -8,6 +8,7 @@ import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -16,6 +17,8 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.util.Consumer
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -24,6 +27,9 @@ import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import androidx.media3.extractor.text.CuesWithTiming
+import androidx.media3.extractor.text.DefaultSubtitleParserFactory
+import androidx.media3.extractor.text.SubtitleParser
 import androidx.media3.ui.PlayerView
 import com.chaquo.python.Python
 import com.poobi.tvbrowser.shared.SubtitleData
@@ -54,7 +60,7 @@ sealed class QualityOption {
 
 class PlayerEngine(
     private val context: Context,
-    private val prefs: SharedPreferences,
+    val prefs: SharedPreferences,
     private val onPlaybackError: (PlaybackException, String) -> Unit,
     private val onPlaybackStarted: (String, String, JSONObject, Int?, Int?, Map<String, String>, Map<String, Map<String, String>>) -> Unit = { _, _, _, _, _, _, _ -> },
     private val onUpNextTriggered: () -> Unit,
@@ -62,11 +68,59 @@ class PlayerEngine(
     private val onPlayerReleased: () -> Unit = {},
     private val onVideoWatched: (Int, Int) -> Unit = { _, _ -> }
 ) {
+    private var isReleasing = false
+    private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     var exoPlayer: ExoPlayer? = null
         private set
 
     val audioWaveformCapturer = AudioWaveformCapturer()
     val subtitleAlignmentManager = SubtitleAlignmentManager(context)
+
+    @Volatile
+    var subtitleOffsetUs: Long = 0L
+        private set
+
+    @OptIn(UnstableApi::class)
+    private val subtitleParserFactory = object : SubtitleParser.Factory {
+        private val delegate = DefaultSubtitleParserFactory()
+
+        override fun supportsFormat(format: Format): Boolean {
+            return delegate.supportsFormat(format)
+        }
+
+        override fun getCueReplacementBehavior(format: Format): Int {
+            return delegate.getCueReplacementBehavior(format)
+        }
+
+        override fun create(format: Format): SubtitleParser {
+            val parser = delegate.create(format)
+            return object : SubtitleParser {
+                override fun parse(
+                    data: ByteArray,
+                    offset: Int,
+                    length: Int,
+                    outputOptions: SubtitleParser.OutputOptions,
+                    output: Consumer<CuesWithTiming>
+                ) {
+                    val shiftingOutput = Consumer<CuesWithTiming> { cuesWithTiming ->
+                        val shiftedStart = cuesWithTiming.startTimeUs + subtitleOffsetUs
+                        val shiftedCuesWithTiming = CuesWithTiming(
+                            cuesWithTiming.cues,
+                            shiftedStart,
+                            cuesWithTiming.durationUs
+                        )
+                        output.accept(shiftedCuesWithTiming)
+                    }
+                    parser.parse(data, offset, length, outputOptions, shiftingOutput)
+                }
+
+                override fun getCueReplacementBehavior(): Int {
+                    return parser.cueReplacementBehavior
+                }
+            }
+        }
+    }
 
     private val _isPlayerActive = MutableStateFlow(false)
     val isPlayerActive: StateFlow<Boolean> = _isPlayerActive.asStateFlow()
@@ -112,8 +166,56 @@ class PlayerEngine(
     private val checkUpNextHandler = Handler(Looper.getMainLooper())
     var isUpNextDismissed = false
 
-    private var isReleasing = false
-    private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    init {
+        playerScope.launch {
+            subtitleAlignmentManager.isUIVisible.collect { isVisible ->
+                withContext(Dispatchers.Main) {
+                    if (isVisible) {
+                        disableNativeSubtitles(true)
+                    } else {
+                        applySubtitleOffset(subtitleAlignmentManager.baselineOffsetMs)
+                    }
+                }
+            }
+        }
+    }
+
+    fun applySubtitleOffset(offsetMs: Long) {
+        val newOffsetUs = offsetMs * 1000L
+        val renderingMode = prefs.getInt("subtitle_rendering_mode", 0)
+        val offsetChanged = subtitleOffsetUs != newOffsetUs
+        subtitleOffsetUs = newOffsetUs
+        restoreSubtitleVisibility()
+
+        if (renderingMode == 0) {
+            if (offsetChanged || exoPlayer?.trackSelectionParameters?.disabledTrackTypes?.contains(C.TRACK_TYPE_TEXT) == true) {
+                exoPlayer?.let { player ->
+                    if (player.playbackState != Player.STATE_IDLE) {
+                        val currentMediaItem = player.currentMediaItem
+                        if (currentMediaItem != null) {
+                            val currentPosition = player.currentPosition
+                            val wasPlaying = player.playWhenReady
+                            player.setMediaItem(currentMediaItem, false)
+                            player.seekTo(currentPosition)
+                            player.prepare()
+                            player.playWhenReady = wasPlaying
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun restoreSubtitleVisibility() {
+        val hasExternalSubs = lastSubtitles.isNotEmpty()
+        if (hasExternalSubs) {
+            val renderingMode = prefs.getInt("subtitle_rendering_mode", 0)
+            disableNativeSubtitles(renderingMode == 1)
+        } else {
+            val embeddedEnabled = prefs.getBoolean("embedded_subs_enabled", true)
+            disableNativeSubtitles(!embeddedEnabled)
+        }
+    }
 
     private fun isHlsUrl(url: String): Boolean {
         val urlLower = url.lowercase()
@@ -240,6 +342,7 @@ class PlayerEngine(
         _showQualitySelector.value = false
     }
 
+    @OptIn(UnstableApi::class)
     fun launchVideo(
         videoUrl: String, 
         title: String?, 
@@ -289,6 +392,9 @@ class PlayerEngine(
         _isPlayerActive.value = true
         isReleasing = false
 
+        subtitleOffsetUs = 0L
+        subtitleAlignmentManager.setOffset(0L)
+
         exoPlayer?.release()
 
         val isLocalHost = cleanUrl.contains("localhost") || cleanUrl.contains("127.0.0.1")
@@ -320,10 +426,14 @@ class PlayerEngine(
             }
         }
 
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(dataSourceFactory)
+            .setSubtitleParserFactory(subtitleParserFactory)
+
         exoPlayer = ExoPlayer.Builder(context, renderersFactory)
             .setBandwidthMeter(bandwidthMeter)
             .setTrackSelector(trackSelector)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory))
+            .setMediaSourceFactory(mediaSourceFactory)
             .build()
 
         exoPlayer?.addListener(object : Player.Listener {
@@ -454,12 +564,10 @@ class PlayerEngine(
         val firstSubUrl = subtitles.keys.firstOrNull() ?: ""
         if (firstSubUrl.isNotEmpty()) {
             subtitleAlignmentManager.loadSubtitles(firstSubUrl)
-            disableNativeSubtitles(true)
         } else {
             subtitleAlignmentManager.hideUI()
-            val embeddedEnabled = prefs.getBoolean("embedded_subs_enabled", true)
-            disableNativeSubtitles(!embeddedEnabled)
         }
+        restoreSubtitleVisibility()
 
         exoPlayer?.prepare()
         exoPlayer?.playWhenReady = true

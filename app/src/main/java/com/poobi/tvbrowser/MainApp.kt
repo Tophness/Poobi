@@ -699,10 +699,19 @@ fun MainApp(
                     )
                 }
 
-                CustomSubtitleOverlay(
-                    playerEngine = playerEngine,
-                    modifier = Modifier.fillMaxSize()
-                )
+                val subtitleRenderingMode = remember { mutableStateOf(0) }
+                LaunchedEffect(isPlayerActive) {
+                    if (isPlayerActive) {
+                        subtitleRenderingMode.value = playerEngine.prefs.getInt("subtitle_rendering_mode", 0)
+                    }
+                }
+
+                if (subtitleRenderingMode.value == 1) {
+                    CustomSubtitleOverlay(
+                        playerEngine = playerEngine,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
 
                 SubtitleAlignmentOverlay(
                     manager = playerEngine.subtitleAlignmentManager,
@@ -710,7 +719,6 @@ fun MainApp(
                     player = playerEngine.exoPlayer!!,
                     onDismiss = {
                         playerEngine.subtitleAlignmentManager.hideUI()
-                        playerEngine.disableNativeSubtitles(true)
                     }
                 )
 

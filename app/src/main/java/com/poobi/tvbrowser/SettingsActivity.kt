@@ -117,7 +117,7 @@ class SettingsActivity : AppCompatActivity() {
     private var torrentCacheCleanMode by mutableStateOf(0)
     private var torrentCacheCleanDays by mutableStateOf(0)
     private var torrentCacheCleanDaysStr by mutableStateOf("")
-	private var torrentPrebufferPieces by mutableStateOf(1)
+    private var torrentPrebufferPieces by mutableStateOf(1)
 
     private var timeoutMode by mutableStateOf("Both")
     private var globalTimeout by mutableStateOf(30)
@@ -127,6 +127,7 @@ class SettingsActivity : AppCompatActivity() {
     private var enforceWhitelist by mutableStateOf(true)
     private val whitelistedHosts = mutableStateListOf<String>()
 
+    private var subRenderingMode by mutableStateOf(0)
     private var autoSubPref by mutableStateOf(0)
     private var countPref by mutableStateOf(1)
     private var waitPref by mutableStateOf(1)
@@ -305,7 +306,7 @@ class SettingsActivity : AppCompatActivity() {
         torrentCacheCleanMode = prefs.getInt("torrent_cache_clean_mode", 0)
         torrentCacheCleanDays = prefs.getInt("torrent_cache_clean_days", 0)
         torrentCacheCleanDaysStr = if (torrentCacheCleanDays > 0) torrentCacheCleanDays.toString() else ""
-		torrentPrebufferPieces = prefs.getInt("torrent_prebuffer_pieces", 1)
+        torrentPrebufferPieces = prefs.getInt("torrent_prebuffer_pieces", 1)
 
         timeoutMode = prefs.getString("timeout_mode", "Both") ?: "Both"
         globalTimeout = prefs.getInt("global_timeout", 30)
@@ -321,6 +322,7 @@ class SettingsActivity : AppCompatActivity() {
             whitelistedHosts.add(hostsArr.getString(i))
         }
 
+        subRenderingMode = prefs.getInt("subtitle_rendering_mode", 0)
         autoSubPref = prefs.getInt("auto_sub_pref", 0)
         countPref = prefs.getInt("auto_sub_count", 1)
         waitPref = prefs.getInt("auto_sub_wait_pref", 1)
@@ -997,6 +999,16 @@ class SettingsActivity : AppCompatActivity() {
 
         LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item { PanelHeader("Subtitle Search Preferences") }
+
+            item {
+                DropdownSettingRow(
+                    label = "Subtitle Rendering Engine",
+                    options = listOf("Native (Requires Reloading Subs)", "Custom Subtitle Overlay (Zero Delay)"),
+                    selectedIndex = subRenderingMode
+                ) { index ->
+                    subRenderingMode = index
+                }
+            }
 
             item { DropdownSettingRow("Auto-search Behavior", listOf("Ask me to search", "Search Automatically", "Never Search"), autoSubPref) { 
                 autoSubPref = it
@@ -1720,123 +1732,123 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-	@Composable
-	fun TorrentPanel() {
-		var cacheSize by remember { mutableStateOf(0L) }
-		var cacheItems by remember { mutableStateOf(emptyList<com.poobi.tvbrowser.torrent.TorrentCacheItem>()) }
-		var showDaysPickerDialog by remember { mutableStateOf(false) }
+    @Composable
+    fun TorrentPanel() {
+        var cacheSize by remember { mutableStateOf(0L) }
+        var cacheItems by remember { mutableStateOf(emptyList<com.poobi.tvbrowser.torrent.TorrentCacheItem>()) }
+        var showDaysPickerDialog by remember { mutableStateOf(false) }
 
-		fun refreshCache() {
-			val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
-			cacheSize = server.getCacheSize()
-			cacheItems = server.getCacheItems()
-		}
+        fun refreshCache() {
+            val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
+            cacheSize = server.getCacheSize()
+            cacheItems = server.getCacheItems()
+        }
 
-		LaunchedEffect(Unit) {
-			refreshCache()
-		}
+        LaunchedEffect(Unit) {
+            refreshCache()
+        }
 
-		Column(modifier = Modifier.fillMaxSize()) {
-			LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-				item { PanelHeader("Torrent Streaming Configuration") }
+        Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                item { PanelHeader("Torrent Streaming Configuration") }
 
-				item {
-					DropdownSettingRow(
-						label = "Playback Pre-buffer Size",
-						options = listOf("1 Piece (Fastest / Default)", "2 Pieces", "4 Pieces (Standard)", "8 Pieces (Most Stable)"),
-						selectedIndex = when (torrentPrebufferPieces) {
-							1 -> 0
-							2 -> 1
-							4 -> 2
-							8 -> 3
-							else -> 0
-						}
-					) { index ->
-						val pieces = when (index) {
-							0 -> 1
-							1 -> 2
-							2 -> 4
-							3 -> 8
-							else -> 1
-						}
-						torrentPrebufferPieces = pieces
-						lifecycleScope.launch(Dispatchers.IO) {
-							prefs.edit().putInt("torrent_prebuffer_pieces", pieces).apply()
-						}
-					}
-				}
+                item {
+                    DropdownSettingRow(
+                        label = "Playback Pre-buffer Size",
+                        options = listOf("1 Piece (Fastest / Default)", "2 Pieces", "4 Pieces (Standard)", "8 Pieces (Most Stable)"),
+                        selectedIndex = when (torrentPrebufferPieces) {
+                            1 -> 0
+                            2 -> 1
+                            4 -> 2
+                            8 -> 3
+                            else -> 0
+                        }
+                    ) { index ->
+                        val pieces = when (index) {
+                            0 -> 1
+                            1 -> 2
+                            2 -> 4
+                            3 -> 8
+                            else -> 1
+                        }
+                        torrentPrebufferPieces = pieces
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            prefs.edit().putInt("torrent_prebuffer_pieces", pieces).apply()
+                        }
+                    }
+                }
 
-				item {
-					DropdownSettingRow(
-						label = "Preferred Torrent Language",
-						options = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi"),
-						selectedIndex = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi").indexOf(torrentLanguage).coerceAtLeast(0)
-					) { index ->
-						torrentLanguage = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi")[index]
-						lifecycleScope.launch(Dispatchers.IO) {
-							prefs.edit().putString("torrent_language", torrentLanguage).apply()
-						}
-					}
-				}
+                item {
+                    DropdownSettingRow(
+                        label = "Preferred Torrent Language",
+                        options = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi"),
+                        selectedIndex = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi").indexOf(torrentLanguage).coerceAtLeast(0)
+                    ) { index ->
+                        torrentLanguage = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi")[index]
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            prefs.edit().putString("torrent_language", torrentLanguage).apply()
+                        }
+                    }
+                }
 
-				item {
-					DropdownSettingRow(
-						label = "Torrent Cache Auto-Clean Mode",
-						options = listOf("Manual Only", "Every time a new torrent starts", "Every time a video is exited", "Every X days"),
-						selectedIndex = torrentCacheCleanMode
-					) { index ->
-						torrentCacheCleanMode = index
-						if (index == 3) {
-							showDaysPickerDialog = true
-						}
-					}
-				}
+                item {
+                    DropdownSettingRow(
+                        label = "Torrent Cache Auto-Clean Mode",
+                        options = listOf("Manual Only", "Every time a new torrent starts", "Every time a video is exited", "Every X days"),
+                        selectedIndex = torrentCacheCleanMode
+                    ) { index ->
+                        torrentCacheCleanMode = index
+                        if (index == 3) {
+                            showDaysPickerDialog = true
+                        }
+                    }
+                }
 
-				if (torrentCacheCleanMode == 3) {
-					item {
-						Card(
-							modifier = Modifier.fillMaxWidth().clickable { showDaysPickerDialog = true }.tvSettingsFocus(),
-							colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))
-						) {
-							Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-								Column(modifier = Modifier.weight(1f)) {
-									Text("Clean Interval", color = Color.LightGray, fontSize = 12.sp)
-									Text(if (torrentCacheCleanDays > 0) "Every $torrentCacheCleanDays days" else "Disabled / Click to set", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-								}
-							}
-						}
-					}
-				}
+                if (torrentCacheCleanMode == 3) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().clickable { showDaysPickerDialog = true }.tvSettingsFocus(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))
+                        ) {
+                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Clean Interval", color = Color.LightGray, fontSize = 12.sp)
+                                    Text(if (torrentCacheCleanDays > 0) "Every $torrentCacheCleanDays days" else "Disabled / Click to set", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
 
-				item { Spacer(modifier = Modifier.height(8.dp)) }
-				item { Text("Storage Cache Manager", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+                item { Spacer(modifier = Modifier.height(8.dp)) }
+                item { Text("Storage Cache Manager", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
 
-				item {
-					Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))) {
-						Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-							Column(modifier = Modifier.weight(1f)) {
-								Text("Total Cached P2P Storage", color = Color.LightGray, fontSize = 12.sp)
-								Text("%.2f MB".format(cacheSize / (1024f * 1024f)), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-							}
-							Button(
-								onClick = {
-									val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
-									server.clearAllCache()
-									refreshCache()
-								},
-								colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-								modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-							) {
-								Text("Clear All")
-							}
-						}
-					}
-				}
+                item {
+                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))) {
+                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Total Cached P2P Storage", color = Color.LightGray, fontSize = 12.sp)
+                                Text("%.2f MB".format(cacheSize / (1024f * 1024f)), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = {
+                                    val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
+                                    server.clearAllCache()
+                                    refreshCache()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                            ) {
+                                Text("Clear All")
+                            }
+                        }
+                    }
+                }
 
-				if (cacheItems.isNotEmpty()) {
-					item { Text("Cached Directory Sub-folders", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)) }
-					items(cacheItems) { cacheItem ->
-						Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = Color(0x0DFFFFFF))) {
+                if (cacheItems.isNotEmpty()) {
+                    item { Text("Cached Directory Sub-folders", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)) }
+                    items(cacheItems) { cacheItem ->
+                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = Color(0x0DFFFFFF))) {
 							Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
 								Column(modifier = Modifier.weight(1f)) {
 									Text(cacheItem.name, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1854,61 +1866,61 @@ class SettingsActivity : AppCompatActivity() {
 									Text("Clear", fontSize = 11.sp)
 								}
 							}
-						}
-					}
-				}
-			}
-		}
+                        }
+                    }
+                }
+            }
+        }
 
-		if (showDaysPickerDialog) {
-			AlertDialog(
-				onDismissRequest = { showDaysPickerDialog = false },
-				title = { Text("Auto-Clean Interval", color = Color.White) },
-				containerColor = Color(0xFF222225),
-				text = {
-					Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-						Text("Enter number of days between cache cleans:", color = Color.LightGray)
-						TvInputField(
-							value = torrentCacheCleanDaysStr,
-							onValueChange = { newValue ->
-								val filtered = newValue.filter { it.isDigit() }
-								torrentCacheCleanDaysStr = filtered
-								if (filtered.isNotEmpty()) {
-									torrentCacheCleanDays = filtered.toInt()
-								} else {
-									torrentCacheCleanDays = 0
-								}
-							},
-							placeholder = "e.g. 7",
-							containerColor = Color(0xFF222225),
-							imeAction = ImeAction.Done
-						)
-					}
-				},
-				confirmButton = {
-					Button(
-						onClick = {
-							showDaysPickerDialog = false
-						},
-						modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-					) {
-						Text("OK", color = Color.White)
-					}
-				},
-				dismissButton = {
-					Button(
-						onClick = {
-							showDaysPickerDialog = false
-						},
-						colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-						modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-					) {
-						Text("Cancel", color = Color.White)
-					}
-				}
-			)
-		}
-	}
+        if (showDaysPickerDialog) {
+            AlertDialog(
+                onDismissRequest = { showDaysPickerDialog = false },
+                title = { Text("Auto-Clean Interval", color = Color.White) },
+                containerColor = Color(0xFF222225),
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Enter number of days between cache cleans:", color = Color.LightGray)
+                        TvInputField(
+                            value = torrentCacheCleanDaysStr,
+                            onValueChange = { newValue ->
+                                val filtered = newValue.filter { it.isDigit() }
+                                torrentCacheCleanDaysStr = filtered
+                                if (filtered.isNotEmpty()) {
+                                    torrentCacheCleanDays = filtered.toInt()
+                                } else {
+                                    torrentCacheCleanDays = 0
+                                }
+                            },
+                            placeholder = "e.g. 7",
+                            containerColor = Color(0xFF222225),
+                            imeAction = ImeAction.Done
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showDaysPickerDialog = false
+                        },
+                        modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                    ) {
+                        Text("OK", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = {
+                            showDaysPickerDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                        modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                    ) {
+                        Text("Cancel", color = Color.White)
+                    }
+                }
+            )
+        }
+    }
 
     @Composable
     fun SyncPanel() {
@@ -2090,6 +2102,7 @@ class SettingsActivity : AppCompatActivity() {
                     putString("enabled_packs", JSONArray(enabledPacksList).toString())
                     putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString())
 
+                    putInt("subtitle_rendering_mode", subRenderingMode)
                     putInt("auto_sub_pref", autoSubPref)
                     putInt("auto_sub_count", countPref)
                     putInt("auto_sub_wait_pref", waitPref)
@@ -2128,7 +2141,7 @@ class SettingsActivity : AppCompatActivity() {
                     put("up_next_time_pref", upNextTime)
                     put("autoplay_next_pref", autoplayNext)
                     put("scrape_tab_order", scrapeTabOrder)
-					put("torrent_language", torrentLanguage)
+                    put("torrent_language", torrentLanguage)
 
                     val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
                     serviceKeys.forEach { key ->
