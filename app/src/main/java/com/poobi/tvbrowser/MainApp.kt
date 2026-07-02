@@ -420,19 +420,6 @@ fun MainApp(
         }
 
         if (isPlayerActive) {
-            val playPosition = remember { mutableStateOf(0L) }
-
-            LaunchedEffect(isPlayerActive) {
-                if (isPlayerActive) {
-                    while (true) {
-                        playerEngine.exoPlayer?.let {
-                            playPosition.value = it.currentPosition
-                        }
-                        delay(200)
-                    }
-                }
-            }
-
             Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                 AndroidView(
                     factory = { ctx ->
@@ -713,8 +700,7 @@ fun MainApp(
                 }
 
                 CustomSubtitleOverlay(
-                    manager = playerEngine.subtitleAlignmentManager,
-                    currentPositionMs = playPosition.value,
+                    playerEngine = playerEngine,
                     modifier = Modifier.fillMaxSize()
                 )
 

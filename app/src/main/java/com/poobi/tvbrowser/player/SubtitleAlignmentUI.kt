@@ -38,15 +38,28 @@ enum class AlignmentScreen { Menu, Search, Waveform }
 
 @Composable
 fun CustomSubtitleOverlay(
-    manager: SubtitleAlignmentManager,
-    currentPositionMs: Long,
+    playerEngine: PlayerEngine,
     modifier: Modifier = Modifier
 ) {
-    val activeCue by manager.activeCue.collectAsState()
-    val isUIVisible by manager.isUIVisible.collectAsState()
+    val activeCue by playerEngine.subtitleAlignmentManager.activeCue.collectAsState()
+    val isPlayerActive by playerEngine.isPlayerActive.collectAsState()
+    val isUIVisible by playerEngine.subtitleAlignmentManager.isUIVisible.collectAsState()
 
-    LaunchedEffect(currentPositionMs) {
-        manager.updateActiveCue(currentPositionMs)
+    var playPosition by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(isPlayerActive) {
+        if (isPlayerActive) {
+            while (true) {
+                playerEngine.exoPlayer?.let {
+                    playPosition = it.currentPosition
+                }
+                delay(200)
+            }
+        }
+    }
+
+    LaunchedEffect(playPosition) {
+        playerEngine.subtitleAlignmentManager.updateActiveCue(playPosition)
     }
 
     if (isUIVisible) return
