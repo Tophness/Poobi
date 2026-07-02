@@ -216,165 +216,166 @@ fun MainApp(
             .fillMaxSize()
             .background(Color(0xFF1A1A1D))
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-
-            AnimatedVisibility(
-                visible = !isPlayerActive && !isBrowsing,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(72.dp)
-                        .background(Color(0xFF1E1E24))
-                        .padding(horizontal = 40.dp)
-                        .focusProperties {
-                            onEnter = {
-                                val direction = requestedFocusDirection
-                                when (direction) {
-                                    FocusDirection.Up -> {
-                                        val target = if (currentTab == AppTab.Browser) browserTabFocusRequester else streamsTabFocusRequester
-                                        target
-                                    }
-                                    FocusDirection.Left, FocusDirection.Right -> {
-                                        FocusRequester.Default
-                                    }
-                                    else -> {
-                                        FocusRequester.Default
+        if (!isPlayerActive) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                AnimatedVisibility(
+                    visible = !isBrowsing,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp)
+                            .background(Color(0xFF1E1E24))
+                            .padding(horizontal = 40.dp)
+                            .focusProperties {
+                                onEnter = {
+                                    val direction = requestedFocusDirection
+                                    when (direction) {
+                                        FocusDirection.Up -> {
+                                            val target = if (currentTab == AppTab.Browser) browserTabFocusRequester else streamsTabFocusRequester
+                                            target
+                                        }
+                                        FocusDirection.Left, FocusDirection.Right -> {
+                                            FocusRequester.Default
+                                        }
+                                        else -> {
+                                            FocusRequester.Default
+                                        }
                                     }
                                 }
-                            }
-                        },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    ModernTab(
-                        text = "Browser",
-                        isSelected = currentTab == AppTab.Browser,
-                        onFocus = { browserViewModel.currentAppTab.value = 0 },
-                        onClick = { browserViewModel.currentAppTab.value = 0 },
-                        focusRequester = browserTabFocusRequester,
-                        keyTracker = KeyTracker
-                    )
-
-                    ModernTab(
-                        text = "Streams",
-                        isSelected = currentTab == AppTab.Streams,
-                        onFocus = { browserViewModel.currentAppTab.value = 1 },
-                        onClick = { browserViewModel.currentAppTab.value = 1 },
-                        focusRequester = streamsTabFocusRequester,
-                        keyTracker = KeyTracker,
-                        modifier = Modifier.focusProperties {
-                            if (isScrapeScreenActive) {
-                                down = streamsContentTabFocusRequester
-                            }
-                        }
-                    )
-                    
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    val settingsInteractionSource = remember { MutableInteractionSource() }
-                    val isSettingsFocused by settingsInteractionSource.collectIsFocusedAsState()
-
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(if (isSettingsFocused) Color(0xFF00BCD4) else Color.Transparent)
-                            .then(if (isSettingsFocused) Modifier.border(2.dp, Color.White, CircleShape) else Modifier)
-                            .clickable(
-                                interactionSource = settingsInteractionSource,
-                                indication = null,
-                                onClick = { context.startActivity(Intent(context, SettingsActivity::class.java)) }
-                            )
-                            .focusable(interactionSource = settingsInteractionSource),
-                        contentAlignment = Alignment.Center
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_settings),
-                            contentDescription = "Settings",
-                            tint = if (isSettingsFocused) Color.Black else Color.White,
-                            modifier = Modifier.size(20.dp)
+                        ModernTab(
+                            text = "Browser",
+                            isSelected = currentTab == AppTab.Browser,
+                            onFocus = { browserViewModel.currentAppTab.value = 0 },
+                            onClick = { browserViewModel.currentAppTab.value = 0 },
+                            focusRequester = browserTabFocusRequester,
+                            keyTracker = KeyTracker
                         )
+
+                        ModernTab(
+                            text = "Streams",
+                            isSelected = currentTab == AppTab.Streams,
+                            onFocus = { browserViewModel.currentAppTab.value = 1 },
+                            onClick = { browserViewModel.currentAppTab.value = 1 },
+                            focusRequester = streamsTabFocusRequester,
+                            keyTracker = KeyTracker,
+                            modifier = Modifier.focusProperties {
+                                if (isScrapeScreenActive) {
+                                    down = streamsContentTabFocusRequester
+                                }
+                            }
+                        )
+                        
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        val settingsInteractionSource = remember { MutableInteractionSource() }
+                        val isSettingsFocused by settingsInteractionSource.collectIsFocusedAsState()
+
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(if (isSettingsFocused) Color(0xFF00BCD4) else Color.Transparent)
+                                .then(if (isSettingsFocused) Modifier.border(2.dp, Color.White, CircleShape) else Modifier)
+                                .clickable(
+                                    interactionSource = settingsInteractionSource,
+                                    indication = null,
+                                    onClick = { context.startActivity(Intent(context, SettingsActivity::class.java)) }
+                                )
+                                .focusable(interactionSource = settingsInteractionSource),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_settings),
+                                contentDescription = "Settings",
+                                tint = if (isSettingsFocused) Color.Black else Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
-            }
-            
-            AnimatedVisibility(
-                visible = !isPlayerActive && !isBrowsing,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color(0xFF00BCD4)))
-            }
+                
+                AnimatedVisibility(
+                    visible = !isBrowsing,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color(0xFF00BCD4)))
+                }
 
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                when (currentTab) {
-                    AppTab.Browser -> {
-                        if (isBrowsing) {
-                            Column {
-                                if (topBarVisible) {
-                                    BrowserTopBar(
-                                        viewModel = browserViewModel,
-                                        onNavigateDown = {
-                                            browserViewModel.hideTopBar()
-                                            cursorManager.clearKeyStates()
-                                            cursorManager.wakeCursor()
-                                        }
-                                    )
-                                }
-                                
-                                if (activeIndex in browserViewModel.getWebViewsList().indices) {
-                                    key(activeIndex) {
-                                        AndroidView(
-                                            factory = { ctx ->
-                                                val wv = browserViewModel.getWebViewsList()[activeIndex]
-                                                wv.apply {
-                                                    val prevParent = parent as? ViewGroup
-                                                    if (prevParent != null) {
-                                                        prevParent.removeView(this)
-                                                    }
-                                                    layoutParams = ViewGroup.LayoutParams(
-                                                        ViewGroup.LayoutParams.MATCH_PARENT,
-                                                        ViewGroup.LayoutParams.MATCH_PARENT
-                                                    )
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxSize(),
-                                            update = { currentView ->
-                                                val targetWebView = browserViewModel.currentWebView
-                                                
-                                                if (currentView != targetWebView && targetWebView != null) {
-                                                    val parentContainer = currentView.parent as? ViewGroup
-                                                    if (parentContainer != null) {
-                                                        parentContainer.removeView(currentView)
-                                                        val targetPrevParent = targetWebView.parent as? ViewGroup
-                                                        if (targetPrevParent != null) {
-                                                            targetPrevParent.removeView(targetWebView)
-                                                        }
-                                                        parentContainer.addView(targetWebView)
-                                                    }
-                                                }
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    when (currentTab) {
+                        AppTab.Browser -> {
+                            if (isBrowsing) {
+                                Column {
+                                    if (topBarVisible) {
+                                        BrowserTopBar(
+                                            viewModel = browserViewModel,
+                                            onNavigateDown = {
+                                                browserViewModel.hideTopBar()
+                                                cursorManager.clearKeyStates()
+                                                cursorManager.wakeCursor()
                                             }
                                         )
                                     }
+                                    
+                                    if (activeIndex in browserViewModel.getWebViewsList().indices) {
+                                        key(activeIndex) {
+                                            AndroidView(
+                                                factory = { ctx ->
+                                                    val wv = browserViewModel.getWebViewsList()[activeIndex]
+                                                    wv.apply {
+                                                        val prevParent = parent as? ViewGroup
+                                                        if (prevParent != null) {
+                                                            prevParent.removeView(this)
+                                                        }
+                                                        layoutParams = ViewGroup.LayoutParams(
+                                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                                            ViewGroup.LayoutParams.MATCH_PARENT
+                                                        )
+                                                    }
+                                                },
+                                                modifier = Modifier.fillMaxSize(),
+                                                update = { currentView ->
+                                                    val targetWebView = browserViewModel.currentWebView
+                                                    
+                                                    if (currentView != targetWebView && targetWebView != null) {
+                                                        val parentContainer = currentView.parent as? ViewGroup
+                                                        if (parentContainer != null) {
+                                                            parentContainer.removeView(currentView)
+                                                            val targetPrevParent = targetWebView.parent as? ViewGroup
+                                                            if (targetPrevParent != null) {
+                                                                targetPrevParent.removeView(targetWebView)
+                                                            }
+                                                            parentContainer.addView(targetWebView)
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
                                 }
+                            } else {
+                                BrowserHomeScreen(browserViewModel)
                             }
-                        } else {
-                            BrowserHomeScreen(browserViewModel)
                         }
-                    }
-                    AppTab.Streams -> {
-                        when {
-                            isScrapeScreenActive -> {
-                                ScrapeProgressScreen(viewModel = streamsViewModel, streamsContentTabFocusRequester = streamsContentTabFocusRequester)
-                            }
-                            selectedMedia != null -> {
-                                MediaDetailsScreen(streamsViewModel)
-                            }
-                            else -> {
-                                StreamsDashboardScreen(streamsViewModel)
+                        AppTab.Streams -> {
+                            when {
+                                isScrapeScreenActive -> {
+                                    ScrapeProgressScreen(viewModel = streamsViewModel, streamsContentTabFocusRequester = streamsContentTabFocusRequester)
+                                }
+                                selectedMedia != null -> {
+                                    MediaDetailsScreen(streamsViewModel)
+                                }
+                                else -> {
+                                    StreamsDashboardScreen(streamsViewModel)
+                                }
                             }
                         }
                     }
