@@ -43,10 +43,13 @@ fun CustomSubtitleOverlay(
     modifier: Modifier = Modifier
 ) {
     val activeCue by manager.activeCue.collectAsState()
+    val isUIVisible by manager.isUIVisible.collectAsState()
 
     LaunchedEffect(currentPositionMs) {
         manager.updateActiveCue(currentPositionMs)
     }
+
+    if (isUIVisible) return
 
     activeCue?.let { cue ->
         Box(
@@ -299,8 +302,7 @@ fun SubtitleAlignmentOverlay(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(230.dp)
-                            .background(Color(0xE6141416))
-                            .border(width = 1.dp, color = Color(0xFF222225))
+                            .background(Color.Transparent)
                             .padding(12.dp)
                     ) {
                         WaveformAlignmentLayout(
@@ -388,13 +390,14 @@ fun WaveformAlignmentLayout(
                 .height(30.dp)
                 .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
                 .padding(horizontal = 8.dp, vertical = 2.dp),
-            contentAlignment = Alignment.CenterStart
+            contentAlignment = Alignment.Center
         ) {
             Text(
-                text = activeCue?.text ?: "[ Silence ]",
+                text = (activeCue?.text ?: "[ Silence ]").replace("\n", " "),
                 color = if (activeCue != null) Color.White else Color.Gray,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
