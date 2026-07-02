@@ -197,14 +197,6 @@ class PlayerEngine(
             if (player.playbackState == Player.STATE_READY && player.playWhenReady) {
                 audioWaveformCapturer.currentPositionMs = player.currentPosition
 
-                if (subtitleAlignmentManager.isLooping.value) {
-                    val loopStart = subtitleAlignmentManager.loopStartMs
-                    val loopEnd = subtitleAlignmentManager.loopEndMs
-                    if (player.currentPosition >= loopEnd) {
-                        player.seekTo(loopStart)
-                    }
-                }
-
                 val pos = player.currentPosition
                 val dur = player.duration
                 val threshold = getUpNextThreshold()
@@ -219,7 +211,7 @@ class PlayerEngine(
                     }
                 }
             }
-            checkUpNextHandler.postDelayed(this, 50)
+            checkUpNextHandler.postDelayed(this, 100)
         }
     }
 
