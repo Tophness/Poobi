@@ -122,7 +122,7 @@ class SubtitleAlignmentManager(private val context: Context) {
 
         val loopLength = (dynamicEnd - loopStartMs).coerceIn(2000L, 8000L)
         loopEndMs = loopStartMs + loopLength
-
+        player.playWhenReady = true
         _isLooping.value = true
         loopMonitoringJob?.cancel()
         loopMonitoringJob = coroutineScope.launch(Dispatchers.Main) {
