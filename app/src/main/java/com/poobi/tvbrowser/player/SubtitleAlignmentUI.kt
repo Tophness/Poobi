@@ -108,7 +108,7 @@ fun SubtitleAlignmentOverlay(
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.40f))
     ) {
-                when (screen) {
+        when (screen) {
             AlignmentScreen.Menu -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -145,6 +145,8 @@ fun SubtitleAlignmentOverlay(
                                 .focusRequester(focusRequester)
                                 .focusProperties {
                                     up = FocusRequester.Cancel
+                                    left = FocusRequester.Cancel
+                                    right = FocusRequester.Cancel
                                 },
                             onClick = { screen = AlignmentScreen.Waveform }
                         ) { isFocused ->
@@ -154,7 +156,13 @@ fun SubtitleAlignmentOverlay(
                         }
 
                         TvFocusableBox(
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            modifier = Modifier
+							.fillMaxWidth()
+							.height(40.dp)
+							.focusProperties {
+								left = FocusRequester.Cancel
+								right = FocusRequester.Cancel
+							},
                             onClick = { screen = AlignmentScreen.Search }
                         ) { isFocused ->
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -163,7 +171,13 @@ fun SubtitleAlignmentOverlay(
                         }
 
                         TvFocusableBox(
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            modifier = Modifier
+							.fillMaxWidth()
+							.height(40.dp)
+							.focusProperties {
+								left = FocusRequester.Cancel
+								right = FocusRequester.Cancel
+							},
                             onClick = { manager.setOffset(0L) }
                         ) { isFocused ->
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -177,6 +191,8 @@ fun SubtitleAlignmentOverlay(
                                 .height(40.dp)
                                 .focusProperties {
                                     down = FocusRequester.Cancel
+                                    left = FocusRequester.Cancel
+                                    right = FocusRequester.Cancel
                                 },
                             onClick = { onDismiss() }
                         ) { isFocused ->
