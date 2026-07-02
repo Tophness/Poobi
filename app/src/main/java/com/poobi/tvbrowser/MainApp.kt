@@ -732,6 +732,15 @@ fun MainApp(
                 var wasSyncVisible by remember { mutableStateOf(false) }
 
                 LaunchedEffect(isSyncVisible) {
+                    playerEngine.playerView?.let { pView ->
+                        if (isSyncVisible) {
+                            pView.useController = false
+                            pView.hideController()
+                        } else {
+                            pView.useController = true
+                        }
+                    }
+                    
                     if (!isSyncVisible && wasSyncVisible) {
                         playerEngine.requestPlayPauseFocus()
                     }
