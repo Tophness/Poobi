@@ -65,6 +65,9 @@ class PlayerEngine(
     var exoPlayer: ExoPlayer? = null
         private set
 
+    val audioWaveformCapturer = AudioWaveformCapturer()
+    val subtitleAlignmentManager = SubtitleAlignmentManager(context)
+
     private val _isPlayerActive = MutableStateFlow(false)
     val isPlayerActive: StateFlow<Boolean> = _isPlayerActive.asStateFlow()
 
@@ -124,24 +127,46 @@ class PlayerEngine(
         return url.lowercase().contains("mpd")
     }
 
-	private fun sanitizeHeaders(videoUrl: String, headers: Map<String, String>): Map<String, String> {
-		val mergedHeaders = headers.toMutableMap()
-		
-		if (isHlsUrl(videoUrl)) {
-			val refKey = mergedHeaders.keys.find { it.equals("referer", ignoreCase = true) }
-			val currentReferer = refKey?.let { mergedHeaders[it] }
+    private fun sanitizeHeaders(videoUrl: String, headers: Map<String, String>): Map<String, String> {
+        val mergedHeaders = headers.toMutableMap()
+        
+        if (isHlsUrl(videoUrl)) {
+            val refKey = mergedHeaders.keys.find { it.equals("referer", ignoreCase = true) }
+            val currentReferer = refKey?.let { mergedHeaders[it] }
 
-			if (currentReferer.isNullOrEmpty()) {
-				mergedHeaders.keys.filter { it.equals("referer", ignoreCase = true) }.forEach {
-					mergedHeaders.remove(it)
-				}
-				mergedHeaders["Referer"] = videoUrl
-			}
-		}
-		return mergedHeaders
-	}
+            if (currentReferer.isNullOrEmpty()) {
+                mergedHeaders.keys.filter { it.equals("referer", ignoreCase = true) }.forEach {
+                    mergedHeaders.remove(it)
+                }
+                mergedHeaders["Referer"] = videoUrl
+            }
+        }
+        return mergedHeaders
+    }
 
-	fun resetUpNextDismissed() {
+    fun requestPlayPauseFocus() {
+        val view = playerView ?: return
+        view.post {
+            view.showController()
+            val playPauseId = try {
+                androidx.media3.ui.R.id.exo_play_pause
+            } catch (e: Throwable) {
+                view.resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui")
+            }
+            val playPauseBtn = if (playPauseId != 0) view.findViewById<android.view.View>(playPauseId) else null
+            if (playPauseBtn != null) {
+                playPauseBtn.requestFocus()
+            }
+        }
+    }
+
+    fun disableNativeSubtitles(disable: Boolean) {
+        exoPlayer?.trackSelectionParameters = exoPlayer?.trackSelectionParameters?.buildUpon()
+            ?.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, disable)
+            ?.build() ?: exoPlayer!!.trackSelectionParameters
+    }
+
+    fun resetUpNextDismissed() {
         isUpNextDismissed = false
         _showUpNext.value = true
     }
@@ -170,6 +195,16 @@ class PlayerEngine(
         override fun run() {
             val player = exoPlayer ?: return
             if (player.playbackState == Player.STATE_READY && player.playWhenReady) {
+                audioWaveformCapturer.currentPositionMs = player.currentPosition
+
+                if (subtitleAlignmentManager.isLooping.value) {
+                    val loopStart = subtitleAlignmentManager.loopStartMs
+                    val loopEnd = subtitleAlignmentManager.loopEndMs
+                    if (player.currentPosition >= loopEnd) {
+                        player.seekTo(loopStart)
+                    }
+                }
+
                 val pos = player.currentPosition
                 val dur = player.duration
                 val threshold = getUpNextThreshold()
@@ -184,7 +219,7 @@ class PlayerEngine(
                     }
                 }
             }
-            checkUpNextHandler.postDelayed(this, 1000)
+            checkUpNextHandler.postDelayed(this, 50)
         }
     }
 
@@ -281,7 +316,19 @@ class PlayerEngine(
             .build()
 
         val trackSelector = DefaultTrackSelector(context)
-        exoPlayer = ExoPlayer.Builder(context)
+        val renderersFactory = object : androidx.media3.exoplayer.DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): androidx.media3.exoplayer.audio.AudioSink {
+                return androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf(audioWaveformCapturer))
+                    .build()
+            }
+        }
+
+        exoPlayer = ExoPlayer.Builder(context, renderersFactory)
             .setBandwidthMeter(bandwidthMeter)
             .setTrackSelector(trackSelector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory))
@@ -412,10 +459,14 @@ class PlayerEngine(
             exoPlayer?.seekTo(savedPos)
         }
 
-        if (!prefs.getBoolean("embedded_subs_enabled", true)) {
-            exoPlayer?.trackSelectionParameters = exoPlayer?.trackSelectionParameters?.buildUpon()
-                ?.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                ?.build() ?: exoPlayer!!.trackSelectionParameters
+        val firstSubUrl = subtitles.keys.firstOrNull() ?: ""
+        if (firstSubUrl.isNotEmpty()) {
+            subtitleAlignmentManager.loadSubtitles(firstSubUrl)
+            disableNativeSubtitles(true)
+        } else {
+            subtitleAlignmentManager.hideUI()
+            val embeddedEnabled = prefs.getBoolean("embedded_subs_enabled", true)
+            disableNativeSubtitles(!embeddedEnabled)
         }
 
         exoPlayer?.prepare()

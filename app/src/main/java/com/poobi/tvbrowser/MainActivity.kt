@@ -559,6 +559,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (playerEngine.isPlayerActive.value) {
+            if (playerEngine.subtitleAlignmentManager.isUIVisible.value) {
+                if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        playerEngine.subtitleAlignmentManager.cancelChanges()
+                    }
+                    return true
+                }
+                return super.dispatchKeyEvent(event)
+            }
+
             val pView = playerEngine.playerView
             val isUpNextFocused = playerEngine.showUpNext.value && 
                                   currentFocus?.javaClass?.name?.contains("Compose") == true

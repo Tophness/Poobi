@@ -60,6 +60,8 @@ import com.poobi.tvbrowser.browser.ContextMenuOverlay
 import com.poobi.tvbrowser.browser.CursorManager
 import com.poobi.tvbrowser.player.PlayerEngine
 import com.poobi.tvbrowser.player.UpNextOverlay
+import com.poobi.tvbrowser.player.CustomSubtitleOverlay
+import com.poobi.tvbrowser.player.SubtitleAlignmentOverlay
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvInputField
 import com.poobi.tvbrowser.shared.KeyTracker
@@ -71,6 +73,7 @@ import com.poobi.tvbrowser.streams.NewEpisodeNotificationOverlay
 import com.poobi.tvbrowser.streams.SubtitleWaitOverlay
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.delay
 
 enum class AppTab { Browser, Streams }
 
@@ -417,6 +420,19 @@ fun MainApp(
         }
 
         if (isPlayerActive) {
+            val playPosition = remember { mutableStateOf(0L) }
+
+            LaunchedEffect(isPlayerActive) {
+                if (isPlayerActive) {
+                    while (true) {
+                        playerEngine.exoPlayer?.let {
+                            playPosition.value = it.currentPosition
+                        }
+                        delay(200)
+                    }
+                }
+            }
+
             Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                 AndroidView(
                     factory = { ctx ->
@@ -528,6 +544,75 @@ fun MainApp(
                                             basicControls.addView(qualityBtn)
                                         }
                                     }
+
+                                    val existingSyncBtn = basicControls.findViewWithTag<android.view.View>("exo_sub_sync_button_tag")
+                                    if (existingSyncBtn == null) {
+                                        val syncBtn = android.widget.TextView(ctx).apply {
+                                            tag = "exo_sub_sync_button_tag"
+                                            text = "SUB SYNC"
+                                            
+                                            gravity = android.view.Gravity.CENTER
+                                            val density = resources.displayMetrics.density
+                                            val padH = (14 * density).toInt()
+                                            val padV = (6 * density).toInt()
+                                            setPadding(padH, padV, padH, padV)
+                                            textSize = 13f
+                                            setTypeface(null, android.graphics.Typeface.BOLD)
+                                            setMinWidth((70 * density).toInt())
+
+                                            val normalDrawable = android.graphics.drawable.GradientDrawable().apply {
+                                                setColor(android.graphics.Color.TRANSPARENT)
+                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+                                                cornerRadius = 4f * density
+                                            }
+                                            val focusedDrawable = android.graphics.drawable.GradientDrawable().apply {
+                                                setColor(android.graphics.Color.parseColor("#00BCD4"))
+                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+                                                cornerRadius = 4f * density
+                                            }
+
+                                            val sld = android.graphics.drawable.StateListDrawable().apply {
+                                                addState(intArrayOf(android.R.attr.state_focused), focusedDrawable)
+                                                addState(intArrayOf(), normalDrawable)
+                                            }
+                                            background = sld
+
+                                            val colorStateList = android.content.res.ColorStateList(
+                                                arrayOf(
+                                                    intArrayOf(android.R.attr.state_focused),
+                                                    intArrayOf()
+                                                ),
+                                                intArrayOf(
+                                                    android.graphics.Color.BLACK,
+                                                    android.graphics.Color.WHITE
+                                                )
+                                            )
+                                            setTextColor(colorStateList)
+
+                                            layoutParams = android.widget.LinearLayout.LayoutParams(
+                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                                            ).apply {
+                                                gravity = android.view.Gravity.CENTER_VERTICAL
+                                                rightMargin = (10 * density).toInt()
+                                                leftMargin = (10 * density).toInt()
+                                            }
+                                            
+                                            setOnClickListener {
+                                                playerEngine.subtitleAlignmentManager.showUI()
+                                                playerEngine.disableNativeSubtitles(true)
+                                            }
+                                            
+                                            isFocusable = true
+                                        }
+
+                                        val index = if (settingsBtn != null) basicControls.indexOfChild(settingsBtn) else -1
+                                        if (index >= 0) {
+                                            basicControls.addView(syncBtn, index)
+                                        } else {
+                                            basicControls.addView(syncBtn)
+                                        }
+                                    }
                                 }
                             }
                             
@@ -625,6 +710,32 @@ fun MainApp(
                             }
                         }
                     )
+                }
+
+                CustomSubtitleOverlay(
+                    manager = playerEngine.subtitleAlignmentManager,
+                    currentPositionMs = playPosition.value,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                SubtitleAlignmentOverlay(
+                    manager = playerEngine.subtitleAlignmentManager,
+                    audioCapturer = playerEngine.audioWaveformCapturer,
+                    player = playerEngine.exoPlayer!!,
+                    onDismiss = {
+                        playerEngine.subtitleAlignmentManager.hideUI()
+                        playerEngine.disableNativeSubtitles(true)
+                    }
+                )
+
+                val isSyncVisible by playerEngine.subtitleAlignmentManager.isUIVisible.collectAsState()
+                var wasSyncVisible by remember { mutableStateOf(false) }
+
+                LaunchedEffect(isSyncVisible) {
+                    if (!isSyncVisible && wasSyncVisible) {
+                        playerEngine.requestPlayPauseFocus()
+                    }
+                    wasSyncVisible = isSyncVisible
                 }
             }
         }
