@@ -105,13 +105,13 @@ class SubtitleAlignmentManager(private val context: Context) {
             val secondsDiff = deltaOffset / 1000f
             lastAdjustmentMsg = String.format("Auto-aligned offset by %.2fs (%+dms)", secondsDiff, deltaOffset)
 
-            player.seekTo(nativeStart)
+            player.seekTo(nativeStart + deltaOffset)
             startLoop(player, cue)
         }
     }
 
     fun startLoop(player: ExoPlayer, targetCue: SubtitleCue) {
-        loopStartMs = targetCue.startTimeMs
+        loopStartMs = targetCue.startTimeMs + _offsetMs.value
         
         val nextCue = _cues.value.find { it.startTimeMs > targetCue.endTimeMs }
         val dynamicEnd = if (nextCue != null && (nextCue.startTimeMs - targetCue.endTimeMs) > 1000) {
@@ -120,7 +120,7 @@ class SubtitleAlignmentManager(private val context: Context) {
             targetCue.endTimeMs + 1500
         }
 
-        val loopLength = (dynamicEnd - loopStartMs).coerceIn(2000L, 8000L)
+        val loopLength = (dynamicEnd - targetCue.startTimeMs).coerceIn(2000L, 8000L)
         loopEndMs = loopStartMs + loopLength
         player.playWhenReady = true
         _isLooping.value = true

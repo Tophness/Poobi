@@ -354,11 +354,13 @@ fun WaveformAlignmentLayout(
     var playerPos by remember { mutableStateOf(player.currentPosition) }
 
     LaunchedEffect(Unit) {
-        val currentPos = player.currentPosition
-        val currentCues = manager.cues.value
-        val targetCue = manager.activeCue.value ?: currentCues.minByOrNull { Math.abs(it.startTimeMs - currentPos) }
-        if (targetCue != null) {
-            manager.startLoop(player, targetCue)
+        if (!manager.isLooping.value) {
+            val currentPos = player.currentPosition
+            val currentCues = manager.cues.value
+            val targetCue = manager.activeCue.value ?: currentCues.minByOrNull { Math.abs(it.startTimeMs - currentPos) }
+            if (targetCue != null) {
+                manager.startLoop(player, targetCue)
+            }
         }
 
         while (true) {
