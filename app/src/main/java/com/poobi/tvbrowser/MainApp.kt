@@ -430,6 +430,12 @@ fun MainApp(
                             setShowSubtitleButton(true)
                             setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
                             playerEngine.playerView = this
+                            val renderingMode = playerEngine.prefs.getInt("subtitle_rendering_mode", 0)
+                            if (renderingMode == 1 && playerEngine.hasExternalSubtitles) {
+                                subtitleView?.visibility = android.view.View.INVISIBLE
+                            } else {
+                                subtitleView?.visibility = android.view.View.VISIBLE
+                            }
                             
                             setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
                                 val visible = visibility == android.view.View.VISIBLE
@@ -612,6 +618,13 @@ fun MainApp(
                             view.player = playerEngine.exoPlayer
                         }
                         playerEngine.playerView = view
+                        
+                        val renderingMode = playerEngine.prefs.getInt("subtitle_rendering_mode", 0)
+                        if (renderingMode == 1 && playerEngine.hasExternalSubtitles) {
+                            view.subtitleView?.visibility = android.view.View.INVISIBLE
+                        } else {
+                            view.subtitleView?.visibility = android.view.View.VISIBLE
+                        }
                     },
                     onRelease = {
                         playerEngine.playerView = null

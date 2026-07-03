@@ -156,6 +156,7 @@ class PlayerEngine(
     private var lastAlternativeUrls: List<String> = emptyList()
     private var lastAlternativeNames: List<String> = emptyList()
     private var lastIsTrailer: Boolean = false
+    val hasExternalSubtitles: Boolean get() = lastSubtitles.isNotEmpty()
 
     var playerView: PlayerView? = null
     private var hasReachedReady = false
@@ -209,8 +210,7 @@ class PlayerEngine(
     private fun restoreSubtitleVisibility() {
         val hasExternalSubs = lastSubtitles.isNotEmpty()
         if (hasExternalSubs) {
-            val renderingMode = prefs.getInt("subtitle_rendering_mode", 0)
-            disableNativeSubtitles(renderingMode == 1)
+            disableNativeSubtitles(false)
         } else {
             val embeddedEnabled = prefs.getBoolean("embedded_subs_enabled", true)
             disableNativeSubtitles(!embeddedEnabled)
@@ -266,6 +266,17 @@ class PlayerEngine(
         exoPlayer?.trackSelectionParameters = exoPlayer?.trackSelectionParameters?.buildUpon()
             ?.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, disable)
             ?.build() ?: exoPlayer!!.trackSelectionParameters
+    }
+
+    fun isTextTrackSelected(): Boolean {
+        val player = exoPlayer ?: return false
+        val tracks = player.currentTracks
+        for (group in tracks.groups) {
+            if (group.type == C.TRACK_TYPE_TEXT && group.isSelected) {
+                return true
+            }
+        }
+        return false
     }
 
     fun resetUpNextDismissed() {
@@ -670,26 +681,29 @@ class PlayerEngine(
                 val currentPos = player.currentPosition
                 val wasPlaying = player.playWhenReady
                 
-                saveProgress()
-                
-                launchVideo(
-                    videoUrl = option.url,
-                    title = lastVideoTitle,
-                    headers = lastHeaders,
-                    subtitles = lastSubtitles,
-                    item = lastScrapedItem,
-                    season = lastScrapedSeason,
-                    episode = lastScrapedEpisode,
-                    fromStreams = lastFromStreams,
-                    alternativeUrls = lastAlternativeUrls,
-                    alternativeNames = lastAlternativeNames,
-                    initialPositionMs = currentPos,
-                    isTrailer = lastIsTrailer
-                )
-                exoPlayer?.playWhenReady = wasPlaying
+                playVideoInAlternateQuality(currentPos, wasPlaying, option.url)
             }
         }
-        _showQualitySelector.value = false
+    }
+
+    private fun playVideoInAlternateQuality(currentPos: Long, wasPlaying: Boolean, alternateUrl: String) {
+        saveProgress()
+        
+        launchVideo(
+            videoUrl = alternateUrl,
+            title = lastVideoTitle,
+            headers = lastHeaders,
+            subtitles = lastSubtitles,
+            item = lastScrapedItem,
+            season = lastScrapedSeason,
+            episode = lastScrapedEpisode,
+            fromStreams = lastFromStreams,
+            alternativeUrls = lastAlternativeUrls,
+            alternativeNames = lastAlternativeNames,
+            initialPositionMs = currentPos,
+            isTrailer = lastIsTrailer
+        )
+        exoPlayer?.playWhenReady = wasPlaying
     }
 
     fun seekVideo(direction: Int, repeatCount: Int) {

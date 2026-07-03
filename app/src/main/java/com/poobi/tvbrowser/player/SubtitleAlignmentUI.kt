@@ -46,12 +46,14 @@ fun CustomSubtitleOverlay(
     val isUIVisible by playerEngine.subtitleAlignmentManager.isUIVisible.collectAsState()
 
     var playPosition by remember { mutableStateOf(0L) }
+    var isTextTrackSelected by remember { mutableStateOf(false) }
 
     LaunchedEffect(isPlayerActive) {
         if (isPlayerActive) {
             while (true) {
-                playerEngine.exoPlayer?.let {
-                    playPosition = it.currentPosition
+                playerEngine.exoPlayer?.let { player ->
+                    playPosition = player.currentPosition
+                    isTextTrackSelected = playerEngine.isTextTrackSelected()
                 }
                 delay(200)
             }
@@ -63,6 +65,7 @@ fun CustomSubtitleOverlay(
     }
 
     if (isUIVisible) return
+    if (!isTextTrackSelected) return
 
     activeCue?.let { cue ->
         Box(
