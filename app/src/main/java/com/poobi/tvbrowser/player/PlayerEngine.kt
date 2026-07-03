@@ -159,6 +159,13 @@ class PlayerEngine(
     val hasExternalSubtitles: Boolean get() = lastSubtitles.isNotEmpty()
 
     var playerView: PlayerView? = null
+        set(value) {
+            field = value
+            value?.let {
+                updateNativeSubtitleViewVisibility()
+            }
+        }
+
     private var hasReachedReady = false
     private var hasTriggeredPlaybackStarted = false
 
@@ -171,11 +178,10 @@ class PlayerEngine(
         playerScope.launch {
             subtitleAlignmentManager.isUIVisible.collect { isVisible ->
                 withContext(Dispatchers.Main) {
-                    if (isVisible) {
-                        disableNativeSubtitles(true)
-                    } else {
+                    if (!isVisible) {
                         applySubtitleOffset(subtitleAlignmentManager.baselineOffsetMs)
                     }
+                    updateNativeSubtitleViewVisibility()
                 }
             }
         }
@@ -186,10 +192,9 @@ class PlayerEngine(
         val renderingMode = prefs.getInt("subtitle_rendering_mode", 0)
         val offsetChanged = subtitleOffsetUs != newOffsetUs
         subtitleOffsetUs = newOffsetUs
-        restoreSubtitleVisibility()
 
         if (renderingMode == 0) {
-            if (offsetChanged || exoPlayer?.trackSelectionParameters?.disabledTrackTypes?.contains(C.TRACK_TYPE_TEXT) == true) {
+            if (offsetChanged) {
                 exoPlayer?.let { player ->
                     if (player.playbackState != Player.STATE_IDLE) {
                         val currentMediaItem = player.currentMediaItem
@@ -215,6 +220,19 @@ class PlayerEngine(
             val embeddedEnabled = prefs.getBoolean("embedded_subs_enabled", true)
             disableNativeSubtitles(!embeddedEnabled)
         }
+    }
+
+    fun updateNativeSubtitleViewVisibility() {
+        val view = playerView ?: return
+        val renderingMode = prefs.getInt("subtitle_rendering_mode", 0)
+        val isSyncVisible = subtitleAlignmentManager.isUIVisible.value
+
+        val shouldShow = when {
+            isSyncVisible -> false
+            renderingMode == 1 && hasExternalSubtitles -> false
+            else -> true
+        }
+        view.subtitleView?.visibility = if (shouldShow) android.view.View.VISIBLE else android.view.View.INVISIBLE
     }
 
     private fun isHlsUrl(url: String): Boolean {

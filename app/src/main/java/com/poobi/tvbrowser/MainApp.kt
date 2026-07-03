@@ -594,7 +594,6 @@ fun MainApp(
                                             
                                             setOnClickListener {
                                                 playerEngine.subtitleAlignmentManager.showUI()
-                                                playerEngine.disableNativeSubtitles(true)
                                             }
                                             
                                             isFocusable = true
