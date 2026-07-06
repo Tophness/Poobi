@@ -1961,9 +1961,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         return ""
     }
 
-    private fun performAutoSubtitleSearch(item: JSONObject, season: Int?, episode: Int?) {
+    private fun performAutoSubtitleSearch(item: JSONObject, season: Int?, episode: Int?): Boolean {
         val itemKey = "${item.optInt("id")}_${season ?: 0}_${episode ?: 0}"
-        if (_isDownloadingSubs.value || lastSubtitledItemKey == itemKey) return
+        if (_isDownloadingSubs.value || lastSubtitledItemKey == itemKey) return false
         
         val cached = loadSubtitlesFromCache(itemKey)
         val countPref = prefs.getInt("auto_sub_count", 1)
@@ -1972,7 +1972,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         if (cached.isNotEmpty() && hasEnoughCached) {
             lastSubtitledItemKey = itemKey
             _subStatusMsg.value = "Using cached subtitles..."
-            _isDownloadingSubs.value = true
+            _isDownloadingSubs.value = false
             _showSubProgressBar.value = false
             _subProgress.value = 1.0f
             
@@ -1988,11 +1988,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     resolveAndPlayInternal(pendingSource)
                     pendingPlayVideoSourceData = null
                 }
-                
-                delay(3000)
-                _isDownloadingSubs.value = false
             }
-            return
+            return true
         }
 
         lastSubtitledItemKey = itemKey
@@ -2145,6 +2142,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
+        return false
     }
 
     fun applySortPriorities() {
@@ -2205,14 +2203,15 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         if (infoHash.isNotEmpty() && fileIdx != -1) {
             performTorrentPreBuffering(infoHash, fileIdx, sourceDataJson)
         } else {
+            var hasInstantCachedSubs = false
             if (_isScraping.value && !_isDownloadingSubs.value && lastSubtitledItemKey == null) {
                 val item = _selectedItem.value
                 if (item != null && prefs.getInt("auto_sub_pref", 0) == 1) {
-                    performAutoSubtitleSearch(item, lastScrapedSeason, lastScrapedEpisode)
+                    hasInstantCachedSubs = performAutoSubtitleSearch(item, lastScrapedSeason, lastScrapedEpisode)
                 }
             }
 
-            if (_isDownloadingSubs.value) {
+            if (_isDownloadingSubs.value && !hasInstantCachedSubs) {
                 when (prefs.getInt("auto_sub_wait_pref", 1)) {
                     0 -> {
                         cancelSubtitleDownloads()

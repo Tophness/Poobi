@@ -108,6 +108,7 @@ class SettingsActivity : AppCompatActivity() {
     private var upNextTimeStr by mutableStateOf("20")
     private var autoplayNext by mutableStateOf("Closest Source")
     private var episodeFocusMode by mutableStateOf(0)
+    private var autoSkipIntros by mutableStateOf(true)
 
     private var scrollTopbar by mutableStateOf(true)
     private var navMode by mutableStateOf(0)
@@ -292,6 +293,7 @@ class SettingsActivity : AppCompatActivity() {
         extractPref = prefs.getInt("extract_video_pref", 0)
         fallbackPref = prefs.getInt("exo_fallback_pref", 0)
         embeddedSubs = prefs.getBoolean("embedded_subs_enabled", true)
+        autoSkipIntros = prefs.getBoolean("auto_skip_intros", true)
         upNextMode = prefs.getString("up_next_popup_pref", "Ask") ?: "Ask"
         upNextTime = prefs.getInt("up_next_time_pref", 20)
         upNextTimeStr = upNextTime.toString()
@@ -557,6 +559,7 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
 
+                item { ToggleSettingRow("Auto-Skip Intros & Recaps", autoSkipIntros) { autoSkipIntros = it } }
                 item {
                     TvInputField(
                         value = upNextTimeStr,
@@ -567,7 +570,7 @@ class SettingsActivity : AppCompatActivity() {
                                 upNextTime = filtered.toInt()
                             }
                         },
-                        label = "Show Overlay Seconds Before End",
+                        label = "Seconds Before End (Fallback If Show End Undetected)",
                         placeholder = "20",
                         containerColor = Color(0xFF222225),
                         imeAction = ImeAction.Done
@@ -2081,6 +2084,7 @@ class SettingsActivity : AppCompatActivity() {
                     putInt("extract_video_pref", extractPref)
                     putInt("exo_fallback_pref", fallbackPref)
                     putBoolean("embedded_subs_enabled", embeddedSubs)
+                    putBoolean("auto_skip_intros", autoSkipIntros)
                     putString("up_next_popup_pref", upNextMode)
                     putInt("up_next_time_pref", upNextTime)
                     putString("autoplay_next_pref", autoplayNext)

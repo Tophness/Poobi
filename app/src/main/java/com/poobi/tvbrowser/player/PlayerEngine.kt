@@ -76,6 +76,7 @@ class PlayerEngine(
 
     val audioWaveformCapturer = AudioWaveformCapturer()
     val subtitleAlignmentManager = SubtitleAlignmentManager(context)
+    private val introDbManager = IntroDbManager(context, playerScope)
 
     @Volatile
     var subtitleOffsetUs: Long = 0L
@@ -330,11 +331,23 @@ class PlayerEngine(
 
                 val pos = player.currentPosition
                 val dur = player.duration
-                val threshold = getUpNextThreshold()
-                val remaining = dur - pos
+
+                val autoSkipEnabled = prefs.getBoolean("auto_skip_intros", true)
+                if (autoSkipEnabled) {
+                    introDbManager.checkAndSkipSegments(pos, player)
+                }
+
+                val creditsStart = introDbManager.getCreditsStartMs()
+                val isAtEndZone = if (creditsStart != null) {
+                    pos >= creditsStart
+                } else {
+                    val threshold = getUpNextThreshold()
+                    val remaining = dur - pos
+                    remaining <= threshold
+                }
 
                 if (dur > 0 && lastScrapedSeason != null && !isUpNextDismissed && !_showUpNext.value) {
-                    if (remaining <= threshold) {
+                    if (isAtEndZone) {
                         if (_nextEpisodeData.value != null) {
                             _showUpNext.value = true
                             onUpNextTriggered()
@@ -423,6 +436,7 @@ class PlayerEngine(
 
         subtitleOffsetUs = 0L
         subtitleAlignmentManager.setOffset(0L)
+        introDbManager.reset()
 
         exoPlayer?.release()
 
@@ -471,6 +485,22 @@ class PlayerEngine(
                 if (state == Player.STATE_READY) {
                     hasReachedReady = true
                     checkUpNextHandler.post(checkUpNextRunnable)
+                    
+                    if (!introDbManager.hasFetchedTimestamps) {
+                        val tmdbId = lastScrapedItem?.optInt("id") ?: 0
+                        if (tmdbId > 0 && !lastIsTrailer) {
+                            val mediaType = lastScrapedItem?.optString("media_type")
+                                ?: if (lastScrapedItem?.has("name") == true) "tv" else "movie"
+                            val isTv = mediaType == "tv" || mediaType == "tvshow"
+                            introDbManager.fetchMediaTimestamps(
+                                tmdbId, 
+                                isTv, 
+                                lastScrapedSeason, 
+                                lastScrapedEpisode, 
+                                exoPlayer?.duration ?: 0L
+                            )
+                        }
+                    }
                     
                     val title = lastVideoTitle ?: "Unknown"
                     if (!hasTriggeredPlaybackStarted) {
@@ -806,8 +836,15 @@ class PlayerEngine(
             if (resumeKey != null) {
                 val pos = player.currentPosition
                 val dur = player.duration
-                val threshold = getUpNextThreshold()
-                val isCompleted = pos >= (dur - threshold)
+                
+                val creditsStart = introDbManager.getCreditsStartMs()
+                val isCompleted = if (creditsStart != null) {
+                    pos >= creditsStart
+                } else {
+                    val threshold = getUpNextThreshold()
+                    pos >= (dur - threshold)
+                }
+
                 if (dur > 0) {
                     if (isCompleted) {
                         prefs.edit().remove(resumeKey).apply()
