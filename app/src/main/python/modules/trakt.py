@@ -364,7 +364,7 @@ def syncTVShows(user):
     try:
         if getTraktCredentialsInfo() == False:
             return
-        indicators = getTraktAsJson('/users/me/watched/shows?extended=full')
+        indicators = getTraktAsJson('/users/me/watched/shows?extended=progress')
         indicators = [(i['show']['ids']['tmdb'], i['show']['aired_episodes'], sum([[(s['number'], e['number']) for e in s['episodes']] for s in i['seasons']], [])) for i in indicators]
         indicators = [(str(i[0]), int(i[1]), i[2]) for i in indicators]
         return indicators
