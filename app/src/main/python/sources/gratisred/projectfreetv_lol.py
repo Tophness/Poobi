@@ -22,6 +22,7 @@ from resources.lib.modules import scrape_sources
 
 DOM = client_utils.parseDOM
 
+
 class source:
     def __init__(self):
         self.results = []
@@ -71,91 +72,44 @@ class source:
                 result_url = self.base_link + self.tvshow_link % (slug, season, episode)
             else:
                 result_url = self.base_link + self.movie_link % (slug, year)
-
-            def _fetch_text(target_url, referer=None):
-                hdrs = dict(self.headers)
-                if referer:
-                    hdrs['Referer'] = referer
-                p = client.scrapePage(target_url, headers=hdrs, timeout='15')
-                try:
-                    txt = p.text if p is not None and hasattr(p, 'text') else ''
-                except Exception:
-                    txt = ''
-                if not isinstance(txt, str):
-                    try:
-                        txt = str(txt or '')
-                    except Exception:
-                        txt = ''
-                return txt
-
-            # Step 1: episode page -> locate the vembed URL (the only iframe
-            # on the episode page is the hdplayer that points to /vembed/<id>/)
-            ep_html = _fetch_text(result_url, referer=self.base_link)
-            if not ep_html:
+            page = client.scrapePage(result_url, headers=self.headers, timeout='15')
+            html = (getattr(page, 'text', '') or '') if page is not None else ''
+            if not html:
                 return self.results
 
-            vembed_urls = []
             try:
-                for src in DOM(ep_html, 'iframe', ret='src'):
-                    if src:
-                        vembed_urls.append(self.base_link + src if not src.startswith('http') else src)
+                for link in DOM(html, 'iframe', ret='src'):
+                    try:
+                        link = self.base_link + link if not link.startswith('http') else link
+                        for src in scrape_sources.process(hostDict, link):
+                            if scrape_sources.check_host_limit(src['source'], self.results):
+                                continue
+                            self.results.append(src)
+                    except Exception:
+                        continue
             except Exception:
                 pass
-            if not vembed_urls:
-                try:
-                    for src in re.findall(r'[\"\'](https?://[^\"\'<>]*?/vembed/[^\"\'<>]+)[\"\'<>]', ep_html, re.I):
-                        vembed_urls.append(src)
-                except Exception:
-                    pass
 
-            if not vembed_urls:
-                return self.results
-
-            # Step 2: vembed page -> pull source IDs from <select id="sourceSelect">
-            all_source_ids = []
-            for vurl in vembed_urls:
-                vhtml = _fetch_text(vurl, referer=result_url)
-                if not vhtml:
-                    continue
-                sel = DOM(vhtml, 'select', attrs={'id': 'sourceSelect'})
-                ids = []
-                if sel:
-                    ids = DOM(sel[0], 'option', ret='value')
-                else:
-                    ids = re.findall(r'<option[^>]*value=[\"\']([^\"\'<>]+)[\"\'<>]', vhtml, re.I)
-                for vid in ids:
-                    vid = (vid or '').strip()
-                    if vid:
-                        all_source_ids.append(vid)
-
-            seen = set()
-            source_ids = [s for s in all_source_ids if not (s in seen or seen.add(s))]
-
-            # Step 3: for each source_id, fetch /external/asset/<id>/ and
-            # pull the iframe src -> hand to resolveurl via scrape_sources.process
-            for source_id in source_ids:
-                try:
-                    asset_url = self.base_link + '/external/asset/%s/' % source_id
-                    asset_html = _fetch_text(asset_url, referer=vembed_urls[0] if vembed_urls else self.base_link)
-                    if not asset_html:
-                        continue
-                    iframes = DOM(asset_html, 'iframe', ret='src')
-                    for link in iframes:
-                        try:
-                            if not link:
-                                continue
-                            link = self.base_link + link if not link.startswith('http') else link
-                            for src in scrape_sources.process(hostDict, link):
-                                if scrape_sources.check_host_limit(src['source'], self.results):
-                                    continue
-                                self.results.append(src)
-                        except Exception:
+            try:
+                ext_rows = DOM(html, 'tr', attrs={'class': r'ext_link.+?'})
+                for row in ext_rows:
+                    try:
+                        hrefs = DOM(row, 'a', ret='href')
+                        titles = DOM(row, 'a', ret='title')
+                        if not hrefs or not titles:
                             continue
-                except Exception:
-                    continue
-
+                        link, host = hrefs[0], titles[0]
+                        link = self.base_link + link if not link.startswith('http') else link
+                        item = scrape_sources.make_item(hostDict, link, host=host, info=None, prep=True)
+                        if item and not scrape_sources.check_host_limit(item['source'], self.results):
+                            self.results.append(item)
+                    except Exception:
+                        continue
+            except Exception:
+                pass
             return self.results
         except Exception:
+            #log_utils.log('sources', 1)
             return self.results
 
 
@@ -179,5 +133,6 @@ class source:
                 except Exception:
                     pass
             except Exception:
+                #log_utils.log('resolve', 1)
                 pass
         return url

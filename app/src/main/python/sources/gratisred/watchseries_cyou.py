@@ -121,27 +121,34 @@ class source:
 
 
     def resolve(self, url):
-        if any(d in url for d in self.domains):
+        if not any(d in url for d in self.domains):
+            return url
+        try:
+            page = client.scrapePage(url, headers=self.headers, timeout='15')
+            html = (getattr(page, 'text', '') or '') if page is not None else ''
             try:
-                page = client.scrapePage(url, headers=self.headers, timeout='15')
-                html = (getattr(page, 'text', '') or '') if page is not None else ''
-                # Prefer iframe src.
-                try:
-                    iframe = DOM(html, 'iframe', ret='src')
-                    if iframe:
-                        return iframe[0]
-                except Exception:
-                    pass
-                # Fallback: /open/site/... redirect target embedded in page.
-                try:
-                    m = re.search(r'"(/open/site/[^"]+)"', html, re.I | re.S)
-                    if m:
-                        target = self.base_link + m.group(1)
-                        page2 = client.scrapePage(target, headers=self.headers, timeout='15')
-                        return getattr(page2, 'url', target) or target
-                except Exception:
-                    pass
+                iframe = DOM(html, 'iframe', ret='src')
+                if iframe:
+                    link = iframe[0]
+                    if link and link not in ('about:blank', ''):
+                        return link if link.startswith('http') else self.base_link + link
             except Exception:
-                #log_utils.log('resolve', 1)
                 pass
+            try:
+                m = re.search(r'"(/open/site/[^"]+)"', html, re.I | re.S)
+                if m:
+                    target = m.group(1)
+                    if not target.startswith('http'):
+                        target = self.base_link + target
+                    resolved = client.request(target, headers=self.headers, output='geturl', timeout='15')
+                    if resolved:
+                        return resolved
+                    page2 = client.scrapePage(target, headers=self.headers, timeout='15')
+                    if page2 is not None and getattr(page2, 'url', None):
+                        return page2.url
+            except Exception:
+                pass
+        except Exception:
+            #log_utils.log('resolve', 1)
+            pass
         return url

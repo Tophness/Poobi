@@ -17,6 +17,7 @@
 """
 
 import binascii
+import json
 import re
 from six.moves import urllib_parse
 from resolveurl.lib import helpers
@@ -26,21 +27,32 @@ from resolveurl.resolver import ResolveUrl, ResolverError
 
 class VidSonicResolver(ResolveUrl):
     name = 'VidSonic'
-    domains = ['vidsonic.net']
-    pattern = r'(?://|\.)(vidsonic\.net)/(?:e|d)/([0-9a-zA-Z]+)'
+    domains = ['vidsonic.net', 'vixeo.io']
+    pattern = r'(?://|\.)((?:vidsonic|vixeo)\.(?:net|io))/(?:e|d)/([0-9a-zA-Z]+)'
 
     def get_media_url(self, host, media_id):
         web_url = self.get_url(host, media_id)
         ref = urllib_parse.urljoin(web_url, '/')
         headers = {
-            'User-Agent': common.FF_USER_AGENT,
+            'User-Agent': common.RAND_UA,
             'Referer': ref,
             'Origin': ref[:-1]
         }
         html = self.net.http_GET(web_url, headers=headers).content
+        src = ''
         r = re.search(r"const\s*_0x1\s*=\s*'([^']+)", html)
         if r:
-            src = binascii.unhexlify(r.group(1).replace('|', '')).decode()[::-1]
+            src = r.group(1)
+        else:
+            # newer player builds carry the same reversed hex string in a
+            # base64 encoded json blob on the player root element instead
+            r = re.search(r'data-config="([^"]+)"', html)
+            if r:
+                blob = r.group(1)
+                cfg = json.loads(helpers.b64decode(blob))
+                src = cfg.get('source', '')
+        if src:
+            src = binascii.unhexlify(src.replace('|', '')).decode()[::-1]
             return src + helpers.append_headers(headers)
         raise ResolverError('Video Link Not Found')
 

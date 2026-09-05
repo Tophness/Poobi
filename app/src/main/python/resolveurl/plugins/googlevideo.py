@@ -20,6 +20,7 @@ from resolveurl import common, hmf
 from resolveurl.resolver import ResolveUrl, ResolverError
 from resolveurl.lib import helpers
 import re
+from kodi_six import xbmc, xbmcaddon, xbmcvfs
 import json
 from six.moves import urllib_error, urllib_parse, urllib_request
 import six
@@ -35,7 +36,7 @@ class GoogleResolver(ResolveUrl):
     pattern = r'https?://(.*?(?:\.googlevideo|\.bp\.blogspot|blogger|(?:plus|drive|get|docs)\.google|google(?:usercontent|drive|apis))\.com)/(.*?(?:videoplayback\?|[\?&]authkey|host/)*.+)'
 
     def __init__(self):
-        self.headers = {'User-Agent': common.FF_USER_AGENT}
+        self.headers = {'User-Agent': common.RAND_UA}
         self.url_matches = ['redirector.', 'googleusercontent', '.bp.blogspot.com']
         self.itag_map = {'5': '240', '6': '270', '17': '144', '18': '360', '22': '720', '34': '360', '35': '480',
                          '36': '240', '37': '1080', '38': '3072', '43': '360', '44': '480', '45': '720', '46': '1080',
@@ -58,7 +59,22 @@ class GoogleResolver(ResolveUrl):
         video = None
         web_url = self.get_url(host, media_id)
 
-        def use_gdrive(): return False
+        if xbmc.getCondVisibility('System.HasAddon(plugin.googledrive)') and self.get_setting('use_gdrive') == "true":
+            addon = xbmcaddon.Addon('plugin.googledrive')
+            if six.PY3:
+                db = xbmcvfs.translatePath(addon.getAddonInfo('profile')) + 'accounts.db'
+            else:
+                db = xbmc.translatePath(addon.getAddonInfo('profile')) + 'accounts.db'
+            conn = sqlite3.connect(db)
+            c = conn.cursor()
+            c.execute("SELECT key FROM store;")
+            driveid = c.fetchone()[0]
+            conn.close()
+
+            doc_id = re.search(r'[-\w]{25,}', web_url)
+            if doc_id:
+                common.kodi.notify(header=None, msg='Resolving with Google Drive', duration=3000)
+                video = 'plugin://plugin.googledrive/?action=play&content_type=video&driveid={0}&item_id={1}'.format(driveid, doc_id.group(0))
 
         if not video:
             response, video_urls = self._parse_google(web_url)
