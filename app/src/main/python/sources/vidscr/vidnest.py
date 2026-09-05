@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 import json
-import requests
 import re
+import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 API = 'https://new.vidnest.fun'
 SITE = 'https://vidnest.fun'
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+
 _ALPH = 'RB0fpH8ZEyVLkv7c2i6MAJ5u3IKFDxlS1NTsnGaqmXYdUrtzjwObCgQP94hoeW+/='
 _TABLE = {c: i for i, c in enumerate(_ALPH)}
 
@@ -18,13 +19,24 @@ _PROVIDERS = {
     'hollymoviehd': ('hollymoviehd', 'sources_file'),
     'flixhq':       ('flixhq',       'url_only'),
     'vidlink':      ('vidlink',      'vidlink'),
-    'klikxxi':      ('klikxxi',      'sources'),
+    'ophim':        ('klikxxi',      'sources'),
+}
+
+PROVIDER_LABELS = {
+    'moviesapi':    'MoviesAPI',
+    'purstream':    'PurStream',
+    'allmovies':    'AllMovies',
+    'catflix':      'CatFlix',
+    'hollymoviehd': 'HollyMovieHD',
+    'flixhq':       'FlixHQ',
+    'vidlink':      'VidLink',
+    'ophim':        'Ophim',
 }
 
 class source:
     def __init__(self):
         self.results = []
-        self.domains = ['vidnest.fun']
+        self.domains = ['vidnest.fun', 'new.vidnest.fun']
 
     def movie(self, imdb, tmdb, title, localtitle, aliases, year):
         return str(tmdb) if tmdb else None
@@ -58,35 +70,95 @@ class source:
     def _fetch(self, is_movie, tmdb_id, season, episode, prov, kind):
         path = f"{prov}/movie/{tmdb_id}" if is_movie else f"{prov}/tv/{tmdb_id}/{season}/{episode}"
         try:
-            r = requests.get(f"{API}/{path}", headers={'User-Agent': UA, 'Origin': SITE, 'Referer': SITE + '/'}, timeout=10)
+            r = requests.get(
+                f"{API}/{path}",
+                headers={'User-Agent': UA, 'Origin': SITE, 'Referer': SITE + '/'},
+                timeout=10
+            )
             if not r.ok:
                 return []
             data = self._decode(r.json())
-            streams = []
-            
-            raw_sources = data.get('sources', []) if kind != 'url_only' else [{'url': data.get('url')}]
-            if kind == 'streams_lang': raw_sources = data.get('streams', [])
-            if kind == 'vidlink': raw_sources = [{'url': (data.get('data') or {}).get('stream', {}).get('playlist')}]
-            
-            if not raw_sources and isinstance(data, list): raw_sources = data
+            if not isinstance(data, dict):
+                return []
 
-            for s in raw_sources:
-                if not isinstance(s, dict): continue
-                u = s.get('url') or s.get('file')
-                if not u: continue
-                streams.append({
-                    'source': f"Vidnest {prov}",
-                    'quality': s.get('quality', '720p'),
-                    'url': u,
-                    'direct': True,
-                    'info': 'HLS'
-                })
+            label_pretty = PROVIDER_LABELS.get(prov, prov)
+            streams = []
+
+            if kind in ('sources', 'sources_named'):
+                for s in (data.get('sources') or []):
+                    u = s.get('url')
+                    if not u: continue
+                    q = s.get('quality') or s.get('name') or '720p'
+                    streams.append({
+                        'source': f"Vidnest {label_pretty}",
+                        'quality': q,
+                        'url': f"{u}|User-Agent={UA}&Referer={SITE}/",
+                        'direct': True,
+                        'info': 'HLS' if '.m3u8' in u.lower() or u.lower().endswith('.txt') else 'MP4'
+                    })
+
+            elif kind == 'sources_file':
+                for s in (data.get('sources') or []):
+                    u = s.get('file')
+                    if not u: continue
+                    q = s.get('label') or '720p'
+                    streams.append({
+                        'source': f"Vidnest {label_pretty}",
+                        'quality': q,
+                        'url': f"{u}|User-Agent={UA}&Referer={SITE}/",
+                        'direct': True,
+                        'info': 'HLS' if (s.get('type') == 'hls' or '.m3u8' in u.lower()) else 'MP4'
+                    })
+
+            elif kind == 'streams_lang':
+                for s in (data.get('streams') or []):
+                    u = s.get('url')
+                    if not u: continue
+                    extra_h = s.get('headers') or {}
+                    
+                    hdr_parts = [f"User-Agent={UA}", f"Referer={SITE}/"]
+                    for k, v in extra_h.items():
+                        hdr_parts.append(f"{k}={v}")
+                    pipe_headers = "&".join(hdr_parts)
+
+                    streams.append({
+                        'source': f"Vidnest {label_pretty}",
+                        'quality': '720p',
+                        'url': f"{u}|{pipe_headers}",
+                        'direct': True,
+                        'info': 'HLS'
+                    })
+
+            elif kind == 'url_only':
+                u = data.get('url')
+                if u:
+                    streams.append({
+                        'source': f"Vidnest {label_pretty}",
+                        'quality': '720p',
+                        'url': f"{u}|User-Agent={UA}&Referer={SITE}/",
+                        'direct': True,
+                        'info': 'HLS'
+                    })
+
+            elif kind == 'vidlink':
+                stream = (data.get('data') or {}).get('stream') or {}
+                u = stream.get('playlist')
+                if u:
+                    streams.append({
+                        'source': f"Vidnest {label_pretty}",
+                        'quality': '720p',
+                        'url': f"{u}|User-Agent={UA}&Referer={SITE}/",
+                        'direct': True,
+                        'info': 'HLS'
+                    })
+
             return streams
-        except: return []
+        except:
+            return []
 
     def _decode(self, env):
         if not isinstance(env, dict) or not env.get('encrypted'): return env
-        data = env['data']
+        data = env.get('data', '')
         out = bytearray()
         for i in range(0, len(data), 4):
             block = data[i:i + 4].ljust(4, '=')

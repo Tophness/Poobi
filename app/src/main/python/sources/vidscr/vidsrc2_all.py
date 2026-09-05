@@ -48,7 +48,7 @@ class source:
                 ex.submit(self._scrape_host, s, host, media_type, tmdb_id, season, episode, imdb_id)
                 for host in KNOWN_HOSTS
             ]
-            for fut in as_completed(futures, timeout=25):
+            for fut in as_completed(futures, timeout=20):
                 try: 
                     res = fut.result()
                     if res: self.results.extend(res)
@@ -81,18 +81,16 @@ class source:
     def _scrape_host(self, sess, host, media_type, tmdb_id, season, episode, imdb_id):
         embed_url = self._build_embed_url(host, media_type, tmdb_id, season, episode, imdb_id)
 
-        # Special-case vidsrc.icu
         if host == 'vidsrc.icu':
             return self._resolve_vidsrc_icu(sess, embed_url)
 
         try:
-            r = sess.get(embed_url, headers={'Referer': f'https://{host}/'}, timeout=12)
+            r = sess.get(embed_url, headers={'Referer': f'https://{host}/'}, timeout=10)
             if not r.ok: return []
 
             html = r.text
             streams = []
 
-            # Direct media
             for mu in self._scrape_media(html):
                 streams.append({
                     'source': f'{host} direct',
@@ -102,7 +100,6 @@ class source:
                     'info': 'HLS' if '.m3u8' in mu else 'MP4'
                 })
 
-            # Iframes
             iframes = re.findall(r'<iframe[^>]+src=["\']([^"\']+)["\']', html, re.I)
             for i, u in enumerate(iframes[:3]):
                 if u.startswith('//'): u = 'https:' + u
@@ -124,16 +121,14 @@ class source:
             m = re.search(r'<iframe[^>]+src=["\'](https?:[^"\']+vidsrcme[^"\']+)["\']', r.text)
             if m:
                 inner = m.group(1)
-                # This could be handed off to vidsrc_me logic if we want to be thorough
-                # For now just follow and scrape
-                return [{'source': 'vidsrc.icu', 'quality': '720p', 'url': mu, 'direct': True} for mu in self._follow_iframe(sess, inner, embed_url)]
+                return [{'source': 'vidsrc.icu', 'quality': '720p', 'url': f"{mu}|Referer={inner}&User-Agent={UA}", 'direct': True, 'info': 'HLS'} for mu in self._follow_iframe(sess, inner, embed_url)]
         except: pass
         return []
 
     def _follow_iframe(self, sess, url, referer, depth=1):
         if depth < 0 or not url: return []
         try:
-            r = sess.get(url, timeout=10, headers={'Referer': referer})
+            r = sess.get(url, timeout=8, headers={'Referer': referer})
             body = r.text
             media = self._scrape_media(body)
             if media: return media

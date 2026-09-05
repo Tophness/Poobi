@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
 import requests
-import time
+import base64
 from urllib.parse import urlparse, urljoin
 
 class source:
@@ -13,6 +13,9 @@ class source:
         self.cdn_pool = [
             'shadowlandschronicles.com', 'cdn-centaurus.com', 'cdn-fnc.com',
             'shadowlands-cdn.com', 'nestra-cdn.com', 'cloudnestra.com', 'tmstr-cdn.com'
+        ]
+        self.mirrors = [
+            'cloudnestra.com', 'nestra-cdn.com', 'tmstr-cdn.com', 'shadowlandschronicles.com'
         ]
 
     def movie(self, imdb, tmdb, title, localtitle, aliases, year):
@@ -67,42 +70,54 @@ class source:
                 _add('https://cloudnestra.com/rcp/' + m.group(1))
         return servers
 
+    def _fetch_safe(self, sess, url, referer):
+        urls_to_try = [url]
+        if 'cloudnestra.com/' in url:
+            for m in self.mirrors[1:]:
+                urls_to_try.append(url.replace('cloudnestra.com', m, 1))
+
+        for target in urls_to_try:
+            try:
+                r = sess.get(target, headers={'Referer': referer, 'User-Agent': self.ua, 'Accept-Encoding': 'gzip, deflate'}, timeout=10)
+                if r.ok and len(r.text) > 100:
+                    return r.text
+            except: pass
+        return ''
+
     def _resolve_cloudnestra(self, rcp_url, sess, referer, server_name):
-        r = sess.get(rcp_url, headers={'Referer': referer}, timeout=10).text
+        body = self._fetch_safe(sess, rcp_url, referer)
+        if not body: return
         rcp_host = urlparse(rcp_url).netloc
 
-        # Look for direct media in RCP page
-        self._find_and_add_direct(r, rcp_url, server_name)
+        self._find_and_add_direct(body, rcp_url, server_name)
 
-        next_url = self._find_next_hop(r, rcp_host)
+        next_url = self._find_next_hop(body, rcp_host)
         if next_url:
-            r2 = sess.get(next_url, headers={'Referer': rcp_url}, timeout=10).text
-            self._find_and_add_direct(r2, next_url, server_name)
-            
-            # Pool parsing and expansion
-            pool = self._parse_server_pool(r2)
-            raw_files = re.findall(r'file\s*:\s*["\']([^"\']+)["\']', r2)
-            for raw_file in raw_files:
-                candidates = self._expand_templates(raw_file, pool)
-                for c in candidates:
-                    if '.m3u8' in c or '.mp4' in c:
-                        self.results.append({
-                            'source': server_name,
-                            'quality': '720p',
-                            'url': f"{c}|Referer=https://cloudnestra.com/&Origin=https://cloudnestra.com&User-Agent={self.ua}",
-                            'direct': True,
-                            'info': 'HLS' if '.m3u8' in c else 'MP4'
-                        })
+            body2 = self._fetch_safe(sess, next_url, rcp_url)
+            if body2:
+                self._find_and_add_direct(body2, next_url, server_name)
+                
+                pool = self._parse_server_pool(body2)
+                raw_files = re.findall(r'file\s*:\s*["\']([^"\']+)["\']', body2)
+                for raw_file in raw_files:
+                    candidates = self._expand_templates(raw_file, pool)
+                    for c in candidates:
+                        if '.m3u8' in c or '.mp4' in c:
+                            self.results.append({
+                                'source': server_name,
+                                'quality': '720p',
+                                'url': f"{c}|Referer=https://cloudnestra.com/&Origin=https://cloudnestra.com&User-Agent={self.ua}",
+                                'direct': True,
+                                'info': 'HLS' if '.m3u8' in c else 'MP4'
+                            })
 
     def _find_next_hop(self, body, current_host):
-        # XOR hidden source
         enc = re.search(r'data-h=["\']([0-9a-fA-F]+)["\']', body)
         seed = re.search(r'data-i=["\']([^"\']+)["\']', body)
         if enc and seed:
             decoded = self._xor_decode(enc.group(1), seed.group(1))
             if decoded: return urljoin(f"https://{current_host}", decoded)
 
-        # Iframe patterns
         for pat in (
             r'src\s*[:=]\s*["\']([^"\']*?/prorcp/[^"\']+)["\']',
             r'["\'](/prorcp/[A-Za-z0-9+/=_\-]+)["\']',
@@ -114,7 +129,6 @@ class source:
                 candidate = m.group(1).strip('"\'')
                 if 'atob' in pat:
                     try:
-                        import base64
                         candidate = base64.b64decode(candidate + '==').decode('utf-8', errors='replace')
                     except: continue
                 return urljoin(f"https://{current_host}", candidate)
@@ -143,7 +157,6 @@ class source:
                 u = m.group(1).replace('\\/', '/').strip('"\'')
                 if 'atob' in pat:
                     try:
-                        import base64
                         u = base64.b64decode(u + '===').decode('utf-8', errors='replace')
                         nm = re.search(r'(https?://[^\s\'"<>]+?\.m3u8[^\s\'"<>]*)', u)
                         if nm: u = nm.group(1)
