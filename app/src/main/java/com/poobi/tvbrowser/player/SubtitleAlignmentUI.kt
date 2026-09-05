@@ -80,7 +80,7 @@ fun CustomSubtitleOverlay(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text(
-                    text = cue.text,
+                    text = cue.annotatedString,
                     color = Color.White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
@@ -176,12 +176,12 @@ fun SubtitleAlignmentOverlay(
 
                         TvFocusableBox(
                             modifier = Modifier
-							.fillMaxWidth()
-							.height(40.dp)
-							.focusProperties {
-								left = FocusRequester.Cancel
-								right = FocusRequester.Cancel
-							},
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .focusProperties {
+                                    left = FocusRequester.Cancel
+                                    right = FocusRequester.Cancel
+                                },
                             onClick = { screen = AlignmentScreen.Search }
                         ) { isFocused ->
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -191,12 +191,12 @@ fun SubtitleAlignmentOverlay(
 
                         TvFocusableBox(
                             modifier = Modifier
-							.fillMaxWidth()
-							.height(40.dp)
-							.focusProperties {
-								left = FocusRequester.Cancel
-								right = FocusRequester.Cancel
-							},
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .focusProperties {
+                                    left = FocusRequester.Cancel
+                                    right = FocusRequester.Cancel
+                                },
                             onClick = { manager.setOffset(0L) }
                         ) { isFocused ->
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
