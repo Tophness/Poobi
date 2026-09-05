@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.Toast
+import java.io.File
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
@@ -144,6 +145,9 @@ class PlayerEngine(
     private val _isControllerVisible = MutableStateFlow(false)
     val isControllerVisible: StateFlow<Boolean> = _isControllerVisible.asStateFlow()
 
+    private val _showDiskSubtitlePicker = MutableStateFlow(false)
+    val showDiskSubtitlePicker: StateFlow<Boolean> = _showDiskSubtitlePicker.asStateFlow()
+
     var upNextFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
 
     private var lastVideoTitle: String? = null
@@ -185,6 +189,51 @@ class PlayerEngine(
                     updateNativeSubtitleViewVisibility()
                 }
             }
+        }
+    }
+
+    fun showDiskSubtitlePicker() {
+        _showDiskSubtitlePicker.value = true
+    }
+
+    fun dismissDiskSubtitlePicker() {
+        _showDiskSubtitlePicker.value = false
+    }
+
+    fun addSubtitlesFromDisk(files: List<File>, autoSelectSingle: Boolean = true) {
+        if (files.isEmpty()) return
+        val player = exoPlayer ?: return
+
+        val newlyAddedSubData = mutableListOf<SubtitleData>()
+        val newSubMap = lastSubtitles.toMutableMap()
+
+        files.forEach { file ->
+            val uri = Uri.fromFile(file).toString()
+            val label = file.nameWithoutExtension
+                .replace(Regex("_[0-9a-fA-F\\-]{36}"), "")
+                .replace("_", " ")
+            val lang = getLanguageInfo(file.name).first
+
+            newSubMap[uri] = mapOf("label" to label, "lang" to lang)
+            newlyAddedSubData.add(SubtitleData(url = uri, label = label, lang = lang))
+        }
+        lastSubtitles = newSubMap
+
+        addSubtitlesBatch(newlyAddedSubData)
+
+        if (files.size == 1 && autoSelectSingle) {
+            val singleUri = Uri.fromFile(files[0]).toString()
+            val label = newlyAddedSubData[0].label
+
+            val renderingMode = prefs.getInt("subtitle_rendering_mode", 0)
+            if (renderingMode == 1) {
+                subtitleAlignmentManager.loadSubtitles(singleUri)
+            } else {
+                disableNativeSubtitles(false)
+            }
+            Toast.makeText(context, "Loaded & selected: $label", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Added ${files.size} subtitles to captions menu", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -429,6 +478,7 @@ class PlayerEngine(
         hasTriggeredPlaybackStarted = false
         _showUpNext.value = false
         _showQualitySelector.value = false
+        _showDiskSubtitlePicker.value = false
         _qualityOptions.value = emptyList()
         _currentQuality.value = null
         _isPlayerActive.value = true

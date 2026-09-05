@@ -128,7 +128,6 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     } else {
-                        // Coming from browser originally, just return to browser or show toast
                         Toast.makeText(this, "ExoPlayer Error: ${error.errorCodeName}", Toast.LENGTH_SHORT).show()
                         browserViewModel.resumeTimersOnCurrent()
                     }
@@ -559,6 +558,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (playerEngine.isPlayerActive.value) {
+            if (playerEngine.showDiskSubtitlePicker.value) {
+                if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK) {
+                    playerEngine.dismissDiskSubtitlePicker()
+                    return true
+                }
+                return super.dispatchKeyEvent(event)
+            }
+
             if (playerEngine.subtitleAlignmentManager.isUIVisible.value) {
                 if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                     if (event.action == KeyEvent.ACTION_DOWN) {

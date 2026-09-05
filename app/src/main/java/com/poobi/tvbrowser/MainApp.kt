@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -65,6 +66,7 @@ import com.poobi.tvbrowser.player.SubtitleAlignmentOverlay
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvInputField
 import com.poobi.tvbrowser.shared.KeyTracker
+import com.poobi.tvbrowser.shared.TvMarqueeText
 import com.poobi.tvbrowser.streams.MediaDetailsScreen
 import com.poobi.tvbrowser.streams.ScrapeProgressScreen
 import com.poobi.tvbrowser.streams.StreamsDashboardScreen
@@ -74,6 +76,8 @@ import com.poobi.tvbrowser.streams.SubtitleWaitOverlay
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class AppTab { Browser, Streams }
 
@@ -421,196 +425,233 @@ fun MainApp(
         }
 
         if (isPlayerActive) {
+            val showDiskSubtitlePicker by playerEngine.showDiskSubtitlePicker.collectAsState()
+            if (showDiskSubtitlePicker) {
+                DiskSubtitleMultiPickerDialog(
+                    playerEngine = playerEngine,
+                    onDismiss = { playerEngine.dismissDiskSubtitlePicker() }
+                )
+            }
+
             Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                 AndroidView(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
-                            player = playerEngine.exoPlayer
-                            useController = true
-                            setShowSubtitleButton(true)
-                            setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-                            playerEngine.playerView = this
-                            val renderingMode = playerEngine.prefs.getInt("subtitle_rendering_mode", 0)
-                            if (renderingMode == 1 && playerEngine.hasExternalSubtitles) {
-                                subtitleView?.visibility = android.view.View.INVISIBLE
-                            } else {
-                                subtitleView?.visibility = android.view.View.VISIBLE
-                            }
-                            
-                            setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
-                                val visible = visibility == android.view.View.VISIBLE
-                                playerEngine.setControllerVisible(visible)
-                                if (visible) {
-                                    post {
-                                        if (!playerEngine.showUpNext.value) {
-                                            val playPauseBtn = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
-                                                ?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui"))
-                                                ?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", context.packageName))
-                                            playPauseBtn?.requestFocus()
-                                        }
-                                    }
-                                }
-                            })
+							player = playerEngine.exoPlayer
+							useController = true
+							setShowSubtitleButton(true)
+							setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
+							playerEngine.playerView = this
+							
+							val renderingMode = playerEngine.prefs.getInt("subtitle_rendering_mode", 0)
+							if (renderingMode == 1 && playerEngine.hasExternalSubtitles) {
+								subtitleView?.visibility = android.view.View.INVISIBLE
+							} else {
+								subtitleView?.visibility = android.view.View.VISIBLE
+							}
+							
+							setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility: Int ->
+								val visible = visibility == android.view.View.VISIBLE
+								playerEngine.setControllerVisible(visible)
+								if (visible) {
+									post {
+										if (!playerEngine.showUpNext.value) {
+											val playPauseBtn = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
+												?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui"))
+												?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", context.packageName))
+											playPauseBtn?.requestFocus()
+										}
+									}
+								}
+							})
 
-                            post {
-                                val basicControlsId = try {
-                                    androidx.media3.ui.R.id.exo_basic_controls
-                                } catch (e: Throwable) {
-                                    resources.getIdentifier("exo_basic_controls", "id", "androidx.media3.ui")
-                                }
-                                val settingsBtnId = try {
-                                    androidx.media3.ui.R.id.exo_settings
-                                } catch (e: Throwable) {
-                                    resources.getIdentifier("exo_settings", "id", "androidx.media3.ui")
-                                }
+							post {
+								val subtitleId = try {
+									androidx.media3.ui.R.id.exo_subtitle
+								} catch (e: Throwable) {
+									resources.getIdentifier("exo_subtitle", "id", "androidx.media3.ui")
+								}
+								val subtitleBtn = findViewById<android.view.View>(subtitleId)
 
-                                val basicControls = findViewById<android.widget.LinearLayout>(basicControlsId)
-                                val settingsBtn = findViewById<android.view.View>(settingsBtnId)
+								if (subtitleBtn != null) {
+									// 1. Force the subtitle button to ALWAYS stay enabled, focusable, and visible
+									subtitleBtn.isEnabled = true
+									subtitleBtn.isFocusable = true
+									subtitleBtn.alpha = 1.0f
 
-                                if (basicControls != null) {
-                                    val existingBtn = basicControls.findViewWithTag<android.view.View>("exo_quality_button_tag")
-                                    if (existingBtn == null) {
-                                        val qualityBtn = android.widget.TextView(ctx).apply {
-                                            tag = "exo_quality_button_tag"
+									subtitleBtn.viewTreeObserver.addOnPreDrawListener(android.view.ViewTreeObserver.OnPreDrawListener {
+										if (!subtitleBtn.isEnabled || subtitleBtn.alpha < 0.9f) {
+											subtitleBtn.isEnabled = true
+											subtitleBtn.isFocusable = true
+											subtitleBtn.alpha = 1.0f
+										}
+										true
+									})
 
-                                            val format = playerEngine.exoPlayer?.videoFormat
-                                            val height = format?.height
-                                            text = if (height != null && height > 0) "${height}P" else "AUTO"
-                                            
-                                            gravity = android.view.Gravity.CENTER
-                                            val density = resources.displayMetrics.density
-                                            val padH = (14 * density).toInt()
-                                            val padV = (6 * density).toInt()
-                                            setPadding(padH, padV, padH, padV)
-                                            textSize = 13f
-                                            setTypeface(null, android.graphics.Typeface.BOLD)
-                                            setMinWidth((70 * density).toInt())
+									// 2. Open our pop-out captions menu directly anchored above the button
+									subtitleBtn.setOnClickListener {
+										com.poobi.tvbrowser.player.CaptionsPopupMenu.show(subtitleBtn, playerEngine)
+									}
+								}
 
-                                            val normalDrawable = android.graphics.drawable.GradientDrawable().apply {
-                                                setColor(android.graphics.Color.TRANSPARENT)
-                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
-                                                cornerRadius = 4f * density
-                                            }
-                                            val focusedDrawable = android.graphics.drawable.GradientDrawable().apply {
-                                                setColor(android.graphics.Color.parseColor("#00BCD4"))
-                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
-                                                cornerRadius = 4f * density
-                                            }
+								val basicControlsId = try {
+									androidx.media3.ui.R.id.exo_basic_controls
+								} catch (e: Throwable) {
+									resources.getIdentifier("exo_basic_controls", "id", "androidx.media3.ui")
+								}
+								val settingsBtnId = try {
+									androidx.media3.ui.R.id.exo_settings
+								} catch (e: Throwable) {
+									resources.getIdentifier("exo_settings", "id", "androidx.media3.ui")
+								}
 
-                                            val sld = android.graphics.drawable.StateListDrawable().apply {
-                                                addState(intArrayOf(android.R.attr.state_focused), focusedDrawable)
-                                                addState(intArrayOf(), normalDrawable)
-                                            }
-                                            background = sld
+								val basicControls = findViewById<android.widget.LinearLayout>(basicControlsId)
+								val settingsBtn = findViewById<android.view.View>(settingsBtnId)
 
-                                            val colorStateList = android.content.res.ColorStateList(
-                                                arrayOf(
-                                                    intArrayOf(android.R.attr.state_focused),
-                                                    intArrayOf()
-                                                ),
-                                                intArrayOf(
-                                                    android.graphics.Color.BLACK,
-                                                    android.graphics.Color.WHITE
-                                                )
-                                            )
-                                            setTextColor(colorStateList)
+								if (basicControls != null) {
+									val existingBtn = basicControls.findViewWithTag<android.view.View>("exo_quality_button_tag")
+									if (existingBtn == null) {
+										val qualityBtn = android.widget.TextView(ctx).apply {
+											tag = "exo_quality_button_tag"
 
-                                            layoutParams = android.widget.LinearLayout.LayoutParams(
-                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
-                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-                                            ).apply {
-                                                gravity = android.view.Gravity.CENTER_VERTICAL
-                                                rightMargin = (10 * density).toInt()
-                                                leftMargin = (10 * density).toInt()
-                                            }
-                                            
-                                            setOnClickListener {
-                                                playerEngine.showResolutionSelector()
-                                            }
-                                            
-                                            isFocusable = true
-                                        }
+											val format = playerEngine.exoPlayer?.videoFormat
+											val height = format?.height
+											text = if (height != null && height > 0) "${height}P" else "AUTO"
+											
+											gravity = android.view.Gravity.CENTER
+											val density = resources.displayMetrics.density
+											val padH = (14 * density).toInt()
+											val padV = (6 * density).toInt()
+											setPadding(padH, padV, padH, padV)
+											textSize = 13f
+											setTypeface(null, android.graphics.Typeface.BOLD)
+											setMinWidth((70 * density).toInt())
 
-                                        val index = if (settingsBtn != null) basicControls.indexOfChild(settingsBtn) else -1
-                                        if (index >= 0) {
-                                            basicControls.addView(qualityBtn, index)
-                                        } else {
-                                            basicControls.addView(qualityBtn)
-                                        }
-                                    }
+											val normalDrawable = android.graphics.drawable.GradientDrawable().apply {
+												setColor(android.graphics.Color.TRANSPARENT)
+												setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+												cornerRadius = 4f * density
+											}
+											val focusedDrawable = android.graphics.drawable.GradientDrawable().apply {
+												setColor(android.graphics.Color.parseColor("#00BCD4"))
+												setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+												cornerRadius = 4f * density
+											}
 
-                                    val existingSyncBtn = basicControls.findViewWithTag<android.view.View>("exo_sub_sync_button_tag")
-                                    if (existingSyncBtn == null) {
-                                        val syncBtn = android.widget.TextView(ctx).apply {
-                                            tag = "exo_sub_sync_button_tag"
-                                            text = "SUB SYNC"
-                                            
-                                            gravity = android.view.Gravity.CENTER
-                                            val density = resources.displayMetrics.density
-                                            val padH = (14 * density).toInt()
-                                            val padV = (6 * density).toInt()
-                                            setPadding(padH, padV, padH, padV)
-                                            textSize = 13f
-                                            setTypeface(null, android.graphics.Typeface.BOLD)
-                                            setMinWidth((70 * density).toInt())
+											val sld = android.graphics.drawable.StateListDrawable().apply {
+												addState(intArrayOf(android.R.attr.state_focused), focusedDrawable)
+												addState(intArrayOf(), normalDrawable)
+											}
+											background = sld
 
-                                            val normalDrawable = android.graphics.drawable.GradientDrawable().apply {
-                                                setColor(android.graphics.Color.TRANSPARENT)
-                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
-                                                cornerRadius = 4f * density
-                                            }
-                                            val focusedDrawable = android.graphics.drawable.GradientDrawable().apply {
-                                                setColor(android.graphics.Color.parseColor("#00BCD4"))
-                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
-                                                cornerRadius = 4f * density
-                                            }
+											val colorStateList = android.content.res.ColorStateList(
+												arrayOf(
+													intArrayOf(android.R.attr.state_focused),
+													intArrayOf()
+												),
+												intArrayOf(
+													android.graphics.Color.BLACK,
+													android.graphics.Color.WHITE
+												)
+											)
+											setTextColor(colorStateList)
 
-                                            val sld = android.graphics.drawable.StateListDrawable().apply {
-                                                addState(intArrayOf(android.R.attr.state_focused), focusedDrawable)
-                                                addState(intArrayOf(), normalDrawable)
-                                            }
-                                            background = sld
+											layoutParams = android.widget.LinearLayout.LayoutParams(
+												android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+												android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+											).apply {
+												gravity = android.view.Gravity.CENTER_VERTICAL
+												rightMargin = (10 * density).toInt()
+												leftMargin = (10 * density).toInt()
+											}
+											
+											setOnClickListener {
+												playerEngine.showResolutionSelector()
+											}
+											
+											isFocusable = true
+										}
 
-                                            val colorStateList = android.content.res.ColorStateList(
-                                                arrayOf(
-                                                    intArrayOf(android.R.attr.state_focused),
-                                                    intArrayOf()
-                                                ),
-                                                intArrayOf(
-                                                    android.graphics.Color.BLACK,
-                                                    android.graphics.Color.WHITE
-                                                )
-                                            )
-                                            setTextColor(colorStateList)
+										val index = if (settingsBtn != null) basicControls.indexOfChild(settingsBtn) else -1
+										if (index >= 0) {
+											basicControls.addView(qualityBtn, index)
+										} else {
+											basicControls.addView(qualityBtn)
+										}
+									}
 
-                                            layoutParams = android.widget.LinearLayout.LayoutParams(
-                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
-                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-                                            ).apply {
-                                                gravity = android.view.Gravity.CENTER_VERTICAL
-                                                rightMargin = (10 * density).toInt()
-                                                leftMargin = (10 * density).toInt()
-                                            }
-                                            
-                                            setOnClickListener {
-                                                playerEngine.subtitleAlignmentManager.showUI()
-                                            }
-                                            
-                                            isFocusable = true
-                                        }
+									val existingSyncBtn = basicControls.findViewWithTag<android.view.View>("exo_sub_sync_button_tag")
+									if (existingSyncBtn == null) {
+										val syncBtn = android.widget.TextView(ctx).apply {
+											tag = "exo_sub_sync_button_tag"
+											text = "SUB SYNC"
+											
+											gravity = android.view.Gravity.CENTER
+											val density = resources.displayMetrics.density
+											val padH = (14 * density).toInt()
+											val padV = (6 * density).toInt()
+											setPadding(padH, padV, padH, padV)
+											textSize = 13f
+											setTypeface(null, android.graphics.Typeface.BOLD)
+											setMinWidth((70 * density).toInt())
 
-                                        val index = if (settingsBtn != null) basicControls.indexOfChild(settingsBtn) else -1
-                                        if (index >= 0) {
-                                            basicControls.addView(syncBtn, index)
-                                        } else {
-                                            basicControls.addView(syncBtn)
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            requestFocus()
-                        }
+											val normalDrawable = android.graphics.drawable.GradientDrawable().apply {
+												setColor(android.graphics.Color.TRANSPARENT)
+												setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+												cornerRadius = 4f * density
+											}
+											val focusedDrawable = android.graphics.drawable.GradientDrawable().apply {
+												setColor(android.graphics.Color.parseColor("#00BCD4"))
+												setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+												cornerRadius = 4f * density
+											}
+
+											val sld = android.graphics.drawable.StateListDrawable().apply {
+												addState(intArrayOf(android.R.attr.state_focused), focusedDrawable)
+												addState(intArrayOf(), normalDrawable)
+											}
+											background = sld
+
+											val colorStateList = android.content.res.ColorStateList(
+												arrayOf(
+													intArrayOf(android.R.attr.state_focused),
+													intArrayOf()
+												),
+												intArrayOf(
+													android.graphics.Color.BLACK,
+													android.graphics.Color.WHITE
+												)
+											)
+											setTextColor(colorStateList)
+
+											layoutParams = android.widget.LinearLayout.LayoutParams(
+												android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+												android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+											).apply {
+												gravity = android.view.Gravity.CENTER_VERTICAL
+												rightMargin = (10 * density).toInt()
+												leftMargin = (10 * density).toInt()
+											}
+											
+											setOnClickListener {
+												playerEngine.subtitleAlignmentManager.showUI()
+											}
+											
+											isFocusable = true
+										}
+
+										val index = if (settingsBtn != null) basicControls.indexOfChild(settingsBtn) else -1
+										if (index >= 0) {
+											basicControls.addView(syncBtn, index)
+										} else {
+											basicControls.addView(syncBtn)
+										}
+									}
+								}
+							}
+							
+							requestFocus()
+						}
                     },
                     update = { view ->
                         if (view.player != playerEngine.exoPlayer) {
@@ -1224,4 +1265,215 @@ fun MainApp(
             }
         )
     }
+}
+
+enum class DiskPickerStep { MediaList, SubtitleList }
+
+@Composable
+fun DiskSubtitleMultiPickerDialog(
+    playerEngine: PlayerEngine,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var currentStep by remember { mutableStateOf(DiskPickerStep.MediaList) }
+    var diskGroups by remember { mutableStateOf<List<com.poobi.tvbrowser.player.DiskMediaSubtitleGroup>>(emptyList()) }
+    var selectedGroup by remember { mutableStateOf<com.poobi.tvbrowser.player.DiskMediaSubtitleGroup?>(null) }
+    var isScanningDisk by remember { mutableStateOf(true) }
+
+    val selectedFiles = remember { mutableStateMapOf<java.io.File, Boolean>() }
+    val firstItemFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val groups = com.poobi.tvbrowser.player.DiskSubtitleManager.scanDiskSubtitles(context)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                diskGroups = groups
+                isScanningDisk = false
+            }
+        }
+    }
+
+    LaunchedEffect(currentStep, isScanningDisk) {
+        if (!isScanningDisk) {
+            kotlinx.coroutines.delay(100)
+            try {
+                firstItemFocusRequester.requestFocus()
+            } catch (e: Exception) {}
+        }
+    }
+
+    val handleBack = {
+        if (currentStep == DiskPickerStep.SubtitleList) {
+            currentStep = DiskPickerStep.MediaList
+            selectedFiles.clear()
+        } else {
+            onDismiss()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = handleBack,
+        title = {
+            Text(
+                text = when (currentStep) {
+                    DiskPickerStep.MediaList -> "Select Media"
+                    DiskPickerStep.SubtitleList -> selectedGroup?.mediaTitle ?: "Select Subtitles"
+                },
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        },
+        containerColor = Color(0xFF222225),
+        text = {
+            when (currentStep) {
+                DiskPickerStep.MediaList -> {
+                    if (isScanningDisk) {
+                        Box(modifier = Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Color(0xFF00BCD4))
+                        }
+                    } else if (diskGroups.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                            Text("No subtitle files (.srt, .vtt, .ass) found on disk.", color = Color.Gray)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            itemsIndexed(diskGroups) { index, group ->
+                                TvFocusableBox(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier),
+                                    onClick = {
+                                        selectedGroup = group
+                                        selectedFiles.clear()
+                                        currentStep = DiskPickerStep.SubtitleList
+                                    }
+                                ) { isFocused ->
+                                    Row(
+                                        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        TvMarqueeText(
+                                            text = group.mediaTitle,
+                                            color = if (isFocused) Color.Black else Color.White,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            text = "(${group.subtitles.size} subs)",
+                                            color = if (isFocused) Color.Black.copy(alpha = 0.7f) else Color.Gray,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                DiskPickerStep.SubtitleList -> {
+                    val group = selectedGroup
+                    if (group != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val allSelected = group.subtitles.isNotEmpty() && group.subtitles.all { selectedFiles[it.file] == true }
+                                Button(
+                                    onClick = {
+                                        if (allSelected) {
+                                            selectedFiles.clear()
+                                        } else {
+                                            group.subtitles.forEach { selectedFiles[it.file] = true }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333338))
+                                ) {
+                                    Text(if (allSelected) "Deselect All" else "Select All", fontSize = 12.sp)
+                                }
+
+                                val count = selectedFiles.values.count { it }
+                                Text(
+                                    text = "$count selected",
+                                    color = Color(0xFF00BCD4),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                itemsIndexed(group.subtitles) { index, subItem ->
+                                    val isChecked = selectedFiles[subItem.file] == true
+                                    TvFocusableBox(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(48.dp)
+                                            .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier),
+                                        onClick = {
+                                            selectedFiles[subItem.file] = !isChecked
+                                        }
+                                    ) { isFocused ->
+                                        Row(
+                                            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            androidx.compose.material3.Checkbox(
+                                                checked = isChecked,
+                                                onCheckedChange = { selectedFiles[subItem.file] = it },
+                                                colors = androidx.compose.material3.CheckboxDefaults.colors(
+                                                    checkedColor = Color(0xFF00BCD4),
+                                                    uncheckedColor = if (isFocused) Color.Black else Color.Gray
+                                                )
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            TvMarqueeText(
+                                                text = subItem.displayName,
+                                                color = if (isFocused) Color.Black else Color.White,
+                                                fontSize = 13.sp,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (currentStep == DiskPickerStep.SubtitleList) {
+                val chosenFiles = selectedFiles.filter { it.value }.keys.toList()
+                Button(
+                    enabled = chosenFiles.isNotEmpty(),
+                    onClick = {
+                        playerEngine.addSubtitlesFromDisk(chosenFiles, autoSelectSingle = true)
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                ) {
+                    val count = chosenFiles.size
+                    Text(if (count > 0) "Add ($count)" else "Add", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        dismissButton = {
+            Button(
+                onClick = handleBack,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+            ) {
+                Text(if (currentStep == DiskPickerStep.SubtitleList) "Back" else "Cancel", color = Color.White)
+            }
+        }
+    )
 }
