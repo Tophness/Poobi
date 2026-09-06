@@ -1396,7 +1396,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 val rawStreamUrl = json.optString("url")
-                if (rawStreamUrl.isEmpty() || !rawStreamUrl.startsWith("http")) {
+                if (rawStreamUrl.isEmpty() || (!rawStreamUrl.startsWith("http") && !rawStreamUrl.startsWith("file://"))) {
                     withContext(Dispatchers.Main) { tryNextSource() }
                     return@launch
                 }
@@ -1429,6 +1429,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun checkUrlValidity(url: String, headers: Map<String, String>): Boolean = withContext(Dispatchers.IO) {
+        if (url.startsWith("file://")) {
+            return@withContext true
+        }
         try {
             val connection = URL(url).openConnection() as HttpURLConnection
             connection.requestMethod = "HEAD"
@@ -2256,7 +2259,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         val rawStreamUrl = json.optString("url")
                         val isVideo = json.optBoolean("is_video", false)
                         
-                        if (rawStreamUrl.isNotEmpty() && rawStreamUrl.startsWith("http")) {
+                        if (rawStreamUrl.isNotEmpty() && (rawStreamUrl.startsWith("http") || rawStreamUrl.startsWith("file://"))) {
                             val (streamUrl, parsedHeaders) = com.poobi.tvbrowser.shared.parseKodiUrl(rawStreamUrl)
                             playStream(streamUrl, isVideo, sourceDataJson, parsedHeaders)
                         } else {

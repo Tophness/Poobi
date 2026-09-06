@@ -1,13 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
-
-try:
-    from curl_cffi import requests as curlm
-    CURL_CFFI_AVAILABLE = True
-except Exception as e:
-    import requests as curlm
-    CURL_CFFI_AVAILABLE = False
-    logging.error(f"cfscrape shim: curl_cffi fallback to requests. Error: {e}")
+from curl_cffi import requests as curlm
 
 from .exceptions import (
     CloudflareLoopProtection,
@@ -15,19 +8,22 @@ from .exceptions import (
     CloudflareIUAMError,
     CloudflareSolveError,
     CloudflareChallengeError,
-    CloudflareCaptchaError,
-    CloudflareCaptchaProvider
+    CloudflareReCaptchaError,
+    CloudflareReCaptchaProvider
 )
 
 class CloudScraper(curlm.Session):
     def __init__(self, *args, **kwargs):
+        # Strip out cfscrape/cloudscraper specific kwargs that curl_cffi doesn't support
         for key in ['debug', 'delay', 'cipherSuite', 'ssl_context', 'interpreter',
-                    'captcha', 'requestPreHook', 'requestPostHook', 'source_address',
+                    'recaptcha', 'requestPreHook', 'requestPostHook', 'source_address',
                     'doubleDown', 'allow_brotli', 'browser', 'solveDepth']:
             kwargs.pop(key, None)
 
-        if CURL_CFFI_AVAILABLE and 'impersonate' not in kwargs:
+        # Default to chrome impersonation if not specified
+        if 'impersonate' not in kwargs:
             kwargs['impersonate'] = 'chrome110'
+
         super(CloudScraper, self).__init__(*args, **kwargs)
 
     @classmethod
@@ -35,8 +31,10 @@ class CloudScraper(curlm.Session):
         scraper = cls(**kwargs)
         if sess:
             if hasattr(sess, 'cookies'):
-                try: scraper.cookies.update(sess.cookies)
-                except: pass
+                try:
+                    scraper.cookies.update(sess.cookies)
+                except:
+                    pass
             if hasattr(sess, 'headers'):
                 scraper.headers.update(sess.headers)
         return scraper
@@ -46,11 +44,9 @@ class CloudScraper(curlm.Session):
         scraper = cls.create_scraper(**kwargs)
         try:
             resp = scraper.get(url, timeout=kwargs.get('timeout', 10))
-            if hasattr(resp, 'cookies') and hasattr(resp.cookies, 'get_dict'):
-                return resp.cookies.get_dict(), scraper.headers.get("User-Agent")
-            return {}, scraper.headers.get("User-Agent")
+            return resp.cookies.get_dict(), scraper.headers.get("User-Agent")
         except Exception as e:
-            logging.error(f"cfscrape shim get_tokens error: {e}")
+            logging.error(f"cloudscraper shim error: {e}")
             return {}, scraper.headers.get("User-Agent", "")
 
     @classmethod

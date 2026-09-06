@@ -290,7 +290,8 @@ class PlayerEngine(
         return urlLower.contains("m3u8") || 
                urlLower.contains("/hls/") || 
                urlLower.contains("/pl/") || 
-               urlLower.contains("/playlist/")
+               urlLower.contains("/playlist/") ||
+			   urlLower.contains("/streamsvr/")
     }
 
     private fun isDashUrl(url: String): Boolean {
@@ -600,7 +601,7 @@ class PlayerEngine(
             }
         })
 
-        val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
+        val mediaItemBuilder = MediaItem.Builder().setUri(Uri.parse(cleanUrl))
         val subtitleConfigs = subtitles.map { (subUrl, infoMap) ->
             val mimeType = when {
                 subUrl.contains(".vtt") -> MimeTypes.TEXT_VTT
@@ -619,8 +620,8 @@ class PlayerEngine(
                 .build()
         }
 
-        if (videoUrl.contains("|")) {
-            val urls = videoUrl.split("|")
+        if (cleanUrl.contains("|") && (cleanUrl.substringAfter("|").startsWith("http://") || cleanUrl.substringAfter("|").startsWith("https://"))) {
+            val urls = cleanUrl.split("|")
             val videoUri = Uri.parse(urls[0])
             val audioUri = Uri.parse(urls[1])
 
@@ -645,12 +646,12 @@ class PlayerEngine(
             exoPlayer?.setMediaSource(mergedSource)
         } else {
             val mediaItemBuilder = MediaItem.Builder()
-                .setUri(Uri.parse(videoUrl))
+                .setUri(Uri.parse(cleanUrl))
                 .setSubtitleConfigurations(subtitleConfigs)
 
-            if (isHlsUrl(videoUrl)) {
+            if (isHlsUrl(cleanUrl)) {
                 mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
-            } else if (isDashUrl(videoUrl)) {
+            } else if (isDashUrl(cleanUrl)) {
                 mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
             }
             

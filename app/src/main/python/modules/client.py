@@ -247,12 +247,42 @@ def request(url, close=True, redirect=True, error=False, verify=True, post=None,
         try:
             response = urllib2.urlopen(req, timeout=int(timeout))
         except HTTPError as response:
-            #log_utils.log('request-HTTPError (%s): %s' % (response.code, url))
-            if response.code == 503:
-                if 'cf-browser-verification' in response.read(5242880):
-                    log_utils.log('client - url with cloudflare: ' + repr(url))
-                    #log_utils.log('client - cfScrape Exception', 1)
-                elif error is False:
+            if response.code in [403, 503]:
+                content = response.read(5242880)
+                if 'cf-browser-verification' in content or 'cloudflare' in response.headers.get('Server', '').lower() or 'just a moment' in content.lower():
+                    log_utils.log('client - cloudflare detected, using curl_cffi shim: ' + repr(url))
+                    try:
+                        from resources.lib.modules import cfscrape
+                        if hasattr(cfscrape, 'CURL_CFFI_AVAILABLE') and not cfscrape.CURL_CFFI_AVAILABLE:
+                             log_utils.log('client - curl_cffi NOT available in shim, cannot bypass cloudflare')
+                             if error is False: return
+                             else: raise response
+
+                        scraper = cfscrape.create_scraper()
+                        if post:
+                            c_resp = scraper.post(url, data=post, headers=headers, timeout=int(timeout))
+                        else:
+                            c_resp = scraper.get(url, headers=headers, timeout=int(timeout))
+
+                        if output == 'cookie':
+                            return '; '.join([f"{k}={v}" for k, v in c_resp.cookies.get_dict().items()])
+                        elif output == 'response':
+                            return (str(c_resp.status_code), c_resp.content)
+                        elif output == 'headers':
+                            return c_resp.headers
+                        elif output == 'geturl':
+                            return c_resp.url
+                        elif output == 'json':
+                            return c_resp.json()
+                        else:
+                            result = c_resp.content
+                            if not as_bytes:
+                                result = six.ensure_text(result, errors='ignore')
+                            return result
+                    except Exception as e:
+                        log_utils.log('client - curl_cffi bypass failed: ' + str(e))
+
+                if error is False:
                     return
             elif error is False:
                 return

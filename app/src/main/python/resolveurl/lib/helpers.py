@@ -60,30 +60,16 @@ def get_hidden(html, form_id=None, index=None, include_submit=True):
 
 def pick_source(sources, auto_pick=None):
     if auto_pick is None:
-        auto_pick = common.get_setting('auto_pick') == 'true'
+        auto_pick = common.get_setting('auto_pick') != 'false'
 
-    if len(sources) == 1:
+    if not sources:
+        raise ResolverError(common.i18n('no_video_link'))
+
+    if len(sources) == 1 or auto_pick:
         return sources[0][1]
-    elif len(sources) > 1:
-        if auto_pick:
-            return sources[0][1]
-        else:
-            # Let the user choose via the console
-            print("\n[ResolveURL] Multiple sources found. Please choose one:")
-            for i, source in enumerate(sources):
-                label = str(source[0]) if source[0] else 'Unknown'
-                print(f"[{i}] {label}")
-            
-            while True:
-                try:
-                    choice = int(input(f"Select a source (0-{len(sources)-1}): "))
-                    if 0 <= choice < len(sources):
-                        return sources[choice][1]
-                    else:
-                        print("Invalid choice. Try again.")
-                except ValueError:
-                    print("Please enter a valid number.")
-    else:
+    try:
+        return sources[0][1]
+    except Exception:
         raise ResolverError(common.i18n('no_video_link'))
 
 

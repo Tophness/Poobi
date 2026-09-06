@@ -385,18 +385,35 @@ class Net:
             else:
                 response = urllib_request.urlopen(req, timeout=timeout)
         except urllib_error.HTTPError as e:
-            if e.code == 403 and 'cloudflare' in e.hdrs.get('server', ''):
-                if 'challenge' in e.hdrs.get('cf-mitigated', ''):
-                    from resolveurl.resolver import ResolverError
-                    raise ResolverError('Cloudflare challenge')
+            if (e.code in [403, 503]) and ('cloudflare' in e.hdrs.get('server', '').lower() or 'cf-mitigated' in e.hdrs):
                 try:
-                    import ssl
-                    ctx = ssl.create_default_context()
-                    ctx.set_alpn_protocols(['http/1.1'])
-                    handlers = [urllib_request.HTTPSHandler(context=ctx)]
-                    opener = urllib_request.build_opener(*handlers)
-                    response = opener.open(req, timeout=timeout)
-                except Exception:
+                    from curl_cffi import requests as curlm
+                    log_utils.Logger.get_logger().log('Net - cloudflare detected, using curl_cffi: ' + url)
+                    c_resp = curlm.request(
+                        method=method or ('POST' if form_data is not None else 'GET'),
+                        url=url,
+                        data=form_data,
+                        headers=headers,
+                        timeout=timeout,
+                        impersonate="chrome110",
+                        allow_redirects=redirect
+                    )
+                    # We return a dummy response object that looks like what HttpResponse expects
+                    class DummyResponse:
+                        def __init__(self, c_resp):
+                            self.c_resp = c_resp
+                            self.headers = c_resp.headers
+                            self.status = c_resp.status_code
+                            self.code = c_resp.status_code
+                        def read(self, *args, **kwargs):
+                            return self.c_resp.content
+                        def geturl(self):
+                            return self.c_resp.url
+                        def info(self):
+                            return self.c_resp.headers
+                    return HttpResponse(DummyResponse(c_resp))
+                except Exception as ex:
+                    log_utils.Logger.get_logger().log('Net - curl_cffi failed or not available: ' + str(ex))
                     raise
             else:
                 raise

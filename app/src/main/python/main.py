@@ -9,6 +9,7 @@ import importlib.util
 import types
 import inspect
 import re
+from urllib.parse import parse_qsl, urljoin
 from concurrent.futures import ThreadPoolExecutor
 
 try:
@@ -32,6 +33,8 @@ MODULES_PATH = get_path("modules") or os.path.join(FILES_DIR, "chaquopy/AssetFin
 RESOLVEURL_PATH = get_path("resolveurl") or os.path.join(FILES_DIR, "chaquopy/AssetFinder/app/resolveurl")
 
 PROJECT_ROOT = os.path.dirname(SOURCES_PATH)
+ASSET_ROOT = os.path.dirname(PROJECT_ROOT)
+
 if not os.path.exists(SOURCES_PATH):
     alt_root = "/data/data/com.poobi.tvbrowser/files/chaquopy/AssetFinder/app"
     if os.path.exists(alt_root):
@@ -42,13 +45,17 @@ if not os.path.exists(SOURCES_PATH):
     SOURCES_PATH = os.path.join(PROJECT_ROOT, "sources")
     MODULES_PATH = os.path.join(PROJECT_ROOT, "modules")
     RESOLVEURL_PATH = os.path.join(PROJECT_ROOT, "resolveurl")
+    ASSET_ROOT = os.path.dirname(PROJECT_ROOT)
+
 USERDATA_PATH = os.path.join(FILES_DIR, 'userdata')
 CONFIG_FILE = os.path.join(USERDATA_PATH, 'config.json')
 
 if not os.path.exists(USERDATA_PATH): os.makedirs(USERDATA_PATH)
 
-for path in [PROJECT_ROOT, MODULES_PATH, RESOLVEURL_PATH]:
-    if path and path not in sys.path:
+CHAQUOPY_PATH = os.path.join(ASSET_ROOT, "requirements", "chaquopy")
+
+for path in [PROJECT_ROOT, MODULES_PATH, RESOLVEURL_PATH, CHAQUOPY_PATH]:
+    if path and path not in sys.path and os.path.exists(path):
         sys.path.append(path)
 
 try:
@@ -56,8 +63,8 @@ try:
     sub_manager.PROJECT_ROOT = FILES_DIR
     import shutil
     sub_manager.shutil.copy2 = shutil.copy
-except Exception as e:
-    print(f"Subtitle patching failed: {e}")
+except Exception:
+    pass
 
 sys.modules['resources'] = types.ModuleType('resources')
 sys.modules['resources.lib'] = types.ModuleType('resources.lib')
@@ -76,6 +83,60 @@ except ImportError:
 
 DEFAULT_WHITELIST = [
 ]
+
+def localize_hls_stream(stream_url_with_headers):
+    if not stream_url_with_headers or stream_url_with_headers.startswith("file://"):
+        return stream_url_with_headers
+
+    raw_url = stream_url_with_headers.split('|')[0]
+    headers = {}
+    if '|' in stream_url_with_headers:
+        try:
+            headers = dict(parse_qsl(stream_url_with_headers.split('|', 1)[1]))
+        except Exception:
+            pass
+
+    try:
+        from modules import cfscrape
+        session = cfscrape.create_scraper()
+    except Exception:
+        session = requests.Session()
+
+    try:
+        resp = session.get(raw_url, headers=headers, timeout=10)
+        if resp.status_code == 200 and '#EXTM3U' in resp.text:
+            text = resp.text
+            base_url = raw_url
+
+            if '#EXT-X-STREAM-INF' in text:
+                for line in text.splitlines():
+                    line_s = line.strip()
+                    if line_s and not line_s.startswith('#'):
+                        child_url = urljoin(base_url, line_s)
+                        child_resp = session.get(child_url, headers=headers, timeout=10)
+                        if child_resp.status_code == 200 and '#EXTM3U' in child_resp.text:
+                            text = child_resp.text
+                            base_url = child_url
+                        break
+
+            lines = []
+            for line in text.splitlines():
+                line_s = line.strip()
+                if line_s and not line_s.startswith('#'):
+                    lines.append(urljoin(base_url, line_s))
+                else:
+                    lines.append(line)
+
+            m3u8_path = os.path.realpath(os.path.join(FILES_DIR, "stream_playlist.m3u8"))
+            with open(m3u8_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines))
+
+            header_part = ("|" + stream_url_with_headers.split('|', 1)[1]) if '|' in stream_url_with_headers else ""
+            return f"file://{m3u8_path}{header_part}"
+    except Exception as e:
+        print(f"[DEBUG] localize_hls_stream error: {e}", flush=True)
+
+    return stream_url_with_headers
 
 def get_trailer(content, tmdb, season=None, episode=None):
     try:
@@ -468,7 +529,7 @@ class UniversalScraper:
                     self.status["message"] = "Stopped!"
                     break
                 self.status["message"] = "Resuming..."
-                time.sleep(0.1) # Let threads catch up
+                time.sleep(0.1)
 
             elapsed = time.monotonic() - start_time - paused_duration
             if elapsed > max_wait: 
@@ -582,14 +643,17 @@ class UniversalScraper:
             try:
                 if resolveurl.HostedMediaFile(url):
                     resolved = resolveurl.resolve(url)
-                    if resolved: return resolved, True
-            except: pass
+                    if resolved:
+                        resolved = localize_hls_stream(resolved)
+                        return resolved, True
+            except Exception: pass
 
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
-        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo', '/pl/', '/playlist/']
+        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo', '/pl/', '/playlist/', '/streamsvr/']
         
         url_lower = url.lower()
-        if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower:
+        if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower or '/streamsvr/' in url_lower:
+            url = localize_hls_stream(url)
             is_video = True
         elif any(k in url_lower for k in video_keywords):
             is_video = True
@@ -732,7 +796,7 @@ def get_scrape_status():
 
         display_sources = []
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
-        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo', '/pl/', '/playlist/']
+        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo', '/pl/', '/playlist/', '/streamsvr/']
 
         quality_map = {'4k': 0, '1080p': 1, '720p': 2, 'hd': 2, 'sd': 3, 'cam': 4, 'scr': 4}
         for s in sources:
@@ -871,7 +935,7 @@ def scrape(item_json, season=None, episode=None):
 
         display_sources = []
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')
-        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo', '/pl/', '/playlist/']
+        video_keywords = ['/embed/', '/player/', 'vidsrc', '2embed', 'vidlink', 'vidcloud', 'vcloud', 'googlevideo', 'gvideo', '/pl/', '/playlist/', '/streamsvr/']
         
         for s in sources:
             is_video = s.get('is_video')
@@ -916,6 +980,8 @@ def resolve(source_data_json):
         
         scraper = UniversalScraper(enabled_packs)
         url, is_video = scraper.resolveSource(source_data)   
+        if url:
+            url = localize_hls_stream(url)
         return json.dumps({"url": url if url else "", "is_video": is_video})
     except Exception as e:
         print(f"[DEBUG] Resolve Error: {str(e)}")

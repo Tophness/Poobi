@@ -26,8 +26,7 @@ class GoodStreamCCResolver(ResolveUrl):
 
     def get_media_url(self, host, media_id):
         web_url = self.get_url(host, media_id)
-        
-        # 1. Create a synchronized cfscrape session (matches TLS ciphers to User-Agent)
+
         if cfscrape:
             session = cfscrape.create_scraper()
         else:
@@ -41,7 +40,6 @@ class GoodStreamCCResolver(ResolveUrl):
             'Sec-Fetch-Site': 'cross-site'
         }
 
-        # 2. GET embed page
         if cfscrape:
             resp_get = session.get(web_url, headers=headers)
             html = resp_get.text if resp_get else ''
@@ -49,7 +47,6 @@ class GoodStreamCCResolver(ResolveUrl):
             headers['User-Agent'] = common.RAND_UA
             html = session.http_GET(web_url, headers=headers).content
 
-        # 3. Extract CSRF Token (handles GoodStream's 'type="hiden"' typo)
         r = re.search(r'id=["\']csrf_token["\']\s*value=["\']([^"\']+)["\']', html)
         if not r:
             r = re.search(r'value=["\']([^"\']+)["\']\s*id=["\']csrf_token["\']', html)
@@ -69,7 +66,6 @@ class GoodStreamCCResolver(ResolveUrl):
             }
             data = {'csrf_token': csrf_token, 'token': ''}
 
-            # 4. POST for direct stream URLs
             if cfscrape:
                 resp_post = session.post(web_url, data=data, headers=post_headers)
                 resp_text = resp_post.text if resp_post else ''
@@ -93,7 +89,8 @@ class GoodStreamCCResolver(ResolveUrl):
                 
                 if sources:
                     ua = session.headers.get('User-Agent', common.RAND_UA) if cfscrape else common.RAND_UA
-                    return helpers.pick_source(sources) + helpers.append_headers({'User-Agent': ua, 'Referer': web_url})
+                    resolved = helpers.pick_source(sources)
+                    return resolved + helpers.append_headers({'User-Agent': ua, 'Referer': web_url})
 
         raise ResolverError('File Not Found or Removed')
 

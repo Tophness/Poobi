@@ -79,13 +79,16 @@ chaquopy {
     defaultConfig {
         buildPython("C:/Users/Chris/AppData/Local/Python/pythoncore-3.11-64/python.exe")
         version = "3.11"
-        extractPackages("sources", "modules", "resolveurl", "subtitles")
+        extractPackages("sources", "modules", "resolveurl", "subtitles", "curl_cffi", "_cffi_backend")
         pip {
+            options("--find-links", "wheels")
             install("requests")
             install("beautifulsoup4")
             install("six")
             install("simplejson")
             install("trakt")
+            install("curl_cffi")
+            install("cffi")
         }
     }
 }

@@ -20,7 +20,6 @@ from resolveurl import common, hmf
 from resolveurl.resolver import ResolveUrl, ResolverError
 from resolveurl.lib import helpers
 import re
-from kodi_six import xbmc, xbmcaddon, xbmcvfs
 import json
 from six.moves import urllib_error, urllib_parse, urllib_request
 import six
@@ -59,22 +58,21 @@ class GoogleResolver(ResolveUrl):
         video = None
         web_url = self.get_url(host, media_id)
 
-        if xbmc.getCondVisibility('System.HasAddon(plugin.googledrive)') and self.get_setting('use_gdrive') == "true":
-            addon = xbmcaddon.Addon('plugin.googledrive')
-            if six.PY3:
-                db = xbmcvfs.translatePath(addon.getAddonInfo('profile')) + 'accounts.db'
-            else:
-                db = xbmc.translatePath(addon.getAddonInfo('profile')) + 'accounts.db'
-            conn = sqlite3.connect(db)
-            c = conn.cursor()
-            c.execute("SELECT key FROM store;")
-            driveid = c.fetchone()[0]
-            conn.close()
+        if common.has_addon('plugin.googledrive') and self.get_setting('use_gdrive') == "true":
+            try:
+                db = common.profile_path + '/accounts.db'
+                conn = sqlite3.connect(db)
+                c = conn.cursor()
+                c.execute("SELECT key FROM store;")
+                driveid = c.fetchone()[0]
+                conn.close()
 
-            doc_id = re.search(r'[-\w]{25,}', web_url)
-            if doc_id:
-                common.kodi.notify(header=None, msg='Resolving with Google Drive', duration=3000)
-                video = 'plugin://plugin.googledrive/?action=play&content_type=video&driveid={0}&item_id={1}'.format(driveid, doc_id.group(0))
+                doc_id = re.search(r'[-\w]{25,}', web_url)
+                if doc_id:
+                    common.kodi.notify(header=None, msg='Resolving with Google Drive', duration=3000)
+                    video = 'plugin://plugin.googledrive/?action=play&content_type=video&driveid={0}&item_id={1}'.format(driveid, doc_id.group(0))
+            except Exception:
+                pass
 
         if not video:
             response, video_urls = self._parse_google(web_url)
@@ -113,7 +111,7 @@ class GoogleResolver(ResolveUrl):
                 return response
 
         opener = urllib_request.build_opener(NoRedirection)
-        urllib_request.install_opener(opener)  # @ big change
+        urllib_request.install_opener(opener)
         request = urllib_request.Request(url, headers=hdrs)
         try:
             response = urllib_request.urlopen(request)
@@ -154,7 +152,6 @@ class GoogleResolver(ResolveUrl):
             response = self.net.http_GET(link)
             sources = self._parse_gdocs(response.content)
         elif 'blogger.com/video.g?token=' in link:
-            # Quick hack till I figure the direction to take this plugin
             response = self.net.http_GET(link)
             source = re.search(r'''['"]play_url["']\s*:\s*["']([^"']+)''', response.content)
             if source:
@@ -202,9 +199,9 @@ class GoogleResolver(ResolveUrl):
                             for item3 in item2:
                                 if isinstance(item3, list):
                                     for item4 in item3:
-                                        if isinstance(item4, six.text_type) and six.PY2:  # @big change
+                                        if isinstance(item4, six.text_type) and six.PY2:
                                             item4 = item4.encode('utf-8')
-                                        if isinstance(item4, six.string_types) and six.PY2:  # @big change
+                                        if isinstance(item4, six.string_types) and six.PY2:
                                             item4 = urllib_parse.unquote(item4).decode('unicode_escape') if six.PY2 else urllib_parse.unquote(item4)
                                             for match in re.finditer('url=(?P<link>[^&]+).*?&itag=(?P<itag>[^&]+)', item4):
                                                 link = match.group('link')
@@ -224,7 +221,7 @@ class GoogleResolver(ResolveUrl):
         items = value.split(',')
         for item in items:
             _source_itag, source_url = item.split('|')
-            if isinstance(source_url, six.text_type) and six.PY2:  # @big change
+            if isinstance(source_url, six.text_type) and six.PY2:
                 source_url = source_url.decode('unicode_escape').encode('utf-8')
             quality = self.itag_map.get(_source_itag, 'Unknown Quality [%s]' % _source_itag)
             source_url = urllib_parse.unquote(source_url)
