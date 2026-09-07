@@ -89,6 +89,7 @@ chaquopy {
             install("trakt")
             install("curl_cffi")
             install("cffi")
+            install("pywasm")
         }
     }
 }

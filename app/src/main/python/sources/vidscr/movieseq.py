@@ -6,10 +6,11 @@ BASE = 'https://movieseq.com'
 TIMEOUT = 8
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
+
 class source:
     def __init__(self):
         self.results = []
-        self.domains = ['movieseq.com']
+        self.domains = ['movieseq.com', 'nextgencloudfabric.com', 'subscriptionbusinesshub.site']
 
     def movie(self, imdb, tmdb, title, localtitle, aliases, year):
         return str(tmdb) if tmdb else None
@@ -18,11 +19,15 @@ class source:
         return str(tmdb) if tmdb else None
 
     def episode(self, url, imdb, tmdb, tvdb, title, premiered, season, episode):
-        if not url: return None
+        if not url:
+            return None
         return f"{url}|{season}|{episode}"
 
     def sources(self, url, hostDict):
-        if not url: return []
+        self.results = []
+        if not url:
+            return self.results
+
         parts = url.split('|')
         tmdb_id = parts[0]
         season = parts[1] if len(parts) > 1 else None
@@ -33,25 +38,14 @@ class source:
         else:
             embed_url = f"{BASE}/embed/movie/{tmdb_id}"
 
-        try:
-            r = requests.head(embed_url, headers={'User-Agent': UA, 'Referer': BASE + '/'}, timeout=TIMEOUT, allow_redirects=True)
-            if r.status_code < 400:
-                self.results.append({
-                    'source': 'MovieSeq Embed',
-                    'quality': '720p',
-                    'url': embed_url,
-                    'direct': False,
-                    'info': 'Embed'
-                })
-        except:
-            # Add anyway as a fallback option
-            self.results.append({
-                'source': 'MovieSeq Embed',
-                'quality': '720p',
-                'url': embed_url,
-                'direct': False,
-                'info': 'Embed'
-            })
+        self.results.append({
+            'source': 'MovieSeq Embed',
+            'quality': '1080p',
+            'url': embed_url,
+            'direct': False,
+            'info': 'HLS'
+        })
+
         return self.results
 
     def resolve(self, url):

@@ -85,7 +85,7 @@ DEFAULT_WHITELIST = [
 ]
 
 def localize_hls_stream(stream_url_with_headers):
-    if not stream_url_with_headers or stream_url_with_headers.startswith("file://"):
+    if not stream_url_with_headers or stream_url_with_headers.startswith("file://") or "bypass_localize=true" in stream_url_with_headers:
         return stream_url_with_headers
 
     raw_url = stream_url_with_headers.split('|')[0]
