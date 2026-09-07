@@ -972,17 +972,36 @@ def scrape(item_json, season=None, episode=None):
 
 def resolve(source_data_json):
     try:
-        source_data = json.loads(source_data_json)
+        source_data = json.loads(source_data_json)        
         packs = [d for d in os.listdir(SOURCES_PATH) if os.path.isdir(os.path.join(SOURCES_PATH, d))]
         enabled_packs = GLOBAL_CONFIG.get("enabled_packs")
         if enabled_packs is None:
             enabled_packs = [p for p in packs if GLOBAL_CONFIG.get(f"pack_{p}", True)]
         
         scraper = UniversalScraper(enabled_packs)
-        url, is_video = scraper.resolveSource(source_data)   
-        if url:
-            url = localize_hls_stream(url)
-        return json.dumps({"url": url if url else "", "is_video": is_video})
+        resolved_url, is_video = scraper.resolveSource(source_data)
+        
+        if resolved_url:
+            resolved_url = localize_hls_stream(resolved_url)
+
+        url_clean = resolved_url
+        structured_headers = {}
+        
+        if resolved_url and "|" in resolved_url:
+            parts = resolved_url.split("|", 1)
+            url_clean = parts[0]
+            header_part = parts[1]
+            if "=" in header_part:
+                structured_headers = dict(parse_qsl(header_part))
+
+        return json.dumps({
+            "url": url_clean if url_clean else "",
+            "headers": structured_headers,
+            "is_video": is_video
+        })
+        
     except Exception as e:
-        print(f"[DEBUG] Resolve Error: {str(e)}")
+        print(f"[DEBUG_RESOLVE] Error during resolution: {str(e)}", flush=True)
+        import traceback
+        traceback.print_exc()
         return json.dumps({"error": str(e)})

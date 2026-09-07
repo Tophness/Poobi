@@ -453,9 +453,15 @@ class PlayerEngine(
             saveProgress()
         }
 
-        val (cleanUrl, parsedHeaders) = com.poobi.tvbrowser.shared.parseKodiUrl(videoUrl)
+        var cleanUrl = videoUrl
         val mergedHeaders = headers.toMutableMap()
-        mergedHeaders.putAll(parsedHeaders)
+        
+        if (videoUrl.contains("|") && !videoUrl.substringAfter("|").startsWith("http")) {
+            val (parsedUrl, parsedHeaders) = com.poobi.tvbrowser.shared.parseKodiUrl(videoUrl)
+            cleanUrl = parsedUrl
+            mergedHeaders.putAll(parsedHeaders)
+        }
+        
         val finalHeaders = sanitizeHeaders(cleanUrl, mergedHeaders)
 
         val uaKey = finalHeaders.keys.find { it.equals("user-agent", ignoreCase = true) }

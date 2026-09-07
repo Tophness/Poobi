@@ -1395,13 +1395,21 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     return@launch
                 }
 
-                val rawStreamUrl = json.optString("url")
-                if (rawStreamUrl.isEmpty() || (!rawStreamUrl.startsWith("http") && !rawStreamUrl.startsWith("file://"))) {
+                val streamUrl = json.optString("url")
+                if (streamUrl.isEmpty() || (!streamUrl.startsWith("http") && !streamUrl.startsWith("file://"))) {
                     withContext(Dispatchers.Main) { tryNextSource() }
                     return@launch
                 }
 
-                val (streamUrl, parsedHeaders) = com.poobi.tvbrowser.shared.parseKodiUrl(rawStreamUrl)
+                val parsedHeaders = mutableMapOf<String, String>()
+                val headersJson = json.optJSONObject("headers")
+                if (headersJson != null) {
+                    val keys = headersJson.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        parsedHeaders[key] = headersJson.getString(key)
+                    }
+                }
 
                 val headersMap = mutableMapOf<String, String>()
                 try {
@@ -2256,11 +2264,20 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                             return@withContext
                         }
 
-                        val rawStreamUrl = json.optString("url")
+                        val streamUrl = json.optString("url")
                         val isVideo = json.optBoolean("is_video", false)
-                        
-                        if (rawStreamUrl.isNotEmpty() && (rawStreamUrl.startsWith("http") || rawStreamUrl.startsWith("file://"))) {
-                            val (streamUrl, parsedHeaders) = com.poobi.tvbrowser.shared.parseKodiUrl(rawStreamUrl)
+
+                        val parsedHeaders = mutableMapOf<String, String>()
+                        val headersJson = json.optJSONObject("headers")
+                        if (headersJson != null) {
+                            val keys = headersJson.keys()
+                            while (keys.hasNext()) {
+                                val key = keys.next()
+                                parsedHeaders[key] = headersJson.getString(key)
+                            }
+                        }
+
+                        if (streamUrl.isNotEmpty() && (streamUrl.startsWith("http") || streamUrl.startsWith("file://"))) {
                             playStream(streamUrl, isVideo, sourceDataJson, parsedHeaders)
                         } else {
                             resumeScrape()

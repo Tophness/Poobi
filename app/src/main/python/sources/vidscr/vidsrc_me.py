@@ -302,9 +302,9 @@ class source:
                 final_url_with_bypass = f"{final_url}{delim_loc}bypass_localize=true"
 
                 play_url = (
-                    f"{final_url_with_bypass}|Referer={quote_plus(inner_player_url)}"
-                    f"&Origin={quote_plus(container_host)}"
-                    f"&User-Agent={quote_plus(self.ua)}"
+                    f"{final_url_with_bypass}|Referer={inner_player_url}"
+                    f"&Origin={container_host}"
+                    f"&User-Agent={self.ua}"
                 )
                 
                 self.results.append({
