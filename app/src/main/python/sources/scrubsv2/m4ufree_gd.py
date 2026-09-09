@@ -2,7 +2,7 @@
 
 import re
 import json
-from six.moves.urllib_parse import parse_qs, urlencode
+from six.moves.urllib_parse import parse_qs, urlencode, quote_plus
 
 from resources.lib.modules import cleantitle
 from resources.lib.modules import client
@@ -14,7 +14,7 @@ class source:
         self.results = []
         self.domains = ['m4ufree.gd']
         self.base_link = 'https://m4ufree.gd'
-        self.search_link = '/browser?keyword=%s'
+        self.suggest_link = '/api/suggest?q=%s'
 
     def movie(self, imdb, tmdb, title, localtitle, aliases, year):
         url = {'imdb': imdb, 'tmdb': tmdb, 'title': title, 'year': year}
@@ -38,39 +38,98 @@ class source:
             data = {k: v[0] for k, v in data.items()}
 
             title = data.get('tvshowtitle') or data.get('title')
-            year = data.get('year')
+            year = str(data.get('year', ''))
+            season = data.get('season')
+            episode = data.get('episode')
+            is_tv = bool(data.get('tvshowtitle'))
 
-            search_url = self.base_link + self.search_link % cleantitle.get_plus(title)
-            html = client.scrapePage(search_url).text
+            headers = {
+                'User-Agent': client.UserAgent,
+                'Referer': f"{self.base_link}/",
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json, text/javascript, */*; q=0.01'
+            }
 
-            # Use regex to find links and titles in the search results
-            matches = re.findall(r'<a class="bf-card" href="(.+?)" title="(.+?)"', html)
-            match_url = None
+            query_url = self.base_link + (self.suggest_link % quote_plus(title))
+            response = client.scrapePage(query_url, headers=headers)
+            suggestions = []
+            if response:
+                try:
+                    suggestions = response.json()
+                except Exception:
+                    suggestions = []
 
-            # Search for the correct movie/show card
-            for href, item_title in matches:
-                # Basic check: title and year match
-                if cleantitle.get(title) in cleantitle.get(item_title) and year in item_title:
-                    match_url = self.base_link + href
+            if not suggestions and ':' in title:
+                short_title = title.split(':', 1)[0].strip()
+                retry_resp = client.scrapePage(self.base_link + (self.suggest_link % quote_plus(short_title)), headers=headers)
+                if retry_resp:
+                    try:
+                        suggestions = retry_resp.json()
+                    except Exception:
+                        pass
+
+            if not suggestions or not isinstance(suggestions, list):
+                return self.results
+
+            target_clean = cleantitle.get(title)
+            matched_item = None
+
+            for item in suggestions:
+                item_title = item.get('title', '')
+                item_year = str(item.get('year', ''))
+                item_type = item.get('type', '')
+
+                if is_tv and item_type and item_type not in ['tv', 'series']:
+                    continue
+                if not is_tv and item_type and item_type != 'movie':
+                    continue
+
+                item_clean = cleantitle.get(item_title)
+                if (target_clean in item_clean or item_clean in target_clean) and (not year or year == item_year):
+                    matched_item = item
                     break
 
-            if not match_url:
-                # If no direct match, try a looser match or just take the first one if it's a search for a specific title
-                if matches:
-                    match_url = self.base_link + matches[0][0]
-                else:
-                    return self.results
+            if not matched_item and suggestions:
+                matched_item = suggestions[0]
 
-            # Get the watch page and extract links from the javascript variable window.__OPT
-            watch_html = client.scrapePage(match_url).text
-            opt_data = re.findall(r'window\.__OPT\s*=\s*(\[.+?\]);', watch_html)
+            if not matched_item:
+                return self.results
 
+            watch_path = matched_item.get('url', '')
+            if not watch_path:
+                return self.results
+
+            if is_tv and season and episode:
+                if not watch_path.endswith(f"-season-{season}-episode-{episode}"):
+                    watch_path = f"{watch_path.rstrip('/')}/season-{season}-episode-{episode}"
+
+            watch_url = watch_path if watch_path.startswith("http") else f"{self.base_link}{watch_path}"
+
+            watch_resp = client.scrapePage(watch_url, headers={'User-Agent': client.UserAgent, 'Referer': f"{self.base_link}/"})
+            if not watch_resp or not watch_resp.text:
+                return self.results
+
+            opt_data = re.findall(r'window\.__OPT\s*=\s*(\[.+?\]);', watch_resp.text)
+            links = []
             if opt_data:
-                links = json.loads(opt_data[0])
-                for link in links:
-                    for source in scrape_sources.process(hostDict, link):
-                        if not scrape_sources.check_host_limit(source['source'], self.results):
-                            self.results.append(source)
+                try:
+                    links = json.loads(opt_data[0])
+                except Exception:
+                    links = []
+
+            if not links:
+                links = re.findall(r'<iframe[^>]+src="([^"]+)"', watch_resp.text)
+
+            for link in links:
+                clean_link = link.replace('\\/', '/')
+                if clean_link.startswith('//'):
+                    clean_link = 'https:' + clean_link
+                elif clean_link.startswith('/'):
+                    clean_link = self.base_link + clean_link
+
+                for source in scrape_sources.process(hostDict, clean_link):
+                    if not scrape_sources.check_host_limit(source['source'], self.results):
+                        self.results.append(source)
 
             return self.results
         except Exception:
