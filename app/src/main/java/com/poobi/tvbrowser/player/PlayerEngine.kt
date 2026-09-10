@@ -173,6 +173,7 @@ class PlayerEngine(
 
     private var hasReachedReady = false
     private var hasTriggeredPlaybackStarted = false
+    private var hasInitialQualitySelected = false
 
     private var lastSeekTime = 0L
     private var seekIncrement = 5000L
@@ -483,6 +484,7 @@ class PlayerEngine(
         isUpNextDismissed = false
         hasReachedReady = false
         hasTriggeredPlaybackStarted = false
+        hasInitialQualitySelected = false
         _showUpNext.value = false
         _showQualitySelector.value = false
         _showDiskSubtitlePicker.value = false
@@ -661,7 +663,13 @@ class PlayerEngine(
                 mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
             }
             
-            exoPlayer?.setMediaItem(mediaItemBuilder.build())
+            val mediaItem = mediaItemBuilder.build()
+            if (isHlsUrl(cleanUrl)) {
+                val hlsSource = androidx.media3.exoplayer.hls.HlsMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+                exoPlayer?.setMediaSource(hlsSource)
+            } else {
+                exoPlayer?.setMediaItem(mediaItem)
+            }
         }
 
         val resumeKey = if (title != null) "resume_stream_$title" else null
@@ -731,6 +739,19 @@ class PlayerEngine(
         }
 
         _qualityOptions.value = options
+
+        if (!hasInitialQualitySelected && options.any { it is QualityOption.Native }) {
+            val highestNative = options.filterIsInstance<QualityOption.Native>()
+                .maxByOrNull { option ->
+                    val format = option.trackGroup.getFormat(option.trackIndex)
+                    (format.height.takeIf { it > 0 } ?: 0) * 100000 + (format.bitrate.takeIf { it > 0 } ?: 0)
+                }
+            if (highestNative != null) {
+                hasInitialQualitySelected = true
+                selectQuality(highestNative)
+                return
+            }
+        }
 
         val currentUrl = lastVideoUrl
         val currentDistinct = options.firstOrNull { it is QualityOption.DistinctUrl && it.url == currentUrl }

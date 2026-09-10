@@ -85,12 +85,19 @@ class source:
                     continue
 
                 item_clean = cleantitle.get(item_title)
-                if (target_clean in item_clean or item_clean in target_clean) and (not year or year == item_year):
+                if (target_clean in item_clean or item_clean in target_clean):
                     matched_item = item
                     break
 
-            if not matched_item and suggestions:
-                matched_item = suggestions[0]
+            if not matched_item:
+                for item in suggestions:
+                    item_type = item.get('type', '')
+                    if is_tv and item_type in ['tv', 'series']:
+                        matched_item = item
+                        break
+                    elif not is_tv and item_type == 'movie':
+                        matched_item = item
+                        break
 
             if not matched_item:
                 return self.results
@@ -99,11 +106,10 @@ class source:
             if not watch_path:
                 return self.results
 
-            if is_tv and season and episode:
-                if not watch_path.endswith(f"-season-{season}-episode-{episode}"):
-                    watch_path = f"{watch_path.rstrip('/')}/season-{season}-episode-{episode}"
-
             watch_url = watch_path if watch_path.startswith("http") else f"{self.base_link}{watch_path}"
+            if is_tv and season and episode:
+                sep = '&' if '?' in watch_url else '?'
+                watch_url = f"{watch_url}{sep}s={season}&e={episode}"
 
             watch_resp = client.scrapePage(watch_url, headers={'User-Agent': client.UserAgent, 'Referer': f"{self.base_link}/"})
             if not watch_resp or not watch_resp.text:
@@ -111,6 +117,7 @@ class source:
 
             opt_data = re.findall(r'window\.__OPT\s*=\s*(\[.+?\]);', watch_resp.text)
             links = []
+
             if opt_data:
                 try:
                     links = json.loads(opt_data[0])
@@ -127,9 +134,9 @@ class source:
                 elif clean_link.startswith('/'):
                     clean_link = self.base_link + clean_link
 
-                for source in scrape_sources.process(hostDict, clean_link):
-                    if not scrape_sources.check_host_limit(source['source'], self.results):
-                        self.results.append(source)
+                for source_item in scrape_sources.process(hostDict, clean_link):
+                    if not scrape_sources.check_host_limit(source_item['source'], self.results):
+                        self.results.append(source_item)
 
             return self.results
         except Exception:

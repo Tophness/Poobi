@@ -78,10 +78,9 @@ class PeachifyResolver(ResolveUrl):
         stream_sources = raw_data.get('sources') or raw_data.get('stream') or []
         for src in stream_sources:
             surl = src.get('url') or src.get('file') or src.get('src')
-            dub = src.get('dub', 'English')
-            label = f"1080p ({dub})" if surl else dub
+            dub = src.get('dub', 'HD')
             if surl:
-                sources.append((label, surl))
+                sources.append((dub, surl))
 
         if not sources and raw_data.get('file'):
             sources.append(('HD', raw_data.get('file')))

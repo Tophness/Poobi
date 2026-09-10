@@ -107,18 +107,6 @@ def localize_hls_stream(stream_url_with_headers):
         if resp.status_code == 200 and '#EXTM3U' in resp.text:
             text = resp.text
             base_url = raw_url
-
-            if '#EXT-X-STREAM-INF' in text:
-                for line in text.splitlines():
-                    line_s = line.strip()
-                    if line_s and not line_s.startswith('#'):
-                        child_url = urljoin(base_url, line_s)
-                        child_resp = session.get(child_url, headers=headers, timeout=10)
-                        if child_resp.status_code == 200 and '#EXTM3U' in child_resp.text:
-                            text = child_resp.text
-                            base_url = child_url
-                        break
-
             lines = []
             for line in text.splitlines():
                 line_s = line.strip()
