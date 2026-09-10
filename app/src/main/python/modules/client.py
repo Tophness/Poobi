@@ -363,7 +363,7 @@ def scrapePage(url, referer=None, headers=None, post=None, cookie=None, timeout=
     try:
         if not url:
             return
-        url =  "https:" + url if url.startswith('//') else url
+        url = "https:" + url if url.startswith('//') else url
         netloc = urllib_parse.urlparse(url).netloc
         session = _cf_sessions.get(netloc)
         if session is None:
@@ -376,53 +376,41 @@ def scrapePage(url, referer=None, headers=None, post=None, cookie=None, timeout=
         try:
             if headers:
                 session.headers.update(headers)
-            if (referer and not 'Referer' in session.headers):
+            if referer and 'Referer' not in session.headers:
                 session.headers.update({'Referer': referer})
             else:
                 elements = urllib_parse.urlparse(url)
                 base = '%s://%s' % (elements.scheme, (elements.netloc or elements.path))
                 session.headers.update({'Referer': base})
-            if (cookie and not 'Cookie' in session.headers): # not tested yet, just placed as a idea reminder.
+            if cookie and 'Cookie' not in session.headers:
                 session.headers.update({'Cookie': cookie})
-            if not 'User-Agent' in session.headers:
+            if 'User-Agent' not in session.headers:
                 session.headers.update({'User-Agent': UserAgent})
+
+            kwargs = {'timeout': int(timeout), 'verify': False}
+
             if post:
-                page = session.post(url, data=post, timeout=int(timeout))
+                page = session.post(url, data=post, **kwargs)
             else:
-                page = session.get(url, timeout=int(timeout))
+                page = session.get(url, **kwargs)
+
+            try:
+                page.encoding = 'utf-8'
+            except Exception:
+                pass
 
             if page.status_code in [404, 403, 500, 502, 503, 504]:
                 log_utils.log('scrapePage - Skipping due to unreachable status %s for url: %s' % (page.status_code, url))
                 return None
 
-            ###################################################################
-            """## A ghetto fix for blockage that could probably be coded better.
-            resp_code = str(page.status_code)
-            resp_header = page.headers
-            resp_server = resp_header['Server']
-            if resp_code in ['403', '503'] and resp_server == 'cloudflare':
-                #log_utils.log('scrapePage - url with cloudflare: ' + repr(url))
-                corsproxy = 'https://corsproxy.io/?' + url
-                #corsproxy = 'https://proxy.iamcdn.net/sub?url=' + url
-                #corsproxy = 'https://api.allorigins.win/raw?url=' + url
-                if post:
-                    page = session.post(corsproxy, data=post, timeout=int(timeout))
-                else:
-                    page = session.get(corsproxy, timeout=int(timeout))
-            """
-            ###################################################################
-            page.encoding = 'utf-8'
-            #page.raise_for_status()  # Commented out to make trakt progress option work properly again lol
         finally:
             pass
         return page
     except Exception as e:
-        #log_utils.log('scrapePage-Error: (%s) => %s' % (str(e), url))
-        #log_utils.log('scrapePage', 1)
         return
 
 
-def url_ok(url): #  Old Code Saved.
+def url_ok(url):
     r = scrapePage(url)
     if r.status_code == 200 or r.status_code == 301:
         return True
