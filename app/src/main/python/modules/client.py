@@ -407,6 +407,7 @@ def scrapePage(url, referer=None, headers=None, post=None, cookie=None, timeout=
             pass
         return page
     except Exception as e:
+        print(f"[CLIENT_DEBUG] scrapePage Exception on {url}: {type(e).__name__}: {e}", flush=True)
         return
 
 

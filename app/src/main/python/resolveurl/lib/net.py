@@ -398,7 +398,7 @@ class Net:
                         impersonate="chrome110",
                         allow_redirects=redirect
                     )
-                    # We return a dummy response object that looks like what HttpResponse expects
+
                     class DummyResponse:
                         def __init__(self, c_resp):
                             self.c_resp = c_resp
@@ -476,6 +476,10 @@ class HttpResponse:
         else:
             html = html.decode('ascii', errors='ignore') if six.PY3 else html
         return html
+
+    @property
+    def json(self):
+        return json.loads(self.content)
 
     def get_headers(self, as_dict=False):
         """Returns headers returned by the server.
