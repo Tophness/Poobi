@@ -16,27 +16,33 @@ from modules.purecrypto import aes256_gcm_decrypt
 class PeachifyResolver(ResolveUrl):
     name = 'Peachify'
     domains = ['peachify.top', 'eat-peach.sbs', 'x.eat-peach.sbs', 'none.eat-peach.sbs', 'a.eat-peach.sbs']
-    pattern = r'(?://|\.)((?:peachify\.top|(?:[axn]one\.)?eat-peach\.sbs))/(?:embed/)?(?:movie/|tv/)?([0-9a-zA-Z-/]+)'
+    pattern = r'(?://|\.)((?:peachify\.top|(?:[axn]one\.)?eat-peach\.sbs))/(?:embed/)?((?:(?:movie|tv)/)?[0-9a-zA-Z-/]+)'
 
     PEACHIFY_KEY = bytes.fromhex("d8f2a1b5e9c470814f6b2c3a5d8e7f901a2b3c4d5e3f7a8b9c0d1e2f3a4d5c6d")
 
     def get_media_url(self, host, media_id, subs=False):
-        parts = media_id.split('/')
-        tmdb_id = parts[1] if len(parts) > 1 and parts[0] in ['movie', 'tv'] else parts[0]
-        media_type = 'tv' if 'tv' in media_id or (len(parts) > 2 and parts[0] == 'tv') else 'movie'
+        parts = [p for p in media_id.split('/') if p]
+        numeric_parts = [p for p in parts if p.isdigit()]
 
-        season = None
-        episode = None
-        if media_type == 'tv':
-            tv_parts = [p for p in parts if p.isdigit()]
-            if len(tv_parts) >= 3:
-                tmdb_id = tv_parts[0]
-                season = tv_parts[1]
-                episode = tv_parts[2]
-            elif len(tv_parts) >= 2:
-                tmdb_id = tv_parts[0]
-                season = tv_parts[1]
+        if 'tv' in parts or 'tv' in media_id or len(numeric_parts) >= 3:
+            media_type = 'tv'
+            if len(numeric_parts) >= 3:
+                tmdb_id = numeric_parts[0]
+                season = numeric_parts[1]
+                episode = numeric_parts[2]
+            elif len(numeric_parts) >= 2:
+                tmdb_id = numeric_parts[0]
+                season = numeric_parts[1]
                 episode = "1"
+            else:
+                tmdb_id = numeric_parts[0] if numeric_parts else parts[-1]
+                season = "1"
+                episode = "1"
+        else:
+            media_type = 'movie'
+            tmdb_id = numeric_parts[0] if numeric_parts else parts[-1]
+            season = None
+            episode = None
 
         providers = ['air', 'holly', 'multi', 'moviebox']
         api_bases = ['https://none.eat-peach.sbs', 'https://x.eat-peach.sbs']
@@ -72,7 +78,7 @@ class PeachifyResolver(ResolveUrl):
                 break
 
         if not raw_data:
-            raise ResolverError('Peachify: Failed to retrieve or decrypt stream data from API')
+            raise ResolverError(f'Peachify: Failed to retrieve stream data for {media_type} (TMDB: {tmdb_id})')
 
         sources = []
         stream_sources = raw_data.get('sources') or raw_data.get('stream') or []

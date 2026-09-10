@@ -1175,16 +1175,20 @@
 		<setting id="VidSpeedResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidSpeedResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidSpeedResolver_login" type="bool" label="33022" default="true" visible="false"/>
+		<setting label="VidSrc" type="lsep"/>
+		<setting id="VidSrcResolver_priority" type="number" label="33016" default="100"/>
+		<setting id="VidSrcResolver_enabled" type="bool" label="33017" default="true"/>
+		<setting id="VidSrcResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting label="VidsSt" type="lsep"/>
 		<setting id="VidsStResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidsStResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidsStResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 15">
 		<setting label="VidStore" type="lsep"/>
 		<setting id="VidStoreResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidStoreResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidStoreResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 15">
 		<setting label="VidTube" type="lsep"/>
 		<setting id="VidTubeResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidTubeResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1254,12 +1258,12 @@
 		<setting id="VTubeResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VTubeResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VTubeResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 16">
 		<setting label="Vudeo" type="lsep"/>
 		<setting id="VudeoResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VudeoResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VudeoResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 16">
 		<setting label="Wecima" type="lsep"/>
 		<setting id="WecimaResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="WecimaResolver_enabled" type="bool" label="33017" default="true"/>

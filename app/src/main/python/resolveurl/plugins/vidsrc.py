@@ -9,7 +9,7 @@ import re
 import json
 import base64
 import requests
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, parse_qsl
 from resolveurl import common
 from resolveurl.lib import helpers
 from resolveurl.resolver import ResolveUrl, ResolverError
@@ -25,11 +25,11 @@ class VidSrcResolver(ResolveUrl):
         'vidsrc.xyz', 'vidsrcme.ru', 'vidsrc.stream', 'vidsrc.icu',
         'cloudorchestranova.com', 'vidsrc.mov', 'vsembed.ru'
     ]
-    pattern = r'(?://|\.)((?:vidsrc\.(?:me|in|to|net|xyz|stream|icu|mov)|vidsrcme\.ru|vsembed\.ru|cloudorchestranova\.com))/(?:embed/)?(?:movie/|tv/)?([0-9a-zA-Z-/]+)'
+    # Retain (movie|tv) in group 2 and support query parameters
+    pattern = r'(?://|\.)((?:vidsrc\.(?:me|in|to|net|xyz|stream|icu|mov)|vidsrcme\.ru|vsembed\.ru|cloudorchestranova\.com))/(?:embed/)?((?:(?:movie|tv)/)?[0-9a-zA-Z-/]+(?:\?[^"\'>\s]+)?)'
 
     def get_media_url(self, host, media_id, subs=False):
         try:
-            base_link = 'https://vidsrcme.ru'
             ua = common.RAND_UA
 
             s = requests.Session()
@@ -43,11 +43,26 @@ class VidSrcResolver(ResolveUrl):
             if not host:
                 host = 'vidsrc.me'
 
-            if not media_id.startswith('movie/') and not media_id.startswith('tv/') and not media_id.startswith('tt'):
-                media_id = f"movie/{media_id}"
+            # ---------------------------------------------------------------
+            # 1. Determine Media Type & Format Media ID
+            # ---------------------------------------------------------------
+            parts = [p for p in media_id.split('/') if p]
+            numeric_parts = [p for p in parts if p.isdigit()]
+            is_tv = 'tv' in media_id or 'tv' in parts or len(numeric_parts) >= 2 or len(parts) >= 3
+
+            if is_tv:
+                if not media_id.startswith('tv/'):
+                    clean_id = media_id.replace('movie/', '').replace('tv/', '')
+                    media_id = f"tv/{clean_id}"
+            else:
+                if not media_id.startswith('movie/') and not media_id.startswith('tt'):
+                    media_id = f"movie/{media_id}"
 
             embed_url = f"https://{host}/embed/{media_id}"
 
+            # ---------------------------------------------------------------
+            # 2. Layer 1 (Embed Page)
+            # ---------------------------------------------------------------
             try:
                 r1 = s.get(embed_url, timeout=12, allow_redirects=True, verify=False)
             except Exception:
@@ -62,6 +77,9 @@ class VidSrcResolver(ResolveUrl):
                 raise ResolverError('VidSrc: Layer 1 iframe not found')
             layer1_url = urljoin(final_embed_url, iframe1.group(1))
 
+            # ---------------------------------------------------------------
+            # 3. Layer 2 (vsembed / RCP Container)
+            # ---------------------------------------------------------------
             r2 = s.get(layer1_url, headers={'Referer': final_embed_url}, timeout=12, verify=False)
             html2 = r2.text
 
@@ -95,6 +113,9 @@ class VidSrcResolver(ResolveUrl):
 
             container_host = f"{urlparse(container_url).scheme}://{urlparse(container_url).netloc}"
 
+            # ---------------------------------------------------------------
+            # 4. Layer 3 (CloudOrchestraNova Player Container)
+            # ---------------------------------------------------------------
             r3 = s.get(
                 container_url, 
                 headers={'Referer': layer1_url, 'Origin': container_host}, 
@@ -102,6 +123,7 @@ class VidSrcResolver(ResolveUrl):
                 verify=False
             )
             html3 = r3.text
+            active_player_url = container_url
 
             cfg_match = re.search(r'window\.CFG\s*=\s*({[^;]+});', html3)
             if cfg_match:
@@ -117,21 +139,50 @@ class VidSrcResolver(ResolveUrl):
                             verify=False
                         )
                         html3 = r4.text
+                        active_player_url = inner_player_url
                 except Exception:
                     pass
 
+            # ---------------------------------------------------------------
+            # 5. Extract CONFIG & Call Stream API
+            # ---------------------------------------------------------------
             m3u8_candidates = []
+            subtitles_dict = {}
+
             config_match = re.search(r'window\.CONFIG\s*=\s*({.+?});', html3, re.DOTALL)
             if config_match:
                 try:
                     config_data = json.loads(config_match.group(1))
-                    stream_api = config_data.get('api', '').replace(r'\u0026', '&')
+
+                    # Parse Stream API endpoint: Movie uses 'api', TV uses 'streamBase' + season + episode + &stream_urls
+                    if is_tv:
+                        stream_base = config_data.get('streamBase', '').replace(r'\u0026', '&')
+                        s_num = config_data.get('season')
+                        e_num = config_data.get('episode')
+                        stream_api = f"{stream_base}&season={s_num}&episode={e_num}&stream_urls"
+                    else:
+                        stream_api = config_data.get('api', '').replace(r'\u0026', '&')
+
+                    # Optionally extract subtitles from metaApi if present
+                    meta_api = config_data.get('metaApi', '').replace(r'\u0026', '&')
+                    if subs and meta_api:
+                        try:
+                            meta_resp = s.get(meta_api, headers={'Referer': active_player_url, 'User-Agent': ua}, timeout=8, verify=False)
+                            meta_json = meta_resp.json()
+                            for sub in meta_json.get('default_subs', []):
+                                s_label = sub.get('lang') or sub.get('code') or 'English'
+                                s_url = sub.get('url')
+                                if s_url:
+                                    subtitles_dict[s_label] = s_url
+                        except Exception:
+                            pass
+
                     if stream_api:
                         api_resp = s.get(
                             stream_api, 
                             headers={
                                 'User-Agent': ua,
-                                'Referer': container_url,
+                                'Referer': active_player_url,
                                 'Origin': container_host,
                                 'Accept': 'application/json, text/plain, */*'
                             }, 
@@ -150,7 +201,7 @@ class VidSrcResolver(ResolveUrl):
                                 
                                 dataPath = getattr(control, 'dataPath', os.path.dirname(__file__))
                                 wasm_path = os.path.join(dataPath, 'vidsrc.wasm')
-                                wasm_resp = s.get(wasm_url, headers={'Referer': container_url}, timeout=10, verify=False)
+                                wasm_resp = s.get(wasm_url, headers={'Referer': active_player_url}, timeout=10, verify=False)
                                 with open(wasm_path, 'wb') as f:
                                     f.write(wasm_resp.content)
 
@@ -198,7 +249,7 @@ class VidSrcResolver(ResolveUrl):
                                         dec_bytes[i] = memory_data[ptr + 12 + i]
 
                                 plaintext = dec_bytes.decode('utf-8', errors='replace')
-                                m3u8_candidates.extend([l.strip() for l in plaintext.splitlines() if l.strip()])
+                                m3u8_candidates.extend([l.strip() for l in plaintext.splitlines() if l.strip() and l.startswith('http')])
                             except Exception:
                                 pass
                         else:
@@ -222,7 +273,12 @@ class VidSrcResolver(ResolveUrl):
             if not m3u8_candidates:
                 raise ResolverError('VidSrc: No stream URLs found')
 
-            stream_url = m3u8_candidates[0].split('|')[0]
+            # ---------------------------------------------------------------
+            # 6. Acquire JWT Playback Token from Stream Server
+            # ---------------------------------------------------------------
+            # Prioritize Stream #2 (higher bitrate encode) if available, else Stream #1
+            preferred_master_url = m3u8_candidates[1] if len(m3u8_candidates) > 1 else m3u8_candidates[0]
+            stream_url = preferred_master_url.split('|')[0]
             parsed_url = urlparse(stream_url)
             stream_origin = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
@@ -231,7 +287,7 @@ class VidSrcResolver(ResolveUrl):
             try:
                 t_resp = s.get(
                     token_url, 
-                    headers={'User-Agent': ua, 'Referer': container_url, 'Origin': container_host}, 
+                    headers={'User-Agent': ua, 'Referer': active_player_url, 'Origin': container_host}, 
                     timeout=8,
                     verify=False
                 )
@@ -255,12 +311,18 @@ class VidSrcResolver(ResolveUrl):
             final_url_with_bypass = f"{final_url}{delim_loc}bypass_localize=true"
 
             src_headers = {
-                'Referer': container_url,
+                'Referer': active_player_url,
                 'Origin': container_host,
                 'User-Agent': ua,
                 'verifypeer': 'false'
             }
-            return final_url_with_bypass + helpers.append_headers(src_headers)
+
+            playable_url = final_url_with_bypass + helpers.append_headers(src_headers)
+
+            if subs and subtitles_dict:
+                return playable_url, subtitles_dict
+            return playable_url
+
         except Exception as e:
             raise ResolverError(f'VidSrc: {str(e)}')
 
@@ -268,5 +330,9 @@ class VidSrcResolver(ResolveUrl):
         if not host.startswith('http'):
             host = 'vidsrc.me'
         if not media_id.startswith('movie/') and not media_id.startswith('tv/') and not media_id.startswith('tt'):
-            media_id = f"movie/{media_id}"
+            parts = [p for p in media_id.split('/') if p]
+            if len(parts) >= 2:
+                media_id = f"tv/{media_id}"
+            else:
+                media_id = f"movie/{media_id}"
         return f"https://{host}/embed/{media_id}"
