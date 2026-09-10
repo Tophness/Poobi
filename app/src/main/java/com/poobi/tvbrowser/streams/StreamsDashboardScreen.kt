@@ -59,24 +59,15 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
 
     val isDeletable = activeCategoryIndex == 1 || activeCategoryIndex == 2
 
-    LaunchedEffect(activeCategoryIndex, searchResults) {
-        if (activeCategoryIndex == 0) {
+    LaunchedEffect(searchResults) {
+        if (activeCategoryIndex == 0 && searchResults != null && searchResults!!.length() > 0) {
             val startTime = System.currentTimeMillis()
-            if (searchResults == null) {
-                try {
-                    delay(100)
-                    if (KeyTracker.lastKeyPressTime < startTime) {
-                        searchFieldFocusRequester.requestFocus()
-                    }
-                } catch (e: Exception) {}
-            } else if (searchResults!!.length() > 0) {
-                try {
-                    delay(200)
-                    if (KeyTracker.lastKeyPressTime < startTime) {
-                        firstResultFocusRequester.requestFocus()
-                    }
-                } catch (e: Exception) {}
-            }
+            try {
+                delay(200)
+                if (KeyTracker.lastKeyPressTime < startTime) {
+                    firstResultFocusRequester.requestFocus()
+                }
+            } catch (e: Exception) {}
         }
     }
 

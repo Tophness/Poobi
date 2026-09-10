@@ -183,6 +183,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _activeNotifications = MutableStateFlow<List<JSONObject>>(emptyList())
     val activeNotifications: StateFlow<List<JSONObject>> = _activeNotifications.asStateFlow()
 
+    val selectedScrapeTabIndex = MutableStateFlow(0)
+    var lastSelectedSourceIndex: Int = -1
+    var lastSelectedSourceData: String? = null
+
     init {
         loadSearchHistory()
         refreshFavoritesSet()
@@ -455,6 +459,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _scrapedSources.value = null
         _torrentioSources.value = null
         _isScrapingTorrents.value = false
+        selectedScrapeTabIndex.value = 0
+        lastSelectedSourceIndex = -1
+        lastSelectedSourceData = null
     }
 
     fun clearSelectedMedia() { _selectedItem.value = null }
@@ -1705,6 +1712,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     fun performScrape(item: JSONObject, season: Int? = null, episode: Int? = null) {
         isPlayingFromSavedLink = false
         stopScrape()
+        selectedScrapeTabIndex.value = 0
+        lastSelectedSourceIndex = -1
+        lastSelectedSourceData = null
         
         _selectedItem.value = item
         lastScrapedSeason = season
@@ -2200,9 +2210,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         return SourceSorter(priorities).sort(sources)
     }
 
-    fun resolveAndPlay(sourceDataJson: String, rawItem: JSONObject) {
+    fun resolveAndPlay(sourceDataJson: String, rawItem: JSONObject, index: Int = -1) {
         stopTryAll()
         isPlayingFromSavedLink = false
+        if (index >= 0) {
+            lastSelectedSourceIndex = index
+            lastSelectedSourceData = sourceDataJson
+        }
         lastSelectedSource = try { JSONObject(sourceDataJson) } catch (e: Exception) { rawItem }
         isInteractingWithSources = true
         _scrapeStatusMsg.value = "Pausing Scrapers..."
