@@ -1,6 +1,19 @@
 """
     Plugin for ResolveURL
     Copyright (C) 2020 gujal
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import re
@@ -33,82 +46,41 @@ class DoodStreamResolver(ResolveUrl):
         if host not in ['doodstream.com', 'myvidplay.com', 'playmogo.com']:
             host = 'playmogo.com'
         web_url = self.get_url(host, media_id)
-        headers = {
-            'User-Agent': common.RAND_UA,
-            'Referer': f'https://{host}/'
-        }
+        headers = {'User-Agent': common.RAND_UA,
+                   'Referer': 'https://{0}/'.format(host)}
 
         r = self.net.http_GET(web_url, headers=headers)
         if r.get_url() != web_url:
-            parsed = urllib_parse.urlparse(r.get_url()).netloc
-            if parsed:
-                host = parsed
-                web_url = self.get_url(host, media_id)
+            host = re.findall(r'(?://|\.)([^/]+)', r.get_url())[0]
+            web_url = self.get_url(host, media_id)
         headers.update({'Referer': web_url})
         html = r.content
 
-        # Check for deleted/missing media
-        if any(msg in html.lower() for msg in ['video not found', 'file not found', 'has been deleted', 'video no longer exists']):
-            raise ResolverError('File Not Found or Removed')
-
-        # Follow iframe to embed if on a /d/ landing page
         match = re.search(r'<iframe\s*src="([^"]+)', html)
         if match:
-            embed_url = urllib_parse.urljoin(web_url, match.group(1))
-            headers.update({'Referer': web_url})
-            html = self.net.http_GET(embed_url, headers=headers).content
+            url = urllib_parse.urljoin(web_url, match.group(1))
+            html = self.net.http_GET(url, headers=headers).content
         else:
-            embed_url = web_url.replace('/d/', '/e/')
-            headers.update({'Referer': web_url})
-            html = self.net.http_GET(embed_url, headers=headers).content
+            url = web_url.replace('/d/', '/e/')
+            html = self.net.http_GET(url, headers=headers).content
 
-        if any(msg in html.lower() for msg in ['video not found', 'file not found', 'has been deleted']):
-            raise ResolverError('File Not Found or Removed')
-
-        # Subtitles extraction
-        subtitles = {}
         if subs:
+            subtitles = {}
             matches = re.findall(r"""dsplayer\.addRemoteTextTrack\({src:'([^']+)',\s*label:'([^']*)',kind:'captions'""", html)
             if matches:
+                matches = [(src, label) for src, label in matches if len(label) > 1]
                 for src, label in matches:
-                    if len(label) > 1:
-                        subtitles[label] = 'https:' + src if src.startswith('//') else src
+                    subtitles[label] = 'https:' + src if src.startswith('//') else src
 
-        # 1. Locate /pass_md5/ URL
-        pass_url = None
-        m_pass = re.search(r'''['"](/pass_md5/[^'"]+)['"]''', html)
-        if m_pass:
-            pass_url = m_pass.group(1)
-        else:
-            m_pass_concat = re.search(r'''['"](/pass_md5/)['"]\s*\+\s*(\w+)''', html)
-            if m_pass_concat:
-                var_name = m_pass_concat.group(2)
-                v_val = re.search(r'''(?:var|let|const)\s+%s\s*=\s*['"]([^'"]+)['"]''' % var_name, html)
-                if v_val:
-                    pass_url = m_pass_concat.group(1) + v_val.group(1)
-
-        # 2. Locate token query parameter
-        token = None
-        m_tok = re.search(r'''function\s*makePlay[^{]*\{.*?return[^\w'"`?]*(\?token=[^&"'\s]+)''', html, re.DOTALL)
-        if m_tok:
-            token = m_tok.group(1)
-        else:
-            m_tok_direct = re.search(r'''['"](\?token=[^&"'\s]+)''', html) or re.search(r'''(\?token=[a-zA-Z0-9]+)''', html)
-            if m_tok_direct:
-                token = m_tok_direct.group(1)
-
-        if pass_url and token:
-            pass_full_url = urllib_parse.urljoin(embed_url, pass_url)
-            pass_headers = dict(headers)
-            pass_headers['Referer'] = embed_url
-
-            pass_resp = self.net.http_GET(pass_full_url, headers=pass_headers).content
-            if 'cloudflarestorage.' in pass_resp:
-                vid_src = pass_resp.strip() + helpers.append_headers(headers)
+        match = re.search(r'''dsplayer\.hotkeys[^']+'([^']+).+?function\s*makePlay.+?return[^?]+([^"]+)''', html, re.DOTALL)
+        if match:
+            token = match.group(2)
+            url = urllib_parse.urljoin(web_url, match.group(1))
+            html = self.net.http_GET(url, headers=headers).content
+            if 'cloudflarestorage.' in html:
+                vid_src = html.strip() + helpers.append_headers(headers)
             else:
-                expiry = f"&expiry={int(time.time() * 1000)}" if 'expiry=' not in token else ""
-                vid_src = self.dood_decode(pass_resp) + token + expiry + helpers.append_headers(headers)
-
+                vid_src = self.dood_decode(html) + token + str(int(time.time() * 1000)) + helpers.append_headers(headers)
             if subs:
                 return vid_src, subtitles
             return vid_src
