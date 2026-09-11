@@ -176,6 +176,10 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
     }
     val lazyListState = rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIdx)
 
+    LaunchedEffect(Unit) {
+        viewModel.resumeScrape()
+    }
+
     LaunchedEffect(isScraping) {
         if (isScraping) {
             userNavigatedAway = false
