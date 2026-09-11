@@ -608,15 +608,29 @@ class UniversalScraper:
         provider_key = source_data.get('provider_key')
         is_video = source_data.get('direct', False)
 
-        if provider_key in self.provider_instances:
-            provider = self.provider_instances[provider_key]
-            if hasattr(provider, 'resolve'):
-                try: 
-                    new_url = provider.resolve(url)
-                    if new_url:
-                        url = new_url
-                        is_video = True
-                except: pass
+        if provider_key and '_' in provider_key:
+            pack_name, mod_name = provider_key.split('_', 1)
+            sys_key = f"sources.{pack_name}.{mod_name}"
+            
+            provider_mod = sys.modules.get(sys_key)
+            if not provider_mod:
+                fpath = os.path.join(SOURCES_PATH, pack_name, f"{mod_name}.py")
+                if os.path.exists(fpath):
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location(sys_key, fpath)
+                    provider_mod = importlib.util.module_from_spec(spec)
+                    sys.modules[sys_key] = provider_mod
+                    spec.loader.exec_module(provider_mod)
+
+            if provider_mod and hasattr(provider_mod, 'source'):
+                prov_inst = provider_mod.source()
+                if hasattr(prov_inst, 'resolve'):
+                    try:
+                        new_url = prov_inst.resolve(url)
+                        if new_url and new_url != url:
+                            url = new_url
+                    except Exception:
+                        pass
 
         if not url: return None, False
 
@@ -642,11 +656,11 @@ class UniversalScraper:
         url_lower = url.lower()
         if any(url_lower.split('?')[0].endswith(ext) for ext in video_extensions) or '/hls/' in url_lower or '/streamsvr/' in url_lower:
             url = localize_hls_stream(url)
-            is_video = True
+            return url, True
         elif any(k in url_lower for k in video_keywords):
-            is_video = True
+            return url, True
                 
-        return url, is_video
+        return url, False
 
 
 active_scraper = None
@@ -806,6 +820,10 @@ def get_scrape_status():
                         try:
                             if resolveurl.HostedMediaFile(url):
                                 is_video = True
+                            elif s.get('source') and resolveurl.relevant_resolvers(s.get('source')):
+                                is_video = True
+                            elif s.get('provider_key') in getattr(s_inst, 'provider_instances', {}) and hasattr(s_inst.provider_instances[s.get('provider_key')], 'resolve'):
+                                is_video = True
                         except: pass
                 s['is_video'] = is_video
 
@@ -939,6 +957,10 @@ def scrape(item_json, season=None, episode=None):
                     elif resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
                         try:
                             if resolveurl.HostedMediaFile(url):
+                                is_video = True
+                            elif s.get('source') and resolveurl.relevant_resolvers(s.get('source')):
+                                is_video = True
+                            elif s.get('provider_key') in getattr(s_inst, 'provider_instances', {}) and hasattr(s_inst.provider_instances[s.get('provider_key')], 'resolve'):
                                 is_video = True
                         except: pass
                 s['is_video'] = is_video

@@ -160,6 +160,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                     return@remember i
                 }
             }
+            return@remember -1
         }
         viewModel.lastSelectedSourceIndex
     }
@@ -195,7 +196,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
     }
 
     LaunchedEffect(isScraping, currentSources, selectedTab) {
-        if (!userNavigatedAway && currentSources != null && currentSources.length() > 0) {
+        if (!hasRestoredFocus && !userNavigatedAway && currentSources != null && currentSources.length() > 0) {
             if (isTargetValid) {
                 val scrollIdx = if (hasSubHeader) targetIdx + 1 else targetIdx
                 try {
@@ -205,21 +206,21 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                 val startTime = System.currentTimeMillis()
                 try {
                     delay(150)
-                    if (KeyTracker.lastKeyPressTime < startTime) {
+                    if (KeyTracker.lastKeyPressTime < startTime && !userNavigatedAway) {
                         selectedSourceFocusRequester.requestFocus()
                     }
                 } catch (e: Exception) {
                     try {
                         delay(100)
-                        selectedSourceFocusRequester.requestFocus()
+                        if (!userNavigatedAway) selectedSourceFocusRequester.requestFocus()
                     } catch (e2: Exception) {}
                 }
                 hasRestoredFocus = true
-            } else if (!isScraping && !hasRestoredFocus) {
+            } else if (!isScraping) {
                 val startTime = System.currentTimeMillis()
                 try {
                     delay(150)
-                    if (KeyTracker.lastKeyPressTime < startTime) {
+                    if (KeyTracker.lastKeyPressTime < startTime && !userNavigatedAway) {
                         selectedSourceFocusRequester.requestFocus()
                     }
                 } catch (e: Exception) {}
@@ -442,7 +443,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                 progress = { if (total > 0) progress.toFloat() / total.toFloat() else 0f },
                 modifier = Modifier.fillMaxWidth().height(8.dp),
                 color = Color(0xFF00BCD4),
-                trackColor = Color(0xFF333333)
+                trackColor = Color(0xFF333338)
             )
             Spacer(modifier = Modifier.height(15.dp))
         }
@@ -455,7 +456,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                     progress = { subProgress },
                     modifier = Modifier.fillMaxWidth().height(6.dp),
                     color = Color(0xFFFFC107),
-                    trackColor = Color(0xFF333333)
+                    trackColor = Color(0xFF333338)
                 )
             }
             Spacer(modifier = Modifier.height(15.dp))
@@ -547,6 +548,14 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .then(if (isTargetItem) Modifier.focusRequester(selectedSourceFocusRequester) else Modifier)
+                                .onFocusChanged { state ->
+                                    if (state.isFocused) {
+                                        if (!isTargetItem) {
+                                            userNavigatedAway = true
+                                        }
+                                        hasRestoredFocus = true
+                                    }
+                                }
                                 .focusProperties {
                                     if (isFirstItem) {
                                         up = if (selectedTab == "Web") {

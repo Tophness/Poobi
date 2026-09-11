@@ -4,12 +4,13 @@
     Copyright (C) 2026 Poobi / Gujal
 """
 
+import io
 import os
 import re
 import json
 import base64
 import requests
-from urllib.parse import urlparse, urljoin, parse_qsl
+from urllib.parse import urlparse, urljoin, parse_qsl, parse_qs
 from resolveurl import common
 from resolveurl.lib import helpers
 from resolveurl.resolver import ResolveUrl, ResolverError
@@ -17,16 +18,33 @@ from resolveurl.resolver import ResolveUrl, ResolverError
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+_CACHED_WASM_KEY = None
+_CACHED_WASM_BYTES = None
+
+
+def _instantiate_wasm_memory(wasm_bytes):
+    import pywasm
+
+    runtime = pywasm.core.Runtime() if hasattr(pywasm, 'core') else pywasm.Runtime()
+    module_desc = getattr(pywasm, 'ModuleDesc', None) or getattr(pywasm.core, 'ModuleDesc', None)
+    
+    if module_desc:
+        module = module_desc.from_reader(io.BytesIO(wasm_bytes))
+        instance = runtime.instance(module)
+    else:
+        instance = runtime.instance_from_file(io.BytesIO(wasm_bytes))
+
+    return runtime, instance
+
 
 class VidSrcResolver(ResolveUrl):
     name = 'VidSrc'
     domains = [
         'vidsrc.me', 'vidsrc.in', 'vidsrc.to', 'vidsrc.net',
         'vidsrc.xyz', 'vidsrcme.ru', 'vidsrc.stream', 'vidsrc.icu',
-        'cloudorchestranova.com', 'vidsrc.mov', 'vsembed.ru'
+        'cloudorchestranova.com', 'vidsrc.mov', 'vsembed.ru', 'vidsrc.pm'
     ]
-    # Retain (movie|tv) in group 2 and support query parameters
-    pattern = r'(?://|\.)((?:vidsrc\.(?:me|in|to|net|xyz|stream|icu|mov)|vidsrcme\.ru|vsembed\.ru|cloudorchestranova\.com))/(?:embed/)?((?:(?:movie|tv)/)?[0-9a-zA-Z-/]+(?:\?[^"\'>\s]+)?)'
+    pattern = r'(?://|\.)((?:vidsrc\.(?:me|in|to|net|xyz|stream|icu|mov|pm)|vidsrcme\.ru|vsembed\.ru|cloudorchestranova\.com))/(?:embed/)?((?:(?:movie|tv)/)?[0-9a-zA-Z-/]+(?:\?[^"\'>\s]+)?)'
 
     def get_media_url(self, host, media_id, subs=False):
         try:
@@ -43,9 +61,6 @@ class VidSrcResolver(ResolveUrl):
             if not host:
                 host = 'vidsrc.me'
 
-            # ---------------------------------------------------------------
-            # 1. Determine Media Type & Format Media ID
-            # ---------------------------------------------------------------
             parts = [p for p in media_id.split('/') if p]
             numeric_parts = [p for p in parts if p.isdigit()]
             is_tv = 'tv' in media_id or 'tv' in parts or len(numeric_parts) >= 2 or len(parts) >= 3
@@ -60,28 +75,27 @@ class VidSrcResolver(ResolveUrl):
 
             embed_url = f"https://{host}/embed/{media_id}"
 
-            # ---------------------------------------------------------------
-            # 2. Layer 1 (Embed Page)
-            # ---------------------------------------------------------------
             try:
                 r1 = s.get(embed_url, timeout=12, allow_redirects=True, verify=False)
             except Exception:
-                embed_url = f"https://v2.vidsrc.me/embed/{media_id}"
-                r1 = s.get(embed_url, timeout=12, allow_redirects=True, verify=False)
+                embed_url = f"https://vidsrcme.ru/embed/{media_id}"
+                try:
+                    r1 = s.get(embed_url, timeout=12, allow_redirects=True, verify=False)
+                except Exception:
+                    embed_url = f"https://v2.vidsrc.me/embed/{media_id}"
+                    r1 = s.get(embed_url, timeout=12, allow_redirects=True, verify=False)
 
             final_embed_url = r1.url
             html1 = r1.text
 
             iframe1 = re.search(r'<iframe[^>]+src=["\']([^"\']+)["\']', html1, re.I)
-            if not iframe1:
-                raise ResolverError('VidSrc: Layer 1 iframe not found')
-            layer1_url = urljoin(final_embed_url, iframe1.group(1))
-
-            # ---------------------------------------------------------------
-            # 3. Layer 2 (vsembed / RCP Container)
-            # ---------------------------------------------------------------
-            r2 = s.get(layer1_url, headers={'Referer': final_embed_url}, timeout=12, verify=False)
-            html2 = r2.text
+            if iframe1 and not iframe1.group(1).startswith("${"):
+                layer1_url = urljoin(final_embed_url, iframe1.group(1))
+                r2 = s.get(layer1_url, headers={'Referer': final_embed_url}, timeout=12, verify=False)
+                html2 = r2.text
+            else:
+                layer1_url = final_embed_url
+                html2 = html1
 
             container_url = None
             data_api_match = re.search(r'data-api=["\']([^"\']+)["\']', html2)
@@ -90,12 +104,12 @@ class VidSrcResolver(ResolveUrl):
                 api_url = urljoin(layer1_url, api_rel)
                 try:
                     api_resp = s.get(
-                        api_url, 
+                        api_url,
                         headers={
-                            'Referer': layer1_url, 
+                            'Referer': layer1_url,
                             'X-Requested-With': 'XMLHttpRequest',
                             'Accept': 'application/json, text/javascript, */*; q=0.01'
-                        }, 
+                        },
                         timeout=10,
                         verify=False
                     )
@@ -113,12 +127,9 @@ class VidSrcResolver(ResolveUrl):
 
             container_host = f"{urlparse(container_url).scheme}://{urlparse(container_url).netloc}"
 
-            # ---------------------------------------------------------------
-            # 4. Layer 3 (CloudOrchestraNova Player Container)
-            # ---------------------------------------------------------------
             r3 = s.get(
-                container_url, 
-                headers={'Referer': layer1_url, 'Origin': container_host}, 
+                container_url,
+                headers={'Referer': layer1_url, 'Origin': container_host},
                 timeout=12,
                 verify=False
             )
@@ -133,8 +144,8 @@ class VidSrcResolver(ResolveUrl):
                     if player_path:
                         inner_player_url = urljoin(container_url, player_path)
                         r4 = s.get(
-                            inner_player_url, 
-                            headers={'Referer': container_url, 'Origin': container_host}, 
+                            inner_player_url,
+                            headers={'Referer': container_url, 'Origin': container_host},
                             timeout=12,
                             verify=False
                         )
@@ -143,9 +154,6 @@ class VidSrcResolver(ResolveUrl):
                 except Exception:
                     pass
 
-            # ---------------------------------------------------------------
-            # 5. Extract CONFIG & Call Stream API
-            # ---------------------------------------------------------------
             m3u8_candidates = []
             subtitles_dict = {}
 
@@ -154,7 +162,6 @@ class VidSrcResolver(ResolveUrl):
                 try:
                     config_data = json.loads(config_match.group(1))
 
-                    # Parse Stream API endpoint: Movie uses 'api', TV uses 'streamBase' + season + episode + &stream_urls
                     if is_tv:
                         stream_base = config_data.get('streamBase', '').replace(r'\u0026', '&')
                         s_num = config_data.get('season')
@@ -163,7 +170,6 @@ class VidSrcResolver(ResolveUrl):
                     else:
                         stream_api = config_data.get('api', '').replace(r'\u0026', '&')
 
-                    # Optionally extract subtitles from metaApi if present
                     meta_api = config_data.get('metaApi', '').replace(r'\u0026', '&')
                     if subs and meta_api:
                         try:
@@ -179,13 +185,13 @@ class VidSrcResolver(ResolveUrl):
 
                     if stream_api:
                         api_resp = s.get(
-                            stream_api, 
+                            stream_api,
                             headers={
                                 'User-Agent': ua,
                                 'Referer': active_player_url,
                                 'Origin': container_host,
                                 'Accept': 'application/json, text/plain, */*'
-                            }, 
+                            },
                             timeout=10,
                             verify=False
                         )
@@ -196,60 +202,54 @@ class VidSrcResolver(ResolveUrl):
 
                         if enc_b64 and wasm_url:
                             try:
-                                import pywasm
-                                from resources.lib.modules import control
-                                
-                                dataPath = getattr(control, 'dataPath', os.path.dirname(__file__))
-                                wasm_path = os.path.join(dataPath, 'vidsrc.wasm')
-                                wasm_resp = s.get(wasm_url, headers={'Referer': active_player_url}, timeout=10, verify=False)
-                                with open(wasm_path, 'wb') as f:
-                                    f.write(wasm_resp.content)
+                                global _CACHED_WASM_KEY, _CACHED_WASM_BYTES
 
-                                if hasattr(pywasm, 'core'):
-                                    runtime = pywasm.core.Runtime()
-                                    m = runtime.instance_from_file(wasm_path)
-                                    raw_enc = base64.b64decode(enc_b64)
-                                    enc_len = len(raw_enc)
-                                    ptr = runtime.invocate(m, 'alloc', [enc_len])[0]
+                                parsed_query = parse_qs(urlparse(wasm_url).query)
+                                current_w_key = parsed_query.get('w', [wasm_url])[0]
 
-                                    memory_data = None
-                                    for attr_path in ['machine.store.mems', 'memory_list', 'store.mems']:
-                                        try:
-                                            obj = runtime
-                                            for part in attr_path.split('.'):
-                                                obj = getattr(obj, part)
-                                            memory_data = obj[0].data
-                                            break
-                                        except Exception:
-                                            pass
+                                if _CACHED_WASM_KEY != current_w_key or _CACHED_WASM_BYTES is None:
+                                    wasm_resp = s.get(
+                                        wasm_url,
+                                        headers={'Referer': active_player_url},
+                                        timeout=10,
+                                        verify=False
+                                    )
+                                    _CACHED_WASM_BYTES = wasm_resp.content
+                                    _CACHED_WASM_KEY = current_w_key
 
-                                    if memory_data is None:
-                                        memory_data = m.exports.memory.buffer
+                                runtime, m = _instantiate_wasm_memory(_CACHED_WASM_BYTES)
+                                raw_enc = base64.b64decode(enc_b64)
+                                enc_len = len(raw_enc)
 
-                                    for i in range(enc_len):
-                                        memory_data[ptr + i] = raw_enc[i]
+                                ptr = runtime.invocate(m, 'alloc', [enc_len])[0]
 
-                                    out_len = runtime.invocate(m, 'decrypt', [ptr, enc_len])[0]
-                                    dec_bytes = bytearray(out_len)
-                                    for i in range(out_len):
-                                        dec_bytes[i] = memory_data[ptr + 12 + i]
-                                else:
-                                    runtime = pywasm.load(wasm_path)
-                                    raw_enc = base64.b64decode(enc_b64)
-                                    enc_len = len(raw_enc)
-                                    ptr = runtime.exec('alloc', [enc_len])
-                                    
-                                    memory_data = runtime.machine.memory_list[0].data
-                                    for i in range(enc_len):
-                                        memory_data[ptr + i] = raw_enc[i]
+                                memory_data = None
+                                for attr_path in ['machine.store.mems', 'memory_list', 'store.mems']:
+                                    try:
+                                        obj = runtime
+                                        for part in attr_path.split('.'):
+                                            obj = getattr(obj, part)
+                                        memory_data = obj[0].data
+                                        break
+                                    except Exception:
+                                        pass
 
-                                    out_len = runtime.exec('decrypt', [ptr, enc_len])
-                                    dec_bytes = bytearray(out_len)
-                                    for i in range(out_len):
-                                        dec_bytes[i] = memory_data[ptr + 12 + i]
+                                if memory_data is None:
+                                    memory_data = m.exports.memory.buffer
+
+                                for i in range(enc_len):
+                                    memory_data[ptr + i] = raw_enc[i]
+
+                                out_len = runtime.invocate(m, 'decrypt', [ptr, enc_len])[0]
+                                dec_bytes = bytearray(out_len)
+                                for i in range(out_len):
+                                    dec_bytes[i] = memory_data[ptr + 12 + i]
 
                                 plaintext = dec_bytes.decode('utf-8', errors='replace')
-                                m3u8_candidates.extend([l.strip() for l in plaintext.splitlines() if l.strip() and l.startswith('http')])
+                                m3u8_candidates.extend([
+                                    l.strip() for l in plaintext.splitlines()
+                                    if l.strip() and l.startswith('http')
+                                ])
                             except Exception:
                                 pass
                         else:
@@ -273,10 +273,6 @@ class VidSrcResolver(ResolveUrl):
             if not m3u8_candidates:
                 raise ResolverError('VidSrc: No stream URLs found')
 
-            # ---------------------------------------------------------------
-            # 6. Acquire JWT Playback Token from Stream Server
-            # ---------------------------------------------------------------
-            # Prioritize Stream #2 (higher bitrate encode) if available, else Stream #1
             preferred_master_url = m3u8_candidates[1] if len(m3u8_candidates) > 1 else m3u8_candidates[0]
             stream_url = preferred_master_url.split('|')[0]
             parsed_url = urlparse(stream_url)
@@ -286,8 +282,8 @@ class VidSrcResolver(ResolveUrl):
             token = ""
             try:
                 t_resp = s.get(
-                    token_url, 
-                    headers={'User-Agent': ua, 'Referer': active_player_url, 'Origin': container_host}, 
+                    token_url,
+                    headers={'User-Agent': ua, 'Referer': active_player_url, 'Origin': container_host},
                     timeout=8,
                     verify=False
                 )
@@ -327,8 +323,8 @@ class VidSrcResolver(ResolveUrl):
             raise ResolverError(f'VidSrc: {str(e)}')
 
     def get_url(self, host, media_id):
-        if not host.startswith('http'):
-            host = 'vidsrc.me'
+        if not host or not host.startswith('http'):
+            host = host or 'vidsrc.me'
         if not media_id.startswith('movie/') and not media_id.startswith('tv/') and not media_id.startswith('tt'):
             parts = [p for p in media_id.split('/') if p]
             if len(parts) >= 2:

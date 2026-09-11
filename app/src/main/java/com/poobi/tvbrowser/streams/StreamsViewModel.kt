@@ -1698,11 +1698,15 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         
         _isScraping.value = false
         _isResolving.value = false
-        val count = sources?.length() ?: 0
+        val count = sources?.length() ?: _scrapedSources.value?.length() ?: 0
         _scrapeStatusMsg.value = "Finished! Found $count sources."
-        _scrapeProgress.value = _scrapeTotal.value
+        if (_scrapeTotal.value > 0) {
+            _scrapeProgress.value = _scrapeTotal.value
+        }
         
-        _scrapedSources.value = if (sources != null && sources.length() > 0) sortSources(sources) else JSONArray()
+        if (sources != null && sources.length() > 0) {
+            _scrapedSources.value = sortSources(sources)
+        }
         
         if (prefs.getInt("auto_sub_pref", 0) == 1) { 
             performAutoSubtitleSearch(item, season, episode)
@@ -1808,7 +1812,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     val total = status.optInt("total", 0)
                     val message = status.optString("message", "")
                     val sources = status.optJSONArray("sources")
-                    val sortedSources = if (sources != null && !isInteractingWithSources) sortSources(sources) else null
+                    val currentCount = _scrapedSources.value?.length() ?: 0
+                    val newCount = sources?.length() ?: 0
+
+                    val isFinished = message.startsWith("Finished") || 
+                                     message.startsWith("Stopped") || 
+                                     (total > 0 && current >= total)
+
+                    val sortedSources = if (sources != null && !isInteractingWithSources && (newCount != currentCount || _scrapedSources.value == null)) {
+                        sortSources(sources)
+                    } else null
 
                     withContext(Dispatchers.Main) {
                         if (total > 0) {
@@ -1819,12 +1832,22 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         _scrapeStatusMsg.value = when {
                             _isResolving.value -> "Resolving Link..."
                             isInteractingWithSources -> "Pausing Scrapers..."
-                            message.startsWith("Paused") -> "Scraping Paused: $current / $total providers..."
+                            isFinished -> "Finished! Found ${sources?.length() ?: _scrapedSources.value?.length() ?: 0} sources."
+                            message.startsWith("Paused") && isInteractingWithSources -> "Scraping Paused: $current / $total providers..."
                             total > 0 && current < total -> "Scraping: $current / $total providers..."
-                            else -> message
+                            else -> if (message.isNotEmpty() && !message.startsWith("Paused")) message else "Scraping: $current / $total providers..."
                         }
 
                         if (sortedSources != null) _scrapedSources.value = sortedSources
+
+                        if (isFinished) {
+                            _isScraping.value = false
+                            _isResolving.value = false
+                        }
+                    }
+
+                    if (isFinished) {
+                        break
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
@@ -2256,7 +2279,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun resolveAndPlayInternal(sourceDataJson: String) {
-        _isScraping.value = true
         _isResolving.value = true
         _scrapeStatusMsg.value = "Resolving Link..."
 
@@ -2268,7 +2290,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val resolveResult = scraper.callAttr("resolve", sourceDataJson).toString()
 
                 withContext(Dispatchers.Main) {
-                    _isScraping.value = false
                     _isResolving.value = false
                     try {
                         val json = JSONObject(resolveResult)
@@ -2305,7 +2326,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     resumeScrape()
-                    _isScraping.value = false
                     _isResolving.value = false
                     _events.value = StreamsEvent.ShowToast("Resolve error: ${e.message}")
                 }
@@ -2319,8 +2339,20 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
         isInteractingWithSources = false
 
-        if (_isScraping.value) {
-            _scrapeStatusMsg.value = "Resuming Scrape..."
+        val isAlreadyFinished = _scrapeTotal.value > 0 && _scrapeProgress.value >= _scrapeTotal.value
+        if (isAlreadyFinished) {
+            _isScraping.value = false
+            _scrapeStatusMsg.value = "Finished! Found ${_scrapedSources.value?.length() ?: 0} sources."
+            return
+        }
+
+        if (_isScraping.value || scrapeJob?.isActive == true) {
+            _isScraping.value = true
+            _scrapeStatusMsg.value = if (_scrapeTotal.value > 0) {
+                "Scraping: ${_scrapeProgress.value} / ${_scrapeTotal.value} providers..."
+            } else {
+                "Resuming Scrape..."
+            }
             viewModelScope.launch(Dispatchers.IO) {
                 try { 
                     Python.getInstance().getModule("main").callAttr("resume_scrape") 

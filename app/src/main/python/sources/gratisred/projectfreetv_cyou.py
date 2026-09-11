@@ -12,7 +12,7 @@
 
 import re
 
-from six.moves.urllib_parse import parse_qs, urlencode
+from six.moves.urllib_parse import parse_qs, urlencode, urljoin
 
 from resources.lib.modules import cleantitle
 from resources.lib.modules import client
@@ -80,6 +80,8 @@ class source:
             try:
                 for link in DOM(html, 'iframe', ret='src'):
                     try:
+                        if not link or any(bad in link.lower() for bad in ['sharethis', 'about:blank', 'googletag', 'facebook']):
+                            continue
                         link = self.base_link + link if not link.startswith('http') else link
                         for src in scrape_sources.process(hostDict, link):
                             if scrape_sources.check_host_limit(src['source'], self.results):
@@ -92,21 +94,60 @@ class source:
 
             try:
                 ext_rows = DOM(html, 'tr', attrs={'class': r'ext_link.+?'})
+                parsed_candidates = []
+
                 for row in ext_rows:
                     try:
                         hrefs = DOM(row, 'a', ret='href')
                         titles = DOM(row, 'a', ret='title')
-                        if not hrefs or not titles:
+                        if not hrefs:
                             continue
-                        link, host = hrefs[0], titles[0]
-                        link = self.base_link + link if not link.startswith('http') else link
-                        item = scrape_sources.make_item(hostDict, link, host=host, info=None, prep=True)
-                        if item and not scrape_sources.check_host_limit(item['source'], self.results):
-                            self.results.append(item)
+                        link = hrefs[0]
+                        host = titles[0] if titles else "Unknown"
+
+                        td_cells = [re.sub(r'<[^>]+>', '', td).strip() for td in DOM(row, 'td')]
+                        quality = td_cells[1] if len(td_cells) > 1 else "HD"
+                        uploader = td_cells[2] if len(td_cells) > 2 else ""
+                        age = td_cells[3] if len(td_cells) > 3 else ""
+
+                        m_id = re.search(r'/open/link/(\d+)', link)
+                        link_id = int(m_id.group(1)) if m_id else 0
+
+                        display_title = f"{host} ({uploader} • {age})" if uploader and age else host
+
+                        parsed_candidates.append({
+                            'link': self.base_link + link if not link.startswith('http') else link,
+                            'host': host,
+                            'link_id': link_id,
+                            'quality': quality,
+                            'display_title': display_title
+                        })
                     except Exception:
                         continue
+
+                parsed_candidates.sort(key=lambda x: x['link_id'], reverse=True)
+
+                host_seen = {}
+                for cand in parsed_candidates:
+                    h_key = cand['host'].lower()
+                    if host_seen.get(h_key, 0) >= 2:
+                        continue
+                    host_seen[h_key] = host_seen.get(h_key, 0) + 1
+
+                    item = scrape_sources.make_item(hostDict, cand['link'], host=cand['host'], info=cand['display_title'], prep=True)
+                    if item:
+                        item['title'] = cand['display_title']
+                        if cand['quality']:
+                            item['quality'] = cand['quality']
+                        self.results.append(item)
             except Exception:
                 pass
+
+            def _get_link_id(item):
+                m = re.search(r'/open/link/(\d+)', item.get('url', ''))
+                return int(m.group(1)) if m else 0
+
+            self.results.sort(key=_get_link_id, reverse=True)
             return self.results
         except Exception:
             #log_utils.log('sources', 1)
@@ -114,33 +155,72 @@ class source:
 
 
     def resolve(self, url):
-        if not any(d in url for d in self.domains):
+        if not any(d in url for d in self.domains) and '/open/link/' not in url:
             return url
         try:
             page = client.scrapePage(url, headers=self.headers, timeout='15')
             html = (getattr(page, 'text', '') or '') if page is not None else ''
+            if not html:
+                return url
+
             try:
-                iframe = DOM(html, 'iframe', ret='src')
-                if iframe:
-                    link = iframe[0]
-                    if link and link not in ('about:blank', ''):
-                        return link if link.startswith('http') else self.base_link + link
+                for link in DOM(html, 'iframe', ret='src'):
+                    if link and not any(bad in link.lower() for bad in ['sharethis', 'about:blank', 'googletag', 'facebook', 'beacon']):
+                        return link if link.startswith('http') else urljoin(self.base_link, link)
             except Exception:
                 pass
-            try:
-                m = re.search(r'"(/open/site/[^"]+)"', html, re.I | re.S)
-                if m:
-                    target = m.group(1)
-                    if not target.startswith('http'):
-                        target = self.base_link + target
-                    resolved = client.request(target, headers=self.headers, output='geturl', timeout='15')
-                    if resolved:
-                        return resolved
-                    page2 = client.scrapePage(target, headers=self.headers, timeout='15')
-                    if page2 is not None and getattr(page2, 'url', None):
-                        return page2.url
-            except Exception:
-                pass
+
+            meta_id = None
+            m_id = re.search(r'data-metaid=["\'](\d+)["\']', html)
+            if m_id:
+                meta_id = m_id.group(1)
+            else:
+                m_url_id = re.search(r'/open/link/(\d+)', url)
+                if m_url_id:
+                    meta_id = m_url_id.group(1)
+
+            token_match = re.search(r"['\"](/open/(?!link/)[\w-]+/?)['\"]", html)
+            target_url = None
+
+            if token_match:
+                token = token_match.group(1).strip("'\"")
+                if not token.startswith('/'):
+                    token = '/' + token
+                if not token.endswith('/'):
+                    token += '/'
+
+                if meta_id and meta_id not in token:
+                    target_path = token + meta_id + '/'
+                else:
+                    target_path = token
+                target_url = urljoin(self.base_link, target_path)
+            elif meta_id:
+                target_url = urljoin(self.base_link, f"/open/site/{meta_id}/")
+
+            if target_url:
+                step_headers = {
+                    'User-Agent': client.UserAgent,
+                    'Referer': url,
+                    'Origin': self.base_link
+                }
+                page2 = client.scrapePage(target_url, headers=step_headers, timeout='15')
+                if page2 is not None:
+                    final_url = getattr(page2, 'url', None) or target_url
+                    if final_url and not any(d in final_url for d in self.domains):
+                        return final_url
+
+                    html2 = getattr(page2, 'text', '') or ''
+                    for ifr in DOM(html2, 'iframe', ret='src'):
+                        if ifr and not any(bad in ifr.lower() for bad in ['sharethis', 'about:blank', 'googletag', 'facebook', 'beacon']):
+                            return ifr if ifr.startswith('http') else urljoin(self.base_link, ifr)
+
+                    m_loc = re.search(r'''(?:location(?:\.href)?|window\.open)\s*=\s*['"]([^'"]+)''', html2)
+                    if m_loc and m_loc.group(1).startswith('http'):
+                        return m_loc.group(1)
+
+                    for href in DOM(html2, 'a', ret='href'):
+                        if href.startswith('http') and not any(d in href for d in self.domains):
+                            return href
         except Exception:
             #log_utils.log('resolve', 1)
             pass
