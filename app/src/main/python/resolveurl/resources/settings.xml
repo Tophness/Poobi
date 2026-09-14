@@ -844,6 +844,10 @@
 		<setting id="StreamoUploadResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="StreamoUploadResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="StreamoUploadResolver_login" type="bool" label="33022" default="true" visible="false"/>
+		<setting label="StreamPlay" type="lsep"/>
+		<setting id="StreamPlayResolver_priority" type="number" label="33016" default="100"/>
+		<setting id="StreamPlayResolver_enabled" type="bool" label="33017" default="true"/>
+		<setting id="StreamPlayResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting label="StreamRuby" type="lsep"/>
 		<setting id="StreamRubyResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="StreamRubyResolver_enabled" type="bool" label="33017" default="true"/>
@@ -880,12 +884,12 @@
 		<setting id="SuperITUResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="SuperITUResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="SuperITUResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 11">
 		<setting label="SuperVideo" type="lsep"/>
 		<setting id="SuperVideoResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="SuperVideoResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="SuperVideoResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 11">
 		<setting label="SwiftLoad" type="lsep"/>
 		<setting id="SwiftLoadResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="SwiftLoadResolver_enabled" type="bool" label="33017" default="true"/>
@@ -955,12 +959,12 @@
 		<setting id="UploadBazResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="UploadBazResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="UploadBazResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 12">
 		<setting label="UploadDo" type="lsep"/>
 		<setting id="UploadDoResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="UploadDoResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="UploadDoResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 12">
 		<setting label="UploadEver" type="lsep"/>
 		<setting id="UploadEverResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="UploadEverResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1029,12 +1033,12 @@
 		<setting id="UsersCloudResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="UsersCloudResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="UsersCloudResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 13">
 		<setting label="VCDNLare" type="lsep"/>
 		<setting id="VCDNLareResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VCDNLareResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VCDNLareResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 13">
 		<setting label="VeeHD" type="lsep"/>
 		<setting id="VeeHDResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VeeHDResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1105,12 +1109,12 @@
 		<setting id="VideoSeyredResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VideoSeyredResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VideoSeyredResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 14">
 		<setting label="VideoWood" type="lsep"/>
 		<setting id="VideoWoodResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VideoWoodResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VideoWoodResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 14">
 		<setting label="VideoZoo" type="lsep"/>
 		<setting id="VideoZooResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VideoZooResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1179,12 +1183,12 @@
 		<setting id="VidSrcResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidSrcResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidSrcResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 15">
 		<setting label="VidsSt" type="lsep"/>
 		<setting id="VidsStResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidsStResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidsStResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 15">
 		<setting label="VidStore" type="lsep"/>
 		<setting id="VidStoreResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidStoreResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1254,12 +1258,12 @@
 		<setting id="VrraTopResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VrraTopResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VrraTopResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 16">
 		<setting label="VTube" type="lsep"/>
 		<setting id="VTubeResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VTubeResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VTubeResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 16">
 		<setting label="Vudeo" type="lsep"/>
 		<setting id="VudeoResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VudeoResolver_enabled" type="bool" label="33017" default="true"/>

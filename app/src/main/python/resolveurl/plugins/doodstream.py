@@ -73,6 +73,14 @@ class DoodStreamResolver(ResolveUrl):
                     subtitles[label] = 'https:' + src if src.startswith('//') else src
 
         match = re.search(r'''dsplayer\.hotkeys[^']+'([^']+).+?function\s*makePlay.+?return[^?]+([^"]+)''', html, re.DOTALL)
+
+        if not match:
+            pass_m = re.search(r"['\"](/pass_md5/[^'\"]+)['\"]", html)
+            if pass_m:
+                pass_path = pass_m.group(1)
+                token = f"?token={pass_path.split('/')[-1]}&expiry="
+                match = type('DoodMatch', (), {'group': lambda self, i: pass_path if i == 1 else token})()
+
         if match:
             token = match.group(2)
             url = urllib_parse.urljoin(web_url, match.group(1))

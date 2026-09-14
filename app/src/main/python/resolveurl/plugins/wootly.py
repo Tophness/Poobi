@@ -52,16 +52,15 @@ class WootlyResolver(ResolveUrl):
                 if resp:
                     resp2 = True
                     headers = {'Referer': ref, 'User-Agent': common.RAND_UA}
-                    while '.mp4' not in resp and resp2:
+                    video_exts = ('.mp4', '.webm', '.mkv', '.m3u8')
+                    while not any(ext in resp.lower() for ext in video_exts) and resp2:
                         resp2 = helpers.get_redirect_url(resp, headers=headers)
                         if resp2 == resp:
-                            resp2 = False
                             break
                         else:
                             resp = resp2
-                            resp2 = True
 
-                    if resp2:
+                    if any(ext in resp.lower() for ext in video_exts):
                         return resp + helpers.append_headers(headers)
 
         raise ResolverError('File Not Found or Removed')
