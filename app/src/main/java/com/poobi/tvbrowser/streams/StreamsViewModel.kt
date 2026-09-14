@@ -37,7 +37,9 @@ sealed class StreamsEvent {
         val episode: Int?, 
         val nextEpisode: JSONObject? = null,
         val isWebpage: Boolean = false,
-        val isTrailer: Boolean = false
+        val isTrailer: Boolean = false,
+        val alternativeUrls: List<String> = emptyList(),
+        val alternativeNames: List<String> = emptyList()
     ) : StreamsEvent()
     data class ShowToast(val message: String) : StreamsEvent()
     data class ShowSubtitlePicker(val subs: JSONArray) : StreamsEvent()
@@ -1669,6 +1671,20 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
+        val altUrls = mutableListOf<String>()
+        val altNames = mutableListOf<String>()
+        try {
+            val sObj = JSONObject(sourceDataJson)
+            val aUrls = sObj.optJSONArray("alternative_urls")
+            val aNames = sObj.optJSONArray("alternative_names")
+            if (aUrls != null && aNames != null) {
+                for (i in 0 until aUrls.length()) {
+                    altUrls.add(aUrls.getString(i))
+                    altNames.add(aNames.getString(i))
+                }
+            }
+        } catch (e: Exception) {}
+
         _events.value = StreamsEvent.PlayVideo(
             url = streamUrl,
             title = fullTitle,
@@ -1678,7 +1694,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             season = lastScrapedSeason,
             episode = lastScrapedEpisode,
             nextEpisode = nextEp,
-            isWebpage = !isVideo
+            isWebpage = !isVideo,
+            alternativeUrls = altUrls,
+            alternativeNames = altNames
         )
     }
 

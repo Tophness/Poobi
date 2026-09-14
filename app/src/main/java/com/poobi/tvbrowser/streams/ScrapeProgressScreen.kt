@@ -622,6 +622,19 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     } else {
+                                        val audioDisplay = rawData.optString("audio", "").ifEmpty {
+                                            rawData.optString("languages_display", "")
+                                        }
+                                        if (audioDisplay.isNotEmpty()) {
+                                            Text(
+                                                text = audioDisplay,
+                                                color = if (isFocused) Color(0xFF1B5E20) else Color(0xFF4CAF50),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(bottom = 2.dp)
+                                            )
+                                        }
+
                                         val displayTitle = if (rawTitle.isNotEmpty() && !rawTitle.equals(sourceName, ignoreCase = true)) {
                                             rawTitle
                                         } else {
@@ -721,16 +734,18 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                                 )
                                             }
                                         }
+                                    }
 
-                                        val sizeStr = rawData.optString("size", "")
-                                        if (sizeStr.isNotEmpty()) {
-                                            Text(
-                                                text = sizeStr,
-                                                color = if (isFocused) Color.Black else Color(0xFF4CAF50),
-                                                fontSize = 20.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
+                                    val sizeStr = rawData.optString("size", "").ifEmpty {
+                                        rawData.optString("size_str", "")
+                                    }
+                                    if (sizeStr.isNotEmpty()) {
+                                        Text(
+                                            text = sizeStr,
+                                            color = if (isFocused) Color.Black else Color(0xFF4CAF50),
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                     }
 
                                     Image(

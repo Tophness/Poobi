@@ -606,7 +606,7 @@ class UniversalScraper:
     def resolveSource(self, source_data):
         url = source_data.get('url')
         provider_key = source_data.get('provider_key')
-        is_video = source_data.get('direct', False)
+        is_video = source_data.get('is_video', False) or source_data.get('direct', False)
 
         if provider_key and '_' in provider_key:
             pack_name, mod_name = provider_key.split('_', 1)
@@ -990,7 +990,10 @@ def resolve(source_data_json):
         
         scraper = UniversalScraper(enabled_packs)
         resolved_url, is_video = scraper.resolveSource(source_data)
-        
+
+        if source_data.get('direct') or source_data.get('is_video'):
+            is_video = True
+
         if resolved_url:
             resolved_url = localize_hls_stream(resolved_url)
 
@@ -1007,11 +1010,12 @@ def resolve(source_data_json):
         return json.dumps({
             "url": url_clean if url_clean else "",
             "headers": structured_headers,
-            "is_video": is_video
+            "is_video": is_video,
+            "alternative_urls": source_data.get("alternative_urls", []),
+            "alternative_names": source_data.get("alternative_names", [])
         })
         
     except Exception as e:
-        print(f"[DEBUG_RESOLVE] Error during resolution: {str(e)}", flush=True)
         import traceback
         traceback.print_exc()
         return json.dumps({"error": str(e)})

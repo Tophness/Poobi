@@ -251,6 +251,8 @@ class MainActivity : AppCompatActivity() {
                                     season = event.season,
                                     episode = event.episode,
                                     fromStreams = true,
+                                    alternativeUrls = event.alternativeUrls,
+                                    alternativeNames = event.alternativeNames,
                                     isTrailer = event.isTrailer
                                 )
                             } else {
