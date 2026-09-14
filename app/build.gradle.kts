@@ -1,5 +1,46 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import com.android.build.api.dsl.ApplicationExtension
+import java.io.ByteArrayOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.io.File
+import org.json.JSONObject
+
+fun getGitVersionName(): String {
+    return try {
+        val byteOut = ByteArrayOutputStream()
+        project.providers.exec {
+            commandLine("git", "describe", "--tags", "--always")
+            standardOutput = byteOut
+        }.result.get()
+        val desc = byteOut.toString().trim().removePrefix("v").removePrefix("V")
+
+        val regex = Regex("""^(\d+(\.\d+)*)-(\d+)-g[0-9a-fA-F]+$""")
+        val match = regex.find(desc)
+        if (match != null) {
+            "${match.groupValues[1]}.${match.groupValues[3]}"
+        } else if (desc.matches(Regex("""^\d+(\.\d+)*$"""))) {
+            desc
+        } else {
+            "4.3.1"
+        }
+    } catch (e: Exception) {
+        "4.3.1"
+    }
+}
+
+fun getGitVersionCode(): Int {
+    return try {
+        val byteOut = ByteArrayOutputStream()
+        project.providers.exec {
+            commandLine("git", "rev-list", "--count", "HEAD")
+            standardOutput = byteOut
+        }.result.get()
+        byteOut.toString().trim().toIntOrNull() ?: 1
+    } catch (e: Exception) {
+        1
+    }
+}
 
 plugins {
     alias(libs.plugins.android.application)
@@ -15,8 +56,8 @@ extensions.configure<ApplicationExtension> {
         applicationId = "com.poobi.tvbrowser"
         minSdk = 24
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = getGitVersionCode()
+        versionName = getGitVersionName()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -136,5 +177,163 @@ dependencies {
     implementation(libs.google.http.client.android)
     implementation(libs.google.api.services.drive) {
         exclude(group = "org.apache.httpcomponents")
+    }
+}
+
+tasks.register("publishGithubRelease") {
+    group = "publishing"
+    description = "Builds all debug APKs, creates a GitHub release with the latest Git tag, and uploads the APKs."
+    dependsOn("assembleDebug")
+
+    doLast {
+        val repoOwner = "Tophness"
+        val repoName = "Poobi"
+
+        val token = project.findProperty("GITHUB_TOKEN") as? String
+            ?: System.getenv("GITHUB_TOKEN")
+            ?: throw GradleException("GitHub token not found! Please add GITHUB_TOKEN=ghp_... to C:\\Users\\Chris\\.gradle\\gradle.properties")
+
+        try {
+            project.providers.exec {
+                commandLine("git", "fetch", "--tags")
+            }.result.get()
+        } catch (_: Exception) {}
+
+        var latestRemoteTag = ""
+        try {
+            val getReleasesUrl = URL("https://api.github.com/repos/$repoOwner/$repoName/releases/latest")
+            val getConn = (getReleasesUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("User-Agent", "Poobi-Gradle-Publisher")
+            }
+            if (getConn.responseCode == 200) {
+                val json = JSONObject(getConn.inputStream.bufferedReader().use { it.readText() })
+                latestRemoteTag = json.optString("tag_name", "").removePrefix("v").removePrefix("V")
+            }
+        } catch (e: Exception) {
+            println("Note: Could not check latest remote release: ${e.message}")
+        }
+
+        var version = getGitVersionName()
+        if (latestRemoteTag.isNotEmpty() && (version == "1.0.0" || version <= latestRemoteTag)) {
+            val parts = latestRemoteTag.split(".").map { it.toIntOrNull() ?: 0 }.toMutableList()
+            if (parts.size >= 2) {
+                parts[parts.lastIndex] = parts.last() + 1
+                version = parts.joinToString(".")
+            } else {
+                version = "$latestRemoteTag.1"
+            }
+        }
+
+        val tagName = if (version.startsWith("v", ignoreCase = true)) version else "v$version"
+        println("Publishing GitHub Release: $tagName for $repoOwner/$repoName (Latest remote was: v$latestRemoteTag)")
+
+        try {
+            project.providers.exec {
+                commandLine("git", "tag", "-a", tagName, "-m", "Release $tagName")
+            }.result.get()
+        } catch (_: Exception) {}
+
+        try {
+            project.providers.exec {
+                commandLine("git", "push", "origin", tagName)
+            }.result.get()
+            println("Pushed git tag $tagName to GitHub.")
+        } catch (e: Exception) {
+            println("Note: Git tag push skipped or already exists: ${e.message}")
+        }
+
+        val createReleaseUrl = URL("https://api.github.com/repos/$repoOwner/$repoName/releases")
+        val createConn = (createReleaseUrl.openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            setRequestProperty("Authorization", "Bearer $token")
+            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("User-Agent", "Poobi-Gradle-Publisher")
+            setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            setRequestProperty("Content-Type", "application/json")
+            doOutput = true
+        }
+
+        val requestBody = JSONObject().apply {
+            put("tag_name", tagName)
+            put("name", "Poobi $tagName")
+            put("body", "Automated release for version $tagName.")
+            put("draft", false)
+            put("prerelease", false)
+        }.toString()
+
+        createConn.outputStream.use { it.write(requestBody.toByteArray()) }
+
+        val responseCode = createConn.responseCode
+        val responseBody = (if (responseCode in 200..299) createConn.inputStream else createConn.errorStream)
+            ?.bufferedReader()?.use { it.readText() } ?: ""
+
+        val releaseJson: JSONObject
+        if (responseCode == 201) {
+            releaseJson = JSONObject(responseBody)
+            println("Created new release on GitHub.")
+        } else if (responseCode == 422) {
+            println("Release already exists. Fetching existing release info...")
+            val getUrl = URL("https://api.github.com/repos/$repoOwner/$repoName/releases/tags/$tagName")
+            val getConn = (getUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("User-Agent", "Poobi-Gradle-Publisher")
+                setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            }
+            releaseJson = JSONObject(getConn.inputStream.bufferedReader().use { it.readText() })
+        } else {
+            throw GradleException("Failed to create GitHub release (Code: $responseCode): $responseBody")
+        }
+
+        val uploadUrlTemplate = releaseJson.getString("upload_url")
+        val baseUploadUrl = uploadUrlTemplate.substringBefore("{")
+
+        val apks = listOf(
+            File(layout.buildDirectory.asFile.get(), "outputs/apk/arm64/debug/app-arm64-debug.apk"),
+            File(layout.buildDirectory.asFile.get(), "outputs/apk/armv7/debug/app-armv7-debug.apk"),
+            File(layout.buildDirectory.asFile.get(), "outputs/apk/x86/debug/app-x86-debug.apk"),
+            File(layout.buildDirectory.asFile.get(), "outputs/apk/x86_64/debug/app-x86_64-debug.apk")
+        )
+
+        for (apk in apks) {
+            if (!apk.exists()) {
+                println("Warning: APK not found at ${apk.absolutePath}, skipping.")
+                continue
+            }
+
+            val assetName = "Poobi-${tagName}-${apk.name}"
+            val uploadUrl = URL("$baseUploadUrl?name=$assetName")
+            println("Uploading $assetName (${apk.length() / (1024 * 1024)} MB)...")
+
+            val uploadConn = (uploadUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("User-Agent", "Poobi-Gradle-Publisher")
+                setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+                setRequestProperty("Content-Type", "application/vnd.android.package-archive")
+                doOutput = true
+                setFixedLengthStreamingMode(apk.length())
+            }
+
+            apk.inputStream().use { input ->
+                uploadConn.outputStream.use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            if (uploadConn.responseCode in 200..299) {
+                println("Successfully uploaded $assetName")
+            } else {
+                val err = uploadConn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                println("Failed uploading $assetName (Code: ${uploadConn.responseCode}): $err")
+            }
+        }
+
+        println("Release $tagName completed successfully!")
     }
 }
