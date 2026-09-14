@@ -70,24 +70,24 @@ The "Torrents" tab (powered by Torrentio) allows for high-bitrate streaming dire
 ## Choosing the Right APK
 
 Before downloading, you need to know which architecture your Android TV uses:
-*   **`app-arm64-debug.apk`**: For modern 64-bit ARM devices (e.g., Nvidia Shield, newer high-end TVs).
-*   **`app-armv7-debug.apk`**: For most common budget boxes and sticks (e.g., Chromecast with Google TV, Fire TV Stick, Xiaomi Mi Box).
-*   **`app-x86_64-debug.apk`** or **`app-x86-debug.apk`**: Rare x86 devices or desktop PCs using android.
+*   **`Poobi-v4.3.1-app-arm64-release.apk`**: For modern 64-bit ARM devices (e.g., Nvidia Shield, newer high-end TVs).
+*   **`Poobi-v4.3.1-app-armv7-release.apk`**: For most common budget boxes and sticks (e.g., Chromecast with Google TV, Fire TV Stick, Xiaomi Mi Box).
+*   **`Poobi-v4.3.1-app-x86_64-release.apk `** or **`Poobi-v4.3.1-app-x86-release.apk`**: Rare x86 devices or desktop PCs using android.
 
 **How to find your architecture:**
 *   **Method 1 (Recommended):**
     1.  Go to **Settings** → **Device Preferences** → **About** (or **Settings** → **System** → **About** on Google TV).
     2.  Scroll down to **Kernel version**.
     3.  Check the text in that section:
-        *   If it contains **`aarch64`**, use **`app-arm64-debug.apk`**.
-        *   If it contains **`armv7l`**, use **`app-armv7-debug.apk`**.
-*   **Method 2 (Trial & Error):** Try installing **`app-arm64-debug.apk`** first. If you get an "App not installed" or "Package appears to be invalid" error, your device is 32-bit—install **`app-armv7-debug.apk`** instead.
+        *   If it contains **`aarch64`**, use **`Poobi-v4.3.1-app-arm64-release.apk`**.
+        *   If it contains **`armv7l`**, use **`Poobi-v4.3.1-app-armv7-release.apk`**.
+*   **Method 2 (Trial & Error):** Try installing **`Poobi-v4.3.1-app-arm64-release.apk`** first. If you get an "App not installed" or "Package appears to be invalid" error, your device is 32-bit—install **`Poobi-v4.3.1-app-armv7-release.apk`** instead.
 *   **Method 3 (ADB):** If you have ADB enabled, run: `adb shell getprop ro.product.cpu.abi`
 
 ## Method 1 — Install Directly on Your TV
 
 1. Go to the [Releases page](https://github.com/Tophness/Poobi/releases)
-2. Download the latest APK corresponding to your architecture (e.g., `app-arm64-debug.apk`)
+2. Download the latest APK corresponding to your architecture (e.g., `Poobi-v4.3.1-app-arm64-release.apk`)
 3. Transfer the APK to your Android TV using one of these methods:
    * USB drive
    * Send Files to TV
@@ -104,7 +104,7 @@ Download the Android Platform Tools for your system:
 * **Windows:** [Platform Tools (Windows)](https://dl.google.com/android/repository/platform-tools-latest-windows.zip)
 * **Linux:** [Platform Tools (Linux)](https://dl.google.com/android/repository/platform-tools-latest-linux.zip)
 
-Extract the archive and copy your APK (e.g., `app-arm64-debug.apk`) into the extracted `platform-tools` folder.
+Extract the archive and copy your APK (e.g., `Poobi-v4.3.1-app-arm64-release.apk`) into the extracted `platform-tools` folder.
 
 ---
 
@@ -131,13 +131,13 @@ Enable:
 #### Windows
 ```bat
 adb connect <YourTVsIP>
-adb install app-arm64-debug.apk
+adb install Poobi-v4.3.1-app-arm64-release.apk
 ```
 
 #### Linux
 ```bash
 ./adb connect <YourTVsIP>
-./adb install app-arm64-debug.apk
+./adb install Poobi-v4.3.1-app-arm64-release.apk
 ```
 
 ## Settings & Configuration
