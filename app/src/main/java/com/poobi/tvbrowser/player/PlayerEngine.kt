@@ -452,6 +452,9 @@ class PlayerEngine(
     ) {
         if (initialPositionMs == 0L) {
             saveProgress()
+            hasInitialQualitySelected = false
+            _qualityOptions.value = emptyList()
+            _currentQuality.value = null
         }
 
         var cleanUrl = videoUrl
@@ -708,37 +711,54 @@ class PlayerEngine(
             }
         }
 
+        val hasDistinctOptions = options.any { it is QualityOption.DistinctUrl }
+
         for (group in tracks.groups) {
             if (group.type == C.TRACK_TYPE_VIDEO && group.isSupported) {
                 if (group.isAdaptiveSupported && options.none { it is QualityOption.Auto }) {
                     options.add(QualityOption.Auto())
                 }
-                
-                for (i in 0 until group.length) {
-                    if (group.isTrackSupported(i)) {
-                        val format = group.getTrackFormat(i)
-                        val width = format.width
-                        val height = format.height
-                        val bitrate = format.bitrate
-                        val label = when {
-                            height > 0 -> "${height}p"
-                            width > 0 -> "${width}p"
-                            else -> format.label ?: "Track ${i + 1}"
-                        }
-                        val bitrateLabel = if (bitrate > 0) " (${bitrate / 1000} kbps)" else ""
-                        options.add(
-                            QualityOption.Native(
-                                name = "$label$bitrateLabel",
-                                trackGroup = group.mediaTrackGroup,
-                                trackIndex = i
+
+                val shouldIncludeNative = group.length > 1 || group.isAdaptiveSupported || !hasDistinctOptions
+
+                if (shouldIncludeNative) {
+                    for (i in 0 until group.length) {
+                        if (group.isTrackSupported(i)) {
+                            val format = group.getTrackFormat(i)
+                            val width = format.width
+                            val height = format.height
+                            val bitrate = format.bitrate
+                            val label = when {
+                                height > 0 -> "${height}p"
+                                width > 0 -> "${width}p"
+                                else -> format.label ?: "Track ${i + 1}"
+                            }
+                            val bitrateLabel = if (bitrate > 0) " (${bitrate / 1000} kbps)" else ""
+                            options.add(
+                                QualityOption.Native(
+                                    name = "$label$bitrateLabel",
+                                    trackGroup = group.mediaTrackGroup,
+                                    trackIndex = i
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
         }
 
         _qualityOptions.value = options
+
+        val currentUrl = lastVideoUrl
+        val currentDistinct = options.firstOrNull { it is QualityOption.DistinctUrl && it.url == currentUrl }
+
+        if (currentDistinct != null) {
+            _currentQuality.value = currentDistinct
+            hasInitialQualitySelected = true
+            val displayName = currentDistinct.name.uppercase()
+            updateQualityButtonText(displayName)
+            return
+        }
 
         if (!hasInitialQualitySelected && options.any { it is QualityOption.Native }) {
             val highestNative = options.filterIsInstance<QualityOption.Native>()
@@ -753,32 +773,36 @@ class PlayerEngine(
             }
         }
 
-        val currentUrl = lastVideoUrl
-        val currentDistinct = options.firstOrNull { it is QualityOption.DistinctUrl && it.url == currentUrl }
-        if (currentDistinct != null) {
-            _currentQuality.value = currentDistinct
-        } else {
-            var selectedTrackCount = 0
-            var singleSelectedTrack: QualityOption? = null
-            
-            for (opt in options) {
-                if (opt is QualityOption.Native) {
-                    for (group in tracks.groups) {
-                        if (group.mediaTrackGroup == opt.trackGroup && group.isTrackSelected(opt.trackIndex)) {
-                            selectedTrackCount++
-                            if (singleSelectedTrack == null) {
-                                singleSelectedTrack = opt
-                            }
+        var selectedTrackCount = 0
+        var singleSelectedTrack: QualityOption? = null
+        
+        for (opt in options) {
+            if (opt is QualityOption.Native) {
+                for (group in tracks.groups) {
+                    if (group.mediaTrackGroup == opt.trackGroup && group.isTrackSelected(opt.trackIndex)) {
+                        selectedTrackCount++
+                        if (singleSelectedTrack == null) {
+                            singleSelectedTrack = opt
                         }
                     }
                 }
             }
+        }
 
-            _currentQuality.value = if (selectedTrackCount == 1) {
-                singleSelectedTrack
+        _currentQuality.value = if (selectedTrackCount == 1) {
+            singleSelectedTrack
+        } else {
+            options.firstOrNull { it is QualityOption.Auto }
+        }
+
+        val active = _currentQuality.value
+        if (active != null) {
+            val displayName = if (active is QualityOption.Native && active.name.contains(" ")) {
+                active.name.substringBefore(" ").uppercase()
             } else {
-                options.firstOrNull { it is QualityOption.Auto }
+                active.name.uppercase()
             }
+            updateQualityButtonText(displayName)
         }
     }
 
@@ -815,6 +839,10 @@ class PlayerEngine(
     private fun playVideoInAlternateQuality(currentPos: Long, wasPlaying: Boolean, alternateUrl: String) {
         saveProgress()
         
+        hasInitialQualitySelected = true
+        val targetOption = _qualityOptions.value.firstOrNull { it is QualityOption.DistinctUrl && it.url == alternateUrl }
+        _currentQuality.value = targetOption
+        
         launchVideo(
             videoUrl = alternateUrl,
             title = lastVideoTitle,
@@ -829,6 +857,10 @@ class PlayerEngine(
             initialPositionMs = currentPos,
             isTrailer = lastIsTrailer
         )
+        
+        playerView?.post {
+            playerView?.player = exoPlayer
+        }
         exoPlayer?.playWhenReady = wasPlaying
     }
 
