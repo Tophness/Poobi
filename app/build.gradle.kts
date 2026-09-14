@@ -83,6 +83,20 @@ extensions.configure<ApplicationExtension> {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            val keystoreFile = project.findProperty("POOBI_KEYSTORE_FILE") as? String
+            if (keystoreFile != null && File(keystoreFile).exists()) {
+                storeFile = File(keystoreFile)
+                storePassword = project.findProperty("POOBI_KEYSTORE_PASSWORD") as? String
+                keyAlias = project.findProperty("POOBI_KEY_ALIAS") as? String
+                keyPassword = project.findProperty("POOBI_KEY_PASSWORD") as? String
+            } else {
+                initWith(getByName("debug"))
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -91,6 +105,7 @@ extensions.configure<ApplicationExtension> {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -182,8 +197,8 @@ dependencies {
 
 tasks.register("publishGithubRelease") {
     group = "publishing"
-    description = "Builds all debug APKs, creates a GitHub release with the latest Git tag, and uploads the APKs."
-    dependsOn("assembleDebug")
+    description = "Builds all signed release APKs, creates a GitHub release with the latest Git tag, and uploads the APKs."
+    dependsOn("assembleRelease")
 
     doLast {
         val repoOwner = "Tophness"
@@ -227,8 +242,12 @@ tasks.register("publishGithubRelease") {
             }
         }
 
-        val tagName = if (version.startsWith("v", ignoreCase = true)) version else "v$version"
-        println("Publishing GitHub Release: $tagName for $repoOwner/$repoName (Latest remote was: v$latestRemoteTag)")
+        val tagName = if (version.startsWith("v", ignoreCase = true)) {
+            "V" + version.substring(1)
+        } else {
+            "V$version"
+        }
+        println("Publishing GitHub Release: $tagName for $repoOwner/$repoName (Latest remote was: V$latestRemoteTag)")
 
         try {
             project.providers.exec {
@@ -293,10 +312,10 @@ tasks.register("publishGithubRelease") {
         val baseUploadUrl = uploadUrlTemplate.substringBefore("{")
 
         val apks = listOf(
-            File(layout.buildDirectory.asFile.get(), "outputs/apk/arm64/debug/app-arm64-debug.apk"),
-            File(layout.buildDirectory.asFile.get(), "outputs/apk/armv7/debug/app-armv7-debug.apk"),
-            File(layout.buildDirectory.asFile.get(), "outputs/apk/x86/debug/app-x86-debug.apk"),
-            File(layout.buildDirectory.asFile.get(), "outputs/apk/x86_64/debug/app-x86_64-debug.apk")
+            File(layout.buildDirectory.asFile.get(), "outputs/apk/arm64/release/app-arm64-release.apk"),
+            File(layout.buildDirectory.asFile.get(), "outputs/apk/armv7/release/app-armv7-release.apk"),
+            File(layout.buildDirectory.asFile.get(), "outputs/apk/x86/release/app-x86-release.apk"),
+            File(layout.buildDirectory.asFile.get(), "outputs/apk/x86_64/release/app-x86_64-release.apk")
         )
 
         for (apk in apks) {
