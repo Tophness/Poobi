@@ -345,18 +345,27 @@ class SettingsActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 driveSyncManager.initService(account)
-                val success = driveSyncManager.downloadSettings()
-                if (success) {
-                    syncToPython()
-                    Toast.makeText(this@SettingsActivity, "Settings synced from Drive!", Toast.LENGTH_LONG).show()
-                    recreate()
-                } else {
-                    driveSyncManager.uploadSettings()
-                    isGoogleSignedInState.value = true
-                    googleSignInStatusState.value = "Signed in as: ${account.email}"
+                isGoogleSignedInState.value = true
+                googleSignInStatusState.value = "Signed in as: ${account.email}"
+
+                when (val outcome = driveSyncManager.syncSettings()) {
+                    com.poobi.tvbrowser.shared.sync.SyncOutcome.RESTORED_FROM_REMOTE -> {
+                        syncToPython()
+                        Toast.makeText(this@SettingsActivity, "Settings restored from Google Drive (cloud was newer).", Toast.LENGTH_LONG).show()
+                        recreate()
+                    }
+                    com.poobi.tvbrowser.shared.sync.SyncOutcome.UPLOADED_LOCAL_TO_REMOTE -> {
+                        Toast.makeText(this@SettingsActivity, "Local settings uploaded to Google Drive (local was newer).", Toast.LENGTH_LONG).show()
+                    }
+                    com.poobi.tvbrowser.shared.sync.SyncOutcome.ALREADY_UP_TO_DATE -> {
+                        Toast.makeText(this@SettingsActivity, "Settings are already synchronized.", Toast.LENGTH_SHORT).show()
+                    }
+                    com.poobi.tvbrowser.shared.sync.SyncOutcome.FAILED -> {
+                        Toast.makeText(this@SettingsActivity, "Cloud sync failed.", Toast.LENGTH_SHORT).show()
+                    }
                 }
             } catch (e: Exception) {
-                Toast.makeText(this@SettingsActivity, "Sync failed: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@SettingsActivity, "Sync error: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -1946,59 +1955,152 @@ class SettingsActivity : AppCompatActivity() {
         val isSignedState by remember { isGoogleSignedInState }
         var isProgressVisible by remember { mutableStateOf(false) }
 
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            PanelHeader("Google Drive Sync")
-            Text("Sync your settings, bookmarks, and history across devices using your own Google Drive storage (App Data folder). This is private and only accessible by this app.", color = Color.Gray)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            item {
+                PanelHeader("Local Backup & Restore (JSON)")
+                Text(
+                    text = "Export or restore all settings, bookmarks, and configuration to an offline JSON file in your device's Downloads folder without requiring a Google account.",
+                    color = Color.Gray,
+                    fontSize = 13.sp
+                )
+            }
 
-            Text("Status: $syncStatus", color = Color.White, fontWeight = FontWeight.Bold)
-
-            if (isSignedState) {
+            item {
                 Button(
                     onClick = {
-                        onSignOutRequested?.invoke {
-                            googleSignInStatusState.value = "Not signed in."
-                            isGoogleSignedInState.value = false
-                            Toast.makeText(this@SettingsActivity, "Signed out successfully", Toast.LENGTH_SHORT).show()
+                        lifecycleScope.launch {
+                            isProgressVisible = true
+                            val file = driveSyncManager.saveToLocalBackupFile()
+                            isProgressVisible = false
+                            if (file != null) {
+                                Toast.makeText(this@SettingsActivity, "Backup saved to: ${file.name}", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(this@SettingsActivity, "Failed to save local backup file.", Toast.LENGTH_LONG).show()
+                            }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                     modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
                 ) {
-                    Text("Logout", color = Color.White)
+                    Text("Save Backup to Downloads (JSON)", color = Color.White, fontWeight = FontWeight.Bold)
                 }
-            } else {
+            }
+
+            item {
                 Button(
                     onClick = {
-                        onSignInRequested?.invoke()
+                        lifecycleScope.launch {
+                            isProgressVisible = true
+                            val restored = driveSyncManager.restoreFromLocalBackupFile()
+                            isProgressVisible = false
+                            if (restored) {
+                                syncToPython()
+                                Toast.makeText(this@SettingsActivity, "Settings & data restored successfully!", Toast.LENGTH_LONG).show()
+                                recreate()
+                            } else {
+                                Toast.makeText(this@SettingsActivity, "No backup JSON file found in Downloads folder!", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4)),
                     modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
                 ) {
-                    Text("Sign in with Google")
+                    Text("Restore from Downloads Backup (JSON)", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(10.dp))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF333338)))
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            item {
+                PanelHeader("Google Drive Cloud Sync")
+                Text(
+                    text = "Sync your settings, bookmarks, and history across devices using your private Google Drive App Data folder. Newer settings automatically take priority.",
+                    color = Color.Gray,
+                    fontSize = 13.sp
+                )
+            }
+
+            item {
+                Text("Status: $syncStatus", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+
+            if (isSignedState) {
+                item {
+                    Button(
+                        onClick = {
+                            onSignOutRequested?.invoke {
+                                googleSignInStatusState.value = "Not signed in."
+                                isGoogleSignedInState.value = false
+                                Toast.makeText(this@SettingsActivity, "Signed out successfully", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                        modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
+                    ) {
+                        Text("Logout", color = Color.White)
+                    }
+                }
+            } else {
+                item {
+                    Button(
+                        onClick = { onSignInRequested?.invoke() },
+                        modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
+                    ) {
+                        Text("Sign in with Google")
+                    }
                 }
             }
 
             if (isProgressVisible) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                item {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Color(0xFF00BCD4))
+                    }
+                }
             }
 
-            Button(
-                onClick = {
-                    val account = GoogleSignIn.getLastSignedInAccount(this@SettingsActivity)
-                    if (account != null) {
-                        lifecycleScope.launch {
-                            isProgressVisible = true
-                            driveSyncManager.initService(account)
-                            val success = driveSyncManager.uploadSettings()
-                            isProgressVisible = false
-                            Toast.makeText(this@SettingsActivity, if (success) "Force sync uploaded successfully!" else "Sync failed.", Toast.LENGTH_SHORT).show()
+            item {
+                Button(
+                    onClick = {
+                        val account = GoogleSignIn.getLastSignedInAccount(this@SettingsActivity)
+                        if (account != null) {
+                            lifecycleScope.launch {
+                                isProgressVisible = true
+                                driveSyncManager.initService(account)
+                                val outcome = driveSyncManager.syncSettings()
+                                isProgressVisible = false
+                                when (outcome) {
+                                    com.poobi.tvbrowser.shared.sync.SyncOutcome.RESTORED_FROM_REMOTE -> {
+                                        syncToPython()
+                                        Toast.makeText(this@SettingsActivity, "Cloud backup was newer. Restored!", Toast.LENGTH_LONG).show()
+                                        recreate()
+                                    }
+                                    com.poobi.tvbrowser.shared.sync.SyncOutcome.UPLOADED_LOCAL_TO_REMOTE -> {
+                                        Toast.makeText(this@SettingsActivity, "Local settings were newer. Uploaded to Drive!", Toast.LENGTH_LONG).show()
+                                    }
+                                    com.poobi.tvbrowser.shared.sync.SyncOutcome.ALREADY_UP_TO_DATE -> {
+                                        Toast.makeText(this@SettingsActivity, "Settings are already synchronized.", Toast.LENGTH_SHORT).show()
+                                    }
+                                    com.poobi.tvbrowser.shared.sync.SyncOutcome.FAILED -> {
+                                        Toast.makeText(this@SettingsActivity, "Cloud sync failed.", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        } else {
+                            Toast.makeText(this@SettingsActivity, "Please sign in to Google first", Toast.LENGTH_SHORT).show()
                         }
-                    } else {
-                        Toast.makeText(this@SettingsActivity, "Please sign in to Google first", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
-            ) {
-                Text("Force Sync Now")
+                    },
+                    modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
+                ) {
+                    Text("Force Sync Now (Two-Way)")
+                }
             }
         }
     }
@@ -2086,6 +2188,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 prefs.edit().apply {
+                    putLong("settings_last_modified", System.currentTimeMillis())
                     putBoolean("light_theme", lightTheme)
                     putInt("restore_tabs_pref", restoreOption)
                     putInt("history_limit", histLimit)

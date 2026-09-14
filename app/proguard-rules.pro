@@ -31,3 +31,18 @@
 -keep class androidx.media3.** { *; }
 -keep class com.poobi.tvbrowser.shared.update.** { *; }
 -keep class com.poobi.tvbrowser.BuildConfig { *; }
+
+-keepclassmembers class * {
+    @com.google.api.client.util.Key <fields>;
+}
+
+-keep class com.google.api.services.drive.** { *; }
+-keep class com.google.api.client.** { *; }
+-keep class com.google.api.client.json.** { *; }
+-keep class com.google.api.client.json.gson.** { *; }
+-dontwarn com.google.api.client.**
+-dontwarn com.google.api.services.drive.**
+-dontwarn org.apache.http.**
+-dontwarn com.google.common.**
+
+-keepattributes Signature, *Annotation*, EnclosingMethod, InnerClasses
