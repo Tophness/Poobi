@@ -6,40 +6,80 @@ import java.net.URL
 import java.io.File
 import org.json.JSONObject
 
-fun getGitVersionName(): String {
-    return try {
-        val byteOut = ByteArrayOutputStream()
-        project.providers.exec {
-            commandLine("git", "describe", "--tags", "--always")
-            standardOutput = byteOut
-        }.result.get()
-        val desc = byteOut.toString().trim().removePrefix("v").removePrefix("V")
+fun runGit(vararg args: String): String {
+    val isWindows = System.getProperty("os.name").lowercase().contains("windows")
+    val gitExecutables = if (isWindows) {
+        listOf(
+            "git",
+            "git.exe",
+            "C:\\Program Files\\Git\\cmd\\git.exe",
+            "C:\\Program Files\\Git\\bin\\git.exe",
+            "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
+            "${System.getenv("LOCALAPPDATA")}\\Programs\\Git\\cmd\\git.exe"
+        )
+    } else {
+        listOf("git", "/usr/bin/git", "/usr/local/bin/git")
+    }
 
-        val regex = Regex("""^(\d+(\.\d+)*)-(\d+)-g[0-9a-fA-F]+$""")
+    for (gitPath in gitExecutables) {
+        try {
+            val process = ProcessBuilder(listOf(gitPath) + args.toList())
+                .directory(rootDir)
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            val exitCode = process.waitFor()
+            if (exitCode == 0 && output.isNotEmpty()) {
+                return output
+            }
+        } catch (_: Exception) {}
+    }
+    return ""
+}
+
+fun getGitVersionName(): String {
+    val descRaw = runGit("describe", "--tags", "--always")
+    if (descRaw.isNotEmpty()) {
+        val desc = descRaw.removePrefix("v").removePrefix("V")
+        val regex = Regex("""^(\d+(\.\d+)*)-(\d+)-g[0-9a-fA-F]+.*$""")
         val match = regex.find(desc)
         if (match != null) {
-            "${match.groupValues[1]}.${match.groupValues[3]}"
-        } else if (desc.matches(Regex("""^\d+(\.\d+)*$"""))) {
-            desc
-        } else {
-            "4.3.1"
+            val base = match.groupValues[1]
+            val ahead = match.groupValues[3]
+            return "$base.$ahead"
         }
-    } catch (e: Exception) {
-        "4.3.1"
+        val clean = desc.substringBefore("-")
+        if (clean.matches(Regex("""^\d+(\.\d+)*$"""))) {
+            return clean
+        }
     }
+
+    val latestTag = runGit("describe", "--tags", "--abbrev=0").removePrefix("v").removePrefix("V")
+    if (latestTag.isNotEmpty() && latestTag.matches(Regex("""^\d+(\.\d+)*$"""))) {
+        val revCount = runGit("rev-list", "--count", "HEAD")
+        return if (revCount.isNotEmpty()) "$latestTag.$revCount" else latestTag
+    }
+
+    val revCount = runGit("rev-list", "--count", "HEAD")
+    return if (revCount.isNotEmpty()) "1.0.$revCount" else "1.0.0"
 }
 
 fun getGitVersionCode(): Int {
-    return try {
-        val byteOut = ByteArrayOutputStream()
-        project.providers.exec {
-            commandLine("git", "rev-list", "--count", "HEAD")
-            standardOutput = byteOut
-        }.result.get()
-        byteOut.toString().trim().toIntOrNull() ?: 1
-    } catch (e: Exception) {
-        1
+    val revCount = runGit("rev-list", "--count", "HEAD")
+    return revCount.toIntOrNull() ?: 1
+}
+
+fun isVersionGreater(v1: String, v2: String): Boolean {
+    val p1 = v1.split("-")[0].split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
+    val p2 = v2.split("-")[0].split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
+    val length = maxOf(p1.size, p2.size)
+    for (i in 0 until length) {
+        val n1 = p1.getOrElse(i) { 0 }
+        val n2 = p2.getOrElse(i) { 0 }
+        if (n1 > n2) return true
+        if (n1 < n2) return false
     }
+    return false
 }
 
 plugins {
@@ -128,6 +168,7 @@ extensions.configure<ApplicationExtension> {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -232,7 +273,7 @@ tasks.register("publishGithubRelease") {
         }
 
         var version = getGitVersionName()
-        if (latestRemoteTag.isNotEmpty() && (version == "1.0.0" || version <= latestRemoteTag)) {
+        if (latestRemoteTag.isNotEmpty() && !isVersionGreater(version, latestRemoteTag)) {
             val parts = latestRemoteTag.split(".").map { it.toIntOrNull() ?: 0 }.toMutableList()
             if (parts.size >= 2) {
                 parts[parts.lastIndex] = parts.last() + 1

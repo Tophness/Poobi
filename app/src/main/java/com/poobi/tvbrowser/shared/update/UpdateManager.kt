@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
+import com.poobi.tvbrowser.BuildConfig
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,6 +64,10 @@ object UpdateManager {
 
     fun checkForUpdates(context: Context, isManual: Boolean = false) {
         if (_isChecking.value || _isDownloading.value) return
+        if (BuildConfig.DEBUG && !isManual) {
+            Log.d(TAG, "Skipping automatic update check in debug build.")
+            return
+        }
         _isChecking.value = true
 
         CoroutineScope(Dispatchers.IO).launch {
@@ -85,6 +90,13 @@ object UpdateManager {
                     val currentVersion = getAppVersionName(context).removePrefix("v").removePrefix("V")
 
                     if (isNewerVersion(remoteVersion, currentVersion)) {
+                        if (BuildConfig.DEBUG && isManual) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Update found ($tagName), but cannot install over a debug build.", Toast.LENGTH_LONG).show()
+                            }
+                            return@launch
+                        }
+
                         val releaseNotes = releaseJson.optString("body", "No changelog provided.")
                         val assets = releaseJson.optJSONArray("assets")
 
@@ -154,8 +166,11 @@ object UpdateManager {
 
     private fun isNewerVersion(remote: String, current: String): Boolean {
         try {
-            val rParts = remote.split("-")[0].split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
-            val cParts = current.split("-")[0].split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
+            val rClean = remote.split("-")[0].trim()
+            val cClean = current.split("-")[0].trim()
+
+            val rParts = rClean.split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
+            val cParts = cClean.split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
             val length = maxOf(rParts.size, cParts.size)
 
             for (i in 0 until length) {

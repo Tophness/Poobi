@@ -529,6 +529,7 @@ class SettingsActivity : AppCompatActivity() {
             DropdownSettingRow("Bookmark Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), bookmarkIconOption) { bookmarkIconOption = it }
             Spacer(modifier = Modifier.height(8.dp))
             val isCheckingUpdates by UpdateManager.isChecking.collectAsState()
+            val currentVerDisplay = "${UpdateManager.getAppVersionName(this@SettingsActivity)}${if (BuildConfig.DEBUG) "-debug" else ""}"
             Button(
                 onClick = { UpdateManager.checkForUpdates(this@SettingsActivity, isManual = true) },
                 enabled = !isCheckingUpdates,
@@ -536,7 +537,7 @@ class SettingsActivity : AppCompatActivity() {
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4))
             ) {
                 Text(
-                    text = if (isCheckingUpdates) "Checking for Updates..." else "Check for Updates (v${UpdateManager.getAppVersionName(this@SettingsActivity)})",
+                    text = if (isCheckingUpdates) "Checking for Updates..." else "Check for Updates (v$currentVerDisplay)",
                     color = Color.Black,
                     fontWeight = FontWeight.Bold
                 )

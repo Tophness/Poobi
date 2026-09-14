@@ -21,6 +21,7 @@ import com.chaquo.python.android.AndroidPlatform
 import com.poobi.tvbrowser.browser.AdBlockManager
 import com.poobi.tvbrowser.browser.BrowserViewModel
 import com.poobi.tvbrowser.browser.CursorManager
+import com.poobi.tvbrowser.BuildConfig
 import com.poobi.tvbrowser.player.PlayerEngine
 import com.poobi.tvbrowser.shared.PythonDialogListener
 import com.poobi.tvbrowser.shared.cleanKodiText
@@ -213,7 +214,9 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             delay(4000)
-            UpdateManager.checkForUpdates(this@MainActivity, isManual = false)
+            if (!BuildConfig.DEBUG) {
+                UpdateManager.checkForUpdates(this@MainActivity, isManual = false)
+            }
         }
 
         lifecycleScope.launch {
