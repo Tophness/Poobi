@@ -3,6 +3,7 @@ package com.poobi.tvbrowser
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -368,6 +369,26 @@ class SettingsActivity : AppCompatActivity() {
                 Toast.makeText(this@SettingsActivity, "Sync error: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    private fun ensureStoragePermission(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!android.os.Environment.isExternalStorageManager()) {
+                Toast.makeText(this, "Please grant All Files Access to save/restore from Downloads", Toast.LENGTH_LONG).show()
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                        data = android.net.Uri.parse("package:$packageName")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    startActivity(intent)
+                }
+                return false
+            }
+        }
+        return true
     }
 
     private suspend fun syncToPython() = withContext(Dispatchers.IO) {
@@ -1961,7 +1982,7 @@ class SettingsActivity : AppCompatActivity() {
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                PanelHeader("Local Backup & Restore (JSON)")
+                PanelHeader("Local Backup & Restore")
                 Text(
                     text = "Export or restore all settings, bookmarks, and configuration to an offline JSON file in your device's Downloads folder without requiring a Google account.",
                     color = Color.Gray,
@@ -1972,6 +1993,7 @@ class SettingsActivity : AppCompatActivity() {
             item {
                 Button(
                     onClick = {
+                        if (!ensureStoragePermission()) return@Button
                         lifecycleScope.launch {
                             isProgressVisible = true
                             val file = driveSyncManager.saveToLocalBackupFile()
@@ -1986,13 +2008,14 @@ class SettingsActivity : AppCompatActivity() {
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                     modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
                 ) {
-                    Text("Save Backup to Downloads (JSON)", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Save Backup", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
 
             item {
                 Button(
                     onClick = {
+                        if (!ensureStoragePermission()) return@Button
                         lifecycleScope.launch {
                             isProgressVisible = true
                             val restored = driveSyncManager.restoreFromLocalBackupFile()
@@ -2009,7 +2032,7 @@ class SettingsActivity : AppCompatActivity() {
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4)),
                     modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
                 ) {
-                    Text("Restore from Downloads Backup (JSON)", color = Color.Black, fontWeight = FontWeight.Bold)
+                    Text("Restore Backup", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
             }
 
