@@ -4,16 +4,36 @@
     WASM Decryption & Host-Token Generation Engine (with URL-Encoded Headers, Caching & SSL Bypasses)
 """
 
+import io
 import os
 import re
 import json
 import base64
 import requests
 import traceback
-from urllib.parse import urlparse, urljoin, unquote, quote_plus
+from urllib.parse import urlparse, urljoin, unquote, quote_plus, parse_qs
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+_CACHED_WASM_KEY = None
+_CACHED_WASM_BYTES = None
+
+
+def _instantiate_wasm_memory(wasm_bytes):
+    import pywasm
+
+    runtime = pywasm.core.Runtime() if hasattr(pywasm, 'core') else pywasm.Runtime()
+    module_desc = getattr(pywasm, 'ModuleDesc', None) or getattr(pywasm.core, 'ModuleDesc', None)
+    
+    if module_desc:
+        module = module_desc.from_reader(io.BytesIO(wasm_bytes))
+        instance = runtime.instance(module)
+    else:
+        instance = runtime.instance_from_file(io.BytesIO(wasm_bytes))
+
+    return runtime, instance
+
 
 class source:
     def __init__(self):
@@ -167,65 +187,57 @@ class source:
                         wasm_url = vs_obj.get('wasm_url')
 
                         if enc_b64 and wasm_url:
-                            # Try pywasm decryption
                             try:
-                                import pywasm
-                                from resources.lib.modules import control
-                                
-                                wasm_path = os.path.join(control.dataPath, 'vidsrc.wasm')
-                                wasm_resp = s.get(wasm_url, headers={'Referer': inner_player_url}, timeout=10, verify=False)
-                                with open(wasm_path, 'wb') as f:
-                                    f.write(wasm_resp.content)
+                                global _CACHED_WASM_KEY, _CACHED_WASM_BYTES
 
-                                # Load pywasm runtime safely (compat for v1.x and v2.x)
-                                if hasattr(pywasm, 'core'):
-                                    runtime = pywasm.core.Runtime()
-                                    m = runtime.instance_from_file(wasm_path)
-                                    raw_enc = base64.b64decode(enc_b64)
-                                    enc_len = len(raw_enc)
-                                    ptr = runtime.invocate(m, 'alloc', [enc_len])[0]
+                                parsed_query = parse_qs(urlparse(wasm_url).query)
+                                current_w_key = parsed_query.get('w', [wasm_url])[0]
 
-                                    memory_data = None
-                                    for attr_path in ['machine.store.mems', 'machine.memory_list', 'memory_list', 'store.mems']:
-                                        try:
-                                            obj = runtime
-                                            for part in attr_path.split('.'):
-                                                obj = getattr(obj, part)
-                                            memory_data = obj[0].data
-                                            break
-                                        except Exception:
-                                            pass
+                                if _CACHED_WASM_KEY != current_w_key or _CACHED_WASM_BYTES is None:
+                                    wasm_resp = s.get(
+                                        wasm_url,
+                                        headers={'Referer': inner_player_url},
+                                        timeout=10,
+                                        verify=False
+                                    )
+                                    _CACHED_WASM_BYTES = wasm_resp.content
+                                    _CACHED_WASM_KEY = current_w_key
 
-                                    if memory_data is None:
-                                        memory_data = m.exports.memory.buffer
+                                runtime, m = _instantiate_wasm_memory(_CACHED_WASM_BYTES)
+                                raw_enc = base64.b64decode(enc_b64)
+                                enc_len = len(raw_enc)
+                                ptr = runtime.invocate(m, 'alloc', [enc_len])[0]
 
-                                    for i in range(enc_len):
-                                        memory_data[ptr + i] = raw_enc[i]
+                                memory_data = None
+                                for attr_path in ['machine.store.mems', 'machine.memory_list', 'memory_list', 'store.mems']:
+                                    try:
+                                        obj = runtime
+                                        for part in attr_path.split('.'):
+                                            obj = getattr(obj, part)
+                                        memory_data = obj[0].data
+                                        break
+                                    except Exception:
+                                        pass
 
-                                    out_len = runtime.invocate(m, 'decrypt', [ptr, enc_len])[0]
-                                    dec_bytes = bytearray(out_len)
-                                    for i in range(out_len):
-                                        dec_bytes[i] = memory_data[ptr + 12 + i]
-                                else:
-                                    runtime = pywasm.load(wasm_path)
-                                    raw_enc = base64.b64decode(enc_b64)
-                                    enc_len = len(raw_enc)
-                                    ptr = runtime.exec('alloc', [enc_len])
-                                    
-                                    memory_data = runtime.machine.memory_list[0].data
-                                    for i in range(enc_len):
-                                        memory_data[ptr + i] = raw_enc[i]
+                                if memory_data is None:
+                                    memory_data = m.exports.memory.buffer
 
-                                    out_len = runtime.exec('decrypt', [ptr, enc_len])
-                                    dec_bytes = bytearray(out_len)
-                                    for i in range(out_len):
-                                        dec_bytes[i] = memory_data[ptr + 12 + i]
+                                for i in range(enc_len):
+                                    memory_data[ptr + i] = raw_enc[i]
+
+                                out_len = runtime.invocate(m, 'decrypt', [ptr, enc_len])[0]
+                                dec_bytes = bytearray(out_len)
+                                for i in range(out_len):
+                                    dec_bytes[i] = memory_data[ptr + 12 + i]
 
                                 plaintext = dec_bytes.decode('utf-8', errors='replace')
-                                urls_in_plain = [l.strip() for l in plaintext.splitlines() if l.strip()]
+                                urls_in_plain = [
+                                    l.strip() for l in plaintext.splitlines()
+                                    if l.strip() and l.startswith('http')
+                                ]
                                 m3u8_candidates.extend(urls_in_plain)
                             except Exception as e:
-                                print(f"[VidSrc] [Step 5] pywasm decryption failed: {e}. Trying raw match fallback...", flush=True)
+                                print(f"[VidSrc] [Step 5] in-memory pywasm decryption failed: {e}. Trying raw match fallback...", flush=True)
                                 traceback.print_exc()
                                 urls_in_raw = re.findall(r'https?://[^\s\'"<>]+?\.m3u8[^\s\'"<>]*', api_resp.text)
                                 m3u8_candidates.extend(urls_in_raw)
