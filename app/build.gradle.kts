@@ -37,41 +37,49 @@ fun runGit(vararg args: String): String {
     return ""
 }
 
+fun parseSemanticVersion(tag: String): Triple<Int, Int, Int> {
+    val clean = tag.removePrefix("v").removePrefix("V").split("-")[0].trim()
+    val parts = clean.split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
+    val major = parts.getOrElse(0) { 1 }
+    val minor = parts.getOrElse(1) { 0 }
+    val patch = parts.getOrElse(2) { 0 }
+    return Triple(major, minor, patch)
+}
+
+fun getLatestGitTag(): String {
+    val raw = runGit("describe", "--tags", "--abbrev=0")
+    if (raw.isNotEmpty()) {
+        return raw.trim()
+    }
+    val allTags = runGit("tag", "--sort=-v:refname")
+    if (allTags.isNotEmpty()) {
+        return allTags.lines().firstOrNull { it.isNotBlank() }?.trim() ?: ""
+    }
+    return ""
+}
+
 fun getGitVersionName(): String {
-    val descRaw = runGit("describe", "--tags", "--always")
-    if (descRaw.isNotEmpty()) {
-        val desc = descRaw.removePrefix("v").removePrefix("V")
-        val regex = Regex("""^(\d+(\.\d+)*)-(\d+)-g[0-9a-fA-F]+.*$""")
-        val match = regex.find(desc)
-        if (match != null) {
-            val base = match.groupValues[1]
-            val ahead = match.groupValues[3]
-            return "$base.$ahead"
-        }
-        val clean = desc.substringBefore("-")
-        if (clean.matches(Regex("""^\d+(\.\d+)*$"""))) {
-            return clean
-        }
-    }
+    val tag = getLatestGitTag()
+    val (major, minor, patch) = parseSemanticVersion(tag)
 
-    val latestTag = runGit("describe", "--tags", "--abbrev=0").removePrefix("v").removePrefix("V")
-    if (latestTag.isNotEmpty() && latestTag.matches(Regex("""^\d+(\.\d+)*$"""))) {
-        val revCount = runGit("rev-list", "--count", "HEAD")
-        return if (revCount.isNotEmpty()) "$latestTag.$revCount" else latestTag
-    }
+    val exactTag = runGit("describe", "--tags", "--exact-match")
+    val isExactTag = exactTag.isNotEmpty()
 
-    val revCount = runGit("rev-list", "--count", "HEAD")
-    return if (revCount.isNotEmpty()) "1.0.$revCount" else "1.0.0"
+    return if (isExactTag) {
+        "$major.$minor.$patch"
+    } else {
+        "$major.$minor.${patch + 1}"
+    }
 }
 
 fun getGitVersionCode(): Int {
-    val revCount = runGit("rev-list", "--count", "HEAD")
-    return revCount.toIntOrNull() ?: 1
+    val countStr = runGit("rev-list", "--count", "HEAD")
+    return countStr.toIntOrNull() ?: 1
 }
 
 fun isVersionGreater(v1: String, v2: String): Boolean {
-    val p1 = v1.split("-")[0].split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
-    val p2 = v2.split("-")[0].split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
+    val p1 = v1.removePrefix("v").removePrefix("V").split("-")[0].split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
+    val p2 = v2.removePrefix("v").removePrefix("V").split("-")[0].split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
     val length = maxOf(p1.size, p2.size)
     for (i in 0 until length) {
         val n1 = p1.getOrElse(i) { 0 }
@@ -257,30 +265,33 @@ tasks.register("publishGithubRelease") {
 
         var latestRemoteTag = ""
         try {
-            val getReleasesUrl = URL("https://api.github.com/repos/$repoOwner/$repoName/releases/latest")
-            val getConn = (getReleasesUrl.openConnection() as HttpURLConnection).apply {
+            val listUrl = URL("https://api.github.com/repos/$repoOwner/$repoName/releases?per_page=5")
+            val listConn = (listUrl.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 setRequestProperty("Authorization", "Bearer $token")
                 setRequestProperty("Accept", "application/vnd.github+json")
                 setRequestProperty("User-Agent", "Poobi-Gradle-Publisher")
             }
-            if (getConn.responseCode == 200) {
-                val json = JSONObject(getConn.inputStream.bufferedReader().use { it.readText() })
-                latestRemoteTag = json.optString("tag_name", "").removePrefix("v").removePrefix("V")
+            if (listConn.responseCode == 200) {
+                val array = org.json.JSONArray(listConn.inputStream.bufferedReader().use { it.readText() })
+                for (i in 0 until array.length()) {
+                    val rel = array.getJSONObject(i)
+                    if (!rel.optBoolean("draft", false) && !rel.optBoolean("prerelease", false)) {
+                        val tag = rel.optString("tag_name", "").removePrefix("v").removePrefix("V")
+                        if (tag.isNotEmpty() && (latestRemoteTag.isEmpty() || isVersionGreater(tag, latestRemoteTag))) {
+                            latestRemoteTag = tag
+                        }
+                    }
+                }
             }
         } catch (e: Exception) {
-            println("Note: Could not check latest remote release: ${e.message}")
+            println("Note: Could not check releases list: ${e.message}")
         }
 
         var version = getGitVersionName()
         if (latestRemoteTag.isNotEmpty() && !isVersionGreater(version, latestRemoteTag)) {
-            val parts = latestRemoteTag.split(".").map { it.toIntOrNull() ?: 0 }.toMutableList()
-            if (parts.size >= 2) {
-                parts[parts.lastIndex] = parts.last() + 1
-                version = parts.joinToString(".")
-            } else {
-                version = "$latestRemoteTag.1"
-            }
+            val (rMajor, rMinor, rPatch) = parseSemanticVersion(latestRemoteTag)
+            version = "$rMajor.$rMinor.${rPatch + 1}"
         }
 
         val tagName = if (version.startsWith("v", ignoreCase = true)) {
@@ -288,6 +299,7 @@ tasks.register("publishGithubRelease") {
         } else {
             "V$version"
         }
+
         println("Publishing GitHub Release: $tagName for $repoOwner/$repoName (Latest remote was: V$latestRemoteTag)")
 
         try {
@@ -322,6 +334,7 @@ tasks.register("publishGithubRelease") {
             put("body", "Automated release for version $tagName.")
             put("draft", false)
             put("prerelease", false)
+            put("make_latest", "true")
         }.toString()
 
         createConn.outputStream.use { it.write(requestBody.toByteArray()) }
