@@ -29,3 +29,5 @@
 -keep class com.frostwire.jlibtorrent.** { *; }
 -keep class com.brave.adblock.** { *; }
 -keep class androidx.media3.** { *; }
+-keep class com.poobi.tvbrowser.shared.update.** { *; }
+-keep class com.poobi.tvbrowser.BuildConfig { *; }

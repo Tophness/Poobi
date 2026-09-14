@@ -28,6 +28,8 @@ import com.poobi.tvbrowser.shared.isFutureDate
 import com.poobi.tvbrowser.shared.KeyTracker
 import com.poobi.tvbrowser.streams.StreamsEvent
 import com.poobi.tvbrowser.streams.StreamsViewModel
+import com.poobi.tvbrowser.shared.update.UpdateManager
+import com.poobi.tvbrowser.shared.update.ApkInstaller
 import com.poobi.tvbrowser.torrent.TorrentStreamServer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -81,7 +83,6 @@ class MainActivity : AppCompatActivity() {
         startTorrentServer()
 
         cursorManager = CursorManager(this, browserViewModel)
-        
         playerEngine = PlayerEngine(
             context = this,
             prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE),
@@ -211,6 +212,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
+            delay(4000)
+            UpdateManager.checkForUpdates(this@MainActivity, isManual = false)
+        }
+
+        lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 streamsViewModel.itemEpisodes.collect { episodes ->
                     if (episodes != null) {
@@ -307,10 +313,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-		browserViewModel.reloadPreferences()
+        browserViewModel.reloadPreferences()
         browserViewModel.refreshLists()
         streamsViewModel.refreshFavoritesSet()
         registerPythonDialogListenerAsync()
+        ApkInstaller.resumePendingInstallIfPermitted(this)
     }
 
     private fun initPythonAsync() {

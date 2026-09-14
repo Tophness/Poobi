@@ -24,7 +24,7 @@
             android:enabled="false"
             android:exported="false">
             <intent-filter>
-            <action android:name="androidx.appcompat.app.AppLocalesMetadataHolderService" />
+                <action android:name="androidx.appcompat.app.AppLocalesMetadataHolderService" />
             </intent-filter>
             <meta-data android:name="autoStoreLocales" android:value="false" />
         </service>
@@ -35,14 +35,21 @@
             android:configChanges="keyboardHidden|orientation|screenSize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" /> <!-- TV Launcher -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
         <activity android:name="com.poobi.tvbrowser.SettingsActivity" android:exported="false" />
 
-        <!-- FileProvider for sharing downloaded files with other apps -->
+        <receiver
+            android:name="com.poobi.tvbrowser.shared.update.DownloadCompleteReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

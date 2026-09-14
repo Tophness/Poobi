@@ -67,6 +67,8 @@ import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvInputField
 import com.poobi.tvbrowser.shared.KeyTracker
 import com.poobi.tvbrowser.shared.TvMarqueeText
+import com.poobi.tvbrowser.shared.update.UpdateManager
+import com.poobi.tvbrowser.shared.update.UpdateInfo
 import com.poobi.tvbrowser.streams.MediaDetailsScreen
 import com.poobi.tvbrowser.streams.ScrapeProgressScreen
 import com.poobi.tvbrowser.streams.StreamsDashboardScreen
@@ -1264,6 +1266,103 @@ fun MainApp(
                 streamsViewModel.dismissAllNotifications()
             }
         )
+
+        val updateInfoState by UpdateManager.updateInfo.collectAsState()
+        val isUpdateDownloading by UpdateManager.isDownloading.collectAsState()
+        val updateDownloadProgress by UpdateManager.downloadProgress.collectAsState()
+
+        updateInfoState?.let { update ->
+            val activity = LocalContext.current as? android.app.Activity
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isUpdateDownloading) {
+                        UpdateManager.dismissUpdate()
+                    }
+                },
+                title = {
+                    Text(
+                        text = "New Update Available (${update.versionName})",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                },
+                containerColor = Color(0xFF222225),
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "A new version of Poobi is available for your device architecture.",
+                            color = Color.LightGray,
+                            fontSize = 14.sp
+                        )
+
+                        if (update.releaseNotes.isNotBlank()) {
+                            Text(
+                                text = update.releaseNotes,
+                                color = Color.Gray,
+                                fontSize = 12.sp,
+                                maxLines = 6,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        if (isUpdateDownloading) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { updateDownloadProgress },
+                                modifier = Modifier.fillMaxWidth().height(8.dp),
+                                color = Color(0xFF00BCD4),
+                                trackColor = Color(0xFF333338)
+                            )
+                            Text(
+                                text = "Downloading: ${(updateDownloadProgress * 100).toInt()}%",
+                                color = Color(0xFF00BCD4),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.End)
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    if (isUpdateDownloading) {
+                        Button(
+                            onClick = { UpdateManager.cancelDownload() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                        ) {
+                            Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                if (activity != null) {
+                                    UpdateManager.startDownloadAndInstall(activity, update)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                        ) {
+                            Text("Install", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                },
+                dismissButton = {
+                    if (!isUpdateDownloading) {
+                        Button(
+                            onClick = { UpdateManager.dismissUpdate() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                        ) {
+                            Text("Later", color = Color.White)
+                        }
+                    }
+                }
+            )
+        }
     }
 }
 

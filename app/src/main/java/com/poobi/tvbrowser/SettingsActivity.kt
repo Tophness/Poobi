@@ -49,6 +49,7 @@ import com.poobi.tvbrowser.streams.SortCriteria
 import com.poobi.tvbrowser.streams.SourceSorter
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvInputField
+import com.poobi.tvbrowser.shared.update.UpdateManager
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -517,6 +518,20 @@ class SettingsActivity : AppCompatActivity() {
             }
             DropdownSettingRow("History Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), historyIconOption) { historyIconOption = it }
             DropdownSettingRow("Bookmark Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), bookmarkIconOption) { bookmarkIconOption = it }
+            Spacer(modifier = Modifier.height(8.dp))
+            val isCheckingUpdates by UpdateManager.isChecking.collectAsState()
+            Button(
+                onClick = { UpdateManager.checkForUpdates(this@SettingsActivity, isManual = true) },
+                enabled = !isCheckingUpdates,
+                modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp)),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4))
+            ) {
+                Text(
+                    text = if (isCheckingUpdates) "Checking for Updates..." else "Check for Updates (v${UpdateManager.getAppVersionName(this@SettingsActivity)})",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 
