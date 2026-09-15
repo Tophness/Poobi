@@ -1131,6 +1131,10 @@
 		<setting id="VidHDResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidHDResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidHDResolver_login" type="bool" label="33022" default="true" visible="false"/>
+		<setting label="VidKing" type="lsep"/>
+		<setting id="VidKingResolver_priority" type="number" label="33016" default="100"/>
+		<setting id="VidKingResolver_enabled" type="bool" label="33017" default="true"/>
+		<setting id="VidKingResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting label="VidLook" type="lsep"/>
 		<setting id="VidLookResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidLookResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1179,12 +1183,16 @@
 		<setting id="VidProResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidProResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidProResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 15">
+		<setting label="VidRock" type="lsep"/>
+		<setting id="VidRockResolver_priority" type="number" label="33016" default="100"/>
+		<setting id="VidRockResolver_enabled" type="bool" label="33017" default="true"/>
+		<setting id="VidRockResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting label="VidSonic" type="lsep"/>
 		<setting id="VidSonicResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidSonicResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidSonicResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 15">
 		<setting label="VidSpeed" type="lsep"/>
 		<setting id="VidSpeedResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidSpeedResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1193,6 +1201,10 @@
 		<setting id="VidSrcResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidSrcResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidSrcResolver_login" type="bool" label="33022" default="true" visible="false"/>
+		<setting label="VidSrcBuzz" type="lsep"/>
+		<setting id="VidSrcBuzzResolver_priority" type="number" label="33016" default="100"/>
+		<setting id="VidSrcBuzzResolver_enabled" type="bool" label="33017" default="true"/>
+		<setting id="VidSrcBuzzResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting label="VidsSt" type="lsep"/>
 		<setting id="VidsStResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidsStResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1245,6 +1257,8 @@
 		<setting id="VKPrimeResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VKPrimeResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VKPrimeResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 16">
 		<setting label="VKSpeed" type="lsep"/>
 		<setting id="VKSpeedResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VKSpeedResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1258,8 +1272,6 @@
 		<setting id="VoeResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VoeResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting id="VoeResolver_prefer_hls" type="bool" label="Prefer HLS over MP4" default="false"/>
-	</category>
-	<category label="33015 16">
 		<setting label="Voxzer" type="lsep"/>
 		<setting id="VoxzerResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VoxzerResolver_enabled" type="bool" label="33017" default="true"/>

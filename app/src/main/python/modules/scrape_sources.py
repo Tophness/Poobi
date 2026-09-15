@@ -560,15 +560,20 @@ def twoembed(link, hostDict, info=None):
                     sources.append(item)
                 return sources
 
-        # Fallback to standard iframe check
         iframes = client_utils.parseDOM(html, 'iframe', ret='src')
-        if iframes:
-            for ifr in iframes:
-                if ifr.startswith('//'):
-                    ifr = 'https:' + ifr
-                item = make_item(hostDict, ifr, host='2embed.cc', info=info)
-                if item:
-                    sources.append(item)
+        if not iframes:
+            iframes = re.findall(r'<iframe\s+[^>]*src=["\']([^"\']+)["\']', html, re.I)
+
+        for ifr in iframes:
+            if not ifr or ifr == 'about:blank' or '2embed.cc/embed/' in ifr:
+                continue
+            if ifr.startswith('//'):
+                ifr = 'https:' + ifr
+
+            items = process(hostDict, ifr)
+            if items:
+                sources.extend(items)
+
         return sources
     except Exception:
         log_utils.log('twoembed', 1)

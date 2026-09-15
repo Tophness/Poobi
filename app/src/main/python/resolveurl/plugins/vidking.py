@@ -14,8 +14,8 @@ from resolveurl.resolver import ResolveUrl, ResolverError
 
 class VidKingResolver(ResolveUrl):
     name = 'VidKing'
-    domains = ['vidking.net', 'www.vidking.net']
-    pattern = r'(?://|\.)(vidking\.net)/(?:embed/)?((?:movie|tv)/[0-9a-zA-Z/-]+(?:\?[^"\'>\s]+)?)'
+    domains = ['vidking.net', 'www.vidking.net', 'videasy.net', 'player.videasy.net']
+    pattern = r'(?://|\.)(vidking\.net|player\.videasy\.net|videasy\.net)/(?:embed/)?((?:movie|tv)/[0-9a-zA-Z/-]+(?:\?[^"\'>\s]+)?)'
 
     HL = [
         1116352408, 1899447441, 3049323471, 3921009573,

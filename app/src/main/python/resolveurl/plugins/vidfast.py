@@ -1,28 +1,46 @@
 """
-    Plugin for ResolveURL
-    Copyright (C) 2020 gujal
+    Plugin for ResolveURL - VidFast / VidUp / YtHD
+    Copyright (C) 2026 Poobi
 """
 
-from resolveurl.plugins.__resolve_generic__ import ResolveGeneric
+import json
+import re
+from urllib.parse import urljoin
+from resolveurl import common
 from resolveurl.lib import helpers
+from resolveurl.resolver import ResolveUrl, ResolverError
 
 
-class VidFastResolver(ResolveGeneric):
+class VidFastResolver(ResolveUrl):
     name = 'VidFast'
-    domains = ['vidfast.co', 'vidfast.pro']
-    pattern = r'(?://|\.)(vidfast\.(?:co|pro))/(?:embed-|movie/|tv/)?([a-zA-Z0-9/-]+(?:\?[^"\'>\s]+)?)'
+    domains = ['vidfast.co', 'vidfast.pro', 'vidup.to', 'ythd.org']
+    pattern = r'(?://|\.)(vid(?:fast|up)\.(?:co|pro|to)|ythd\.org)/(?:embed-|movie/|tv/)?([a-zA-Z0-9/-]+(?:\?[^"\'>\s]+)?)'
 
-    def get_media_url(self, host, media_id):
-        return helpers.get_media_url(
-            self.get_url(host, media_id),
-            patterns=[
-                r'''sources:\s*\[{file:\s*"(?P<url>[^"]+)''',
-                r'''["']?file["']?\s*:\s*["'](?P<url>[^"']+\.m3u8[^"']*)["']'''
-            ],
-            generic_patterns=False
-        )
+    def get_media_url(self, host, media_id, subs=False):
+        clean_id = media_id.split('?')[0]
+        is_tv = 'tv/' in clean_id or len([p for p in clean_id.split('/') if p.isdigit()]) >= 2
+        content_type = "tv" if is_tv else "movie"
+        numeric_id = re.sub(r'\D', '', clean_id)
+
+        api_url = f"https://ythd.org/vs_src.php?type={content_type}&id={numeric_id}"
+        headers = {
+            'User-Agent': common.RAND_UA,
+            'Referer': f'https://{host}/'
+        }
+
+        try:
+            resp = self.net.http_GET(api_url, headers=headers)
+            data = json.loads(resp.content)
+            inner_src = data.get('src')
+            if inner_src:
+                from resolveurl.hmf import HostedMediaFile
+                hmf = HostedMediaFile(url=inner_src)
+                if hmf.valid_url():
+                    return hmf.resolve()
+        except Exception:
+            pass
+
+        raise ResolverError('VidFast: Failed to resolve stream')
 
     def get_url(self, host, media_id):
-        if 'movie/' in media_id or 'tv/' in media_id:
-            return f"https://{host}/{media_id}"
-        return self._default_get_url(host, media_id, template='https://{host}/embed-{media_id}.html')
+        return f"https://ythd.org/embed/movie/{media_id}"

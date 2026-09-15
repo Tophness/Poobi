@@ -1,5 +1,5 @@
 """
-    Plugin for ResolveURL
+    Plugin for ResolveURL - VidLove / 111Movies
     Copyright (C) 2026 Poobi
 """
 
@@ -35,11 +35,11 @@ class VidLoveResolver(ResolveUrl):
         else:
             base_query = f"/movie?id={clean_id}&mode=json"
 
-        headers = {
+        api_headers = {
             'User-Agent': common.RAND_UA,
-            'Referer': f'https://{host}/',
-            'Origin': f'https://{host}',
-            'Accept': 'application/json'
+            'Referer': 'https://player.vidlove.cc/',
+            'Origin': 'https://player.vidlove.cc',
+            'Accept': 'application/json, text/plain, */*'
         }
 
         stream_url = None
@@ -48,16 +48,11 @@ class VidLoveResolver(ResolveUrl):
         for server in self.SERVERS:
             api_url = f"{api_base}{base_query}&sources={server}"
             try:
-                resp = self.net.http_GET(api_url, headers=headers)
+                resp = self.net.http_GET(api_url, headers=api_headers)
                 data = json.loads(resp.content)
                 src_val = data.get('source')
-                if src_val and isinstance(src_val, dict):
+                if isinstance(src_val, dict):
                     stream_url = src_val.get('url') or src_val.get('file') or src_val.get('stream')
-                    if not stream_url and 'manifest' in src_val:
-                        manifest = src_val['manifest']
-                        urls = re.findall(r'https?://[^\s]+', manifest)
-                        if urls:
-                            stream_url = urls[-1]
                 elif isinstance(src_val, str) and src_val.startswith('http'):
                     stream_url = src_val
 
@@ -74,10 +69,13 @@ class VidLoveResolver(ResolveUrl):
 
         stream_headers = {
             'User-Agent': common.RAND_UA,
-            'Referer': f'https://{host}/',
-            'Origin': f'https://{host}',
+            'Referer': 'https://player.vidlove.cc/',
+            'Origin': 'https://player.vidlove.cc',
             'verifypeer': 'false'
         }
+
+        if 'whysosigmabro' in stream_url and '.m3u8' not in stream_url:
+            stream_url += '&format=.m3u8'
 
         playable_url = stream_url + helpers.append_headers(stream_headers)
 
