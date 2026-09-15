@@ -31,17 +31,14 @@ class source:
         }
 
     def movie(self, imdb, tmdb, title, localtitle, aliases, year):
-        print("[CINESPOT DEBUG] movie() called with tmdb: %s, imdb: %s, title: %s" % (tmdb, imdb, title))
         url = {'imdb': imdb, 'tmdb': tmdb, 'title': title, 'year': year}
         return urlencode(url)
 
     def tvshow(self, imdb, tmdb, tvdb, tvshowtitle, localtvshowtitle, aliases, year):
-        print("[CINESPOT DEBUG] tvshow() called with tmdb: %s, tvshowtitle: %s" % (tmdb, tvshowtitle))
         url = {'imdb': imdb, 'tmdb': tmdb, 'tvdb': tvdb, 'tvshowtitle': tvshowtitle, 'year': year}
         return urlencode(url)
 
     def episode(self, url, imdb, tmdb, tvdb, title, premiered, season, episode):
-        print("[CINESPOT DEBUG] episode() called for season: %s, episode: %s" % (season, episode))
         if not url:
             return
         url = parse_qs(url)
@@ -51,7 +48,6 @@ class source:
 
     def sources(self, url, hostDict):
         try:
-            print("[CINESPOT DEBUG] sources() started.")
             if not url:
                 print("[CINESPOT DEBUG] URL parameter is empty.")
                 return self.results
@@ -60,8 +56,6 @@ class source:
             data = dict([(i, data[i][0]) if data[i] else (i, '') for i in data])
             is_show = 'tvshowtitle' in data
             tmdb = data.get('tmdb', '')
-
-            print("[CINESPOT DEBUG] Parsed data - is_show: %s, tmdb: %s" % (is_show, tmdb))
 
             if not tmdb or tmdb == '0':
                 print("[CINESPOT DEBUG] Missing valid TMDb ID. Cannot scrape cinespot.to.")
@@ -87,7 +81,6 @@ class source:
                 try:
                     page = client.scrapePage(cand_url, headers=self.headers, timeout='10')
                     html = (getattr(page, 'text', '') or '') if page is not None else ''
-                    print("[CINESPOT DEBUG] Response length for %s: %d bytes" % (cand_url, len(html)))
                     if 'Just a moment' in html[:1000] or 'cloudflare' in html[:1000].lower():
                         print("[CINESPOT DEBUG] WARNING: Cloudflare challenge detected on %s!" % cand_url)
                 except Exception as e:
@@ -95,7 +88,6 @@ class source:
                     html = ''
                 if html and ('playerFrame' in html or 'server-btn' in html or 'watch-grid' in html):
                     result_url = cand_url
-                    print("[CINESPOT DEBUG] Found valid player page at: %s" % result_url)
                     break
 
             if not html:
@@ -106,22 +98,17 @@ class source:
             if not server_paths:
                 server_paths = DOM(html, 'a', attrs={'class': r'.*?server-btn.*?'}, ret='href')
 
-            print("[CINESPOT DEBUG] Found server query paths: %s" % server_paths)
-
             target_urls = [result_url]
             for path in server_paths:
                 full_path = urljoin(result_url, path)
                 if full_path not in target_urls:
                     target_urls.append(full_path)
 
-            print("[CINESPOT DEBUG] Total pages to check for iframes: %d" % len(target_urls))
-
             for target in target_urls:
                 try:
                     if target == result_url:
                         server_html = html
                     else:
-                        print("[CINESPOT DEBUG] Fetching server URL: %s" % target)
                         page = client.scrapePage(target, headers=self.headers, timeout='10')
                         server_html = (getattr(page, 'text', '') or '') if page is not None else ''
 
@@ -132,8 +119,6 @@ class source:
                     if not iframes:
                         iframes = re.findall(r'<iframe\s+[^>]*src="([^"]+)"', server_html, re.I)
 
-                    print("[CINESPOT DEBUG] Extracted iframes on %s: %s" % (target, iframes))
-
                     for src in iframes:
                         if not src:
                             continue
@@ -141,10 +126,7 @@ class source:
                             src = 'https:' + src
                         elif not src.startswith('http'):
                             src = urljoin(self.base_link, src)
-
-                        print("[CINESPOT DEBUG] Sending iframe to scrape_sources.process: %s" % src)
                         items = scrape_sources.process(custom_host_dict, src)
-                        print("[CINESPOT DEBUG] scrape_sources returned %d items for %s" % (len(items), src))
                         
                         if items:
                             for item in items:
@@ -162,5 +144,4 @@ class source:
             return self.results
 
     def resolve(self, url):
-        print("[CINESPOT DEBUG] resolve() called for: %s" % url)
         return url
