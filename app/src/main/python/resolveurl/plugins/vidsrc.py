@@ -42,9 +42,10 @@ class VidSrcResolver(ResolveUrl):
     domains = [
         'vidsrc.me', 'vidsrc.in', 'vidsrc.to', 'vidsrc.net',
         'vidsrc.xyz', 'vidsrcme.ru', 'vidsrc.stream', 'vidsrc.icu',
-        'cloudorchestranova.com', 'vidsrc.mov', 'vsembed.ru', 'vidsrc.pm'
+        'cloudorchestranova.com', 'vidsrc.mov', 'vsembed.ru', 'vidsrc.pm',
+        'vidsrc.fyi'
     ]
-    pattern = r'(?://|\.)((?:vidsrc\.(?:me|in|to|net|xyz|stream|icu|mov|pm)|vidsrcme\.ru|vsembed\.ru|cloudorchestranova\.com))/(?:embed/)?((?:(?:movie|tv)/)?[0-9a-zA-Z-/]+(?:\?[^"\'>\s]+)?)'
+    pattern = r'(?://|\.)((?:vidsrc\.(?:me|in|to|net|xyz|stream|icu|mov|pm|fyi)|vidsrcme\.ru|vsembed\.ru|cloudorchestranova\.com))/(?:embed/)?((?:(?:movie|tv)/)?[0-9a-zA-Z-/]+(?:\?[^"\'>\s]+)?)'
 
     def get_media_url(self, host, media_id, subs=False):
         try:

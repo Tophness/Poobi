@@ -1089,6 +1089,10 @@
 		<setting id="VidelloResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidelloResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidelloResolver_login" type="bool" label="33022" default="true" visible="false"/>
+		<setting label="Videm" type="lsep"/>
+		<setting id="VidemResolver_priority" type="number" label="33016" default="100"/>
+		<setting id="VidemResolver_enabled" type="bool" label="33017" default="true"/>
+		<setting id="VidemResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting label="VidEmbed" type="lsep"/>
 		<setting id="VidEmbedResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidEmbedResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1105,12 +1109,12 @@
 		<setting id="VideoooResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VideoooResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VideoooResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 14">
 		<setting label="VideoSeyred" type="lsep"/>
 		<setting id="VideoSeyredResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VideoSeyredResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VideoSeyredResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 14">
 		<setting label="VideoWood" type="lsep"/>
 		<setting id="VideoWoodResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VideoWoodResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1131,6 +1135,10 @@
 		<setting id="VidLookResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidLookResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidLookResolver_login" type="bool" label="33022" default="true" visible="false"/>
+		<setting label="VidLove" type="lsep"/>
+		<setting id="VidLoveResolver_priority" type="number" label="33016" default="100"/>
+		<setting id="VidLoveResolver_enabled" type="bool" label="33017" default="true"/>
+		<setting id="VidLoveResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting label="VidMojo" type="lsep"/>
 		<setting id="VidMojoResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidMojoResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1175,6 +1183,8 @@
 		<setting id="VidSonicResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidSonicResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidSonicResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 15">
 		<setting label="VidSpeed" type="lsep"/>
 		<setting id="VidSpeedResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidSpeedResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1183,8 +1193,6 @@
 		<setting id="VidSrcResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidSrcResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidSrcResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 15">
 		<setting label="VidsSt" type="lsep"/>
 		<setting id="VidsStResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidsStResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1250,6 +1258,8 @@
 		<setting id="VoeResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VoeResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting id="VoeResolver_prefer_hls" type="bool" label="Prefer HLS over MP4" default="false"/>
+	</category>
+	<category label="33015 16">
 		<setting label="Voxzer" type="lsep"/>
 		<setting id="VoxzerResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VoxzerResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1258,8 +1268,6 @@
 		<setting id="VrraTopResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VrraTopResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VrraTopResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 16">
 		<setting label="VTube" type="lsep"/>
 		<setting id="VTubeResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VTubeResolver_enabled" type="bool" label="33017" default="true"/>

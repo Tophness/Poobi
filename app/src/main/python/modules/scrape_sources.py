@@ -30,7 +30,7 @@ vidembed_domains = ['goload.io', 'goload.pro', 'membed1.com', 'membed.co', 'memb
     'anihdplay.com', 'gotaku1.com', 'playtaku.net', 'playtaku.online', 'movstreamhd.pro'
 ]
 vidlink_domains = ['vidlink.org']
-vidsrc_domains = ['v2.vidsrc.me', 'vidsrc.me', 'vidsrc.to', 'vidsrc.net', 'vidsrc.xyz', 'vidsrc.in', 'vidsrc.icu']
+vidsrc_domains = ['v2.vidsrc.me', 'vidsrc.me', 'vidsrc.to', 'vidsrc.net', 'vidsrc.xyz', 'vidsrc.in', 'vidsrc.icu', 'vsembed.ru', 'vsembed.su', 'vidsrc.mov', 'vidsrc.fyi']
 voxzer_domains = ['voxzer.org']
 ######################################################
 ############ Used for prepare_link.
@@ -40,9 +40,7 @@ clicknupload_redir_domains = ['clicknupload.click', 'clicknupload.com', 'clicknu
 clicknupload_working_domains = ['clicknupload.cc', 'clicknupload.club', 'clicknupload.co', 'clicknupload.org', 'clicknupload.red']
 ######################################################
 # Spare Alt  doodstream.co | dood.cx fails and all others redirect to doodstream.com
-doodstream_redir_domains = ['dood.cx', 'dood.la', 'dood.pm', 'dood.re', 'dood.sh',
-    'dood.so', 'dood.to', 'dood.watch', 'dood.wf', 'dood.ws', 'dood.yt', 'dooood.com'
-]
+doodstream_redir_domains = ['dood.cx', 'dood.la', 'dood.pm', 'dood.re', 'dood.sh', 'dood.so', 'dood.to', 'dood.watch', 'dood.wf', 'dood.ws', 'dood.yt', 'dooood.com', 'ds2play.com', 'doods.pro']
 ######################################################
 entervideo_failing_domains = ['entervideo.net', 'eplayvid.com']
 ######################################################
@@ -66,6 +64,11 @@ streamsb_working_domains = ['aintahalu.sbs', 'arslanrocky.xyz', 'cloudemb.com', 
 # These redirect to ahvsh.com but swapped to streamhide.com for dupe checks.
 streamhide_redir_domains = ['ahvsh.com', 'guccihide.com', 'louishide.com']
 streamhide_working_domains = ['streamhide.com', 'streamhide.to', 'movhide.pro', 'moviesm4u.com', 'bikurathulw.sbs', 'javb1.com']
+streamwish_failing_domains = [
+    'abkrzkz.sbs', 'ajmidyad.sbs', 'atabkhha.sbs', 'atabknha.sbs', 'atabknhk.sbs', 'atabknhs.sbs',
+    'embedwish.com', 'hayaatieadhab.sbs', 'khadhnayad.sbs', 'kharabnahs.sbs', 'mwish.pro',
+    'wishfast.top', 'yadmalik.sbs', 'streamwish.to'
+]
 ######################################################
 # Spare Alt  movembed.cc | The redirects goto membed1.com i think but done now to be lazy and for dupe checks.
 vidcloud9_failing_domains = ['membed.co', 'vidembed.io', 'vidembed.me', 'vidembed.net', 'vidcloud.icu']
@@ -149,6 +152,10 @@ def prepare_link(url):
         url = url.replace(old_domain, 'send.cm')
     elif old_domain == 'streamvid.co':
         url = url.replace(old_domain, 'streamvid.cc')
+    elif old_domain in doodstream_redir_domains:
+        url = url.replace(old_domain, 'doodstream.com')
+    elif old_domain in streamwish_failing_domains:
+        url = url.replace(old_domain, 'streamwish.com')
     if '//vidcloud.co/embed/' in u:
         url = url.replace('/embed/', '/v/')  # Ghetto fix to get the resolver pattern to notice the url
     #log_utils.log('scrape_sources - prepare_link link: ' + str(url))
@@ -534,25 +541,34 @@ def vidsrc(link, hostDict, info=None):
 
 
 def twoembed(link, hostDict, info=None):
-    sources = [] # Last Tested/Checked: 6-28-2023  Status: Working.
+    sources = []
     try:
         if scrape_twoembed == 'false':
             return sources
-        headers = {'User-Agent': client.UserAgent, 'Referer': 'https://www.2embed.cc/'}
-        link = link.replace('/embed/imdb/tv?id=', '/embed/')
-        link = link.replace('/embed/imdb/movie?id=', '/embed/')
-        link = link.replace('/embed/tmdb/tv?id=', '/embed/')
-        link = link.replace('/embed/tmdb/movie?id=', '/embed/')
+
+        headers = {'User-Agent': client.UserAgent, 'Referer': 'https://cinespot.org/'}
         html = client.scrapePage(link, headers=headers).text
-        iframe = client_utils.parseDOM(html, 'iframe', ret='src')[0]
-        iframe_html = client.scrapePage(iframe, headers=headers).text
-        iframe_unpacked = client_utils.unpacked(iframe_html)
-        iframe_sources = re.findall(r'sources:\[(.+?)\]', iframe_unpacked, re.S)[0]
-        source_link = re.findall(r'(?:file|src)\s*(?:\:)\s*(?:\"|\')(.+?)(?:\"|\')', iframe_sources)[0]
-        item = make_direct_item(hostDict, source_link, host='2embed.cc', info=info, referer=link)
-        if item:
-            sources.append(item)
-        #else: log_utils.log('scrape_sources - twoembed - non-item link: ' + str(url))
+
+        mu_match = re.search(r'href=["\'](https?://movieuniverse\.skin/[^"\']+)["\']', html)
+        if mu_match:
+            mu_url = mu_match.group(1)
+            mu_html = client.scrapePage(mu_url, headers={'User-Agent': client.UserAgent, 'Referer': link}).text
+            videm_match = re.search(r'<iframe[^>]+src=["\'](https?://videm\.xyz/embed/[^"\']+)["\']', mu_html)
+            if videm_match:
+                item = make_item(hostDict, videm_match.group(1), host='videm.xyz', info=info)
+                if item:
+                    sources.append(item)
+                return sources
+
+        # Fallback to standard iframe check
+        iframes = client_utils.parseDOM(html, 'iframe', ret='src')
+        if iframes:
+            for ifr in iframes:
+                if ifr.startswith('//'):
+                    ifr = 'https:' + ifr
+                item = make_item(hostDict, ifr, host='2embed.cc', info=info)
+                if item:
+                    sources.append(item)
         return sources
     except Exception:
         log_utils.log('twoembed', 1)
