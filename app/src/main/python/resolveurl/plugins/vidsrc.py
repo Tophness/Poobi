@@ -9,6 +9,7 @@ import os
 import re
 import json
 import base64
+import time
 import requests
 from urllib.parse import urlparse, urljoin, parse_qsl, parse_qs
 from resolveurl import common
@@ -20,6 +21,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _CACHED_WASM_KEY = None
 _CACHED_WASM_BYTES = None
+_CACHED_STREAM_TOKEN = ""
+_CACHED_TOKEN_EXPIRY = 0
 
 
 def _instantiate_wasm_memory(wasm_bytes):
@@ -48,6 +51,7 @@ class VidSrcResolver(ResolveUrl):
     pattern = r'(?://|\.)((?:vidsrc\.(?:me|in|to|net|xyz|stream|icu|mov|pm|fyi)|vidsrcme\.ru|vsembed\.ru|cloudorchestranova\.com))/(?:embed/)?((?:(?:movie|tv)/)?[0-9a-zA-Z-/]+(?:\?[^"\'>\s]+)?)'
 
     def get_media_url(self, host, media_id, subs=False):
+        global _CACHED_STREAM_TOKEN, _CACHED_TOKEN_EXPIRY
         try:
             ua = common.RAND_UA
 
@@ -279,24 +283,35 @@ class VidSrcResolver(ResolveUrl):
             parsed_url = urlparse(stream_url)
             stream_origin = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
-            token_url = f"{stream_origin}/generate.php"
+            # Token fetching with global caching across requests
             token = ""
-            try:
-                t_resp = s.get(
-                    token_url,
-                    headers={'User-Agent': ua, 'Referer': active_player_url, 'Origin': container_host},
-                    timeout=8,
-                    verify=False
-                )
-                if t_resp.status_code == 200:
-                    raw_token = t_resp.text.strip()
-                    try:
-                        token_json = json.loads(raw_token)
-                        token = token_json.get('token') or token_json.get('data') or raw_token
-                    except Exception:
-                        token = raw_token
-            except Exception:
-                pass
+            now = time.time()
+            if _CACHED_STREAM_TOKEN and now < _CACHED_TOKEN_EXPIRY:
+                token = _CACHED_STREAM_TOKEN
+            else:
+                token_url = f"{stream_origin}/generate.php"
+                try:
+                    t_resp = s.get(
+                        token_url,
+                        headers={'User-Agent': ua, 'Referer': active_player_url, 'Origin': container_host},
+                        timeout=8,
+                        verify=False
+                    )
+                    if t_resp.status_code == 200:
+                        raw_token = t_resp.text.strip()
+                        try:
+                            token_json = json.loads(raw_token)
+                            token = token_json.get('token') or token_json.get('data') or raw_token
+                        except Exception:
+                            token = raw_token
+                        if token:
+                            _CACHED_STREAM_TOKEN = token
+                            _CACHED_TOKEN_EXPIRY = now + 7200  # Valid for 2 hours
+                    elif t_resp.status_code == 429 and _CACHED_STREAM_TOKEN:
+                        token = _CACHED_STREAM_TOKEN
+                except Exception:
+                    if _CACHED_STREAM_TOKEN:
+                        token = _CACHED_STREAM_TOKEN
 
             if token:
                 delim = "&" if "?" in stream_url else "?"

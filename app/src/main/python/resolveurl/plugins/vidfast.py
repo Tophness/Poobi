@@ -5,7 +5,6 @@
 
 import json
 import re
-from urllib.parse import urljoin
 from resolveurl import common
 from resolveurl.lib import helpers
 from resolveurl.resolver import ResolveUrl, ResolverError
@@ -22,6 +21,24 @@ class VidFastResolver(ResolveUrl):
         content_type = "tv" if is_tv else "movie"
         numeric_id = re.sub(r'\D', '', clean_id)
 
+        # If domain is vidup.to, inspect the initial page for client hydration state
+        if 'vidup.to' in host:
+            web_url = f"https://vidup.to/movie/{numeric_id}" if not is_tv else f"https://vidup.to/tv/{numeric_id}"
+            headers = {'User-Agent': common.RAND_UA, 'Referer': 'https://cinespot.org/'}
+            try:
+                html = self.net.http_GET(web_url, headers=headers).content
+                en_match = re.search(r'"en":"([^"]+)"', html)
+                if en_match:
+                    payload = {"en": en_match.group(1)}
+                    api_resp = self.net.http_POST("https://vidup.to/api/video", headers=headers, form_data=payload, jdata=True)
+                    data = json.loads(api_resp.content)
+                    stream_url = data.get('url') or data.get('stream')
+                    if stream_url:
+                        return stream_url + helpers.append_headers({'Referer': 'https://vidup.to/', 'User-Agent': common.RAND_UA})
+            except Exception:
+                pass
+
+        # Fallback to YtHD bridge
         api_url = f"https://ythd.org/vs_src.php?type={content_type}&id={numeric_id}"
         headers = {
             'User-Agent': common.RAND_UA,
@@ -43,4 +60,4 @@ class VidFastResolver(ResolveUrl):
         raise ResolverError('VidFast: Failed to resolve stream')
 
     def get_url(self, host, media_id):
-        return f"https://ythd.org/embed/movie/{media_id}"
+        return f"https://{host}/movie/{media_id}"

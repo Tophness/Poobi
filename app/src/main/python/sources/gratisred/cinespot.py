@@ -16,9 +16,10 @@ class source:
         self.results = []
         self.domains = [
             'cinespot.org', 'vidnest.fun', 'vidnest.io', 'vidsrc.mov', 'vidsrc.to',
-            'vidlink.org', 'vidlink.pro', '2embed.cc', 'multiembed.mov', 'superflixapi.co',
+            'vidlink.org', 'vidlink.pro', '2embed.cc', 'multiembed.mov',
             '111movies.com', 'vidsrc.fyi', 'vidrock.net', 'vidking.net', 'vidfast.pro',
-            'vidup.to', 'videasy.net', 'peachify.top'
+            'vidup.to', 'videasy.net', 'peachify.top',
+            'vidsrc.buzz', 'videm.xyz', 'streamsrcs.2embed.cc', 'movieuniverse.skin'
         ]
         self.base_link = 'https://cinespot.org'
         self.movie_link = '/watch/movie/%s'

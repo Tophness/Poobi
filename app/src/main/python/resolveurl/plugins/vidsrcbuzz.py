@@ -62,7 +62,6 @@ class VidSrcBuzzResolver(ResolveUrl):
         stream_headers = {
             'User-Agent': common.RAND_UA,
             'Referer': embed_url,
-            'Origin': 'https://vidsrc.buzz',
             'verifypeer': 'false'
         }
 

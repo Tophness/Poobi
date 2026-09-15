@@ -507,32 +507,47 @@ def vidlink(link, hostDict, info=None):
 
 
 def vidsrc(link, hostDict, info=None):
-    sources = [] # Last Tested/Checked: 6-28-2023  Status: Working.
+    sources = []
     try:
         if scrape_vidsrc == 'false':
             return sources
+        
+        # Let modern vidsrc domains be processed by ResolveURL
+        item = make_item(hostDict, link, host=None, info=info)
+        if item:
+            sources.append(item)
+            return sources
+
         headers = {'User-Agent': client.UserAgent, 'Referer': 'https://v2.vidsrc.me/'}
         html = client.scrapePage(link, headers=headers).text
+        
+        # Check for modern embedded iframes (e.g. vsembed.ru)
+        inner_iframes = client_utils.parseDOM(html, 'iframe', ret='src')
+        for ifr in inner_iframes:
+            if ifr.startswith('//'): ifr = 'https:' + ifr
+            if ifr.startswith('http') and ifr != link:
+                sub_items = process(hostDict, ifr)
+                if sub_items:
+                    sources.extend(sub_items)
+        if sources:
+            return sources
+
+        # Legacy data-hash fallback
         items = client_utils.parseDOM(html, 'div', ret='data-hash')
         for item in items:
             try:
                 item_url = 'https://source.vidsrc.me/source/' + item
                 item_html = client.scrapePage(item_url, headers=headers).text
-                if not item_html:
-                    continue
+                if not item_html: continue
                 item_html = item_html.replace("\'", '"')
                 item_src = re.findall('src:\s*"([^"]+)"', item_html, re.DOTALL)[0]
                 item_src = 'https:' + item_src if item_src.startswith('//') else item_src
                 item_link = client.request(item_src, headers=headers, output='geturl')
                 url = prepare_link(item_link)
-                if not url:
-                    continue
-                item = make_item(hostDict, url, host=None, info=info)
-                if item:
-                    sources.append(item)
-                #else: log_utils.log('scrape_sources - vidsrc - non-item link: ' + str(url))
+                if not url: continue
+                it = make_item(hostDict, url, host=None, info=info)
+                if it: sources.append(it)
             except:
-                log_utils.log('vidsrc', 1)
                 pass
         return sources
     except Exception:
@@ -549,22 +564,20 @@ def twoembed(link, hostDict, info=None):
         headers = {'User-Agent': client.UserAgent, 'Referer': 'https://cinespot.org/'}
         html = client.scrapePage(link, headers=headers).text
 
-        mu_match = re.search(r'href=["\'](https?://movieuniverse\.skin/[^"\']+)["\']', html)
-        if mu_match:
-            mu_url = mu_match.group(1)
-            mu_html = client.scrapePage(mu_url, headers={'User-Agent': client.UserAgent, 'Referer': link}).text
-            videm_match = re.search(r'<iframe[^>]+src=["\'](https?://videm\.xyz/embed/[^"\']+)["\']', mu_html)
-            if videm_match:
-                item = make_item(hostDict, videm_match.group(1), host='videm.xyz', info=info)
-                if item:
-                    sources.append(item)
-                return sources
+        candidate_links = []
+        
+        # 1. Capture standard src and data-src from iframes
+        iframes_src = client_utils.parseDOM(html, 'iframe', ret='src') or []
+        iframes_data = client_utils.parseDOM(html, 'iframe', ret='data-src') or []
+        candidate_links.extend(iframes_src)
+        candidate_links.extend(iframes_data)
 
-        iframes = client_utils.parseDOM(html, 'iframe', ret='src')
-        if not iframes:
-            iframes = re.findall(r'<iframe\s+[^>]*src=["\']([^"\']+)["\']', html, re.I)
+        # 2. Capture dropdown 'go(...)' mirror links
+        for m in re.finditer(r'''go\(['"](https?://[^'"]+)['"]\)''', html):
+            candidate_links.append(m.group(1))
 
-        for ifr in iframes:
+        # 3. Route mirrors through process()
+        for ifr in candidate_links:
             if not ifr or ifr == 'about:blank' or '2embed.cc/embed/' in ifr:
                 continue
             if ifr.startswith('//'):
