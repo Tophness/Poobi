@@ -28,7 +28,6 @@ class VidemResolver(ResolveUrl):
         resp = self.net.http_GET(web_url, headers=headers)
         html = resp.content
 
-        # Handle movieuniverse wrapper redirecting to videm.xyz
         if 'movieuniverse.skin' in web_url:
             iframe_src = re.search(r'<iframe[^>]+src=["\']([^"\']+)["\']', html, re.I)
             if iframe_src:
@@ -46,9 +45,11 @@ class VidemResolver(ResolveUrl):
             raise ResolverError(f'Videm: Failed to parse session configuration: {e}')
 
         q_token = q_data.get('t', '')
-        servers = q_data.get('ssr', {}).get('servers', [])
+
+        ssr_obj = q_data.get('ssr') or {}
+        servers = ssr_obj.get('servers') or []
         if not servers:
-            raise ResolverError('Videm: No server mirrors available in payload')
+            raise ResolverError('Videm: No server mirrors available in payload (likely invalid TMDb ID)')
 
         api_headers = {
             'User-Agent': common.RAND_UA,
@@ -57,7 +58,6 @@ class VidemResolver(ResolveUrl):
             'X-Requested-With': 'XMLHttpRequest'
         }
 
-        # Race/iterate through all mirrors until one returns a playable stream
         for s in servers:
             s_ref = s.get('ref')
             if not s_ref:
@@ -67,13 +67,12 @@ class VidemResolver(ResolveUrl):
             try:
                 api_resp = self.net.http_GET(api_url, headers=api_headers)
                 api_data = json.loads(api_resp.content)
+                if api_data.get('error'):
+                    continue
+
                 raw_url = api_data.get('url')
                 if raw_url:
-                    if raw_url.startswith('/'):
-                        stream_url = urllib_parse.urljoin('https://videm.xyz/', raw_url)
-                    else:
-                        stream_url = raw_url
-
+                    stream_url = urllib_parse.urljoin('https://videm.xyz/', raw_url) if raw_url.startswith('/') else raw_url
                     delim = "&" if "?" in stream_url else "?"
                     final_stream_url = f"{stream_url}{delim}bypass_localize=true"
 
@@ -84,22 +83,6 @@ class VidemResolver(ResolveUrl):
                     }
 
                     playable_url = final_stream_url + helpers.append_headers(stream_headers)
-
-                    if subs:
-                        subtitles = {}
-                        subs_url = f"https://videm.xyz/api.php?a=subs&type={q_data.get('type')}&id={urllib_parse.quote(q_data.get('id', ''))}&s={q_data.get('s', 0)}&e={q_data.get('e', 0)}&t={urllib_parse.quote(q_token)}"
-                        try:
-                            s_resp = self.net.http_GET(subs_url, headers=api_headers)
-                            s_data = json.loads(s_resp.content)
-                            for sub_item in s_data.get('subs', []):
-                                label = sub_item.get('label') or sub_item.get('lang', 'English')
-                                s_ref_sub = sub_item.get('ref')
-                                if s_ref_sub:
-                                    subtitles[label] = f"https://videm.xyz/api.php?a=sub&ref={urllib_parse.quote(s_ref_sub)}"
-                        except Exception:
-                            pass
-                        return playable_url, subtitles
-
                     return playable_url
             except Exception:
                 continue

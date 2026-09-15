@@ -6,7 +6,7 @@
 
 import json
 import re
-from urllib.parse import quote
+import requests
 from resolveurl import common
 from resolveurl.lib import helpers
 from resolveurl.resolver import ResolveUrl, ResolverError
@@ -19,25 +19,11 @@ class VidNestResolver(ResolveUrl):
 
     CUSTOM_ALPHABET = "RB0fpH8ZEyVLkv7c2i6MAJ5u3IKFDxlS1NTsnGaqmXYdUrtzjwObCgQP94hoeW+/="
 
-    # Verified active servers on new.vidnest.fun
     SERVERS = [
-        ("alfa", "videasy/movie"),
-        ("catflix", "yflix/movie"),
-        ("zeta", "nextgencloudfabric/movie"),
-        ("filxer", "rogflix/movie"),
-        ("gama", "vidzee/movie"),
-        ("ophim", "klikxxi/movie"),
-        ("sigma", "hollymoviehd/movie")
-    ]
-
-    WORKERS = [
-        "https://flixer.streaming-2.workers.dev",
-        "https://flixer.streaming-3.workers.dev",
-        "https://flixer.streaming-4.workers.dev",
-        "https://flixer.streaming-5.workers.dev",
-        "https://flixer.streaming-6.workers.dev",
-        "https://flixer.streaming-7.workers.dev",
-        "https://flixer.streaming-8.workers.dev"
+        ("zeta", "nextgencloudfabric/movie", "https://nextgencloudfabric.com/"),
+        ("gama", "vidzee/movie", "https://vidzee.online/"),
+        ("alfa", "videasy/movie", "https://videasy.online/"),
+        ("ophim", "klikxxi/movie", "https://klikxxi.online/")
     ]
 
     def get_media_url(self, host, media_id, subs=False):
@@ -54,14 +40,16 @@ class VidNestResolver(ResolveUrl):
             'Accept': 'application/json, text/plain, */*'
         }
 
-        for server_type, endpoint in self.SERVERS:
+        s = requests.Session()
+
+        for server_type, endpoint, mirror_referer in self.SERVERS:
             api_url = f"https://new.vidnest.fun/{endpoint}/{numeric_id}"
             try:
-                resp = self.net.http_GET(api_url, headers=headers)
-                if not resp or not resp.content:
+                resp = s.get(api_url, headers=headers, timeout=8, verify=False)
+                if not resp or resp.status_code != 200:
                     continue
 
-                raw_resp = json.loads(resp.content)
+                raw_resp = resp.json()
                 decrypted = self.decrypt_cipher_response(raw_resp)
                 if not decrypted:
                     continue
@@ -72,25 +60,23 @@ class VidNestResolver(ResolveUrl):
                 if isinstance(payload, dict):
                     if payload.get('url'):
                         stream_url = payload['url']
-                    elif payload.get('streams'):
-                        hls = next((s for s in payload['streams'] if s.get('type') == 'hls' and s.get('url')), None)
-                        if hls:
-                            raw_stream = hls['url']
-                            headers_json = quote(json.dumps({'Referer': 'https://moviesapi.to/'}))
-                            worker = self.WORKERS[int(numeric_id) % len(self.WORKERS)]
-                            stream_url = f"{worker}/proxy?url={quote(raw_stream)}&headers={headers_json}"
-                        elif payload['streams'] and payload['streams'][0].get('url'):
-                            stream_url = payload['streams'][0]['url']
-                    elif payload.get('sources'):
+                    elif payload.get('streams') and len(payload['streams']) > 0:
+                        stream_url = payload['streams'][0].get('url')
+                    elif payload.get('sources') and len(payload['sources']) > 0:
                         stream_url = payload['sources'][0].get('url')
 
                 if stream_url:
                     stream_headers = {
                         'User-Agent': common.RAND_UA,
-                        'Referer': 'https://vidnest.fun/',
-                        'Origin': 'https://vidnest.fun',
+                        'Referer': mirror_referer,
+                        'Origin': mirror_referer.rstrip('/'),
                         'verifypeer': 'false'
                     }
+
+                    if '.m3u8' in stream_url or '/_stream' in stream_url:
+                        delim = "&" if "?" in stream_url else "?"
+                        stream_url = f"{stream_url}{delim}bypass_localize=true"
+
                     playable_url = stream_url + helpers.append_headers(stream_headers)
 
                     if subs:
@@ -116,7 +102,6 @@ class VidNestResolver(ResolveUrl):
             return data_str
 
         char_map = {cls.CUSTOM_ALPHABET[i]: i for i in range(len(cls.CUSTOM_ALPHABET))}
-
         decoded_bytes = bytearray()
         data_len = len(data_str)
 
@@ -126,7 +111,6 @@ class VidNestResolver(ResolveUrl):
                 chunk += "="
 
             indices = [char_map.get(c, 64) for c in chunk]
-
             b0 = ((indices[0] & 63) << 2) | ((indices[1] & 48) >> 4)
             decoded_bytes.append(b0)
 
