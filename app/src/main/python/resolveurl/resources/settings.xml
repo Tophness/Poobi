@@ -1065,6 +1065,10 @@
 		<setting id="VevoCloudResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VevoCloudResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VevoCloudResolver_login" type="bool" label="33022" default="true" visible="false"/>
+		<setting label="VidAPI" type="lsep"/>
+		<setting id="VidAPIResolver_priority" type="number" label="33016" default="100"/>
+		<setting id="VidAPIResolver_enabled" type="bool" label="33017" default="true"/>
+		<setting id="VidAPIResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting label="VidBasic" type="lsep"/>
 		<setting id="VidBasicResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidBasicResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1105,12 +1109,12 @@
 		<setting id="VideoApneResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VideoApneResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VideoApneResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 14">
 		<setting label="VideoBin" type="lsep"/>
 		<setting id="VideoBinResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VideoBinResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VideoBinResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 14">
 		<setting label="Videooo" type="lsep"/>
 		<setting id="VideoooResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VideoooResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1179,12 +1183,12 @@
 		<setting id="VidoraResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidoraResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidoraResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 15">
 		<setting label="VidOrg" type="lsep"/>
 		<setting id="VidOrgResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidOrgResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidOrgResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 15">
 		<setting label="Vidoza" type="lsep"/>
 		<setting id="VidozaResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidozaResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1253,12 +1257,12 @@
 		<setting id="VirStreamResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VirStreamResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VirStreamResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 16">
 		<setting label="VixStream" type="lsep"/>
 		<setting id="VixStreamResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VixStreamResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VixStreamResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 16">
 		<setting label="VK" type="lsep"/>
 		<setting id="VKResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VKResolver_enabled" type="bool" label="33017" default="true"/>

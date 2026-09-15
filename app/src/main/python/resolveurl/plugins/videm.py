@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 """
-    Plugin for ResolveURL
+    Plugin for ResolveURL - Videm / MovieUniverse
     Copyright (C) 2026 Poobi
 """
 
@@ -49,13 +50,14 @@ class VidemResolver(ResolveUrl):
         if not servers:
             raise ResolverError('Videm: No server mirrors available in payload')
 
-        # Fallback sequence: try each server until a valid direct stream mints
         api_headers = {
             'User-Agent': common.RAND_UA,
             'Referer': web_url,
+            'Origin': 'https://videm.xyz',
             'X-Requested-With': 'XMLHttpRequest'
         }
 
+        # Race/iterate through all mirrors until one returns a playable stream
         for s in servers:
             s_ref = s.get('ref')
             if not s_ref:
@@ -65,19 +67,23 @@ class VidemResolver(ResolveUrl):
             try:
                 api_resp = self.net.http_GET(api_url, headers=api_headers)
                 api_data = json.loads(api_resp.content)
-                stream_url = api_data.get('url')
-                if stream_url:
-                    if stream_url.startswith('/'):
-                        stream_url = urllib_parse.urljoin('https://videm.xyz', stream_url)
+                raw_url = api_data.get('url')
+                if raw_url:
+                    if raw_url.startswith('/'):
+                        stream_url = urllib_parse.urljoin('https://videm.xyz/', raw_url)
+                    else:
+                        stream_url = raw_url
+
+                    delim = "&" if "?" in stream_url else "?"
+                    final_stream_url = f"{stream_url}{delim}bypass_localize=true"
 
                     stream_headers = {
                         'User-Agent': common.RAND_UA,
                         'Referer': web_url,
-                        'Origin': 'https://videm.xyz',
                         'verifypeer': 'false'
                     }
 
-                    final_url = stream_url + helpers.append_headers(stream_headers)
+                    playable_url = final_stream_url + helpers.append_headers(stream_headers)
 
                     if subs:
                         subtitles = {}
@@ -92,9 +98,9 @@ class VidemResolver(ResolveUrl):
                                     subtitles[label] = f"https://videm.xyz/api.php?a=sub&ref={urllib_parse.quote(s_ref_sub)}"
                         except Exception:
                             pass
-                        return final_url, subtitles
+                        return playable_url, subtitles
 
-                    return final_url
+                    return playable_url
             except Exception:
                 continue
 

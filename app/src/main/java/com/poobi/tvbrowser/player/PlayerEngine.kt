@@ -320,29 +320,35 @@ class PlayerEngine(
                urlLower.contains("/hls/") || 
                urlLower.contains("/pl/") || 
                urlLower.contains("/playlist/") ||
-			   urlLower.contains("/streamsvr/")
+               urlLower.contains("/streamsvr/") ||
+               urlLower.contains("/_stream")
     }
 
     private fun isDashUrl(url: String): Boolean {
         return url.lowercase().contains("mpd")
     }
 
-    private fun sanitizeHeaders(videoUrl: String, headers: Map<String, String>): Map<String, String> {
-        val mergedHeaders = headers.toMutableMap()
-        
-        if (isHlsUrl(videoUrl)) {
-            val refKey = mergedHeaders.keys.find { it.equals("referer", ignoreCase = true) }
-            val currentReferer = refKey?.let { mergedHeaders[it] }
+	private fun sanitizeHeaders(videoUrl: String, headers: Map<String, String>): Map<String, String> {
+		val mergedHeaders = headers.toMutableMap()
 
-            if (currentReferer.isNullOrEmpty()) {
-                mergedHeaders.keys.filter { it.equals("referer", ignoreCase = true) }.forEach {
-                    mergedHeaders.remove(it)
-                }
-                mergedHeaders["Referer"] = videoUrl
-            }
-        }
-        return mergedHeaders
-    }
+		val acceptKey = mergedHeaders.keys.find { it.equals("accept", ignoreCase = true) }
+		if (acceptKey != null && mergedHeaders[acceptKey]?.contains("json") == true) {
+			mergedHeaders.remove(acceptKey)
+		}
+
+		if (isHlsUrl(videoUrl)) {
+			val refKey = mergedHeaders.keys.find { it.equals("referer", ignoreCase = true) }
+			val currentReferer = refKey?.let { mergedHeaders[it] }
+
+			if (currentReferer.isNullOrEmpty()) {
+				mergedHeaders.keys.filter { it.equals("referer", ignoreCase = true) }.forEach {
+					mergedHeaders.remove(it)
+				}
+				mergedHeaders["Referer"] = videoUrl
+			}
+		}
+		return mergedHeaders
+	}
 
     fun requestPlayPauseFocus() {
         val view = playerView ?: return

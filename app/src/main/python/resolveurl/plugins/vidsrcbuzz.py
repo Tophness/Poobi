@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
     Plugin for ResolveURL - VidSrc.buzz (2embed child)
     Copyright (C) 2026 Poobi
@@ -59,13 +60,17 @@ class VidSrcBuzzResolver(ResolveUrl):
         else:
             stream_url = raw_url
 
+        # Append bypass_localize=true to avoid local proxy timeouts on Android
+        delim = "&" if "?" in stream_url else "?"
+        final_stream_url = f"{stream_url}{delim}bypass_localize=true"
+
         stream_headers = {
             'User-Agent': common.RAND_UA,
             'Referer': embed_url,
             'verifypeer': 'false'
         }
 
-        playable_url = stream_url + helpers.append_headers(stream_headers)
+        playable_url = final_stream_url + helpers.append_headers(stream_headers)
 
         if subs:
             subtitles = {}

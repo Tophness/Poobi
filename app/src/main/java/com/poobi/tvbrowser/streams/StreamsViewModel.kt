@@ -1460,17 +1460,20 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             val responseCode = connection.responseCode
             val contentType = connection.contentType ?: ""
 
-            if (responseCode in 200..299) {
-                if (contentType.contains("mpegurl", ignoreCase = true) || url.contains(".m3u8", ignoreCase = true)) {
-                    return@withContext verifyM3u8Content(url, headers)
-                }
+			if (responseCode in 200..299 || responseCode in 301..308) {
+				if (contentType.contains("mpegurl", ignoreCase = true) || url.contains(".m3u8", ignoreCase = true)) {
+					return@withContext verifyM3u8Content(url, headers)
+				}
 
-                val isValid = contentType.contains("video", ignoreCase = true) ||
-                        contentType.contains("mp4", ignoreCase = true) ||
-                        contentType.contains("octet-stream", ignoreCase = true)
+				val isValid = contentType.contains("video", ignoreCase = true) ||
+							  contentType.contains("mp4", ignoreCase = true) ||
+							  contentType.contains("octet-stream", ignoreCase = true) ||
+							  url.split("?")[0].endsWith(".mkv", ignoreCase = true) ||
+							  url.split("?")[0].endsWith(".mp4", ignoreCase = true) ||
+							  responseCode in 301..308
 
-                return@withContext isValid
-            }
+				return@withContext isValid
+			}
 
             if (responseCode == 405 || responseCode == 403 || responseCode == 501 || responseCode == 404) {
                 val getConn = URL(url).openConnection() as HttpURLConnection
