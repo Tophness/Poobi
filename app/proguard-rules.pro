@@ -36,13 +36,13 @@
     @com.google.api.client.util.Key <fields>;
 }
 
--keep class com.google.api.services.drive.** { *; }
--keep class com.google.api.client.** { *; }
--keep class com.google.api.client.json.** { *; }
--keep class com.google.api.client.json.gson.** { *; }
+-keep class com.google.api.services.drive.model.** {
+    <init>();
+    <fields>;
+}
+
+-keepattributes Signature, RuntimeVisibleAnnotations, AnnotationDefault
+
 -dontwarn com.google.api.client.**
 -dontwarn com.google.api.services.drive.**
 -dontwarn org.apache.http.**
--dontwarn com.google.common.**
-
--keepattributes Signature, *Annotation*, EnclosingMethod, InnerClasses

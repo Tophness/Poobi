@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.RemoteImage
+import com.poobi.tvbrowser.shared.StreamResumeManager
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvMarqueeText
 import com.poobi.tvbrowser.shared.isFutureDate
@@ -168,8 +169,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     ?: details?.optString("name")?.takeIf { it.isNotBlank() } 
                     ?: item?.optString("name") ?: ""
                 val displayTitle = "$showTitle S${viewModel.lastScrapedSeason}E${viewModel.lastScrapedEpisode}"
-                val resumeKey = "resume_stream_$displayTitle"
-                val savedPos = viewModel.prefs.getLong(resumeKey, 0L)
+                val savedPos = StreamResumeManager.getPosition(viewModel.prefs, displayTitle)
                 if (savedPos > 0L) {
                     return@remember viewModel.lastScrapedEpisode
                 }

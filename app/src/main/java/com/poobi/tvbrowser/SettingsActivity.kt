@@ -35,6 +35,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
+import android.Manifest
 import androidx.lifecycle.lifecycleScope
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
@@ -81,6 +84,8 @@ fun Modifier.tvSettingsFocus(
 }
 
 class SettingsActivity : AppCompatActivity() {
+
+    private var pendingStorageAction: (() -> Unit)? = null
 
     private lateinit var prefs: SharedPreferences
     private lateinit var driveSyncManager: DriveSyncManager
@@ -371,25 +376,90 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun ensureStoragePermission(): Boolean {
+    private val legacyStoragePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val readGranted = permissions[Manifest.permission.READ_EXTERNAL_STORAGE] ?: false
+        val writeGranted = permissions[Manifest.permission.WRITE_EXTERNAL_STORAGE] ?: true
+        if (readGranted && writeGranted) {
+            val action = pendingStorageAction
+            pendingStorageAction = null
+            action?.invoke()
+        } else {
+            Toast.makeText(this, "Storage permission is required to access backups", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val manageStorageLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!android.os.Environment.isExternalStorageManager()) {
-                Toast.makeText(this, "Please grant All Files Access to save/restore from Downloads", Toast.LENGTH_LONG).show()
+            if (android.os.Environment.isExternalStorageManager()) {
+                val action = pendingStorageAction
+                pendingStorageAction = null
+                action?.invoke()
+            } else {
+                Toast.makeText(this, "Permission denied: All Files Access is required", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun ensureStoragePermission(onGranted: () -> Unit): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        if (android.os.Environment.isExternalStorageManager()) {
+            onGranted()
+            return true
+        }
+
+        pendingStorageAction = onGranted
+
+        AlertDialog.Builder(this)
+            .setTitle("Storage Permission Required")
+            .setMessage("Poobi needs 'All files access' to save and restore backups in your Downloads folder. Please enable it on the next screen.")
+            .setPositiveButton("Allow Access") { _, _ ->
                 try {
                     val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
                         data = android.net.Uri.parse("package:$packageName")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                    startActivity(intent)
+                    manageStorageLauncher.launch(intent)
+                } catch (_: Exception) {
+                    try {
+                        val fallbackIntent = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        manageStorageLauncher.launch(fallbackIntent)
+                    } catch (e: Exception) {
+                        // Fallback directly to App Details Settings screen if Leanback/TV ROM omits All Files list
+                        val appDetailsIntent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = android.net.Uri.parse("package:$packageName")
+                        }
+                        manageStorageLauncher.launch(appDetailsIntent)
+                    }
                 }
-                return false
             }
+            .setNegativeButton("Cancel") { _, _ ->
+                pendingStorageAction = null
+            }
+            .show()
+
+        return false
+    } else {
+        val readPerm = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+        val writePerm = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+
+        if (readPerm == PackageManager.PERMISSION_GRANTED && writePerm == PackageManager.PERMISSION_GRANTED) {
+            onGranted()
+            return true
         }
-        return true
+
+        pendingStorageAction = onGranted
+        legacyStoragePermissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
+        )
+        return false
     }
+}
 
     private suspend fun syncToPython() = withContext(Dispatchers.IO) {
         try {
@@ -1993,15 +2063,16 @@ class SettingsActivity : AppCompatActivity() {
             item {
                 Button(
                     onClick = {
-                        if (!ensureStoragePermission()) return@Button
-                        lifecycleScope.launch {
-                            isProgressVisible = true
-                            val file = driveSyncManager.saveToLocalBackupFile()
-                            isProgressVisible = false
-                            if (file != null) {
-                                Toast.makeText(this@SettingsActivity, "Backup saved to: ${file.name}", Toast.LENGTH_LONG).show()
-                            } else {
-                                Toast.makeText(this@SettingsActivity, "Failed to save local backup file.", Toast.LENGTH_LONG).show()
+                        ensureStoragePermission {
+                            lifecycleScope.launch {
+                                isProgressVisible = true
+                                val file = driveSyncManager.saveToLocalBackupFile()
+                                isProgressVisible = false
+                                if (file != null) {
+                                    Toast.makeText(this@SettingsActivity, "Backup saved to: ${file.name}", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(this@SettingsActivity, "Failed to save local backup file.", Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
                     },
@@ -2015,17 +2086,18 @@ class SettingsActivity : AppCompatActivity() {
             item {
                 Button(
                     onClick = {
-                        if (!ensureStoragePermission()) return@Button
-                        lifecycleScope.launch {
-                            isProgressVisible = true
-                            val restored = driveSyncManager.restoreFromLocalBackupFile()
-                            isProgressVisible = false
-                            if (restored) {
-                                syncToPython()
-                                Toast.makeText(this@SettingsActivity, "Settings & data restored successfully!", Toast.LENGTH_LONG).show()
-                                recreate()
-                            } else {
-                                Toast.makeText(this@SettingsActivity, "No backup JSON file found in Downloads folder!", Toast.LENGTH_LONG).show()
+                        ensureStoragePermission {
+                            lifecycleScope.launch {
+                                isProgressVisible = true
+                                val restored = driveSyncManager.restoreFromLocalBackupFile()
+                                isProgressVisible = false
+                                if (restored) {
+                                    syncToPython()
+                                    Toast.makeText(this@SettingsActivity, "Settings & data restored successfully!", Toast.LENGTH_LONG).show()
+                                    recreate()
+                                } else {
+                                    Toast.makeText(this@SettingsActivity, "No backup JSON file found in Downloads folder!", Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
                     },
@@ -2212,6 +2284,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 prefs.edit().apply {
+                    putString("stream_resume_points", prefs.getString("stream_resume_points", "{}"))
                     putLong("settings_last_modified", System.currentTimeMillis())
                     putBoolean("light_theme", lightTheme)
                     putInt("restore_tabs_pref", restoreOption)

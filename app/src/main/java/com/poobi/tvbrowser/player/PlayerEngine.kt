@@ -33,6 +33,7 @@ import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.extractor.text.SubtitleParser
 import androidx.media3.ui.PlayerView
 import com.chaquo.python.Python
+import com.poobi.tvbrowser.shared.StreamResumeManager
 import com.poobi.tvbrowser.shared.SubtitleData
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -190,6 +191,33 @@ class PlayerEngine(
                     updateNativeSubtitleViewVisibility()
                 }
             }
+        }
+    }
+
+    fun getResumePosition(title: String?): Long {
+        if (title.isNullOrBlank()) return 0L
+        return try {
+            val jsonStr = prefs.getString("stream_resume_points", "{}") ?: "{}"
+            val jsonObj = JSONObject(jsonStr)
+            jsonObj.optLong(title, 0L)
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    fun saveResumePosition(title: String?, positionMs: Long, isCompleted: Boolean) {
+        if (title.isNullOrBlank()) return
+        try {
+            val jsonStr = prefs.getString("stream_resume_points", "{}") ?: "{}"
+            val jsonObj = JSONObject(jsonStr)
+            if (isCompleted) {
+                jsonObj.remove(title)
+            } else if (positionMs > 5000L) {
+                jsonObj.put(title, positionMs)
+            }
+            prefs.edit().putString("stream_resume_points", jsonObj.toString()).apply()
+        } catch (e: Exception) {
+            Log.e("PlayerEngine", "Error saving resume position for $title", e)
         }
     }
 
@@ -675,13 +703,10 @@ class PlayerEngine(
             }
         }
 
-        val resumeKey = if (title != null) "resume_stream_$title" else null
         val savedPos = if (initialPositionMs > 0L) {
             initialPositionMs
-        } else if (resumeKey != null) {
-            prefs.getLong(resumeKey, 0L)
         } else {
-            0L
+            StreamResumeManager.getPosition(prefs, title)
         }
 
         if (savedPos > 5000L) {
@@ -941,12 +966,10 @@ class PlayerEngine(
         val player = exoPlayer
         if (player != null && player.playerError == null && hasReachedReady && !lastIsTrailer) {
             val title = lastVideoTitle
-            val resumeKey = if (title != null) "resume_stream_$title" else null
-
-            if (resumeKey != null) {
+            if (title != null) {
                 val pos = player.currentPosition
                 val dur = player.duration
-                
+
                 val creditsStart = introDbManager.getCreditsStartMs()
                 val isCompleted = if (creditsStart != null) {
                     pos >= creditsStart
@@ -956,8 +979,9 @@ class PlayerEngine(
                 }
 
                 if (dur > 0) {
+                    StreamResumeManager.savePosition(prefs, title, pos, isCompleted)
+
                     if (isCompleted) {
-                        prefs.edit().remove(resumeKey).apply()
                         val season = lastScrapedSeason
                         val episode = lastScrapedEpisode
                         if (season != null && episode != null) {
@@ -975,8 +999,6 @@ class PlayerEngine(
                                 }
                             }
                         }
-                    } else if (pos > 5000L) {
-                        prefs.edit().putLong(resumeKey, pos).apply()
                     }
                 }
             }

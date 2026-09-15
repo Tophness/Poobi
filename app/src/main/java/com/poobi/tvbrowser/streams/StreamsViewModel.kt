@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaquo.python.Python
+import com.poobi.tvbrowser.shared.StreamResumeManager
 import com.poobi.tvbrowser.shared.SubtitleData
 import com.poobi.tvbrowser.torrent.TorrentSortCriteria
 import com.poobi.tvbrowser.torrent.TorrentStreamServer
@@ -682,7 +683,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 prefs.edit().putString("streams_recently_played", newList.toString()).apply()
                 
                 if (displayTitle.isNotEmpty()) {
-                    prefs.edit().remove("resume_stream_$displayTitle").apply()
+                    StreamResumeManager.removePosition(prefs, displayTitle)
                 }
                 
                 withContext(Dispatchers.Main) {
