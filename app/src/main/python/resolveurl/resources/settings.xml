@@ -1213,10 +1213,6 @@
 		<setting id="VidSrcResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidSrcResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VidSrcResolver_login" type="bool" label="33022" default="true" visible="false"/>
-		<setting label="VidSrcBuzz" type="lsep"/>
-		<setting id="VidSrcBuzzResolver_priority" type="number" label="33016" default="100"/>
-		<setting id="VidSrcBuzzResolver_enabled" type="bool" label="33017" default="true"/>
-		<setting id="VidSrcBuzzResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting label="VidsSt" type="lsep"/>
 		<setting id="VidsStResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VidsStResolver_enabled" type="bool" label="33017" default="true"/>
@@ -1257,12 +1253,12 @@
 		<setting id="VirStreamResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VirStreamResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VirStreamResolver_login" type="bool" label="33022" default="true" visible="false"/>
-	</category>
-	<category label="33015 16">
 		<setting label="VixStream" type="lsep"/>
 		<setting id="VixStreamResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VixStreamResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="VixStreamResolver_login" type="bool" label="33022" default="true" visible="false"/>
+	</category>
+	<category label="33015 16">
 		<setting label="VK" type="lsep"/>
 		<setting id="VKResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="VKResolver_enabled" type="bool" label="33017" default="true"/>

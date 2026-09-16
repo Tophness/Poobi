@@ -40,12 +40,17 @@ class GoodStreamCCResolver(ResolveUrl):
             'Sec-Fetch-Site': 'cross-site'
         }
 
+        cookie_str = ""
         if cfscrape:
             resp_get = session.get(web_url, headers=headers)
             html = resp_get.text if resp_get else ''
+            cookie_dict = session.cookies.get_dict()
+            cookie_str = "; ".join([f"{k}={v}" for k, v in cookie_dict.items()])
         else:
             headers['User-Agent'] = common.RAND_UA
-            html = session.http_GET(web_url, headers=headers).content
+            resp_get = session.http_GET(web_url, headers=headers)
+            html = resp_get.content
+            cookie_str = resp_get.get_headers(as_dict=True).get('Set-Cookie', '')
 
         r = re.search(r'id=["\']csrf_token["\']\s*value=["\']([^"\']+)["\']', html)
         if not r:
@@ -64,6 +69,9 @@ class GoodStreamCCResolver(ResolveUrl):
                 'Accept': 'application/json, text/javascript, */*; q=0.01',
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
             }
+            if cookie_str:
+                post_headers['Cookie'] = cookie_str
+
             data = {'csrf_token': csrf_token, 'token': ''}
 
             if cfscrape:
@@ -90,7 +98,10 @@ class GoodStreamCCResolver(ResolveUrl):
                 if sources:
                     ua = session.headers.get('User-Agent', common.RAND_UA) if cfscrape else common.RAND_UA
                     resolved = helpers.pick_source(sources)
-                    return resolved + helpers.append_headers({'User-Agent': ua, 'Referer': web_url})
+                    stream_headers = {'User-Agent': ua, 'Referer': web_url}
+                    if cookie_str:
+                        stream_headers['Cookie'] = cookie_str
+                    return resolved + helpers.append_headers(stream_headers)
 
         raise ResolverError('File Not Found or Removed')
 

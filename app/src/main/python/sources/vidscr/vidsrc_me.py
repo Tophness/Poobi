@@ -321,16 +321,20 @@ class source:
                 server_label = f"Server {idx + 1} (Primary)" if idx == 0 else f"Server {idx + 1} (Backup)"
                 all_alt_names.append(server_label)
 
+            mirror_count = len(all_play_urls)
             self.results.append({
                 'source': 'VidSrc',
-                'title': 'VidSrc',
+                'title': f'VidSrc ({mirror_count} Servers)',
+                'provider': 'VidSrc Network',
                 'quality': '1080p',
                 'url': all_play_urls[0],
                 'direct': True,
                 'is_video': True,
-                'info': '1080p | Adaptive HLS',
-                'alternative_urls': all_play_urls if len(all_play_urls) > 1 else [],
-                'alternative_names': all_alt_names if len(all_alt_names) > 1 else []
+                'info': f'1080p | Adaptive HLS | {mirror_count} Mirrors',
+                'audio': 'English',
+                'languages_display': 'English',
+                'alternative_urls': all_play_urls if mirror_count > 1 else [],
+                'alternative_names': all_alt_names if mirror_count > 1 else []
             })
 
         except Exception as e:

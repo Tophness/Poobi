@@ -412,6 +412,8 @@ class UniversalScraper:
     def __init__(self, enabled_packs):
         self.enabled_packs = enabled_packs
         self.sources = []
+        self.seen_urls = set()
+        self.sources_lock = threading.Lock()
         self.provider_instances = {}
         self.status = {"total": 0, "current": 0, "message": "Initializing...", "timeout": 0}
         self.stop_event = threading.Event()
@@ -593,12 +595,25 @@ class UniversalScraper:
                     results = provider.sources(url, self.hostDict)
 
                 if results:
-                    for res in results:
-                        if self.stop_event.is_set(): break
-                        res.setdefault('provider', f"[{pack_name}] {name}")
-                        res.setdefault('direct', False)
-                        res['provider_key'] = f"{pack_name}_{name}"
-                    self.sources.extend(results)
+                    with self.sources_lock:
+                        for res in results:
+                            if self.stop_event.is_set(): break
+                            
+                            raw_url = res.get('url')
+                            if not raw_url:
+                                continue
+
+                            clean_key = raw_url.split('|')[0].strip().rstrip('/').lower()
+
+                            if clean_key in self.seen_urls:
+                                continue
+                            self.seen_urls.add(clean_key)
+
+                            res.setdefault('provider', f"[{pack_name}] {name}")
+                            res.setdefault('direct', False)
+                            res['provider_key'] = f"{pack_name}_{name}"
+                            self.sources.append(res)
+
             self.status["current"] += 1
         except Exception:
             self.status["current"] += 1

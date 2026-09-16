@@ -44,7 +44,6 @@ class source:
             episode = data.get('episode', '0')
             year = data.get('premiered', '').split('-')[0] if 'tvshowtitle' in data else data.get('year')
 
-            # 1. Determine page URL
             if 'tvshowtitle' in data:
                 page_url = f"{self.base_link}/episode/{cleantitle.get_dash(title)}-season-{season}-episode-{episode}/"
             else:
@@ -57,7 +56,6 @@ class source:
 
             html = response.text
 
-            # 2. Extract streamkey & wpnonce
             streamkey_match = re.search(r'data-streamkey=["\']([^"\']+)["\']', html)
             nonce_match = re.search(r'data-wpnonce=["\']([^"\']+)["\']', html) or re.search(r'data-nonce=["\']([^"\']+)["\']', html)
 
@@ -67,7 +65,6 @@ class source:
             streamkey = streamkey_match.group(1)
             wpnonce = nonce_match.group(1)
 
-            # 3. Request admin-ajax.php for embed URLs
             post_link = self.base_link + self.ajax_link
             ajax_headers = {
                 'User-Agent': client.UserAgent,
@@ -89,13 +86,56 @@ class source:
             ajax_data = json.loads(ajax_resp.text)
             servers_iframe = ajax_data.get('servers_iframe', {})
 
-            embed_links = []
-            for name, embed_url in servers_iframe.items():
-                if embed_url:
-                    embed_links.append(embed_url.replace('&amp;', '&'))
+            goodstream_variants = []
+            other_embeds = []
 
-            # Also ensure host is in hostDict
-            for link in embed_links:
+            for s_name, embed_url in servers_iframe.items():
+                if not embed_url:
+                    continue
+                clean_embed = embed_url.replace('&amp;', '&')
+
+                if 'goodstream.cc' in clean_embed:
+                    name_lower = s_name.lower()
+                    if '1080' in name_lower:
+                        qual = '1080p'
+                        rank = 1
+                    elif '720' in name_lower or 'streamsvr' in name_lower:
+                        qual = '720p'
+                        rank = 2
+                    elif '4k' in name_lower or '2160' in name_lower:
+                        qual = '4K'
+                        rank = 0
+                    else:
+                        qual = '720p'
+                        rank = 2
+
+                    goodstream_variants.append({
+                        'name': qual,
+                        'url': clean_embed,
+                        'rank': rank
+                    })
+                else:
+                    other_embeds.append(clean_embed)
+
+            if goodstream_variants:
+                goodstream_variants.sort(key=lambda x: x['rank'])
+                primary = goodstream_variants[0]
+                alt_urls = [v['url'] for v in goodstream_variants]
+                alt_names = [v['name'] for v in goodstream_variants]
+
+                self.results.append({
+                    'source': 'goodstream.cc',
+                    'title': 'GoodStream',
+                    'quality': primary['name'],
+                    'url': primary['url'],
+                    'direct': False,
+                    'is_video': True,
+                    'info': f"{primary['name']} | GoodStream",
+                    'alternative_urls': alt_urls if len(alt_urls) > 1 else [],
+                    'alternative_names': alt_names if len(alt_names) > 1 else []
+                })
+
+            for link in other_embeds:
                 for src in scrape_sources.process(hostDict, link):
                     self.results.append(src)
 
