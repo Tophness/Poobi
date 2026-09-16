@@ -52,16 +52,9 @@ class VidSrcResolver(ResolveUrl):
 
     def get_media_url(self, host, media_id, subs=False):
         global _CACHED_STREAM_TOKEN, _CACHED_TOKEN_EXPIRY
+        embed_url = ""
         try:
             ua = common.RAND_UA
-
-            s = requests.Session()
-            s.headers.update({
-                'User-Agent': ua,
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Connection': 'keep-alive'
-            })
 
             if not host:
                 host = 'vidsrc.me'
@@ -79,6 +72,17 @@ class VidSrcResolver(ResolveUrl):
                     media_id = f"movie/{media_id}"
 
             embed_url = f"https://{host}/embed/{media_id}"
+            container_host = f"https://{host}"
+
+            s = requests.Session()
+            s.headers.update({
+                'User-Agent': ua,
+                'Referer': container_host + '/',
+                'Origin': container_host,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Connection': 'keep-alive'
+            })
 
             try:
                 r1 = s.get(embed_url, timeout=12, allow_redirects=True, verify=False)
@@ -92,65 +96,22 @@ class VidSrcResolver(ResolveUrl):
 
             final_embed_url = r1.url
             html1 = r1.text
+            container_host = f"{urlparse(final_embed_url).scheme}://{urlparse(final_embed_url).netloc}"
+            s.headers.update({'Referer': container_host + '/', 'Origin': container_host})
 
-            iframe1 = re.search(r'<iframe[^>]+src=["\']([^"\']+)["\']', html1, re.I)
-            if iframe1 and not iframe1.group(1).startswith("${"):
-                layer1_url = urljoin(final_embed_url, iframe1.group(1))
-                r2 = s.get(layer1_url, headers={'Referer': final_embed_url}, timeout=12, verify=False)
-                html2 = r2.text
-            else:
-                layer1_url = final_embed_url
-                html2 = html1
+            html3 = ""
+            active_player_url = final_embed_url
 
-            container_url = None
-            data_api_match = re.search(r'data-api=["\']([^"\']+)["\']', html2)
-            if data_api_match:
-                api_rel = data_api_match.group(1).replace('&amp;', '&')
-                api_url = urljoin(layer1_url, api_rel)
+            cfg_match_landing = re.search(r'window\.CFG\s*=\s*({.+?});', html1)
+            if cfg_match_landing:
                 try:
-                    api_resp = s.get(
-                        api_url,
-                        headers={
-                            'Referer': layer1_url,
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Accept': 'application/json, text/javascript, */*; q=0.01'
-                        },
-                        timeout=10,
-                        verify=False
-                    )
-                    container_url = api_resp.json().get('src')
-                except Exception:
-                    pass
-
-            if not container_url:
-                iframe2 = re.search(r'<iframe[^>]+src=["\']([^"\']+)["\']', html2, re.I)
-                if iframe2:
-                    container_url = urljoin(layer1_url, iframe2.group(1))
-
-            if not container_url:
-                raise ResolverError('VidSrc: Container URL not found')
-
-            container_host = f"{urlparse(container_url).scheme}://{urlparse(container_url).netloc}"
-
-            r3 = s.get(
-                container_url,
-                headers={'Referer': layer1_url, 'Origin': container_host},
-                timeout=12,
-                verify=False
-            )
-            html3 = r3.text
-            active_player_url = container_url
-
-            cfg_match = re.search(r'window\.CFG\s*=\s*({[^;]+});', html3)
-            if cfg_match:
-                try:
-                    cfg_data = json.loads(cfg_match.group(1))
+                    cfg_data = json.loads(cfg_match_landing.group(1))
                     player_path = cfg_data.get('playerUrl')
                     if player_path:
-                        inner_player_url = urljoin(container_url, player_path)
+                        inner_player_url = urljoin(final_embed_url, player_path)
                         r4 = s.get(
                             inner_player_url,
-                            headers={'Referer': container_url, 'Origin': container_host},
+                            headers={'Referer': final_embed_url, 'Origin': container_host},
                             timeout=12,
                             verify=False
                         )
@@ -158,6 +119,73 @@ class VidSrcResolver(ResolveUrl):
                         active_player_url = inner_player_url
                 except Exception:
                     pass
+
+            if not html3:
+                iframe1 = re.search(r'<iframe[^>]+src=["\']([^"\']+)["\']', html1, re.I)
+                if iframe1 and not iframe1.group(1).startswith("${"):
+                    layer1_url = urljoin(final_embed_url, iframe1.group(1))
+                    r2 = s.get(layer1_url, headers={'Referer': final_embed_url}, timeout=12, verify=False)
+                    html2 = r2.text
+                else:
+                    layer1_url = final_embed_url
+                    html2 = html1
+
+                container_url = None
+                data_api_match = re.search(r'data-api=["\']([^"\']+)["\']', html2)
+                if data_api_match:
+                    api_rel = data_api_match.group(1).replace('&amp;', '&')
+                    api_url = urljoin(layer1_url, api_rel)
+                    try:
+                        api_resp = s.get(
+                            api_url,
+                            headers={
+                                'Referer': layer1_url,
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json, text/javascript, */*; q=0.01'
+                            },
+                            timeout=10,
+                            verify=False
+                        )
+                        container_url = api_resp.json().get('src')
+                    except Exception:
+                        pass
+
+                if not container_url:
+                    iframe2 = re.search(r'<iframe[^>]+src=["\']([^"\']+)["\']', html2, re.I)
+                    if iframe2:
+                        container_url = urljoin(layer1_url, iframe2.group(1))
+
+                if not container_url:
+                    raise ResolverError('VidSrc: Container URL not found')
+
+                container_host = f"{urlparse(container_url).scheme}://{urlparse(container_url).netloc}"
+
+                r3 = s.get(
+                    container_url,
+                    headers={'Referer': layer1_url, 'Origin': container_host},
+                    timeout=12,
+                    verify=False
+                )
+                html3 = r3.text
+                active_player_url = container_url
+
+                cfg_match = re.search(r'window\.CFG\s*=\s*({[^;]+});', html3)
+                if cfg_match:
+                    try:
+                        cfg_data = json.loads(cfg_match.group(1))
+                        player_path = cfg_data.get('playerUrl')
+                        if player_path:
+                            inner_player_url = urljoin(container_url, player_path)
+                            r4 = s.get(
+                                inner_player_url,
+                                headers={'Referer': container_url, 'Origin': container_host},
+                                timeout=12,
+                                verify=False
+                            )
+                            html3 = r4.text
+                            active_player_url = inner_player_url
+                    except Exception:
+                        pass
 
             m3u8_candidates = []
             subtitles_dict = {}
@@ -283,7 +311,6 @@ class VidSrcResolver(ResolveUrl):
             parsed_url = urlparse(stream_url)
             stream_origin = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
-            # Token fetching with global caching across requests
             token = ""
             now = time.time()
             if _CACHED_STREAM_TOKEN and now < _CACHED_TOKEN_EXPIRY:
@@ -306,7 +333,7 @@ class VidSrcResolver(ResolveUrl):
                             token = raw_token
                         if token:
                             _CACHED_STREAM_TOKEN = token
-                            _CACHED_TOKEN_EXPIRY = now + 7200  # Valid for 2 hours
+                            _CACHED_TOKEN_EXPIRY = now + 7200
                     elif t_resp.status_code == 429 and _CACHED_STREAM_TOKEN:
                         token = _CACHED_STREAM_TOKEN
                 except Exception:
@@ -340,7 +367,7 @@ class VidSrcResolver(ResolveUrl):
 
     def get_url(self, host, media_id):
         if not host or not host.startswith('http'):
-            host = host or 'vidsrc.me'
+            host = 'vidsrc.me'
         if not media_id.startswith('movie/') and not media_id.startswith('tv/') and not media_id.startswith('tt'):
             parts = [p for p in media_id.split('/') if p]
             if len(parts) >= 2:

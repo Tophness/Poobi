@@ -638,10 +638,6 @@
 		<setting id="MeGoGoResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="MeGoGoResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="MeGoGoResolver_login" type="bool" label="33022" default="true" visible="false"/>
-		<setting label="Mercury" type="lsep"/>
-		<setting id="MercuryResolver_priority" type="number" label="33016" default="100"/>
-		<setting id="MercuryResolver_enabled" type="bool" label="33017" default="true"/>
-		<setting id="MercuryResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting label="MightyUpload" type="lsep"/>
 		<setting id="MightyUploadResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="MightyUploadResolver_enabled" type="bool" label="33017" default="true"/>
@@ -658,6 +654,10 @@
 		<setting id="MP4UploadResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="MP4UploadResolver_enabled" type="bool" label="33017" default="true"/>
 		<setting id="MP4UploadResolver_login" type="bool" label="33022" default="true" visible="false"/>
+		<setting label="MultiEmbed" type="lsep"/>
+		<setting id="MultiEmbedResolver_priority" type="number" label="33016" default="100"/>
+		<setting id="MultiEmbedResolver_enabled" type="bool" label="33017" default="true"/>
+		<setting id="MultiEmbedResolver_login" type="bool" label="33022" default="true" visible="false"/>
 		<setting label="MyFeminist" type="lsep"/>
 		<setting id="MyFeministResolver_priority" type="number" label="33016" default="100"/>
 		<setting id="MyFeministResolver_enabled" type="bool" label="33017" default="true"/>
