@@ -83,10 +83,8 @@ class source:
             try:
                 r1 = s.get(embed_url, timeout=12, allow_redirects=True, verify=False)
             except Exception as e:
-                print(f"[VidSrc] [Step 1] Primary domain failed: {e}. Trying fallback...", flush=True)
                 embed_url = f"{self.fallback_link}/embed/{content}/{url}"
                 r1 = s.get(embed_url, timeout=12, allow_redirects=True, verify=False)
-                print(f"[VidSrc] [Step 1] Fallback landed on: {r1.url} (Status: {r1.status_code})", flush=True)
 
             final_embed_url = r1.url
             embed_host = f"{urlparse(final_embed_url).scheme}://{urlparse(final_embed_url).netloc}"
@@ -109,9 +107,8 @@ class source:
                         verify=False
                     )
                     container_url = api_resp.json().get('src')
-                except Exception as e:
-                    print(f"[VidSrc] [Step 2] vs_src.php request failed: {e}", flush=True)
-                    traceback.print_exc()
+                except Exception:
+                    pass
 
             if not container_url:
                 iframe_match = re.search(r'<iframe[^>]+src=["\']([^"\']+)["\']', html1, re.I)
@@ -142,8 +139,8 @@ class source:
                     player_path = cfg_data.get('playerUrl')
                     if player_path:
                         inner_player_url = urljoin(container_host, player_path)
-                except Exception as e:
-                    print(f"[VidSrc] [Step 3] Failed parsing window.CFG: {e}", flush=True)
+                except Exception:
+                    pass
 
             if not inner_player_url:
                 p_match = re.search(r'["\']playerUrl["\']\s*:\s*["\']([^"\']+)["\']', html2)
@@ -236,18 +233,15 @@ class source:
                                     if l.strip() and l.startswith('http')
                                 ]
                                 m3u8_candidates.extend(urls_in_plain)
-                            except Exception as e:
-                                print(f"[VidSrc] [Step 5] in-memory pywasm decryption failed: {e}. Trying raw match fallback...", flush=True)
-                                traceback.print_exc()
+                            except Exception:
                                 urls_in_raw = re.findall(r'https?://[^\s\'"<>]+?\.m3u8[^\s\'"<>]*', api_resp.text)
                                 m3u8_candidates.extend(urls_in_raw)
                         else:
                             val = api_json.get('data', {}).get('stream_urls')
                             if isinstance(val, list):
                                 m3u8_candidates.extend(val)
-                except Exception as e:
-                    print(f"[VidSrc] [Step 5] Error querying CONFIG.api: {e}", flush=True)
-                    traceback.print_exc()
+                except Exception:
+                    pass
 
             if not m3u8_candidates:
                 for pattern in [
@@ -269,9 +263,14 @@ class source:
                     seen.add(clean_c)
                     unique_candidates.append(c)
 
-            token_cache = {}
+            if not unique_candidates:
+                return []
 
-            for stream_url in unique_candidates:
+            token_cache = {}
+            all_play_urls = []
+            all_alt_names = []
+
+            for idx, stream_url in enumerate(unique_candidates):
                 parsed_url = urlparse(stream_url)
                 stream_origin = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
@@ -300,9 +299,8 @@ class source:
                                 token = raw_token
 
                             token_cache[stream_origin] = token
-                    except Exception as e:
-                        print(f"[VidSrc] [Step 6] Token retrieval exception: {e}", flush=True)
-                        traceback.print_exc()
+                    except Exception:
+                        pass
 
                 if token:
                     delim = "&" if "?" in stream_url else "?"
@@ -318,17 +316,24 @@ class source:
                     f"&Origin={container_host}"
                     f"&User-Agent={self.ua}"
                 )
-                
-                self.results.append({
-                    'source': 'VidSrc',
-                    'quality': '1080p',
-                    'url': play_url,
-                    'direct': True,
-                    'info': 'HLS' if '.m3u8' in stream_url else 'MP4'
-                })
+
+                all_play_urls.append(play_url)
+                server_label = f"Server {idx + 1} (Primary)" if idx == 0 else f"Server {idx + 1} (Backup)"
+                all_alt_names.append(server_label)
+
+            self.results.append({
+                'source': 'VidSrc',
+                'title': 'VidSrc',
+                'quality': '1080p',
+                'url': all_play_urls[0],
+                'direct': True,
+                'is_video': True,
+                'info': '1080p | Adaptive HLS',
+                'alternative_urls': all_play_urls if len(all_play_urls) > 1 else [],
+                'alternative_names': all_alt_names if len(all_alt_names) > 1 else []
+            })
 
         except Exception as e:
-            print(f"[VidSrc] [FATAL EXCEPTION in sources()]: {e}", flush=True)
             traceback.print_exc()
 
         return self.results

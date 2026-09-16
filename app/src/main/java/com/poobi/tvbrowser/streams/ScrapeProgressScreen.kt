@@ -150,17 +150,31 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
     val autoSubPref = viewModel.prefs.getInt("auto_sub_pref", 0)
     val hasSubHeader = selectedTab == "Web" && autoSubPref == 2
 
-    val targetIdx = remember(currentSources, selectedTab, viewModel.lastSelectedSourceIndex, viewModel.lastSelectedSourceData) {
-        val savedData = viewModel.lastSelectedSourceData
-        if (savedData != null && currentSources != null) {
+    val targetIdx = remember(currentSources, selectedTab, viewModel.lastSelectedSourceIndex, viewModel.lastSelectedSourceKey) {
+        val key = viewModel.lastSelectedSourceKey
+        if (key != null && currentSources != null) {
             for (i in 0 until currentSources.length()) {
-                val item = currentSources.optJSONObject(i)
-                if (item != null && item.optString("source_data") == savedData) {
+                val s = currentSources.optJSONObject(i) ?: continue
+                val raw = try { JSONObject(s.optString("source_data", "{}")) } catch (e: Exception) { s }
+                val itemHash = raw.optString("infoHash")
+                val itemFileIdx = raw.optInt("fileIdx", -1)
+                val itemUrl = raw.optString("url").ifEmpty { raw.optString("link") }
+                val itemSource = raw.optString("source")
+                val itemProvider = raw.optString("provider")
+                val itemQuality = raw.optString("quality")
+                val itemTitle = s.optString("title").substringBefore("\n").trim()
+
+                val itemKey = when {
+                    itemHash.isNotEmpty() -> "${itemHash}_$itemFileIdx"
+                    itemUrl.isNotEmpty() -> "${itemProvider}_${itemSource}_$itemUrl"
+                    else -> "${itemProvider}_${itemSource}_${itemQuality}_$itemTitle"
+                }
+
+                if (itemKey == key) {
                     viewModel.lastSelectedSourceIndex = i
                     return@remember i
                 }
             }
-            return@remember -1
         }
         viewModel.lastSelectedSourceIndex
     }
@@ -187,20 +201,8 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
         }
     }
 
-    LaunchedEffect(isScraping, isResolving) {
-        if (isScraping && !isResolving && targetIdx < 0) {
-            val startTime = System.currentTimeMillis()
-            try {
-                delay(250)
-                if (KeyTracker.lastKeyPressTime < startTime) {
-                    stopScanningFocusRequester.requestFocus()
-                }
-            } catch (e: Exception) {}
-        }
-    }
-
-    LaunchedEffect(isScraping, currentSources, selectedTab) {
-        if (!hasRestoredFocus && !userNavigatedAway && currentSources != null && currentSources.length() > 0) {
+    LaunchedEffect(isScraping, currentSources, selectedTab, targetIdx) {
+        if (!userNavigatedAway && currentSources != null && currentSources.length() > 0) {
             if (isTargetValid) {
                 val scrollIdx = if (hasSubHeader) targetIdx + 1 else targetIdx
                 try {
@@ -208,27 +210,39 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                 } catch (e: Exception) {}
 
                 val startTime = System.currentTimeMillis()
-                try {
-                    delay(150)
-                    if (KeyTracker.lastKeyPressTime < startTime && !userNavigatedAway) {
-                        selectedSourceFocusRequester.requestFocus()
-                    }
-                } catch (e: Exception) {
+                delay(100)
+                if (KeyTracker.lastKeyPressTime < startTime && !userNavigatedAway) {
                     try {
-                        delay(100)
-                        if (!userNavigatedAway) selectedSourceFocusRequester.requestFocus()
-                    } catch (e2: Exception) {}
+                        selectedSourceFocusRequester.requestFocus()
+                    } catch (e: Exception) {}
                 }
                 hasRestoredFocus = true
-            } else if (!isScraping) {
+            } else if (!isScraping && !hasRestoredFocus) {
                 val startTime = System.currentTimeMillis()
-                try {
-                    delay(150)
-                    if (KeyTracker.lastKeyPressTime < startTime && !userNavigatedAway) {
+                delay(150)
+                if (KeyTracker.lastKeyPressTime < startTime && !userNavigatedAway) {
+                    try {
                         selectedSourceFocusRequester.requestFocus()
-                    }
-                } catch (e: Exception) {}
+                    } catch (e: Exception) {}
+                }
                 hasRestoredFocus = true
+            }
+        }
+    }
+
+    LaunchedEffect(currentSources, targetIdx, userNavigatedAway) {
+        if (!userNavigatedAway && isTargetValid) {
+            val scrollIdx = if (hasSubHeader) targetIdx + 1 else targetIdx
+            try {
+                lazyListState.scrollToItem(scrollIdx)
+            } catch (e: Exception) {}
+
+            val startTime = System.currentTimeMillis()
+            delay(100)
+            if (KeyTracker.lastKeyPressTime < startTime && !userNavigatedAway) {
+                try {
+                    selectedSourceFocusRequester.requestFocus()
+                } catch (e: Exception) {}
             }
         }
     }
@@ -520,7 +534,27 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                         }
                     }
 
-                    items(currentSources.length()) { idx ->
+                    items(
+                        count = currentSources.length(),
+                        key = { idx ->
+                            val s = currentSources.optJSONObject(idx)
+                            if (s != null) {
+                                val raw = try { JSONObject(s.optString("source_data", "{}")) } catch (e: Exception) { s }
+                                val h = raw.optString("infoHash")
+                                val f = raw.optInt("fileIdx", -1)
+                                val u = raw.optString("url").ifEmpty { raw.optString("link") }
+                                val src = raw.optString("source")
+                                val prov = raw.optString("provider")
+                                val q = raw.optString("quality")
+                                val t = s.optString("title").substringBefore("\n").trim()
+                                when {
+                                    h.isNotEmpty() -> "${h}_$f"
+                                    u.isNotEmpty() -> "${prov}_${src}_$u"
+                                    else -> "${prov}_${src}_${q}_$t"
+                                }
+                            } else idx
+                        }
+                    ) { idx ->
                         val s = currentSources.optJSONObject(idx) ?: return@items
                         val sourceDataStr = s.optString("source_data", "{}")
                         val rawData = JSONObject(sourceDataStr)
@@ -554,7 +588,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                 .then(if (isTargetItem) Modifier.focusRequester(selectedSourceFocusRequester) else Modifier)
                                 .onFocusChanged { state ->
                                     if (state.isFocused) {
-                                        if (!isTargetItem) {
+                                        if (!isTargetItem && KeyTracker.isKeyFresh()) {
                                             userNavigatedAway = true
                                         }
                                         hasRestoredFocus = true
@@ -570,8 +604,6 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                     }
                                 }, 
                             onClick = { 
-                                viewModel.lastSelectedSourceIndex = idx
-                                viewModel.lastSelectedSourceData = sourceDataStr
                                 viewModel.resolveAndPlay(sourceDataStr, s, idx) 
                             }
                         ) { isFocused ->

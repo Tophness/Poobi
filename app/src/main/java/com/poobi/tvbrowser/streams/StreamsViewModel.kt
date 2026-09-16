@@ -188,7 +188,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     val selectedScrapeTabIndex = MutableStateFlow(0)
     var lastSelectedSourceIndex: Int = -1
-    var lastSelectedSourceData: String? = null
+    var lastSelectedSourceKey: String? = null
 
     init {
         loadSearchHistory()
@@ -464,7 +464,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _isScrapingTorrents.value = false
         selectedScrapeTabIndex.value = 0
         lastSelectedSourceIndex = -1
-        lastSelectedSourceData = null
+        lastSelectedSourceKey = null
     }
 
     fun clearSelectedMedia() { _selectedItem.value = null }
@@ -1639,6 +1639,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun playStream(streamUrl: String, isVideo: Boolean, sourceDataJson: String, extraHeaders: Map<String, String> = emptyMap()) {
+        _isResolving.value = false
         val cleanTitle = _selectedItem.value?.optString("title")?.takeIf { it.isNotBlank() } ?: _selectedItem.value?.optString("name") ?: "Unknown"
         val fullTitle = if (lastScrapedSeason != null && lastScrapedEpisode != null) {
             "$cleanTitle S${lastScrapedSeason}E${lastScrapedEpisode}"
@@ -1740,7 +1741,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         stopScrape()
         selectedScrapeTabIndex.value = 0
         lastSelectedSourceIndex = -1
-        lastSelectedSourceData = null
+        lastSelectedSourceKey = null
         
         _selectedItem.value = item
         lastScrapedSeason = season
@@ -2258,17 +2259,28 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     fun resolveAndPlay(sourceDataJson: String, rawItem: JSONObject, index: Int = -1) {
         stopTryAll()
         isPlayingFromSavedLink = false
-        if (index >= 0) {
-            lastSelectedSourceIndex = index
-            lastSelectedSourceData = sourceDataJson
-        }
-        lastSelectedSource = try { JSONObject(sourceDataJson) } catch (e: Exception) { rawItem }
-        isInteractingWithSources = true
-        _scrapeStatusMsg.value = "Pausing Scrapers..."
-
-        val sourceData = JSONObject(sourceDataJson)
+        val sourceData = try { JSONObject(sourceDataJson) } catch (e: Exception) { rawItem }
+        
         val infoHash = sourceData.optString("infoHash", "")
         val fileIdx = sourceData.optInt("fileIdx", -1)
+
+        if (index >= 0) {
+            lastSelectedSourceIndex = index
+            val url = sourceData.optString("url").ifEmpty { sourceData.optString("link") }
+            val source = sourceData.optString("source")
+            val provider = sourceData.optString("provider")
+            val quality = sourceData.optString("quality")
+            val title = rawItem.optString("title").substringBefore("\n").trim()
+
+            lastSelectedSourceKey = when {
+                infoHash.isNotEmpty() -> "${infoHash}_$fileIdx"
+                url.isNotEmpty() -> "${provider}_${source}_$url"
+                else -> "${provider}_${source}_${quality}_$title"
+            }
+        }
+        lastSelectedSource = sourceData
+        isInteractingWithSources = true
+        _scrapeStatusMsg.value = "Pausing Scrapers..."
 
         if (infoHash.isNotEmpty() && fileIdx != -1) {
             performTorrentPreBuffering(infoHash, fileIdx, sourceDataJson)

@@ -11,7 +11,7 @@ import json
 import base64
 import time
 import requests
-from urllib.parse import urlparse, urljoin, parse_qsl, parse_qs
+from urllib.parse import urlparse, urljoin, parse_qsl, parse_qs, quote_plus
 from resolveurl import common
 from resolveurl.lib import helpers
 from resolveurl.resolver import ResolveUrl, ResolverError
@@ -46,18 +46,82 @@ class VidSrcResolver(ResolveUrl):
         'vidsrc.me', 'vidsrc.in', 'vidsrc.to', 'vidsrc.net',
         'vidsrc.xyz', 'vidsrcme.ru', 'vidsrc.stream', 'vidsrc.icu',
         'cloudorchestranova.com', 'vidsrc.mov', 'vsembed.ru', 'vidsrc.pm',
-        'vidsrc.fyi'
+        'vidsrc.fyi', 'vidsrc.buzz'
     ]
-    pattern = r'(?://|\.)((?:vidsrc\.(?:me|in|to|net|xyz|stream|icu|mov|pm|fyi)|vidsrcme\.ru|vsembed\.ru|cloudorchestranova\.com))/(?:embed/)?((?:(?:movie|tv)/)?[0-9a-zA-Z-/]+(?:\?[^"\'>\s]+)?)'
+    pattern = r'(?://|\.)((?:vidsrc\.(?:me|in|to|net|xyz|stream|icu|mov|pm|fyi|buzz)|vidsrcme\.ru|vsembed\.ru|cloudorchestranova\.com))/(?:embed/)?((?:(?:movie|tv)/)?[0-9a-zA-Z-/]+(?:\?[^"\'>\s]+)?)'
 
     def get_media_url(self, host, media_id, subs=False):
         global _CACHED_STREAM_TOKEN, _CACHED_TOKEN_EXPIRY
-        embed_url = ""
         try:
             ua = common.RAND_UA
 
             if not host:
                 host = 'vidsrc.me'
+
+            s = requests.Session()
+
+            if 'vidsrc.buzz' in host:
+                embed_url = self.get_url(host, media_id)
+                headers = {
+                    'User-Agent': ua,
+                    'Referer': 'https://2embed.cc/'
+                }
+
+                resp = s.get(embed_url, headers=headers, timeout=12, verify=False)
+                html = resp.text
+
+                q_match = re.search(r'var\s*Q\s*=\s*({.+?});', html, re.DOTALL)
+                if not q_match:
+                    raise ResolverError('VidSrc (vidsrc.buzz): Session data (Q) not found')
+
+                q_data = json.loads(q_match.group(1))
+                servers = q_data.get('ssr', {}).get('servers', [])
+                refs = [srv.get('ref') for srv in servers if srv.get('ref')]
+                if not refs:
+                    raise ResolverError('VidSrc (vidsrc.buzz): No active server refs found')
+
+                race_url = f"https://vidsrc.buzz/pl/api.php?a=race&refs={quote_plus(','.join(refs))}"
+                api_headers = {
+                    'User-Agent': ua,
+                    'Referer': embed_url,
+                    'Origin': 'https://vidsrc.buzz',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+
+                race_resp = s.get(race_url, headers=api_headers, timeout=10, verify=False)
+                cands = race_resp.json().get('cands', [])
+                if not cands or not cands[0].get('url'):
+                    raise ResolverError('VidSrc (vidsrc.buzz): Race API returned no candidates')
+
+                raw_url = cands[0].get('url')
+                stream_url = urljoin('https://vidsrc.buzz/', raw_url) if raw_url.startswith('/') else raw_url
+                delim = "&" if "?" in stream_url else "?"
+                final_stream_url = f"{stream_url}{delim}bypass_localize=true"
+
+                stream_headers = {
+                    'User-Agent': ua,
+                    'Referer': embed_url,
+                    'verifypeer': 'false'
+                }
+
+                playable_url = final_stream_url + helpers.append_headers(stream_headers)
+
+                if subs:
+                    subtitles = {}
+                    subs_url = f"https://vidsrc.buzz/pl/api.php?a=subs&id={q_data.get('id')}&type={q_data.get('type')}&t={quote_plus(q_data.get('t', ''))}"
+                    try:
+                        s_resp = s.get(subs_url, headers=api_headers, timeout=8, verify=False)
+                        s_data = s_resp.json()
+                        for item in s_data.get('subs', []):
+                            label = item.get('label') or item.get('lang') or 'English'
+                            ref_sub = item.get('ref')
+                            if ref_sub:
+                                subtitles[label] = f"https://vidsrc.buzz/pl/api.php?a=sub&ref={quote_plus(ref_sub)}"
+                    except Exception:
+                        pass
+                    return playable_url, subtitles
+
+                return playable_url
 
             parts = [p for p in media_id.split('/') if p]
             numeric_parts = [p for p in parts if p.isdigit()]
@@ -74,7 +138,6 @@ class VidSrcResolver(ResolveUrl):
             embed_url = f"https://{host}/embed/{media_id}"
             container_host = f"https://{host}"
 
-            s = requests.Session()
             s.headers.update({
                 'User-Agent': ua,
                 'Referer': container_host + '/',

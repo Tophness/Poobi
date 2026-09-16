@@ -76,7 +76,6 @@ class source:
 
             for item in suggestions:
                 item_title = item.get('title', '')
-                item_year = str(item.get('year', ''))
                 item_type = item.get('type', '')
 
                 if is_tv and item_type and item_type not in ['tv', 'series']:
@@ -127,6 +126,7 @@ class source:
             if not links:
                 links = re.findall(r'<iframe[^>]+src="([^"]+)"', watch_resp.text)
 
+            seen_links = set()
             for link in links:
                 clean_link = link.replace('\\/', '/')
                 if clean_link.startswith('//'):
@@ -134,8 +134,14 @@ class source:
                 elif clean_link.startswith('/'):
                     clean_link = self.base_link + clean_link
 
+                if clean_link in seen_links:
+                    continue
+                seen_links.add(clean_link)
+
                 for source_item in scrape_sources.process(hostDict, clean_link):
                     if not scrape_sources.check_host_limit(source_item['source'], self.results):
+                        if any(r.get('url') == source_item.get('url') for r in self.results):
+                            continue
                         self.results.append(source_item)
 
             return self.results
