@@ -701,12 +701,7 @@ class PlayerEngine(
             }
             
             val mediaItem = mediaItemBuilder.build()
-            if (isHlsUrl(cleanUrl)) {
-                val hlsSource = androidx.media3.exoplayer.hls.HlsMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
-                exoPlayer?.setMediaSource(hlsSource)
-            } else {
-                exoPlayer?.setMediaItem(mediaItem)
-            }
+            exoPlayer?.setMediaItem(mediaItem)
         }
 
         val savedPos = if (initialPositionMs > 0L) {
