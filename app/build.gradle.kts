@@ -147,6 +147,7 @@ extensions.configure<ApplicationExtension> {
 
     buildTypes {
         release {
+		    isDefault = true
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
