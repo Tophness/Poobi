@@ -211,7 +211,10 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             delay(4000)
-            if (!BuildConfig.DEBUG) {
+            val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
+            val autoUpdateEnabled = prefs.getBoolean("auto_update_check", true)
+
+            if (!BuildConfig.DEBUG && autoUpdateEnabled) {
                 UpdateManager.checkForUpdates(this@MainActivity, isManual = false)
             }
         }

@@ -148,6 +148,8 @@ class SettingsActivity : AppCompatActivity() {
     private var subdlApikey by mutableStateOf("")
     private var subsourceApikey by mutableStateOf("")
 
+    private var autoUpdateCheck by mutableStateOf(true)
+
     enum class Category {
         General, Web, Player, Interface, Streaming, Autoplay, Subtitles, Sorting, Blocked, Trakt, TMDb, Torrents, Sync
     }
@@ -285,6 +287,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun loadSettingsFromPrefs() {
+        autoUpdateCheck = prefs.getBoolean("auto_update_check", true)
         lightTheme = prefs.getBoolean("light_theme", false)
         restoreOption = prefs.getInt("restore_tabs_pref", 0)
         histLimit = prefs.getInt("history_limit", 20)
@@ -607,29 +610,43 @@ class SettingsActivity : AppCompatActivity() {
 
     @Composable
     fun GeneralPanel() {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            PanelHeader("General Settings")
-            ToggleSettingRow("Use Light Theme", lightTheme) { lightTheme = it }
-            DropdownSettingRow("Restore Session Mode", listOf("Ask to Restore", "Always Restore", "Never Restore"), restoreOption) { restoreOption = it }
-            DropdownSettingRow("History Retention Limit", listOf("10 Entries", "20 Entries", "50 Entries", "Unlimited"), when (histLimit) { 10 -> 0; 20 -> 1; 50 -> 2; else -> 3 }) {
-                histLimit = when (it) { 0 -> 10; 1 -> 20; 2 -> 50; else -> 0 }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+            item { PanelHeader("General Settings") }
+            item { ToggleSettingRow("Use Light Theme", lightTheme) { lightTheme = it } }
+            item { ToggleSettingRow("Check for Updates Automatically", autoUpdateCheck) { autoUpdateCheck = it } }
+            item { DropdownSettingRow("Restore Session Mode", listOf("Ask to Restore", "Always Restore", "Never Restore"), restoreOption) { restoreOption = it } }
+            item {
+                DropdownSettingRow(
+                    label = "History Retention Limit",
+                    options = listOf("10 Entries", "20 Entries", "50 Entries", "Unlimited"),
+                    selectedIndex = when (histLimit) { 10 -> 0; 20 -> 1; 50 -> 2; else -> 3 }
+                ) {
+                    histLimit = when (it) { 0 -> 10; 1 -> 20; 2 -> 50; else -> 0 }
+                }
             }
-            DropdownSettingRow("History Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), historyIconOption) { historyIconOption = it }
-            DropdownSettingRow("Bookmark Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), bookmarkIconOption) { bookmarkIconOption = it }
-            Spacer(modifier = Modifier.height(8.dp))
-            val isCheckingUpdates by UpdateManager.isChecking.collectAsState()
-            val currentVerDisplay = "${UpdateManager.getAppVersionName(this@SettingsActivity)}${if (BuildConfig.DEBUG) "-debug" else ""}"
-            Button(
-                onClick = { UpdateManager.checkForUpdates(this@SettingsActivity, isManual = true) },
-                enabled = !isCheckingUpdates,
-                modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp)),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4))
-            ) {
-                Text(
-                    text = if (isCheckingUpdates) "Checking for Updates..." else "Check for Updates (v$currentVerDisplay)",
-                    color = Color.Black,
-                    fontWeight = FontWeight.Bold
-                )
+            item { DropdownSettingRow("History Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), historyIconOption) { historyIconOption = it } }
+            item { DropdownSettingRow("Bookmark Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), bookmarkIconOption) { bookmarkIconOption = it } }
+            
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                val isCheckingUpdates by UpdateManager.isChecking.collectAsState()
+                val currentVerDisplay = "${UpdateManager.getAppVersionName(this@SettingsActivity)}${if (BuildConfig.DEBUG) "-debug" else ""}"
+                Button(
+                    onClick = { UpdateManager.checkForUpdates(this@SettingsActivity, isManual = true) },
+                    enabled = !isCheckingUpdates,
+                    modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4))
+                ) {
+                    Text(
+                        text = if (isCheckingUpdates) "Checking for Updates..." else "Check for Updates (v$currentVerDisplay)",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
@@ -2284,6 +2301,7 @@ class SettingsActivity : AppCompatActivity() {
                 prefs.edit().apply {
                     putString("stream_resume_points", prefs.getString("stream_resume_points", "{}"))
                     putLong("settings_last_modified", System.currentTimeMillis())
+                    putBoolean("auto_update_check", autoUpdateCheck)
                     putBoolean("light_theme", lightTheme)
                     putInt("restore_tabs_pref", restoreOption)
                     putInt("history_limit", histLimit)

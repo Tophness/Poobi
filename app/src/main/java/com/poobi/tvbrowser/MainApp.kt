@@ -1224,8 +1224,7 @@ fun MainApp(
                             Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
-                },
-                dismissButton = null
+                }
             )
         }
 
@@ -1260,6 +1259,8 @@ fun MainApp(
 
         updateInfoState?.let { update ->
             val activity = LocalContext.current as? android.app.Activity
+            val context = LocalContext.current
+
             AlertDialog(
                 onDismissRequest = {
                     if (!isUpdateDownloading) {
@@ -1324,27 +1325,42 @@ fun MainApp(
                             Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     } else {
-                        Button(
-                            onClick = {
-                                if (activity != null) {
-                                    UpdateManager.startDownloadAndInstall(activity, update)
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Install", color = Color.White, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                },
-                dismissButton = {
-                    if (!isUpdateDownloading) {
-                        Button(
-                            onClick = { UpdateManager.dismissUpdate() },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                        ) {
-                            Text("Later", color = Color.White)
+                            Button(
+                                onClick = {
+                                    val prefs = context.getSharedPreferences("BrowserSettings", android.content.Context.MODE_PRIVATE)
+                                    prefs.edit().putBoolean("auto_update_check", false).apply()
+                                    android.widget.Toast.makeText(context, "Automatic update checks disabled (Re-enable in Settings)", android.widget.Toast.LENGTH_LONG).show()
+                                    UpdateManager.dismissUpdate()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333338)),
+                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                            ) {
+                                Text("Never Ask Again", color = Color(0xFFB0BEC5), fontSize = 13.sp)
+                            }
+
+                            Button(
+                                onClick = { UpdateManager.dismissUpdate() },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                            ) {
+                                Text("Later", color = Color.White)
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (activity != null) {
+                                        UpdateManager.startDownloadAndInstall(activity, update)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                            ) {
+                                Text("Install", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
