@@ -42,7 +42,6 @@ import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvMarqueeText
 import com.poobi.tvbrowser.shared.isFutureDate
 import com.poobi.tvbrowser.shared.KeyTracker
-import org.json.JSONArray
 import org.json.JSONObject
 
 private fun formatDateToDMY(dateStr: String?): String {

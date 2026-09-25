@@ -49,8 +49,6 @@ import com.google.api.services.drive.DriveScopes
 import com.poobi.tvbrowser.browser.AdBlockManager
 import com.poobi.tvbrowser.shared.PythonDialogListener
 import com.poobi.tvbrowser.shared.sync.DriveSyncManager
-import com.poobi.tvbrowser.streams.SortCriteria
-import com.poobi.tvbrowser.streams.SourceSorter
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvInputField
 import com.poobi.tvbrowser.shared.update.UpdateManager

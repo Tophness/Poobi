@@ -2,7 +2,6 @@ package com.poobi.tvbrowser
 
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
 import android.view.KeyEvent
 import android.view.ViewGroup
 import androidx.compose.animation.AnimatedVisibility
@@ -32,15 +31,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -50,14 +46,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.PlayerView
-import com.poobi.tvbrowser.R
-import com.poobi.tvbrowser.SettingsActivity
-import com.poobi.tvbrowser.MainActivity
 import com.poobi.tvbrowser.browser.BrowserDialogState
 import com.poobi.tvbrowser.browser.BrowserHomeScreen
 import com.poobi.tvbrowser.browser.BrowserTopBar
 import com.poobi.tvbrowser.browser.BrowserViewModel
-import com.poobi.tvbrowser.browser.ContextMenuOverlay
 import com.poobi.tvbrowser.browser.CursorManager
 import com.poobi.tvbrowser.player.PlayerEngine
 import com.poobi.tvbrowser.player.UpNextOverlay
@@ -68,7 +60,6 @@ import com.poobi.tvbrowser.shared.TvInputField
 import com.poobi.tvbrowser.shared.KeyTracker
 import com.poobi.tvbrowser.shared.TvMarqueeText
 import com.poobi.tvbrowser.shared.update.UpdateManager
-import com.poobi.tvbrowser.shared.update.UpdateInfo
 import com.poobi.tvbrowser.streams.MediaDetailsScreen
 import com.poobi.tvbrowser.streams.ScrapeProgressScreen
 import com.poobi.tvbrowser.streams.StreamsDashboardScreen
@@ -76,10 +67,6 @@ import com.poobi.tvbrowser.streams.StreamsViewModel
 import com.poobi.tvbrowser.streams.NewEpisodeNotificationOverlay
 import com.poobi.tvbrowser.streams.SubtitleWaitOverlay
 import org.json.JSONArray
-import org.json.JSONObject
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 enum class AppTab { Browser, Streams }
 

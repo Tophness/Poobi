@@ -21,7 +21,6 @@ import com.chaquo.python.android.AndroidPlatform
 import com.poobi.tvbrowser.browser.AdBlockManager
 import com.poobi.tvbrowser.browser.BrowserViewModel
 import com.poobi.tvbrowser.browser.CursorManager
-import com.poobi.tvbrowser.BuildConfig
 import com.poobi.tvbrowser.player.PlayerEngine
 import com.poobi.tvbrowser.shared.PythonDialogListener
 import com.poobi.tvbrowser.shared.cleanKodiText
@@ -32,11 +31,9 @@ import com.poobi.tvbrowser.streams.StreamsViewModel
 import com.poobi.tvbrowser.shared.update.UpdateManager
 import com.poobi.tvbrowser.shared.update.ApkInstaller
 import com.poobi.tvbrowser.torrent.TorrentStreamServer
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.compose.runtime.CompositionLocalProvider
@@ -845,7 +842,9 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val server = TorrentStreamServer.getInstance(applicationContext)
-                server.start()
+                if (!server.isAlive) {
+                    server.start()
+                }
                 Log.i("TVBrowser", "Local Torrent Engine running on port 11470")
                 server.checkAndCleanPeriodicCache(applicationContext)
             } catch (e: Exception) {

@@ -300,10 +300,30 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val server = TorrentStreamServer.getInstance(context)
                 val prebufferLimit = prefs.getInt("torrent_prebuffer_pieces", 1)
 
+                val trackers = mutableListOf<String>()
+                try {
+                    val dataObj = JSONObject(sourceDataJson)
+                    val sourcesArr = dataObj.optJSONArray("sources")
+                    if (sourcesArr != null) {
+                        for (i in 0 until sourcesArr.length()) {
+                            val s = sourcesArr.getString(i)
+                            if (s.isNotBlank()) trackers.add(s)
+                        }
+                    }
+                    val trackersArr = dataObj.optJSONArray("trackers")
+                    if (trackersArr != null) {
+                        for (i in 0 until trackersArr.length()) {
+                            val t = trackersArr.getString(i)
+                            if (t.isNotBlank()) trackers.add(t)
+                        }
+                    }
+                } catch (_: Exception) {}
+
                 server.prepareTorrent(
                     infoHash = infoHash,
                     fileIdx = fileIdx,
                     prebufferPiecesLimit = prebufferLimit,
+                    trackers = trackers,
                     onStatusUpdate = { status, progress, seeders ->
                         _torrentBufferStatus.value = status
                         _torrentBufferProgress.value = progress
@@ -311,7 +331,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     },
                     onReady = {
                         viewModelScope.launch(Dispatchers.Main) {
-                            _isBufferingTorrent.value = false
+                            _torrentBufferStatus.value = "Starting video player..."
+                            _torrentBufferProgress.value = 1f
                             resolveAndPlayInternal(sourceDataJson)
                         }
                     },
@@ -1640,6 +1661,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     private fun playStream(streamUrl: String, isVideo: Boolean, sourceDataJson: String, extraHeaders: Map<String, String> = emptyMap()) {
         _isResolving.value = false
+        _isBufferingTorrent.value = false
         val cleanTitle = _selectedItem.value?.optString("title")?.takeIf { it.isNotBlank() } ?: _selectedItem.value?.optString("name") ?: "Unknown"
         val fullTitle = if (lastScrapedSeason != null && lastScrapedEpisode != null) {
             "$cleanTitle S${lastScrapedSeason}E${lastScrapedEpisode}"
@@ -2349,16 +2371,19 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         if (streamUrl.isNotEmpty() && (streamUrl.startsWith("http") || streamUrl.startsWith("file://"))) {
                             playStream(streamUrl, isVideo, sourceDataJson, parsedHeaders)
                         } else {
+                            _isBufferingTorrent.value = false
                             resumeScrape()
                             _events.value = StreamsEvent.ShowToast("Could not resolve stream URL")
                         }
                     } catch (e: Exception) {
+                        _isBufferingTorrent.value = false
                         resumeScrape()
                         _events.value = StreamsEvent.ShowToast("Resolve parsing error")
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
+                    _isBufferingTorrent.value = false
                     resumeScrape()
                     _isResolving.value = false
                     _events.value = StreamsEvent.ShowToast("Resolve error: ${e.message}")
