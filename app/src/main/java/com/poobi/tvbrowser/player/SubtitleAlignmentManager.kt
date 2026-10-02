@@ -69,6 +69,13 @@ class SubtitleAlignmentManager(private val context: Context) {
         }
     }
 
+    fun clearSubtitles() {
+        activeSubtitleUrl = null
+        _cues.value = emptyList()
+        _activeCue.value = null
+        stopLoop()
+    }
+
     fun updateActiveCue(positionMs: Long) {
         val adjustedPos = positionMs - _offsetMs.value
         val currentCues = _cues.value

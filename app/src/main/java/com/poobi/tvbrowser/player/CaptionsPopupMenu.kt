@@ -15,7 +15,6 @@ import android.widget.PopupWindow
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.media3.common.C
-import androidx.media3.common.TrackSelectionOverride
 import com.poobi.tvbrowser.R
 
 object CaptionsPopupMenu {
@@ -36,20 +35,7 @@ object CaptionsPopupMenu {
             setPadding((6 * density).toInt(), (6 * density).toInt(), (6 * density).toInt(), (6 * density).toInt())
         }
 
-        val scrollView = ScrollView(context).apply {
-            layoutParams = ViewGroup.LayoutParams((280 * density).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
-            addView(popupView)
-        }
-
-        val popupWindow = PopupWindow(
-            scrollView,
-            (280 * density).toInt(),
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            true
-        ).apply {
-            elevation = 20 * density
-            isOutsideTouchable = true
-        }
+        var popupWindowRef: PopupWindow? = null
 
         val createRow = { text: String, isAdd: Boolean, isSelected: Boolean, onClick: () -> Unit ->
             val row = LinearLayout(context).apply {
@@ -79,7 +65,7 @@ object CaptionsPopupMenu {
 
                 setOnClickListener {
                     onClick()
-                    popupWindow.dismiss()
+                    popupWindowRef?.dismiss()
                 }
             }
 
@@ -150,11 +136,12 @@ object CaptionsPopupMenu {
         }
 
         val offRow = createRow("Off", false, !isAnyTrackSelected) {
-            playerEngine.disableNativeSubtitles(true)
+            playerEngine.disableSubtitles()
         }
         popupView.addView(offRow)
 
-        var firstFocusedView: View = addRow
+        var firstFocusedView: View = if (!isAnyTrackSelected) offRow else addRow
+
         textGroups.forEach { group ->
             for (i in 0 until group.length) {
                 val format = group.getTrackFormat(i)
@@ -162,12 +149,7 @@ object CaptionsPopupMenu {
                 val trackName = format.label ?: format.language ?: "Subtitle Track ${i + 1}"
 
                 val trackRow = createRow(trackName, false, isSelected) {
-                    player.trackSelectionParameters = player.trackSelectionParameters
-                        .buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                        .addOverride(TrackSelectionOverride(group.mediaTrackGroup, i))
-                        .build()
+                    playerEngine.selectSubtitleTrack(group.mediaTrackGroup, i, format)
                 }
                 popupView.addView(trackRow)
 
@@ -177,13 +159,41 @@ object CaptionsPopupMenu {
             }
         }
 
+        val popupWidth = (320 * density).toInt()
         popupView.measure(
-            View.MeasureSpec.makeMeasureSpec((280 * density).toInt(), View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(popupWidth, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         )
-        val popupHeight = popupView.measuredHeight
+        val fullHeight = popupView.measuredHeight
+        val screenHeight = context.resources.displayMetrics.heightPixels
+        val maxHeight = (screenHeight * 0.65f).toInt()
+        val popupHeight = minOf(fullHeight, maxHeight)
 
-        popupWindow.showAsDropDown(anchorView, 0, -(popupHeight + anchorView.height + (10 * density).toInt()), Gravity.START)
+        val scrollView = ScrollView(context).apply {
+            layoutParams = ViewGroup.LayoutParams(popupWidth, popupHeight)
+            isFocusable = false
+            isFocusableInTouchMode = false
+            addView(popupView)
+        }
+
+        val popupWindow = PopupWindow(
+            scrollView,
+            popupWidth,
+            popupHeight,
+            true
+        ).apply {
+            elevation = 20 * density
+            isOutsideTouchable = true
+            setOnDismissListener {
+                anchorView.requestFocus()
+            }
+        }
+        popupWindowRef = popupWindow
+
+        val anchorH = if (anchorView.height > 0) anchorView.height else (48 * density).toInt()
+        val yOffset = -(popupHeight + anchorH + (10 * density).toInt())
+
+        popupWindow.showAsDropDown(anchorView, 0, yOffset, Gravity.START)
 
         firstFocusedView.post {
             firstFocusedView.requestFocus()

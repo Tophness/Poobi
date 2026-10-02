@@ -3,6 +3,7 @@ package com.poobi.tvbrowser.player
 import android.content.Context
 import android.os.Environment
 import android.util.Log
+import com.poobi.tvbrowser.shared.SubtitleCacheManager
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -25,8 +26,7 @@ object DiskSubtitleManager {
         val seenFilePaths = mutableSetOf<String>()
 
         try {
-            val subDir = File(context.filesDir, "userdata/subtitles")
-            val cacheFile = File(subDir, "cache_mapping.json")
+            val cacheFile = SubtitleCacheManager.getCacheFile(context)
             val prefs = context.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
             val recents = JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
             val favs = JSONArray(prefs.getString("streams_favorites", "[]") ?: "[]")
@@ -61,7 +61,7 @@ object DiskSubtitleManager {
                 while (keys.hasNext()) {
                     val key = keys.next()
                     val groupTitle = keyToTitleMap[key] ?: keyToTitleMap[key.substringBefore("_")]
-                    val array = json.getJSONArray(key)
+                    val array = json.optJSONArray(key) ?: continue
                     for (j in 0 until array.length()) {
                         val subObj = array.getJSONObject(j)
                         val urlStr = subObj.getString("url")

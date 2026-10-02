@@ -432,12 +432,7 @@ fun MainApp(
 							setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
 							playerEngine.playerView = this
 							
-							val renderingMode = playerEngine.prefs.getInt("subtitle_rendering_mode", 0)
-							if (renderingMode == 1 && playerEngine.hasExternalSubtitles) {
-								subtitleView?.visibility = android.view.View.INVISIBLE
-							} else {
-								subtitleView?.visibility = android.view.View.VISIBLE
-							}
+							playerEngine.updateNativeSubtitleViewVisibility()
 							
 							setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility: Int ->
 								val visible = visibility == android.view.View.VISIBLE
@@ -647,13 +642,7 @@ fun MainApp(
                             view.player = playerEngine.exoPlayer
                         }
                         playerEngine.playerView = view
-                        
-                        val renderingMode = playerEngine.prefs.getInt("subtitle_rendering_mode", 0)
-                        if (renderingMode == 1 && playerEngine.hasExternalSubtitles) {
-                            view.subtitleView?.visibility = android.view.View.INVISIBLE
-                        } else {
-                            view.subtitleView?.visibility = android.view.View.VISIBLE
-                        }
+                        playerEngine.updateNativeSubtitleViewVisibility()
                     },
                     onRelease = {
                         playerEngine.playerView = null
@@ -769,6 +758,7 @@ fun MainApp(
                 var wasSyncVisible by remember { mutableStateOf(false) }
 
                 LaunchedEffect(isSyncVisible) {
+                    playerEngine.updateNativeSubtitleViewVisibility()
                     playerEngine.playerView?.let { pView ->
                         if (isSyncVisible) {
                             pView.useController = false

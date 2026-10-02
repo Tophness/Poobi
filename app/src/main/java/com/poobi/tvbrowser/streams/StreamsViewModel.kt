@@ -673,28 +673,29 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 
                 val item = entry.optJSONObject("item")
                 if (item != null) {
-                    val itemId = item.optInt("id")
                     val season = if (entry.has("season")) entry.getInt("season") else 0
                     val episode = if (entry.has("episode")) entry.getInt("episode") else 0
-                    val itemKey = "${itemId}_${season}_${episode}"
-                    val cachedSubs = loadSubtitlesFromCache(itemKey)
-                    cachedSubs.forEach { sub ->
-                        try {
-                            val uri = android.net.Uri.parse(sub.url)
-                            if (uri.scheme == "file") {
-                                val path = uri.path
-                                if (path != null) {
-                                    val file = File(path)
-                                    if (file.exists() && file.isFile) {
-                                        file.delete()
+                    val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, season, episode)
+                    if (itemKey.isNotEmpty()) {
+                        val cachedSubs = com.poobi.tvbrowser.shared.SubtitleCacheManager.loadSubtitles(context, itemKey)
+                        cachedSubs.forEach { sub ->
+                            try {
+                                val uri = android.net.Uri.parse(sub.url)
+                                if (uri.scheme == "file") {
+                                    val path = uri.path
+                                    if (path != null) {
+                                        val file = File(path)
+                                        if (file.exists() && file.isFile) {
+                                            file.delete()
+                                        }
                                     }
                                 }
+                            } catch (e: Exception) {
+                                Log.e("StreamsViewModel", "Failed to delete subtitle file: ${e.message}")
                             }
-                        } catch (e: Exception) {
-                            Log.e("StreamsViewModel", "Failed to delete subtitle file: ${e.message}")
                         }
+                        com.poobi.tvbrowser.shared.SubtitleCacheManager.removeSubtitles(context, itemKey)
                     }
-                    removeSubtitlesFromCacheMap(itemKey)
                 }
                 
                 val newList = JSONArray()
@@ -723,27 +724,21 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         headers: Map<String, String>,
         subtitles: Map<String, Map<String, String>>
     ) {
+        val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, season, episode)
         if (subtitles.isNotEmpty()) {
             val copiedSubtitles = subtitles.toMap()
-            interceptedSubtitleUrls.clear()
             interceptedSubtitleUrls.putAll(copiedSubtitles)
 
-            val itemKey = "${item.optInt("id")}_${season ?: 0}_${episode ?: 0}"
-            val newlyDownloadedSubs = subtitles.map { (subUrl, infoMap) ->
-                SubtitleData(
-                    url = subUrl,
-                    label = infoMap["label"] ?: "Web Subtitle",
-                    lang = infoMap["lang"] ?: "und"
-                )
-            }
-            val cached = loadSubtitlesFromCache(itemKey)
-            val combinedList = cached.toMutableList()
-            newlyDownloadedSubs.forEach { newSub ->
-                if (combinedList.none { it.url == newSub.url }) {
-                    combinedList.add(newSub)
+            if (itemKey.isNotEmpty()) {
+                val newlyDownloadedSubs = subtitles.map { (subUrl, infoMap) ->
+                    SubtitleData(
+                        url = subUrl,
+                        label = infoMap["label"] ?: "Web Subtitle",
+                        lang = infoMap["lang"] ?: "und"
+                    )
                 }
+                com.poobi.tvbrowser.shared.SubtitleCacheManager.saveSubtitles(context, itemKey, newlyDownloadedSubs)
             }
-            saveSubtitlesToCache(itemKey, combinedList)
         }
 
         addToRecentlyPlayed(displayTitle, item, season, episode, url, headers)
@@ -872,13 +867,17 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 headers.keys().forEach { headersMap[it] = headers.getString(it) }
             }
             
+            val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, season, episode)
             val subtitleUrls = mutableMapOf<String, Map<String, String>>()
-            val itemKey = "${item.optInt("id")}_${season ?: 0}_${episode ?: 0}"
-            val cachedSubs = loadSubtitlesFromCache(itemKey)
-            cachedSubs.forEach { sub ->
-                subtitleUrls[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
+            if (itemKey.isNotEmpty()) {
+                val cachedSubs = com.poobi.tvbrowser.shared.SubtitleCacheManager.loadSubtitles(context, itemKey)
+                cachedSubs.forEach { sub ->
+                    subtitleUrls[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
+                }
             }
-            
+            interceptedSubtitleUrls.forEach { (u, info) ->
+                subtitleUrls[u] = info
+            }
             interceptedSubtitleUrls.clear()
             interceptedSubtitleUrls.putAll(subtitleUrls)
 
@@ -1712,11 +1711,24 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
         } catch (e: Exception) {}
 
+        val item = _selectedItem.value
+        val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, lastScrapedSeason, lastScrapedEpisode)
+        val allSubs = interceptedSubtitleUrls.toMutableMap()
+        if (item != null && itemKey.isNotEmpty()) {
+            val cached = com.poobi.tvbrowser.shared.SubtitleCacheManager.loadSubtitles(context, itemKey)
+            cached.forEach { sub ->
+                if (!allSubs.containsKey(sub.url)) {
+                    allSubs[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
+                }
+            }
+            interceptedSubtitleUrls.putAll(allSubs)
+        }
+
         _events.value = StreamsEvent.PlayVideo(
             url = streamUrl,
             title = fullTitle,
             headers = headersMap,
-            subtitles = interceptedSubtitleUrls.toMap(),
+            subtitles = allSubs.toMap(),
             item = _selectedItem.value!!,
             season = lastScrapedSeason,
             episode = lastScrapedEpisode,
@@ -1771,6 +1783,14 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         interceptedSubtitleUrls.clear()
         lastSubtitledItemKey = null
         _subStatusMsg.value = ""
+
+        val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, season, episode)
+        if (itemKey.isNotEmpty()) {
+            val cached = com.poobi.tvbrowser.shared.SubtitleCacheManager.loadSubtitles(context, itemKey)
+            cached.forEach { sub ->
+                interceptedSubtitleUrls[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
+            }
+        }
 
         _isScraping.value = true
         _isResolving.value = false
@@ -2003,6 +2023,11 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     _isDownloadingSubs.value = false
                     _showSubProgressBar.value = false
                     if (newlyDownloadedSubs.isNotEmpty()) {
+                        val item = _selectedItem.value
+                        val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, lastScrapedSeason, lastScrapedEpisode)
+                        if (itemKey.isNotEmpty()) {
+                            com.poobi.tvbrowser.shared.SubtitleCacheManager.saveSubtitles(context, itemKey, newlyDownloadedSubs)
+                        }
                         _events.value = StreamsEvent.AddSubtitlesBatch(newlyDownloadedSubs)
                     }
                     if (!silent) _events.value = StreamsEvent.ShowToast("Finished downloading $count subtitles")
@@ -2051,10 +2076,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun performAutoSubtitleSearch(item: JSONObject, season: Int?, episode: Int?): Boolean {
-        val itemKey = "${item.optInt("id")}_${season ?: 0}_${episode ?: 0}"
+        val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, season, episode)
         if (_isDownloadingSubs.value || lastSubtitledItemKey == itemKey) return false
         
-        val cached = loadSubtitlesFromCache(itemKey)
+        val cached = com.poobi.tvbrowser.shared.SubtitleCacheManager.loadSubtitles(context, itemKey)
         val countPref = prefs.getInt("auto_sub_count", 1)
         val hasEnoughCached = countPref > 0 && cached.size >= countPref
 
@@ -2196,8 +2221,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         _showSubtitleWaitDialog.value = null
                         
                         if (newlyDownloadedSubs.isNotEmpty()) {
-                            val combinedList = cached + newlyDownloadedSubs
-                            saveSubtitlesToCache(itemKey, combinedList)
+                            com.poobi.tvbrowser.shared.SubtitleCacheManager.saveSubtitles(context, itemKey, newlyDownloadedSubs)
                             _events.value = StreamsEvent.AddSubtitlesBatch(newlyDownloadedSubs)
                         }
 
@@ -2715,74 +2739,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 		}
 	}
 
-    private fun getSubtitleCacheFile(): File {
-        val dir = File(context.filesDir, "userdata/subtitles")
-        if (!dir.exists()) dir.mkdirs()
-        return File(dir, "cache_mapping.json")
-    }
+    private fun getSubtitleCacheFile(): File = com.poobi.tvbrowser.shared.SubtitleCacheManager.getCacheFile(context)
 
-    private fun loadSubtitlesFromCache(itemKey: String): List<SubtitleData> {
-        val file = getSubtitleCacheFile()
-        if (!file.exists()) return emptyList()
-        try {
-            val json = JSONObject(file.readText())
-            if (json.has(itemKey)) {
-                val array = json.getJSONArray(itemKey)
-                val results = mutableListOf<SubtitleData>()
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    val urlStr = obj.getString("url")
-                    val filePath = android.net.Uri.parse(urlStr).path
-                    if (filePath != null && File(filePath).exists()) {
-                        results.add(SubtitleData(
-                            urlStr,
-                            obj.getString("label"),
-                            obj.getString("lang")
-                        ))
-                    }
-                }
-                return results
-            }
-        } catch (e: Exception) {
-            Log.e("StreamsViewModel", "Failed to load subtitle cache: ${e.message}")
-        }
-        return emptyList()
-    }
+    private fun loadSubtitlesFromCache(itemKey: String): List<SubtitleData> = 
+        com.poobi.tvbrowser.shared.SubtitleCacheManager.loadSubtitles(context, itemKey)
 
-    private fun saveSubtitlesToCache(itemKey: String, subs: List<SubtitleData>) {
-        val file = getSubtitleCacheFile()
-        try {
-            val json = if (file.exists()) JSONObject(file.readText()) else JSONObject()
-            val array = JSONArray()
-            subs.forEach { sub ->
-                array.put(JSONObject().apply {
-                    put("url", sub.url)
-                    put("label", sub.label)
-                    put("lang", sub.lang)
-                })
-            }
-            json.put(itemKey, array)
-            file.writeText(json.toString())
-        } catch (e: Exception) {
-            Log.e("StreamsViewModel", "Failed to save subtitle cache: ${e.message}")
-        }
-    }
+    private fun saveSubtitlesToCache(itemKey: String, subs: List<SubtitleData>) = 
+        com.poobi.tvbrowser.shared.SubtitleCacheManager.saveSubtitles(context, itemKey, subs)
 
-    private fun removeSubtitlesFromCacheMap(itemKey: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val file = getSubtitleCacheFile()
-            if (!file.exists()) return@launch
-            try {
-                val json = JSONObject(file.readText())
-                if (json.has(itemKey)) {
-                    json.remove(itemKey)
-                    file.writeText(json.toString())
-                }
-            } catch (e: Exception) {
-                Log.e("StreamsViewModel", "Failed to remove subtitles from cache mapping: ${e.message}")
-            }
-        }
-    }
+    private fun removeSubtitlesFromCacheMap(itemKey: String) = 
+        com.poobi.tvbrowser.shared.SubtitleCacheManager.removeSubtitles(context, itemKey)
 
     private fun sortSeasons(seasons: JSONArray): JSONArray {
         val list = mutableListOf<JSONObject>()

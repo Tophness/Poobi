@@ -32,7 +32,9 @@ import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.extractor.text.SubtitleParser
 import androidx.media3.ui.PlayerView
 import com.chaquo.python.Python
+import com.poobi.tvbrowser.shared.SelectedSubtitleInfo
 import com.poobi.tvbrowser.shared.StreamResumeManager
+import com.poobi.tvbrowser.shared.SubtitleCacheManager
 import com.poobi.tvbrowser.shared.SubtitleData
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -180,6 +182,8 @@ class PlayerEngine(
     private val checkUpNextHandler = Handler(Looper.getMainLooper())
     var isUpNextDismissed = false
 
+    private var pendingSelectedSubtitleLabel: String? = null
+
     init {
         playerScope.launch {
             subtitleAlignmentManager.isUIVisible.collect { isVisible ->
@@ -228,6 +232,56 @@ class PlayerEngine(
         _showDiskSubtitlePicker.value = false
     }
 
+    fun selectSubtitleTrack(trackGroup: TrackGroup, trackIndex: Int, format: Format) {
+        val player = exoPlayer ?: return
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .addOverride(TrackSelectionOverride(trackGroup, trackIndex))
+            .build()
+
+        val label = format.label ?: ""
+        val matchedEntry = lastSubtitles.entries.find { it.value["label"] == label }
+            ?: lastSubtitles.entries.elementAtOrNull(trackIndex)
+        val matchedUrl = matchedEntry?.key
+        val matchedLang = matchedEntry?.value?.get("lang") ?: (format.language ?: "und")
+
+        if (matchedUrl != null) {
+            subtitleAlignmentManager.loadSubtitles(matchedUrl)
+        }
+        updateNativeSubtitleViewVisibility()
+
+        val itemKey = SubtitleCacheManager.getItemKey(lastScrapedItem, lastScrapedSeason, lastScrapedEpisode)
+        if (itemKey.isNotEmpty()) {
+            SubtitleCacheManager.setSelectedSubtitle(
+                context,
+                itemKey,
+                SelectedSubtitleInfo(
+                    isOff = false,
+                    url = matchedUrl ?: "",
+                    label = label,
+                    lang = matchedLang
+                )
+            )
+        }
+    }
+
+    fun disableSubtitles() {
+        disableNativeSubtitles(true)
+        subtitleAlignmentManager.clearSubtitles()
+        updateNativeSubtitleViewVisibility()
+
+        val itemKey = SubtitleCacheManager.getItemKey(lastScrapedItem, lastScrapedSeason, lastScrapedEpisode)
+        if (itemKey.isNotEmpty()) {
+            SubtitleCacheManager.setSelectedSubtitle(
+                context,
+                itemKey,
+                SelectedSubtitleInfo(isOff = true)
+            )
+        }
+    }
+
     fun addSubtitlesFromDisk(files: List<File>, autoSelectSingle: Boolean = true) {
         if (files.isEmpty()) return
         val player = exoPlayer ?: return
@@ -247,18 +301,40 @@ class PlayerEngine(
         }
         lastSubtitles = newSubMap
 
-        addSubtitlesBatch(newlyAddedSubData)
+        val itemKey = SubtitleCacheManager.getItemKey(lastScrapedItem, lastScrapedSeason, lastScrapedEpisode)
+        if (itemKey.isNotEmpty()) {
+            SubtitleCacheManager.saveSubtitles(context, itemKey, newlyAddedSubData)
+        }
 
         if (files.size == 1 && autoSelectSingle) {
             val singleUri = Uri.fromFile(files[0]).toString()
             val label = newlyAddedSubData[0].label
+            val lang = newlyAddedSubData[0].lang
+            pendingSelectedSubtitleLabel = label
+
+            if (itemKey.isNotEmpty()) {
+                SubtitleCacheManager.setSelectedSubtitle(
+                    context,
+                    itemKey,
+                    SelectedSubtitleInfo(
+                        isOff = false,
+                        url = singleUri,
+                        label = label,
+                        lang = lang
+                    )
+                )
+            }
 
             val renderingMode = prefs.getInt("subtitle_rendering_mode", 0)
             if (renderingMode == 1) {
                 subtitleAlignmentManager.loadSubtitles(singleUri)
-            } else {
-                disableNativeSubtitles(false)
             }
+        }
+
+        addSubtitlesBatch(newlyAddedSubData)
+
+        if (files.size == 1 && autoSelectSingle) {
+            val label = newlyAddedSubData[0].label
             Toast.makeText(context, "Loaded & selected: $label", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(context, "Added ${files.size} subtitles to captions menu", Toast.LENGTH_SHORT).show()
@@ -311,6 +387,7 @@ class PlayerEngine(
             else -> true
         }
         view.subtitleView?.visibility = if (shouldShow) android.view.View.VISIBLE else android.view.View.INVISIBLE
+        view.subtitleView?.alpha = if (shouldShow) 1.0f else 0.0f
     }
 
     private fun isHlsUrl(url: String): Boolean {
@@ -327,27 +404,27 @@ class PlayerEngine(
         return url.lowercase().contains("mpd")
     }
 
-	private fun sanitizeHeaders(videoUrl: String, headers: Map<String, String>): Map<String, String> {
-		val mergedHeaders = headers.toMutableMap()
+    private fun sanitizeHeaders(videoUrl: String, headers: Map<String, String>): Map<String, String> {
+        val mergedHeaders = headers.toMutableMap()
 
-		val acceptKey = mergedHeaders.keys.find { it.equals("accept", ignoreCase = true) }
-		if (acceptKey != null && mergedHeaders[acceptKey]?.contains("json") == true) {
-			mergedHeaders.remove(acceptKey)
-		}
+        val acceptKey = mergedHeaders.keys.find { it.equals("accept", ignoreCase = true) }
+        if (acceptKey != null && mergedHeaders[acceptKey]?.contains("json") == true) {
+            mergedHeaders.remove(acceptKey)
+        }
 
-		if (isHlsUrl(videoUrl)) {
-			val refKey = mergedHeaders.keys.find { it.equals("referer", ignoreCase = true) }
-			val currentReferer = refKey?.let { mergedHeaders[it] }
+        if (isHlsUrl(videoUrl)) {
+            val refKey = mergedHeaders.keys.find { it.equals("referer", ignoreCase = true) }
+            val currentReferer = refKey?.let { mergedHeaders[it] }
 
-			if (currentReferer.isNullOrEmpty()) {
-				mergedHeaders.keys.filter { it.equals("referer", ignoreCase = true) }.forEach {
-					mergedHeaders.remove(it)
-				}
-				mergedHeaders["Referer"] = videoUrl
-			}
-		}
-		return mergedHeaders
-	}
+            if (currentReferer.isNullOrEmpty()) {
+                mergedHeaders.keys.filter { it.equals("referer", ignoreCase = true) }.forEach {
+                    mergedHeaders.remove(it)
+                }
+                mergedHeaders["Referer"] = videoUrl
+            }
+        }
+        return mergedHeaders
+    }
 
     fun requestPlayPauseFocus() {
         val view = playerView ?: return
@@ -506,12 +583,45 @@ class PlayerEngine(
             ?: prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
             ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
+        val itemKey = SubtitleCacheManager.getItemKey(item, season, episode)
+        val allSubs = subtitles.toMutableMap()
+        if (itemKey.isNotEmpty()) {
+            val cachedSubs = SubtitleCacheManager.loadSubtitles(context, itemKey)
+            cachedSubs.forEach { sub ->
+                if (!allSubs.containsKey(sub.url)) {
+                    allSubs[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
+                }
+            }
+        }
+
+        val savedPref = if (itemKey.isNotEmpty()) {
+            SubtitleCacheManager.getSelectedSubtitle(context, itemKey)
+        } else null
+
+        val isPrefOff = savedPref?.isOff == true
+
+        var matchedPrefUrl: String? = null
+        var matchedPrefLabel: String? = null
+
+        if (savedPref != null && !isPrefOff && allSubs.isNotEmpty()) {
+            val match = allSubs.entries.find { it.key == savedPref.url }
+                ?: allSubs.entries.find { savedPref.label.isNotEmpty() && it.value["label"] == savedPref.label }
+                ?: allSubs.entries.find { savedPref.lang.isNotEmpty() && savedPref.lang != "und" && it.value["lang"] == savedPref.lang }
+
+            if (match != null) {
+                matchedPrefUrl = match.key
+                matchedPrefLabel = match.value["label"] ?: getLanguageInfo(match.key).second
+            }
+        }
+
+        pendingSelectedSubtitleLabel = if (!isPrefOff) (matchedPrefLabel ?: allSubs.values.firstOrNull()?.get("label")) else null
+
         lastVideoUrl = cleanUrl
         lastVideoTitle = title
         lastScrapedItem = item
         lastScrapedSeason = season
         lastScrapedEpisode = episode
-        lastSubtitles = subtitles
+        lastSubtitles = allSubs
         lastHeaders = finalHeaders
         lastFromStreams = fromStreams
         lastAlternativeUrls = alternativeUrls
@@ -626,6 +736,21 @@ class PlayerEngine(
                 if (isReleasing || !_isPlayerActive.value) return
                 updateQualityOptions(tracks)
 
+                if (pendingSelectedSubtitleLabel != null) {
+                    val targetLabel = pendingSelectedSubtitleLabel
+                    for (group in tracks.groups) {
+                        if (group.type == C.TRACK_TYPE_TEXT) {
+                            for (i in 0 until group.length) {
+                                if (group.getTrackFormat(i).label == targetLabel) {
+                                    pendingSelectedSubtitleLabel = null
+                                    selectSubtitleTrack(group.mediaTrackGroup, i, group.getTrackFormat(i))
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+
                 val activeQuality = _currentQuality.value
                 if (activeQuality != null) {
                     val displayName = if (activeQuality is QualityOption.Native && activeQuality.name.contains(" ")) {
@@ -645,21 +770,30 @@ class PlayerEngine(
             }
         })
 
-        val mediaItemBuilder = MediaItem.Builder().setUri(Uri.parse(cleanUrl))
-        val subtitleConfigs = subtitles.map { (subUrl, infoMap) ->
+        val subtitleConfigs = allSubs.map { (subUrl, infoMap) ->
             val mimeType = when {
                 subUrl.contains(".vtt") -> MimeTypes.TEXT_VTT
                 subUrl.contains(".ass") -> MimeTypes.TEXT_SSA
                 else -> MimeTypes.APPLICATION_SUBRIP
             }
             val label = infoMap["label"] ?: getLanguageInfo(subUrl).second
-            val lang = if (label.isNotEmpty() && label != "Unknown") null else (infoMap["lang"] ?: getLanguageInfo(subUrl).first)
+            val rawLang = infoMap["lang"]?.takeIf { it.isNotBlank() && it != "und" } ?: getLanguageInfo(subUrl).first
+
+            val isDefault = if (isPrefOff) {
+                false
+            } else if (matchedPrefUrl != null) {
+                subUrl == matchedPrefUrl
+            } else {
+                subUrl == allSubs.keys.firstOrNull()
+            }
+
+            val selectionFlags = if (isDefault) C.SELECTION_FLAG_DEFAULT else 0
 
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
                 .setMimeType(mimeType)
-                .setLanguage(lang)
+                .setLanguage(rawLang)
                 .setLabel(label)
-                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .setSelectionFlags(selectionFlags)
                 .setRoleFlags(C.ROLE_FLAG_SUBTITLE)
                 .build()
         }
@@ -713,13 +847,18 @@ class PlayerEngine(
             exoPlayer?.seekTo(savedPos)
         }
 
-        val firstSubUrl = subtitles.keys.firstOrNull() ?: ""
-        if (firstSubUrl.isNotEmpty()) {
-            subtitleAlignmentManager.loadSubtitles(firstSubUrl)
+        val activeSubUrl = if (!isPrefOff) (matchedPrefUrl ?: allSubs.keys.firstOrNull() ?: "") else ""
+        if (activeSubUrl.isNotEmpty()) {
+            subtitleAlignmentManager.loadSubtitles(activeSubUrl)
         } else {
-            subtitleAlignmentManager.hideUI()
+            subtitleAlignmentManager.clearSubtitles()
         }
-        restoreSubtitleVisibility()
+
+        if (isPrefOff) {
+            disableNativeSubtitles(true)
+        } else {
+            restoreSubtitleVisibility()
+        }
 
         exoPlayer?.prepare()
         exoPlayer?.playWhenReady = true
@@ -919,15 +1058,29 @@ class PlayerEngine(
                 else -> MimeTypes.APPLICATION_SUBRIP
             }
 
+            val rawLang = sub.lang.takeIf { it.isNotBlank() && it != "und" } ?: getLanguageInfo(sub.url).first
+            val label = sub.label.ifEmpty { getLanguageInfo(sub.url).second }
+
             val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.url))
                 .setMimeType(mimeType)
-                .setLanguage(if (sub.label.isEmpty()) sub.lang else null)
-                .setLabel(sub.label.ifEmpty { getLanguageInfo(sub.url).second })
+                .setLanguage(rawLang)
+                .setLabel(label)
                 .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                 .setRoleFlags(C.ROLE_FLAG_SUBTITLE)
                 .build()
             
             currentConfigs.add(subConfig)
+        }
+
+        val updatedSubMap = lastSubtitles.toMutableMap()
+        for (sub in newSubs) {
+            updatedSubMap[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
+        }
+        lastSubtitles = updatedSubMap
+
+        val itemKey = SubtitleCacheManager.getItemKey(lastScrapedItem, lastScrapedSeason, lastScrapedEpisode)
+        if (itemKey.isNotEmpty()) {
+            SubtitleCacheManager.saveSubtitles(context, itemKey, newSubs)
         }
 
         val newMediaItem = currentMediaItem.buildUpon()
