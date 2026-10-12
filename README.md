@@ -1,8 +1,8 @@
-# Poobi TV Browser & Streamer
+# Poob TV Browser & Streamer
 
-**Poobi** is a fast, modern, and highly optimized web browser and media streamer designed specifically for Android TV, Google TV, and Android set-top boxes. It combines a powerful ad-blocking browser with a comprehensive stream scraping engine and P2P torrent streaming capabilities.
+**Poob** is a fast, modern, and highly optimized web browser and media streamer designed specifically for Android TV, Google TV, and Android set-top boxes. It combines a powerful ad-blocking browser with a comprehensive stream scraping engine and P2P torrent streaming capabilities.
 
-## Why use Poobi?
+## Why use Poob?
 Sick of Kodi addons having broken sources and alerting you when it errored out trying to process them?
 Sick of every Android TV Browser being a piece of shit?
 Sick of torrentio chewing through your TV's storage with a hidden cache you can't delete? Me too. So I did something about it.
@@ -33,7 +33,7 @@ Any frustration you've had with these apps, I've probably fixed it. And if I hav
 
 ## Streams Tab & Scraping Engine
 
-Poobi features a powerful scraping engine that searches for high-quality streams without the hassle of navigating ad-ridden websites.
+Poob features a powerful scraping engine that searches for high-quality streams without the hassle of navigating ad-ridden websites.
 
 * **Powered by StreamScraper:** The scraping engine uses the libraries from the cross-platform [StreamScraper](https://github.com/Tophness/StreamScraper) Python app.
 * **Kodi Addon Heritage:** The scraping logic is built upon the solid foundation of popular Kodi addons like `gratisred`, `vidscr`, `free99`, `scrubsv2`, `thecrew`, and their various forks.
@@ -142,7 +142,7 @@ adb install Poobi-v4.3.1-app-arm64-release.apk
 
 ## Settings & Configuration
 
-Poobi is highly customizable via the **Settings** tab:
+Poob is highly customizable via the **Settings** tab:
 *   **Appearance:** Toggle Dark/Light themes and Snapshot vs Favicon icon styles.
 *   **Web & Content:** Configure silent popup blocking and Clickjack prevention. Manual point-and-block element selection.
 *   **Player:** Configure Native Player hijacking, fallback preferences, and embedded subtitle toggles.
