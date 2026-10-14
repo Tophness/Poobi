@@ -236,7 +236,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun getWebViewsList(): List<WebView> = _webViews
 
-    fun createNewTab(context: Context, url: String? = null, switchTo: Boolean = true, title: String? = null): WebView {
+    fun createNewTab(
+        context: Context, 
+        url: String? = null, 
+        switchTo: Boolean = true, 
+        title: String? = null,
+        idle: Boolean = false
+    ): WebView {
         val newWebView = WebView(context).apply {
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
             layoutParams = android.widget.FrameLayout.LayoutParams(
@@ -249,7 +255,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         setupWebView(newWebView)
         _webViews.add(newWebView)
 
-        if (url != null) newWebView.loadUrl(url)
+        if (url != null && !idle) {
+            newWebView.loadUrl(url)
+        }
         saveTabs()
         if (switchTo) {
             switchTab(_webViews.size - 1)
@@ -270,13 +278,20 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         oldWebView?.visibility = View.GONE
         _currentTabIndex.value = index
         _isBrowsing.value = true
-        _webViews[index].visibility = View.VISIBLE
+        val targetWebView = _webViews[index]
+        targetWebView.visibility = View.VISIBLE
         interceptedMediaUrls.clear()
         interceptedSubtitleUrls.clear()
+
+        val metadata = targetWebView.tag as? TabMetadata
+        val idleUrl = metadata?.defaultUrl
+        if ((targetWebView.url.isNullOrBlank() || targetWebView.url == "about:blank") && !idleUrl.isNullOrBlank()) {
+            targetWebView.loadUrl(idleUrl)
+        }
         
-        val url = _webViews[index].url ?: ""
+        val url = targetWebView.url ?: idleUrl ?: ""
         _currentUrl.value = url
-        _webViews[index].requestFocus()
+        targetWebView.requestFocus()
     }
 
     fun closeTab(index: Int) {
@@ -359,7 +374,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun restoreAllTabs(context: Context) {
+    fun restoreAllTabs(context: Context, idle: Boolean = false) {
         val savedTabs = prefs.getString("saved_tabs", "[]") ?: "[]"
         try {
             val array = JSONArray(savedTabs)
@@ -369,7 +384,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val url = obj.optString("url")
                 if (url.isNotEmpty()) {
                     val title = obj.optString("title")
-                    createNewTab(context, url, switchTo = false, title = title)
+                    createNewTab(context, url, switchTo = false, title = title, idle = idle)
                 }
             }
             if (_currentTabIndex.value == -1 && _webViews.isNotEmpty()) {
@@ -414,8 +429,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun triggerContextMenuAtCursor(cursorX: Float, cursorY: Float) {
         val wv = currentWebView ?: return
         val density = appContext.resources.displayMetrics.density
-        val x = (cursorX / density).toInt()
-        val y = (cursorY / density).toInt()
+        val location = IntArray(2)
+        wv.getLocationOnScreen(location)
+        val wvX = (cursorX - location[0]).coerceAtLeast(0f)
+        val wvY = (cursorY - location[1]).coerceAtLeast(0f)
+        val x = (wvX / density).toInt()
+        val y = (wvY / density).toInt()
 
         wv.evaluateJavascript("""
             (function() {
@@ -440,6 +459,34 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
                     _currentDialog.value = BrowserDialogState.ContextMenu(link, cursorX, cursorY) 
                 } catch (e: Exception) { }
+            }
+        }
+    }
+
+    fun openLinkAtInNewTab(screenX: Float, screenY: Float) {
+        val wv = currentWebView ?: return
+        val density = appContext.resources.displayMetrics.density
+        val location = IntArray(2)
+        wv.getLocationOnScreen(location)
+        val wvX = (screenX - location[0]).coerceAtLeast(0f)
+        val wvY = (screenY - location[1]).coerceAtLeast(0f)
+        val cssX = (wvX / density).toInt()
+        val cssY = (wvY / density).toInt()
+
+        wv.evaluateJavascript("""
+            (function() {
+                var el = document.elementFromPoint($cssX, $cssY);
+                var temp = el;
+                while (temp && temp.tagName !== 'A') {
+                    temp = temp.parentElement;
+                }
+                return temp ? temp.href : '';
+            })()
+        """.trimIndent()) { result ->
+            val rawLink = result?.replace("\"", "")?.trim() ?: ""
+            if (rawLink.startsWith("http://") || rawLink.startsWith("https://")) {
+                loadUrlAndBrowse(appContext, rawLink, newTab = true)
+                Toast.makeText(appContext, "Opened link in new tab", Toast.LENGTH_SHORT).show()
             }
         }
     }

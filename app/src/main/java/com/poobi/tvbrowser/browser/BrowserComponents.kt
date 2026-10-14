@@ -1,6 +1,8 @@
 package com.poobi.tvbrowser.browser
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -146,7 +148,8 @@ fun BrowserCardItem(
 @Composable
 fun TabItemCard(
     title: String,
-    progress: Float
+    progress: Float,
+    onCloseClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -163,19 +166,32 @@ fun TabItemCard(
             modifier = Modifier.weight(1f)
         )
 
-        HoldToDeleteCloseButton(progress = progress)
+        HoldToDeleteCloseButton(
+            progress = progress,
+            onClick = onCloseClick
+        )
     }
 }
 
 @Composable
 fun HoldToDeleteCloseButton(
-    progress: Float
+    progress: Float,
+    onClick: (() -> Unit)? = null
 ) {
     Box(
         modifier = Modifier
             .size(32.dp)
             .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.5f)),
+            .background(Color.Black.copy(alpha = 0.5f))
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onClick
+                    )
+                } else Modifier
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(

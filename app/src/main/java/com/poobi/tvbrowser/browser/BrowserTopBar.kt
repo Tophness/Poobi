@@ -93,7 +93,8 @@ fun BrowserTopBar(
                     ) { isFocused, progress ->
                         TabItemCard(
                             title = title,
-                            progress = progress
+                            progress = progress,
+                            onCloseClick = { viewModel.closeTab(index) }
                         )
                     }
                 }

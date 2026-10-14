@@ -1,6 +1,5 @@
 package com.poobi.tvbrowser.browser
 
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -8,17 +7,8 @@ import android.view.Choreographer
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.WindowInsets
 import androidx.activity.ComponentActivity
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.platform.LocalFocusManager
+import com.poobi.tvbrowser.shared.HardwareInputManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -82,6 +72,15 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
         scrollVelocityY = 0f
         isMovementLoopRunning = false
         lastMovementTime = 0L
+    }
+
+    fun updatePosition(newX: Float, newY: Float) {
+        val displayMetrics = activity.resources.displayMetrics
+        val maxX = displayMetrics.widthPixels.toFloat()
+        val maxY = displayMetrics.heightPixels.toFloat()
+        _cursorX.value = newX.coerceIn(0f, maxX)
+        _cursorY.value = newY.coerceIn(0f, maxY)
+        checkHover()
     }
 
     fun wakeCursor() {
@@ -202,15 +201,16 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
 
         if (viewModel.isBrowsing.value) {
             val wv = viewModel.currentWebView
-            if (viewModel.scrollTopbarEnabled.value && _cursorY.value <= 0 && (wv?.scrollY ?: 0) == 0 && dy < 0 && !isLongPressing) {
+            val isAtTop = wv == null || !wv.canScrollVertically(-1) || (wv.scrollY <= 0)
+
+            if (viewModel.scrollTopbarEnabled.value && _cursorY.value <= 0 && isAtTop && dy < 0 && !isLongPressing) {
+                wv?.scrollTo(0, 0)
                 viewModel.showTopBar()
                 _cursorVisible.value = false
                 clearKeyStates()
-            }
-
-            if (_cursorY.value >= maxY - 1f && dy > 0) { 
+            } else if (_cursorY.value >= maxY - 1f && dy > 0) { 
                 wv?.scrollBy(0, 15)
-            } else if (_cursorY.value <= 0f && (wv?.scrollY ?: 0) > 0 && dy < 0) {
+            } else if (_cursorY.value <= 0f && !isAtTop && dy < 0) {
                 wv?.scrollBy(0, -15)
             }
         }
@@ -285,48 +285,4 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
         choreographer.removeFrameCallback(frameCallback)
         handler.removeCallbacksAndMessages(null)
     }
-}
-
-fun Modifier.smartDpadFocus(
-    context: android.content.Context,
-    onImeAction: () -> Unit
-): Modifier = composed {
-    val focusManager = LocalFocusManager.current
-    var isFocused by remember { mutableStateOf(false) }
-
-    this
-        .onFocusChanged { isFocused = it.isFocused }
-        .onPreviewKeyEvent { keyEvent ->
-            val nativeEvent = keyEvent.nativeKeyEvent
-            if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
-                val keyCode = nativeEvent.keyCode
-                if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
-                    keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-
-                    var isKeyboardOpen = false
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        val windowInsets = (context as? ComponentActivity)?.window?.decorView?.rootWindowInsets
-                        isKeyboardOpen = windowInsets?.isVisible(WindowInsets.Type.ime()) == true
-                    }
-                    if (nativeEvent.deviceId <= 0) {
-                        isKeyboardOpen = true
-                    }
-
-                    if (!isKeyboardOpen) {
-                        val direction = when (keyCode) {
-                            KeyEvent.KEYCODE_DPAD_UP -> androidx.compose.ui.focus.FocusDirection.Up
-                            KeyEvent.KEYCODE_DPAD_DOWN -> androidx.compose.ui.focus.FocusDirection.Down
-                            KeyEvent.KEYCODE_DPAD_LEFT -> androidx.compose.ui.focus.FocusDirection.Left
-                            KeyEvent.KEYCODE_DPAD_RIGHT -> androidx.compose.ui.focus.FocusDirection.Right
-                            else -> null
-                        }
-                        if (direction != null) {
-                            focusManager.moveFocus(direction)
-                            return@onPreviewKeyEvent true
-                        }
-                    }
-                }
-            }
-            false
-        }
 }

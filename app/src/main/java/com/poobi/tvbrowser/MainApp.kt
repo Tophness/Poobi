@@ -55,6 +55,7 @@ import com.poobi.tvbrowser.player.PlayerEngine
 import com.poobi.tvbrowser.player.UpNextOverlay
 import com.poobi.tvbrowser.player.CustomSubtitleOverlay
 import com.poobi.tvbrowser.player.SubtitleAlignmentOverlay
+import com.poobi.tvbrowser.shared.HardwareInputManager
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvInputField
 import com.poobi.tvbrowser.shared.KeyTracker
@@ -426,216 +427,214 @@ fun MainApp(
                 AndroidView(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
-							player = playerEngine.exoPlayer
-							useController = true
-							setShowSubtitleButton(true)
-							setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-							playerEngine.playerView = this
-							
-							playerEngine.updateNativeSubtitleViewVisibility()
-							
-							setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility: Int ->
-								val visible = visibility == android.view.View.VISIBLE
-								playerEngine.setControllerVisible(visible)
-								if (visible) {
-									post {
-										if (!playerEngine.showUpNext.value) {
-											val playPauseBtn = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
-												?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui"))
-												?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", context.packageName))
-											playPauseBtn?.requestFocus()
-										}
-									}
-								}
-							})
+                            player = playerEngine.exoPlayer
+                            useController = true
+                            setShowSubtitleButton(true)
+                            setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
+                            playerEngine.playerView = this
+                            
+                            playerEngine.updateNativeSubtitleViewVisibility()
+                            
+                            setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility: Int ->
+                                val visible = visibility == android.view.View.VISIBLE
+                                playerEngine.setControllerVisible(visible)
+                                if (visible) {
+                                    post {
+                                        if (!playerEngine.showUpNext.value) {
+                                            val playPauseBtn = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
+                                                ?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", "androidx.media3.ui"))
+                                                ?: findViewById<android.view.View>(resources.getIdentifier("exo_play_pause", "id", context.packageName))
+                                            playPauseBtn?.requestFocus()
+                                        }
+                                    }
+                                }
+                            })
 
-							post {
-								val subtitleId = try {
-									androidx.media3.ui.R.id.exo_subtitle
-								} catch (e: Throwable) {
-									resources.getIdentifier("exo_subtitle", "id", "androidx.media3.ui")
-								}
-								val subtitleBtn = findViewById<android.view.View>(subtitleId)
+                            post {
+                                val subtitleId = try {
+                                    androidx.media3.ui.R.id.exo_subtitle
+                                } catch (e: Throwable) {
+                                    resources.getIdentifier("exo_subtitle", "id", "androidx.media3.ui")
+                                }
+                                val subtitleBtn = findViewById<android.view.View>(subtitleId)
 
-								if (subtitleBtn != null) {
-									// 1. Force the subtitle button to ALWAYS stay enabled, focusable, and visible
-									subtitleBtn.isEnabled = true
-									subtitleBtn.isFocusable = true
-									subtitleBtn.alpha = 1.0f
+                                if (subtitleBtn != null) {
+                                    subtitleBtn.isEnabled = true
+                                    subtitleBtn.isFocusable = true
+                                    subtitleBtn.alpha = 1.0f
 
-									subtitleBtn.viewTreeObserver.addOnPreDrawListener(android.view.ViewTreeObserver.OnPreDrawListener {
-										if (!subtitleBtn.isEnabled || subtitleBtn.alpha < 0.9f) {
-											subtitleBtn.isEnabled = true
-											subtitleBtn.isFocusable = true
-											subtitleBtn.alpha = 1.0f
-										}
-										true
-									})
+                                    subtitleBtn.viewTreeObserver.addOnPreDrawListener(android.view.ViewTreeObserver.OnPreDrawListener {
+                                        if (!subtitleBtn.isEnabled || subtitleBtn.alpha < 0.9f) {
+                                            subtitleBtn.isEnabled = true
+                                            subtitleBtn.isFocusable = true
+                                            subtitleBtn.alpha = 1.0f
+                                        }
+                                        true
+                                    })
 
-									// 2. Open our pop-out captions menu directly anchored above the button
-									subtitleBtn.setOnClickListener {
-										com.poobi.tvbrowser.player.CaptionsPopupMenu.show(subtitleBtn, playerEngine)
-									}
-								}
+                                    subtitleBtn.setOnClickListener {
+                                        com.poobi.tvbrowser.player.CaptionsPopupMenu.show(subtitleBtn, playerEngine)
+                                    }
+                                }
 
-								val basicControlsId = try {
-									androidx.media3.ui.R.id.exo_basic_controls
-								} catch (e: Throwable) {
-									resources.getIdentifier("exo_basic_controls", "id", "androidx.media3.ui")
-								}
-								val settingsBtnId = try {
-									androidx.media3.ui.R.id.exo_settings
-								} catch (e: Throwable) {
-									resources.getIdentifier("exo_settings", "id", "androidx.media3.ui")
-								}
+                                val basicControlsId = try {
+                                    androidx.media3.ui.R.id.exo_basic_controls
+                                } catch (e: Throwable) {
+                                    resources.getIdentifier("exo_basic_controls", "id", "androidx.media3.ui")
+                                }
+                                val settingsBtnId = try {
+                                    androidx.media3.ui.R.id.exo_settings
+                                } catch (e: Throwable) {
+                                    resources.getIdentifier("exo_settings", "id", "androidx.media3.ui")
+                                }
 
-								val basicControls = findViewById<android.widget.LinearLayout>(basicControlsId)
-								val settingsBtn = findViewById<android.view.View>(settingsBtnId)
+                                val basicControls = findViewById<android.widget.LinearLayout>(basicControlsId)
+                                val settingsBtn = findViewById<android.view.View>(settingsBtnId)
 
-								if (basicControls != null) {
-									val existingBtn = basicControls.findViewWithTag<android.view.View>("exo_quality_button_tag")
-									if (existingBtn == null) {
-										val qualityBtn = android.widget.TextView(ctx).apply {
-											tag = "exo_quality_button_tag"
+                                if (basicControls != null) {
+                                    val existingBtn = basicControls.findViewWithTag<android.view.View>("exo_quality_button_tag")
+                                    if (existingBtn == null) {
+                                        val qualityBtn = android.widget.TextView(ctx).apply {
+                                            tag = "exo_quality_button_tag"
 
-											val format = playerEngine.exoPlayer?.videoFormat
-											val height = format?.height
-											text = if (height != null && height > 0) "${height}P" else "AUTO"
-											
-											gravity = android.view.Gravity.CENTER
-											val density = resources.displayMetrics.density
-											val padH = (14 * density).toInt()
-											val padV = (6 * density).toInt()
-											setPadding(padH, padV, padH, padV)
-											textSize = 13f
-											setTypeface(null, android.graphics.Typeface.BOLD)
-											setMinWidth((70 * density).toInt())
+                                            val format = playerEngine.exoPlayer?.videoFormat
+                                            val height = format?.height
+                                            text = if (height != null && height > 0) "${height}P" else "AUTO"
+                                            
+                                            gravity = android.view.Gravity.CENTER
+                                            val density = resources.displayMetrics.density
+                                            val padH = (14 * density).toInt()
+                                            val padV = (6 * density).toInt()
+                                            setPadding(padH, padV, padH, padV)
+                                            textSize = 13f
+                                            setTypeface(null, android.graphics.Typeface.BOLD)
+                                            setMinWidth((70 * density).toInt())
 
-											val normalDrawable = android.graphics.drawable.GradientDrawable().apply {
-												setColor(android.graphics.Color.TRANSPARENT)
-												setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
-												cornerRadius = 4f * density
-											}
-											val focusedDrawable = android.graphics.drawable.GradientDrawable().apply {
-												setColor(android.graphics.Color.parseColor("#00BCD4"))
-												setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
-												cornerRadius = 4f * density
-											}
+                                            val normalDrawable = android.graphics.drawable.GradientDrawable().apply {
+                                                setColor(android.graphics.Color.TRANSPARENT)
+                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+                                                cornerRadius = 4f * density
+                                            }
+                                            val focusedDrawable = android.graphics.drawable.GradientDrawable().apply {
+                                                setColor(android.graphics.Color.parseColor("#00BCD4"))
+                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+                                                cornerRadius = 4f * density
+                                            }
 
-											val sld = android.graphics.drawable.StateListDrawable().apply {
-												addState(intArrayOf(android.R.attr.state_focused), focusedDrawable)
-												addState(intArrayOf(), normalDrawable)
-											}
-											background = sld
+                                            val sld = android.graphics.drawable.StateListDrawable().apply {
+                                                addState(intArrayOf(android.R.attr.state_focused), focusedDrawable)
+                                                addState(intArrayOf(), normalDrawable)
+                                            }
+                                            background = sld
 
-											val colorStateList = android.content.res.ColorStateList(
-												arrayOf(
-													intArrayOf(android.R.attr.state_focused),
-													intArrayOf()
-												),
-												intArrayOf(
-													android.graphics.Color.BLACK,
-													android.graphics.Color.WHITE
-												)
-											)
-											setTextColor(colorStateList)
+                                            val colorStateList = android.content.res.ColorStateList(
+                                                arrayOf(
+                                                    intArrayOf(android.R.attr.state_focused),
+                                                    intArrayOf()
+                                                ),
+                                                intArrayOf(
+                                                    android.graphics.Color.BLACK,
+                                                    android.graphics.Color.WHITE
+                                                )
+                                            )
+                                            setTextColor(colorStateList)
 
-											layoutParams = android.widget.LinearLayout.LayoutParams(
-												android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
-												android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-											).apply {
-												gravity = android.view.Gravity.CENTER_VERTICAL
-												rightMargin = (10 * density).toInt()
-												leftMargin = (10 * density).toInt()
-											}
-											
-											setOnClickListener {
-												playerEngine.showResolutionSelector()
-											}
-											
-											isFocusable = true
-										}
+                                            layoutParams = android.widget.LinearLayout.LayoutParams(
+                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                                            ).apply {
+                                                gravity = android.view.Gravity.CENTER_VERTICAL
+                                                rightMargin = (10 * density).toInt()
+                                                leftMargin = (10 * density).toInt()
+                                            }
+                                            
+                                            setOnClickListener {
+                                                playerEngine.showResolutionSelector()
+                                            }
+                                            
+                                            isFocusable = true
+                                        }
 
-										val index = if (settingsBtn != null) basicControls.indexOfChild(settingsBtn) else -1
-										if (index >= 0) {
-											basicControls.addView(qualityBtn, index)
-										} else {
-											basicControls.addView(qualityBtn)
-										}
-									}
+                                        val index = if (settingsBtn != null) basicControls.indexOfChild(settingsBtn) else -1
+                                        if (index >= 0) {
+                                            basicControls.addView(qualityBtn, index)
+                                        } else {
+                                            basicControls.addView(qualityBtn)
+                                        }
+                                    }
 
-									val existingSyncBtn = basicControls.findViewWithTag<android.view.View>("exo_sub_sync_button_tag")
-									if (existingSyncBtn == null) {
-										val syncBtn = android.widget.TextView(ctx).apply {
-											tag = "exo_sub_sync_button_tag"
-											text = "SUB SYNC"
-											
-											gravity = android.view.Gravity.CENTER
-											val density = resources.displayMetrics.density
-											val padH = (14 * density).toInt()
-											val padV = (6 * density).toInt()
-											setPadding(padH, padV, padH, padV)
-											textSize = 13f
-											setTypeface(null, android.graphics.Typeface.BOLD)
-											setMinWidth((70 * density).toInt())
+                                    val existingSyncBtn = basicControls.findViewWithTag<android.view.View>("exo_sub_sync_button_tag")
+                                    if (existingSyncBtn == null) {
+                                        val syncBtn = android.widget.TextView(ctx).apply {
+                                            tag = "exo_sub_sync_button_tag"
+                                            text = "SUB SYNC"
+                                            
+                                            gravity = android.view.Gravity.CENTER
+                                            val density = resources.displayMetrics.density
+                                            val padH = (14 * density).toInt()
+                                            val padV = (6 * density).toInt()
+                                            setPadding(padH, padV, padH, padV)
+                                            textSize = 13f
+                                            setTypeface(null, android.graphics.Typeface.BOLD)
+                                            setMinWidth((70 * density).toInt())
 
-											val normalDrawable = android.graphics.drawable.GradientDrawable().apply {
-												setColor(android.graphics.Color.TRANSPARENT)
-												setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
-												cornerRadius = 4f * density
-											}
-											val focusedDrawable = android.graphics.drawable.GradientDrawable().apply {
-												setColor(android.graphics.Color.parseColor("#00BCD4"))
-												setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
-												cornerRadius = 4f * density
-											}
+                                            val normalDrawable = android.graphics.drawable.GradientDrawable().apply {
+                                                setColor(android.graphics.Color.TRANSPARENT)
+                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+                                                cornerRadius = 4f * density
+                                            }
+                                            val focusedDrawable = android.graphics.drawable.GradientDrawable().apply {
+                                                setColor(android.graphics.Color.parseColor("#00BCD4"))
+                                                setStroke((1.5f * density).toInt(), android.graphics.Color.WHITE)
+                                                cornerRadius = 4f * density
+                                            }
 
-											val sld = android.graphics.drawable.StateListDrawable().apply {
-												addState(intArrayOf(android.R.attr.state_focused), focusedDrawable)
-												addState(intArrayOf(), normalDrawable)
-											}
-											background = sld
+                                            val sld = android.graphics.drawable.StateListDrawable().apply {
+                                                addState(intArrayOf(android.R.attr.state_focused), focusedDrawable)
+                                                addState(intArrayOf(), normalDrawable)
+                                            }
+                                            background = sld
 
-											val colorStateList = android.content.res.ColorStateList(
-												arrayOf(
-													intArrayOf(android.R.attr.state_focused),
-													intArrayOf()
-												),
-												intArrayOf(
-													android.graphics.Color.BLACK,
-													android.graphics.Color.WHITE
-												)
-											)
-											setTextColor(colorStateList)
+                                            val colorStateList = android.content.res.ColorStateList(
+                                                arrayOf(
+                                                    intArrayOf(android.R.attr.state_focused),
+                                                    intArrayOf()
+                                                ),
+                                                intArrayOf(
+                                                    android.graphics.Color.BLACK,
+                                                    android.graphics.Color.WHITE
+                                                )
+                                            )
+                                            setTextColor(colorStateList)
 
-											layoutParams = android.widget.LinearLayout.LayoutParams(
-												android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
-												android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-											).apply {
-												gravity = android.view.Gravity.CENTER_VERTICAL
-												rightMargin = (10 * density).toInt()
-												leftMargin = (10 * density).toInt()
-											}
-											
-											setOnClickListener {
-												playerEngine.subtitleAlignmentManager.showUI()
-											}
-											
-											isFocusable = true
-										}
+                                            layoutParams = android.widget.LinearLayout.LayoutParams(
+                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                                                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                                            ).apply {
+                                                gravity = android.view.Gravity.CENTER_VERTICAL
+                                                rightMargin = (10 * density).toInt()
+                                                leftMargin = (10 * density).toInt()
+                                            }
+                                            
+                                            setOnClickListener {
+                                                playerEngine.subtitleAlignmentManager.showUI()
+                                            }
+                                            
+                                            isFocusable = true
+                                        }
 
-										val index = if (settingsBtn != null) basicControls.indexOfChild(settingsBtn) else -1
-										if (index >= 0) {
-											basicControls.addView(syncBtn, index)
-										} else {
-											basicControls.addView(syncBtn)
-										}
-									}
-								}
-							}
-							
-							requestFocus()
-						}
+                                        val index = if (settingsBtn != null) basicControls.indexOfChild(settingsBtn) else -1
+                                        if (index >= 0) {
+                                            basicControls.addView(syncBtn, index)
+                                        } else {
+                                            basicControls.addView(syncBtn)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            requestFocus()
+                        }
                     },
                     update = { view ->
                         if (view.player != playerEngine.exoPlayer) {

@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,12 +31,22 @@ fun ContextMenuOverlay(
     onBlockElement: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Focus requester dedicated to contextual list item navigation
     val firstItemFocusRequester = remember { FocusRequester() }
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         firstItemFocusRequester.requestFocus()
     }
+
+    val displayMetrics = context.resources.displayMetrics
+    val screenW = displayMetrics.widthPixels
+    val screenH = displayMetrics.heightPixels
+    val density = displayMetrics.density
+    val menuWidthPx = (240 * density).toInt()
+    val menuHeightPx = (180 * density).toInt()
+
+    val clampedX = cursorX.toInt().coerceIn(16, (screenW - menuWidthPx - 16).coerceAtLeast(16))
+    val clampedY = cursorY.toInt().coerceIn(16, (screenH - menuHeightPx - 16).coerceAtLeast(16))
 
     Box(
         modifier = Modifier
@@ -45,7 +56,7 @@ fun ContextMenuOverlay(
     ) {
         Column(
             modifier = Modifier
-                .offset { IntOffset(cursorX.toInt(), cursorY.toInt()) }
+                .offset { IntOffset(clampedX, clampedY) }
                 .width(220.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xE6222222))

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -86,7 +87,7 @@ fun TvFocusableHoldToDeleteBox(
                             holdProgress = 0f
                             holdJob = coroutineScope.launch {
                                 val startTime = System.currentTimeMillis()
-                                val duration = 1000L // 1 Second hold-to-delete limit
+                                val duration = 1000L
                                 while (System.currentTimeMillis() - startTime < duration) {
                                     val elapsed = System.currentTimeMillis() - startTime
                                     holdProgress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
@@ -113,6 +114,11 @@ fun TvFocusableHoldToDeleteBox(
                 }
                 false
             }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .focusable(interactionSource = interactionSource),
         contentAlignment = Alignment.Center
     ) {

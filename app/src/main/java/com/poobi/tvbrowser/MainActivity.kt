@@ -4,7 +4,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
 import android.widget.Toast
@@ -22,6 +24,7 @@ import com.poobi.tvbrowser.browser.AdBlockManager
 import com.poobi.tvbrowser.browser.BrowserViewModel
 import com.poobi.tvbrowser.browser.CursorManager
 import com.poobi.tvbrowser.player.PlayerEngine
+import com.poobi.tvbrowser.shared.HardwareInputManager
 import com.poobi.tvbrowser.shared.PythonDialogListener
 import com.poobi.tvbrowser.shared.cleanKodiText
 import com.poobi.tvbrowser.shared.isFutureDate
@@ -69,6 +72,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var playerEngine: PlayerEngine
     private var torrentServer: TorrentStreamServer? = null
 
+    private var lastRightClickTime = 0L
+
     private val longPressHandler = Handler(Looper.getMainLooper())
     private val longPressRunnable = Runnable {
         cursorManager.isLongPressing = true
@@ -77,6 +82,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        HardwareInputManager.init(this)
         AdBlockManager.init(this)
         startTorrentServer()
 
@@ -106,7 +112,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     } else if (fromStreams) {
                         when (fallbackPref) {
-                            1 -> { // Always
+                            1 -> {
                                 val item = streamsViewModel.selectedItem.value
                                 browserViewModel.loadUrlAndBrowse(
                                     context = this, 
@@ -118,11 +124,11 @@ class MainActivity : AppCompatActivity() {
                                 )
                                 browserViewModel.currentAppTab.value = 0
                             }
-                            2 -> { // Never
+                            2 -> {
                                 Toast.makeText(this, "ExoPlayer Error: ${error.errorCodeName}", Toast.LENGTH_LONG).show()
                                 streamsViewModel.resumeScrape()
                             }
-                            else -> { // Ask (0)
+                            else -> {
                                 showExoFallbackDialog(url, error.errorCodeName)
                             }
                         }
@@ -310,17 +316,113 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
-        checkStartupTabs()
+        if (savedInstanceState == null) {
+            checkStartupTabs()
+        }
         initPythonAsync()
     }
 
     override fun onResume() {
         super.onResume()
+        HardwareInputManager.updateConnectedDevices(this)
         browserViewModel.reloadPreferences()
         browserViewModel.refreshLists()
         streamsViewModel.refreshFavoritesSet()
         registerPythonDialogListenerAsync()
         ApkInstaller.resumePendingInstallIfPermitted(this)
+    }
+
+    private fun isMouseEvent(event: MotionEvent): Boolean {
+        return (event.source and InputDevice.SOURCE_MOUSE == InputDevice.SOURCE_MOUSE) ||
+               (event.source and InputDevice.SOURCE_TRACKBALL == InputDevice.SOURCE_TRACKBALL) ||
+               (event.source and InputDevice.SOURCE_CLASS_POINTER == InputDevice.SOURCE_CLASS_POINTER) ||
+               event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (HardwareInputManager.isMouseActive(this) && isMouseEvent(event)) {
+            HardwareInputManager.notifyMouseUsed()
+            cursorManager.updatePosition(event.x, event.y)
+
+            when (event.action) {
+                MotionEvent.ACTION_SCROLL -> {
+                    val vScroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+                    if (browserViewModel.currentAppTab.value == 0 && browserViewModel.isBrowsing.value && !browserViewModel.topBarVisible.value) {
+                        browserViewModel.currentWebView?.scrollBy(0, (-vScroll * 140).toInt())
+                        return true
+                    }
+                }
+                MotionEvent.ACTION_BUTTON_PRESS -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        when (event.actionButton) {
+                            MotionEvent.BUTTON_SECONDARY -> {
+                                handleRightClick(event.x, event.y)
+                                return true
+                            }
+                            MotionEvent.BUTTON_TERTIARY -> {
+                                handleMiddleClick(event.x, event.y)
+                                return true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return super.dispatchGenericMotionEvent(event)
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (HardwareInputManager.isMouseActive(this) && isMouseEvent(event)) {
+            HardwareInputManager.notifyMouseUsed()
+            cursorManager.updatePosition(event.x, event.y)
+
+            val buttonState = event.buttonState
+            val isRightClick = (buttonState and MotionEvent.BUTTON_SECONDARY != 0)
+            val isMiddleClick = (buttonState and MotionEvent.BUTTON_TERTIARY != 0)
+
+            if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_POINTER_DOWN) {
+                if (isRightClick) {
+                    handleRightClick(event.x, event.y)
+                    return true
+                }
+                if (isMiddleClick) {
+                    handleMiddleClick(event.x, event.y)
+                    return true
+                }
+
+                if (browserViewModel.currentAppTab.value == 0 && browserViewModel.isBrowsing.value && !browserViewModel.topBarVisible.value) {
+                    val wv = browserViewModel.currentWebView
+                    if (wv != null && !wv.hasFocus()) {
+                        wv.requestFocus()
+                    }
+                }
+            }
+
+            if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_POINTER_UP) {
+                if (isRightClick || isMiddleClick) {
+                    return true
+                }
+            }
+        }
+
+        return super.dispatchTouchEvent(event)
+    }
+
+    private fun handleRightClick(screenX: Float, screenY: Float) {
+        lastRightClickTime = System.currentTimeMillis()
+        if (browserViewModel.currentDialog.value != null) {
+            browserViewModel.dismissDialog()
+            return
+        }
+        if (browserViewModel.currentAppTab.value == 0 && browserViewModel.isBrowsing.value) {
+            browserViewModel.triggerContextMenuAtCursor(screenX, screenY)
+        }
+    }
+
+    private fun handleMiddleClick(screenX: Float, screenY: Float) {
+        if (browserViewModel.currentAppTab.value == 0 && browserViewModel.isBrowsing.value) {
+            browserViewModel.openLinkAtInNewTab(screenX, screenY)
+        }
     }
 
     private fun initPythonAsync() {
@@ -476,21 +578,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun displaySubtitleWaitDialog(sourceDataJson: String) {
-        AlertDialog.Builder(this)
-            .setTitle("Auto-Downloading Subtitles")
-            .setMessage("Subtitles are currently being fetched. Do you want to wait for them to finish before playing?")
-            .setPositiveButton("Skip & Play") { _, _ ->
-                streamsViewModel.cancelSubtitleDownloads()
-                streamsViewModel.resolveAndPlayInternal(sourceDataJson)
-            }
-            .setNegativeButton("Wait") { _, _ ->
-                streamsViewModel.pendingPlayVideoSourceData = sourceDataJson
-                Toast.makeText(this@MainActivity, "Waiting for subtitles to finish downloading...", Toast.LENGTH_SHORT).show()
-            }
-            .show()
-    }
-
     fun startDpadSelectionMode() {
         cursorManager.isSelectionMode = true
         browserViewModel.currentWebView?.requestFocus()
@@ -506,13 +593,35 @@ class MainActivity : AppCompatActivity() {
             if (savedTabs == "[]") return@launch
 
             when (pref) {
-                1 -> browserViewModel.restoreAllTabs(this@MainActivity)
+                1 -> browserViewModel.restoreAllTabs(this@MainActivity, idle = false)
+                2 -> browserViewModel.restoreAllTabs(this@MainActivity, idle = true)
                 0 -> {
+                    val checkBox = android.widget.CheckBox(this@MainActivity).apply {
+                        text = "Remember choice"
+                        setTextColor(android.graphics.Color.WHITE)
+                        setPadding(40, 10, 40, 10)
+                    }
+
                     AlertDialog.Builder(this@MainActivity)
                         .setTitle("Restore Session?")
                         .setMessage("Do you want to restore your previous tabs?")
-                        .setPositiveButton("Restore All") { _, _ -> browserViewModel.restoreAllTabs(this@MainActivity) }
-                        .setNegativeButton("New Session") { _, _ -> 
+                        .setView(checkBox)
+                        .setPositiveButton("Restore & Load") { _, _ ->
+                            if (checkBox.isChecked) {
+                                prefs.edit().putInt("restore_tabs_pref", 1).apply()
+                            }
+                            browserViewModel.restoreAllTabs(this@MainActivity, idle = false)
+                        }
+                        .setNeutralButton("Restore") { _, _ ->
+                            if (checkBox.isChecked) {
+                                prefs.edit().putInt("restore_tabs_pref", 2).apply()
+                            }
+                            browserViewModel.restoreAllTabs(this@MainActivity, idle = true)
+                        }
+                        .setNegativeButton("New Session") { _, _ ->
+                            if (checkBox.isChecked) {
+                                prefs.edit().putInt("restore_tabs_pref", 3).apply()
+                            }
                             prefs.edit().putString("saved_tabs", "[]").apply()
                             browserViewModel.refreshLists()
                         }
@@ -526,14 +635,23 @@ class MainActivity : AppCompatActivity() {
         if (event.action == KeyEvent.ACTION_DOWN) {
             KeyTracker.lastKeyCode = event.keyCode
             KeyTracker.lastKeyPressTime = System.currentTimeMillis()
+
+            if (HardwareInputManager.isAlphaKeyboardDevice(event.device)) {
+                HardwareInputManager.notifyKeyboardUsed()
+            }
+
             if (playerEngine.isPlayerActive.value && 
                 (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER)) {
                 if (playerEngine.isUpNextDismissed) {
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    Handler(Looper.getMainLooper()).post {
                         playerEngine.resetUpNextDismissed()
                     }
                 }
             }
+        }
+
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && (System.currentTimeMillis() - lastRightClickTime) < 500L) {
+            return true
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -663,22 +781,22 @@ class MainActivity : AppCompatActivity() {
                     null
                 }
 
-				val shouldSeek = !isUpNextFocused && (
-								 !isControllerVisible || 
-								 focusedView == null || 
-								 idName == "exo_play_pause" || 
-								 idName == "exo_play" || 
-								 idName == "exo_pause" || 
-								 idName == "exo_progress" || 
-								 idName == "exo_timebar" || 
-								 idName == "exo_time_bar"
-								 )
+                val shouldSeek = !isUpNextFocused && (
+                    !isControllerVisible || 
+                    focusedView == null || 
+                    idName == "exo_play_pause" || 
+                    idName == "exo_play" || 
+                    idName == "exo_pause" || 
+                    idName == "exo_progress" || 
+                    idName == "exo_timebar" || 
+                    idName == "exo_time_bar"
+                )
 
-				if (shouldSeek) {
-					val direction = if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
-					playerEngine.seekVideo(direction, event.repeatCount)
-					return true
-				}
+                if (shouldSeek) {
+                    val direction = if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
+                    playerEngine.seekVideo(direction, event.repeatCount)
+                    return true
+                }
             }
 
             if (event.action == KeyEvent.ACTION_DOWN && playerEngine.showUpNext.value) {
@@ -738,6 +856,25 @@ class MainActivity : AppCompatActivity() {
                             browserViewModel.currentDialog.value == null
         
         if (isBrowserMode) {
+            val isHwKeyboard = HardwareInputManager.isHardwareKeyboardActive(this)
+            val isEnterKey = event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+            val isAlphaKey = isHwKeyboard && HardwareInputManager.isAlphaKeyboardDevice(event.device)
+
+            if (isEnterKey && isAlphaKey) {
+                if (browserViewModel.currentWebView?.dispatchKeyEvent(event) == true) {
+                    return true
+                }
+            }
+
+            if (isHwKeyboard && isAlphaKey && event.action == KeyEvent.ACTION_DOWN && event.isPrintingKey) {
+                if (browserViewModel.currentWebView?.hasFocus() == false) {
+                    browserViewModel.currentWebView?.requestFocus()
+                }
+                if (browserViewModel.currentWebView?.dispatchKeyEvent(event) == true) {
+                    return true
+                }
+            }
+
             val isNativeDpadMode = browserViewModel.navigationModePref.value == 1 && !cursorManager.isSelectionMode
 
             if (isNativeDpadMode) {
@@ -861,6 +998,6 @@ class MainActivity : AppCompatActivity() {
         longPressHandler.removeCallbacks(longPressRunnable)
         cursorManager.cleanup()
         playerEngine.stopAndRelease()
-		TorrentStreamServer.stopInstance()
+        TorrentStreamServer.stopInstance()
     }
 }

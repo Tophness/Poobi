@@ -28,6 +28,8 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +49,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
 import com.google.api.services.drive.DriveScopes
 import com.poobi.tvbrowser.browser.AdBlockManager
+import com.poobi.tvbrowser.shared.HardwareInputManager
 import com.poobi.tvbrowser.shared.PythonDialogListener
 import com.poobi.tvbrowser.shared.sync.DriveSyncManager
 import com.poobi.tvbrowser.shared.TvFocusableBox
@@ -119,6 +122,10 @@ class SettingsActivity : AppCompatActivity() {
     private var navMode by mutableStateOf(0)
     private var scrapeTabOrder by mutableStateOf("Web,Torrents")
     private var torrentLanguage by mutableStateOf("English")
+
+    private var hwKeyboardMode by mutableStateOf(0)
+    private var hwMouseMode by mutableStateOf(0)
+    private var hwMouseShowCursor by mutableStateOf(false)
 
     private var torrentCacheCleanMode by mutableStateOf(0)
     private var torrentCacheCleanDays by mutableStateOf(0)
@@ -208,6 +215,14 @@ class SettingsActivity : AppCompatActivity() {
 
         setContent {
             var selectedCategory by remember { mutableStateOf(Category.General) }
+            val firstCategoryFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(60)
+                try {
+                    firstCategoryFocusRequester.requestFocus()
+                } catch (_: Exception) {}
+            }
 
             Row(
                 modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A1D))
@@ -219,8 +234,13 @@ class SettingsActivity : AppCompatActivity() {
                     Text("Settings", color = Color(0xFF00BCD4), fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
 
                     LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(Category.values()) { category ->
-                            SidebarCategoryItem(category = category, isSelected = selectedCategory == category, onSelect = { selectedCategory = category })
+                        itemsIndexed(Category.values()) { index, category ->
+                            SidebarCategoryItem(
+                                category = category, 
+                                isSelected = selectedCategory == category, 
+                                itemFocusRequester = if (index == 0) firstCategoryFocusRequester else null,
+                                onSelect = { selectedCategory = category }
+                            )
                         }
                     }
 
@@ -312,6 +332,10 @@ class SettingsActivity : AppCompatActivity() {
         navMode = prefs.getInt("navigation_mode_pref", 0)
         scrapeTabOrder = prefs.getString("scrape_tab_order", "Web,Torrents") ?: "Web,Torrents"
         torrentLanguage = prefs.getString("torrent_language", "English") ?: "English"
+
+        hwKeyboardMode = prefs.getInt("hw_keyboard_mode", 0)
+        hwMouseMode = prefs.getInt("hw_mouse_mode", 0)
+        hwMouseShowCursor = prefs.getBoolean("hw_mouse_show_cursor", false)
 
         torrentCacheCleanMode = prefs.getInt("torrent_cache_clean_mode", 0)
         torrentCacheCleanDays = prefs.getInt("torrent_cache_clean_days", 0)
@@ -576,11 +600,17 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     @Composable
-    fun SidebarCategoryItem(category: Category, isSelected: Boolean, onSelect: () -> Unit) {
+    fun SidebarCategoryItem(
+        category: Category, 
+        isSelected: Boolean, 
+        itemFocusRequester: FocusRequester? = null,
+        onSelect: () -> Unit
+    ) {
         var isFocused by remember { mutableStateOf(false) }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (itemFocusRequester != null) Modifier.focusRequester(itemFocusRequester) else Modifier)
                 .clip(RoundedCornerShape(8.dp))
                 .onFocusChanged { state ->
                     if (state.isFocused) {
@@ -618,7 +648,7 @@ class SettingsActivity : AppCompatActivity() {
             item { PanelHeader("General Settings") }
             item { ToggleSettingRow("Use Light Theme", lightTheme) { lightTheme = it } }
             item { ToggleSettingRow("Check for Updates Automatically", autoUpdateCheck) { autoUpdateCheck = it } }
-            item { DropdownSettingRow("Restore Session Mode", listOf("Ask to Restore", "Always Restore", "Never Restore"), restoreOption) { restoreOption = it } }
+            item { DropdownSettingRow(label = "Restore Session Mode", options = listOf("Ask to Restore", "Always Restore & Load", "Always Restore", "Never Restore"), selectedIndex = restoreOption) {restoreOption = it } }
             item {
                 DropdownSettingRow(
                     label = "History Retention Limit",
@@ -740,6 +770,21 @@ class SettingsActivity : AppCompatActivity() {
             DropdownSettingRow("Scraper Result Tab Order", listOf("Web, Torrents", "Torrents, Web"), if (scrapeTabOrder == "Web,Torrents") 0 else 1) { 
                 scrapeTabOrder = if (it == 0) "Web,Torrents" else "Torrents,Web"
             }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            PanelHeader("Hardware Devices & External Input")
+
+            DropdownSettingRow(
+                label = "Hardware Keyboard Mode",
+                options = listOf("Auto-detect (Recommended)", "Always Enabled", "Disabled (TV Remote Mode)"),
+                selectedIndex = hwKeyboardMode
+            ) { hwKeyboardMode = it }
+
+            DropdownSettingRow(
+                label = "Physical Mouse Mode",
+                options = listOf("Auto-detect (Recommended)", "Always Enabled", "Disabled (TV Remote Mode)"),
+                selectedIndex = hwMouseMode
+            ) { hwMouseMode = it }
         }
     }
 
@@ -912,7 +957,6 @@ class SettingsActivity : AppCompatActivity() {
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Row(modifier = Modifier.fillMaxWidth().height(240.dp)) {
-                            // Column Left: Provider Whitelist (Extremely dense padding setup)
                             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                                 Text("Provider Pack Whitelist", color = Color(0xFF00BCD4), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 LazyColumn(modifier = Modifier.fillMaxSize().background(Color(0x0DFFFFFF))) {
@@ -947,7 +991,6 @@ class SettingsActivity : AppCompatActivity() {
 
                             Spacer(modifier = Modifier.width(10.dp))
 
-                            // Column Right: ResolveURL Whitelist
                             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                                 Text("ResolveURL Whitelist", color = Color(0xFF00BCD4), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 LazyColumn(modifier = Modifier.fillMaxSize().background(Color(0x0DFFFFFF))) {
@@ -1983,23 +2026,23 @@ class SettingsActivity : AppCompatActivity() {
                     item { Text("Cached Directory Sub-folders", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)) }
                     items(cacheItems) { cacheItem ->
                         Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = Color(0x0DFFFFFF))) {
-							Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-								Column(modifier = Modifier.weight(1f)) {
-									Text(cacheItem.name, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-									Text("%.2f MB".format(cacheItem.size / (1024f * 1024f)), color = Color.Gray, fontSize = 11.sp)
-								}
-								Button(
-									onClick = {
-										val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
-										server.deleteCacheItem(cacheItem.path)
-										refreshCache()
-									},
-									colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-									modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-								) {
-									Text("Clear", fontSize = 11.sp)
-								}
-							}
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(cacheItem.name, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text("%.2f MB".format(cacheItem.size / (1024f * 1024f)), color = Color.Gray, fontSize = 11.sp)
+                                }
+                                Button(
+                                    onClick = {
+                                        val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
+                                        server.deleteCacheItem(cacheItem.path)
+                                        refreshCache()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                                    modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                                ) {
+                                    Text("Clear", fontSize = 11.sp)
+                                }
+                            }
                         }
                     }
                 }
@@ -2326,6 +2369,10 @@ class SettingsActivity : AppCompatActivity() {
                     putString("scrape_tab_order", scrapeTabOrder)
                     putString("torrent_language", torrentLanguage)
 
+                    putInt("hw_keyboard_mode", hwKeyboardMode)
+                    putInt("hw_mouse_mode", hwMouseMode)
+                    putBoolean("hw_mouse_show_cursor", hwMouseShowCursor)
+
                     putInt("torrent_cache_clean_mode", torrentCacheCleanMode)
                     putInt("torrent_cache_clean_days", torrentCacheCleanDays)
                     putInt("torrent_prebuffer_pieces", torrentPrebufferPieces)
@@ -2352,6 +2399,8 @@ class SettingsActivity : AppCompatActivity() {
                     putString("subsource_apikey", subsourceApikey)
                 }.apply()
 
+                HardwareInputManager.updateActiveStates(applicationContext)
+
                 val appContext = applicationContext
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
@@ -2361,7 +2410,6 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
 
-                // Sync whole configuration to Python
                 val cfg = JSONObject().apply {
                     put("timeout_mode", timeoutMode)
                     put("global_timeout", globalTimeout)

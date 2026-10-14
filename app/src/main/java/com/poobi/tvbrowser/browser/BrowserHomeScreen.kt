@@ -210,7 +210,19 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                 ) { isFocused, progress ->
                                     TabItemCard(
                                         title = item.optString("title", "Saved Tab"),
-                                        progress = progress
+                                        progress = progress,
+                                        onCloseClick = {
+                                            if (index in viewModel.getWebViewsList().indices) {
+                                                viewModel.closeTab(index)
+                                            } else {
+                                                val array = JSONArray()
+                                                for (i in 0 until savedTabsArray.length()) {
+                                                    if (i != index) array.put(savedTabsArray.get(i))
+                                                }
+                                                viewModel.prefs.edit().putString("saved_tabs", array.toString()).apply()
+                                                viewModel.refreshLists()
+                                            }
+                                        }
                                     )
                                 }
                             }
