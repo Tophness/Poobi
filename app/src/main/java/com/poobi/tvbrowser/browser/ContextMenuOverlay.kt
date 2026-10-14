@@ -16,16 +16,22 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poobi.tvbrowser.shared.TvFocusableBox
+import com.poobi.tvbrowser.shared.KeyTracker
 
 @Composable
 fun ContextMenuOverlay(
     cursorX: Float,
     cursorY: Float,
     url: String,
+    selectedText: String = "",
+    isEditable: Boolean = false,
+    onCopy: () -> Unit = {},
+    onPaste: () -> Unit = {},
     onOpenInNewTab: () -> Unit,
     onRefresh: () -> Unit,
     onBlockElement: () -> Unit,
@@ -33,9 +39,13 @@ fun ContextMenuOverlay(
 ) {
     val firstItemFocusRequester = remember { FocusRequester() }
     val context = LocalContext.current
+    val isRemoteInitiated = remember { KeyTracker.isKeyFresh() }
 
     LaunchedEffect(Unit) {
-        firstItemFocusRequester.requestFocus()
+        // Only pre-focus the first item if the menu was opened via remote D-pad
+        if (isRemoteInitiated) {
+            firstItemFocusRequester.requestFocus()
+        }
     }
 
     val displayMetrics = context.resources.displayMetrics
@@ -43,10 +53,17 @@ fun ContextMenuOverlay(
     val screenH = displayMetrics.heightPixels
     val density = displayMetrics.density
     val menuWidthPx = (240 * density).toInt()
-    val menuHeightPx = (180 * density).toInt()
+    val menuHeightPx = (280 * density).toInt()
 
     val clampedX = cursorX.toInt().coerceIn(16, (screenW - menuWidthPx - 16).coerceAtLeast(16))
     val clampedY = cursorY.toInt().coerceIn(16, (screenH - menuHeightPx - 16).coerceAtLeast(16))
+
+    val firstButton = when {
+        selectedText.isNotBlank() -> "copy"
+        isEditable -> "paste"
+        url.isNotEmpty() && url.startsWith("http") -> "new_tab"
+        else -> "refresh"
+    }
 
     Box(
         modifier = Modifier
@@ -63,10 +80,32 @@ fun ContextMenuOverlay(
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            if (selectedText.isNotBlank()) {
+                ContextMenuBtn(
+                    text = "Copy",
+                    focusRequester = if (firstButton == "copy") firstItemFocusRequester else null,
+                    onClick = {
+                        onCopy()
+                        onDismiss()
+                    }
+                )
+            }
+
+            if (isEditable) {
+                ContextMenuBtn(
+                    text = "Paste",
+                    focusRequester = if (firstButton == "paste") firstItemFocusRequester else null,
+                    onClick = {
+                        onPaste()
+                        onDismiss()
+                    }
+                )
+            }
+
             if (url.isNotEmpty() && url.startsWith("http")) {
                 ContextMenuBtn(
                     text = "Open in New Tab",
-                    focusRequester = firstItemFocusRequester,
+                    focusRequester = if (firstButton == "new_tab") firstItemFocusRequester else null,
                     onClick = {
                         onOpenInNewTab()
                         onDismiss()
@@ -76,7 +115,7 @@ fun ContextMenuOverlay(
 
             ContextMenuBtn(
                 text = "Refresh Page",
-                focusRequester = if (url.isEmpty() || !url.startsWith("http")) firstItemFocusRequester else null,
+                focusRequester = if (firstButton == "refresh") firstItemFocusRequester else null,
                 onClick = {
                     onRefresh()
                     onDismiss()
@@ -103,21 +142,22 @@ private fun ContextMenuBtn(
 ) {
     val modifier = Modifier
         .fillMaxWidth()
-        .height(48.dp)
+        .height(44.dp)
         .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
 
     TvFocusableBox(
         modifier = modifier,
         onClick = onClick
-    ) { isFocused ->
+    ) { isHighlighted ->
         Box(
             modifier = Modifier.fillMaxSize().padding(horizontal = 15.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             Text(
                 text = text,
-                color = Color.White,
-                fontSize = 14.sp
+                color = if (isHighlighted) Color.Black else Color.White,
+                fontSize = 14.sp,
+                fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Normal
             )
         }
     }

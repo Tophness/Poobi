@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
@@ -25,10 +27,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -68,21 +74,26 @@ fun TvFocusableBox(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    var isPointerHovered by remember { mutableStateOf(false) }
+    val internalFocusRequester = remember { FocusRequester() }
+
+    val isHighlighted = isFocused || isHovered || isPointerHovered
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.03f else 1.0f,
+        targetValue = if (isHighlighted) 1.03f else 1.0f,
         animationSpec = tween(durationMillis = 150),
         label = "FocusScale"
     )
 
     val backgroundColor = when {
-        isFocused -> Color(0xFF40C4FF)
+        isHighlighted -> Color(0xFF40C4FF)
         isSelected && isTabStyle -> Color(0xFF40C4FF)
         else -> Color(0xFF333333)
     }
 
     val borderColor = when {
-        isFocused -> Color.White
+        isHighlighted -> Color.White
         else -> Color.Transparent
     }
 
@@ -97,12 +108,32 @@ fun TvFocusableBox(
             .scale(scale)
             .clip(shape)
             .background(backgroundColor)
-            .border(if (isFocused) 2.dp else 0.dp, borderColor, shape)
+            .border(if (isHighlighted) 2.dp else 0.dp, borderColor, shape)
             .onFocusChanged { state ->
                 if (state.isFocused) {
                     onFocus?.invoke()
                 }
             }
+            .hoverable(interactionSource = interactionSource)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        when (event.type) {
+                            PointerEventType.Enter, PointerEventType.Move -> {
+                                isPointerHovered = true
+                                try {
+                                    internalFocusRequester.requestFocus()
+                                } catch (_: Exception) {}
+                            }
+                            PointerEventType.Exit -> {
+                                isPointerHovered = false
+                            }
+                        }
+                    }
+                }
+            }
+            .focusRequester(internalFocusRequester)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -111,7 +142,7 @@ fun TvFocusableBox(
             )
             .focusable(interactionSource = interactionSource)
     ) {
-        content(isFocused)
+        content(isHighlighted)
     }
 }
 
