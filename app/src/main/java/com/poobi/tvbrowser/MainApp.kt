@@ -3,6 +3,7 @@ package com.poobi.tvbrowser
 import android.content.Intent
 import android.net.Uri
 import android.view.KeyEvent
+import android.view.View
 import android.view.ViewGroup
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -319,40 +320,50 @@ fun MainApp(
                                         )
                                     }
                                     
-                                    if (activeIndex in browserViewModel.getWebViewsList().indices) {
-                                        key(activeIndex) {
-                                            AndroidView(
-                                                factory = { ctx ->
-                                                    val wv = browserViewModel.getWebViewsList()[activeIndex]
-                                                    wv.apply {
-                                                        val prevParent = parent as? ViewGroup
-                                                        if (prevParent != null) {
-                                                            prevParent.removeView(this)
-                                                        }
-                                                        layoutParams = ViewGroup.LayoutParams(
-                                                            ViewGroup.LayoutParams.MATCH_PARENT,
-                                                            ViewGroup.LayoutParams.MATCH_PARENT
-                                                        )
-                                                    }
-                                                },
-                                                modifier = Modifier.fillMaxSize(),
-                                                update = { currentView ->
-                                                    val targetWebView = browserViewModel.currentWebView
-                                                    
-                                                    if (currentView != targetWebView && targetWebView != null) {
-                                                        val parentContainer = currentView.parent as? ViewGroup
-                                                        if (parentContainer != null) {
-                                                            parentContainer.removeView(currentView)
-                                                            val targetPrevParent = targetWebView.parent as? ViewGroup
-                                                            if (targetPrevParent != null) {
-                                                                targetPrevParent.removeView(targetWebView)
-                                                            }
-                                                            parentContainer.addView(targetWebView)
-                                                        }
+                                    if (browserViewModel.getWebViewsList().isNotEmpty()) {
+                                        AndroidView(
+                                            factory = { ctx ->
+                                                android.widget.FrameLayout(ctx).apply {
+                                                    layoutParams = ViewGroup.LayoutParams(
+                                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                                    )
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxSize(),
+                                            update = { container ->
+                                                val webViews = browserViewModel.getWebViewsList()
+
+                                                for (i in container.childCount - 1 downTo 0) {
+                                                    val child = container.getChildAt(i)
+                                                    if (child is android.webkit.WebView && !webViews.contains(child)) {
+                                                        container.removeViewAt(i)
                                                     }
                                                 }
-                                            )
-                                        }
+
+                                                webViews.forEach { wv ->
+                                                    if (wv.parent != container) {
+                                                        (wv.parent as? ViewGroup)?.removeView(wv)
+                                                        container.addView(
+                                                            wv,
+                                                            ViewGroup.LayoutParams(
+                                                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                                                ViewGroup.LayoutParams.MATCH_PARENT
+                                                            )
+                                                        )
+                                                    }
+                                                }
+
+                                                webViews.forEachIndexed { index, wv ->
+                                                    val isCurrent = (index == activeIndex)
+                                                    wv.visibility = if (isCurrent) View.VISIBLE else View.GONE
+                                                }
+
+                                                if (activeIndex in webViews.indices) {
+                                                    webViews[activeIndex].requestFocus()
+                                                }
+                                            }
+                                        )
                                     }
                                 }
                             } else {
