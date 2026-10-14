@@ -792,6 +792,33 @@ fun MainApp(
                 cursorX = contextMenu.x,
                 cursorY = contextMenu.y,
                 url = contextMenu.url,
+                isEditable = contextMenu.isEditable,
+                hasSelection = contextMenu.hasSelection,
+                hasClipboard = contextMenu.hasClipboard,
+                onCut = {
+                    browserViewModel.currentWebView?.let { wv ->
+                        browserViewModel.sendControlKey(wv, KeyEvent.KEYCODE_X)
+                    }
+                    browserViewModel.dismissDialog()
+                },
+                onCopy = {
+                    browserViewModel.currentWebView?.let { wv ->
+                        browserViewModel.sendControlKey(wv, KeyEvent.KEYCODE_C)
+                    }
+                    browserViewModel.dismissDialog()
+                },
+                onPaste = {
+                    browserViewModel.currentWebView?.let { wv ->
+                        browserViewModel.sendControlKey(wv, KeyEvent.KEYCODE_V)
+                    }
+                    browserViewModel.dismissDialog()
+                },
+                onSelectAll = {
+                    browserViewModel.currentWebView?.let { wv ->
+                        browserViewModel.sendControlKey(wv, KeyEvent.KEYCODE_A)
+                    }
+                    browserViewModel.dismissDialog()
+                },
                 onOpenInNewTab = {
                     browserViewModel.loadUrlAndBrowse(context, contextMenu.url, newTab = true)
                     browserViewModel.dismissDialog()

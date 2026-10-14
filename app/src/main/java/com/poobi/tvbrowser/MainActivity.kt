@@ -85,15 +85,6 @@ class MainActivity : AppCompatActivity() {
         browserViewModel.triggerContextMenuAtCursor(cursorManager.cursorX.value, cursorManager.cursorY.value)
     }
 
-    private fun sendControlKey(targetView: View, keyCode: Int) {
-        val now = android.os.SystemClock.uptimeMillis()
-        val meta = KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
-        val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, meta)
-        val up = KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, meta)
-        targetView.dispatchKeyEvent(down)
-        targetView.dispatchKeyEvent(up)
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
@@ -229,59 +220,6 @@ class MainActivity : AppCompatActivity() {
                 alternativeUrls = altUrls ?: emptyList(),
                 alternativeNames = altNames ?: emptyList()
             )
-        }
-
-        browserViewModel.onShowNativeTextMenu = { screenX, screenY, isEditable, hasSelection ->
-            val wv = browserViewModel.currentWebView
-            if (wv != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                val hasClip = clipboard?.primaryClip?.let { it.itemCount > 0 && !it.getItemAt(0).text.isNullOrEmpty() } == true
-
-                val callback = object : android.view.ActionMode.Callback2() {
-                    override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
-                        mode.title = null
-                        if (isEditable && hasSelection) {
-                            menu.add(android.view.Menu.NONE, android.R.id.cut, 0, "Cut")
-                                .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-                        }
-                        if (hasSelection) {
-                            menu.add(android.view.Menu.NONE, android.R.id.copy, 1, "Copy")
-                                .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-                        }
-                        if (isEditable && hasClip) {
-                            menu.add(android.view.Menu.NONE, android.R.id.paste, 2, "Paste")
-                                .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-                        }
-                        if (isEditable || hasSelection) {
-                            menu.add(android.view.Menu.NONE, android.R.id.selectAll, 3, "Select All")
-                                .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-                        }
-                        return true
-                    }
-
-                    override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean = false
-
-                    override fun onActionItemClicked(mode: android.view.ActionMode, item: android.view.MenuItem): Boolean {
-                        when (item.itemId) {
-                            android.R.id.cut -> sendControlKey(wv, KeyEvent.KEYCODE_X)
-                            android.R.id.copy -> sendControlKey(wv, KeyEvent.KEYCODE_C)
-                            android.R.id.paste -> sendControlKey(wv, KeyEvent.KEYCODE_V)
-                            android.R.id.selectAll -> sendControlKey(wv, KeyEvent.KEYCODE_A)
-                        }
-                        mode.finish()
-                        return true
-                    }
-
-                    override fun onDestroyActionMode(mode: android.view.ActionMode) {}
-
-                    override fun onGetContentRect(mode: android.view.ActionMode, view: android.view.View, outRect: android.graphics.Rect) {
-                        val x = screenX.toInt()
-                        val y = screenY.toInt()
-                        outRect.set(x - 20, y - 20, x + 20, y + 20)
-                    }
-                }
-                startActionMode(callback, android.view.ActionMode.TYPE_FLOATING)
-            }
         }
 
         lifecycleScope.launch {

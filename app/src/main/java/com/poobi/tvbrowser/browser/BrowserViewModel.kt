@@ -9,6 +9,7 @@ import android.graphics.Canvas
 import android.net.Uri
 import android.os.Message
 import android.util.Log
+import android.view.KeyEvent
 import android.view.View
 import android.webkit.*
 import android.widget.Toast
@@ -48,7 +49,7 @@ sealed class BrowserDialogState {
     data class SaveBlockRule(val url: String, val selector: String) : BrowserDialogState()
     data class SaveAutoplayProfile(val url: String, val selectors: List<String>) : BrowserDialogState()
     data class Error(val message: String) : BrowserDialogState()
-    data class ContextMenu(val url: String, val x: Float, val y: Float) : BrowserDialogState()
+    data class ContextMenu(val url: String, val x: Float, val y: Float, val isEditable: Boolean = false, val hasSelection: Boolean = false, val hasClipboard: Boolean = false) : BrowserDialogState()
     data class PlaybackHijackAsk(val url: String, val title: String?, val alternativeUrls: List<String>?, val alternativeNames: List<String>?, val view: View?, val callback: WebChromeClient.CustomViewCallback?) : BrowserDialogState()
 }
 
@@ -233,6 +234,15 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             isFocusableInTouchMode = true
             requestFocus()
         }
+    }
+
+    fun sendControlKey(targetView: View, keyCode: Int) {
+        val now = android.os.SystemClock.uptimeMillis()
+        val meta = KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, meta)
+        val up = KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, meta)
+        targetView.dispatchKeyEvent(down)
+        targetView.dispatchKeyEvent(up)
     }
 
     fun getWebViewsList(): List<WebView> = _webViews
@@ -498,15 +508,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     val isEditable = json.optBoolean("isEditable", false)
                     val hasSelection = json.optBoolean("hasSelection", false)
 
-                    if (isEditable || hasSelection) {
-                        onShowNativeTextMenu?.invoke(cursorX, cursorY, isEditable, hasSelection)
-                    } else {
-                        _currentDialog.value = BrowserDialogState.ContextMenu(
-                            url = link,
-                            x = cursorX,
-                            y = cursorY
-                        )
-                    }
+                    val clipboard = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                    val hasClipboard = clipboard?.primaryClip?.let { it.itemCount > 0 && !it.getItemAt(0).text.isNullOrEmpty() } == true
+
+                    _currentDialog.value = BrowserDialogState.ContextMenu(
+                        url = link,
+                        x = cursorX,
+                        y = cursorY,
+                        isEditable = isEditable,
+                        hasSelection = hasSelection,
+                        hasClipboard = hasClipboard
+                    )
                 } catch (e: Exception) { }
             }
         }
