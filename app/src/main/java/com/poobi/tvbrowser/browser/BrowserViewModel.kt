@@ -2,8 +2,6 @@ package com.poobi.tvbrowser.browser
 
 import android.annotation.SuppressLint
 import android.app.Application
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
@@ -50,13 +48,7 @@ sealed class BrowserDialogState {
     data class SaveBlockRule(val url: String, val selector: String) : BrowserDialogState()
     data class SaveAutoplayProfile(val url: String, val selectors: List<String>) : BrowserDialogState()
     data class Error(val message: String) : BrowserDialogState()
-    data class ContextMenu(
-        val url: String, 
-        val x: Float, 
-        val y: Float,
-        val selectedText: String = "",
-        val isEditable: Boolean = false
-    ) : BrowserDialogState()
+    data class ContextMenu(val url: String, val x: Float, val y: Float) : BrowserDialogState()
     data class PlaybackHijackAsk(val url: String, val title: String?, val alternativeUrls: List<String>?, val alternativeNames: List<String>?, val view: View?, val callback: WebChromeClient.CustomViewCallback?) : BrowserDialogState()
 }
 
@@ -98,6 +90,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private var pendingCustomView: View? = null
     var customViewCallback: WebChromeClient.CustomViewCallback? = null
     var onPlayNativeVideo: ((videoUrl: String, title: String?, alternativeUrls: List<String>?, alternativeNames: List<String>?) -> Unit)? = null
+    var onShowNativeTextMenu: ((screenX: Float, screenY: Float, isEditable: Boolean, hasSelection: Boolean) -> Unit)? = null
 
     val currentWebView: WebView? get() = if (_currentTabIndex.value in _webViews.indices) _webViews[_currentTabIndex.value] else null
 
@@ -466,7 +459,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 var targetInput = checkEditable(el);
-
                 if (!targetInput && el) {
                     var p = el.parentElement;
                     while (p && p !== document.body) {
@@ -475,72 +467,27 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         p = p.parentElement;
                     }
                 }
-
-                if (!targetInput && el) {
-                    targetInput = checkEditable(el.querySelector('input, textarea'));
-                }
-
-                if (!targetInput && el && el.parentElement) {
-                    targetInput = checkEditable(el.parentElement.querySelector('input, textarea'));
-                }
-
-                if (!targetInput) {
-                    targetInput = checkEditable(document.activeElement);
-                }
-
-                if (!targetInput && window.__lastSelectedEditable) {
-                    targetInput = checkEditable(window.__lastSelectedEditable);
-                }
+                if (!targetInput && el) targetInput = checkEditable(el.querySelector('input, textarea'));
+                if (!targetInput && el && el.parentElement) targetInput = checkEditable(el.parentElement.querySelector('input, textarea'));
+                if (!targetInput) targetInput = checkEditable(document.activeElement);
 
                 var isEditable = targetInput !== null;
-                if (isEditable) {
-                    window.__lastRightClickedEditable = targetInput;
+                if (isEditable && targetInput) {
+                    targetInput.focus();
                 }
 
-                var selText = '';
-                var sStart = -1, sEnd = -1;
-                if (targetInput && typeof targetInput.selectionStart === 'number' && typeof targetInput.selectionEnd === 'number' && targetInput.selectionStart !== targetInput.selectionEnd) {
-                    sStart = targetInput.selectionStart;
-                    sEnd = targetInput.selectionEnd;
-                    selText = targetInput.value.substring(sStart, sEnd);
+                var hasSelection = false;
+                if (window.getSelection && window.getSelection().toString().trim().length > 0) {
+                    hasSelection = true;
                 }
-
-                if (!selText) {
-                    var inputs = document.querySelectorAll('input, textarea');
-                    for (var i = 0; i < inputs.length; i++) {
-                        var inp = inputs[i];
-                        if (typeof inp.selectionStart === 'number' && typeof inp.selectionEnd === 'number' && inp.selectionStart !== inp.selectionEnd) {
-                            sStart = inp.selectionStart;
-                            sEnd = inp.selectionEnd;
-                            selText = inp.value.substring(sStart, sEnd);
-                            if (!targetInput) {
-                                targetInput = inp;
-                                isEditable = true;
-                                window.__lastRightClickedEditable = inp;
-                            }
-                            break;
-                        }
-                    }
-                }
-
-                if (!selText && window.getSelection) {
-                    selText = window.getSelection().toString();
-                }
-
-                if (!selText && window.__lastSelectedText && (Date.now() - (window.__lastSelectionTime || 0) < 4000)) {
-                    selText = window.__lastSelectedText;
-                }
-
-                if (targetInput && sStart !== -1 && sEnd !== -1) {
-                    try {
-                        targetInput.setSelectionRange(sStart, sEnd);
-                    } catch(e) {}
+                if (!hasSelection && targetInput && typeof targetInput.selectionStart === 'number' && typeof targetInput.selectionEnd === 'number') {
+                    hasSelection = (targetInput.selectionStart !== targetInput.selectionEnd);
                 }
 
                 return {
                     link: link || '',
-                    selectedText: selText || '',
-                    isEditable: isEditable
+                    isEditable: isEditable,
+                    hasSelection: hasSelection
                 };
             })()
         """.trimIndent()) { result ->
@@ -548,71 +495,21 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 try {
                     val json = JSONObject(result)
                     val link = json.optString("link")
-                    val selectedText = json.optString("selectedText")
                     val isEditable = json.optBoolean("isEditable", false)
+                    val hasSelection = json.optBoolean("hasSelection", false)
 
-                    _currentDialog.value = BrowserDialogState.ContextMenu(
-                        url = link,
-                        x = cursorX,
-                        y = cursorY,
-                        selectedText = selectedText,
-                        isEditable = isEditable
-                    ) 
+                    if (isEditable || hasSelection) {
+                        onShowNativeTextMenu?.invoke(cursorX, cursorY, isEditable, hasSelection)
+                    } else {
+                        _currentDialog.value = BrowserDialogState.ContextMenu(
+                            url = link,
+                            x = cursorX,
+                            y = cursorY
+                        )
+                    }
                 } catch (e: Exception) { }
             }
         }
-    }
-
-    fun copySelectedText(text: String) {
-        if (text.isNotBlank()) {
-            try {
-                val clipboard = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                val clip = ClipData.newPlainText("Copied Text", text)
-                clipboard?.setPrimaryClip(clip)
-                currentWebView?.evaluateJavascript("try { document.execCommand('copy'); } catch(e) {}", null)
-                Toast.makeText(appContext, "Copied to clipboard", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Log.e("BrowserViewModel", "Error copying text", e)
-            }
-        }
-    }
-
-    fun pasteToWebpage() {
-        val clipboard = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        val clipText = clipboard?.primaryClip?.let { clip ->
-            if (clip.itemCount > 0) clip.getItemAt(0).coerceToText(appContext)?.toString() else null
-        }
-
-        if (clipText.isNullOrEmpty()) {
-            Toast.makeText(appContext, "Clipboard is empty", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val quotedText = JSONObject.quote(clipText)
-        val script = """
-            (function() {
-                var el = window.__lastRightClickedEditable || document.activeElement;
-                if (!el) return;
-                el.focus();
-                var text = $quotedText;
-                var success = false;
-                try {
-                    success = document.execCommand('insertText', false, text);
-                } catch(e) {}
-                if (!success && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-                    var start = (typeof el.selectionStart === 'number') ? el.selectionStart : el.value.length;
-                    var end = (typeof el.selectionEnd === 'number') ? el.selectionEnd : el.value.length;
-                    var val = el.value || '';
-                    el.value = val.substring(0, start) + text + val.substring(end);
-                    var newPos = start + text.length;
-                    el.setSelectionRange(newPos, newPos);
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                    el.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            })();
-        """.trimIndent()
-        currentWebView?.evaluateJavascript(script, null)
-        Toast.makeText(appContext, "Pasted from clipboard", Toast.LENGTH_SHORT).show()
     }
 
     fun openLinkAtInNewTab(screenX: Float, screenY: Float) {
@@ -796,51 +693,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 injectClickjackPrevention(view)
                 applyBlockedElements(view)
                 saveTabs()
-
-                view.evaluateJavascript("""
-                    (function() {
-                        if (window.__selectionTrackerInjected) return;
-                        window.__selectionTrackerInjected = true;
-                        window.__lastSelectedText = '';
-                        window.__lastSelectedEditable = null;
-                        window.__lastSelectionTime = 0;
-
-                        function recordSelection() {
-                            var text = '';
-                            var editable = null;
-                            if (window.getSelection) {
-                                text = window.getSelection().toString();
-                            }
-                            var active = document.activeElement;
-                            if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-                                if (typeof active.selectionStart === 'number' && typeof active.selectionEnd === 'number' && active.selectionStart !== active.selectionEnd) {
-                                    text = active.value.substring(active.selectionStart, active.selectionEnd);
-                                    editable = active;
-                                }
-                            }
-                            if (!text) {
-                                var inputs = document.querySelectorAll('input, textarea');
-                                for (var i = 0; i < inputs.length; i++) {
-                                    var inp = inputs[i];
-                                    if (typeof inp.selectionStart === 'number' && typeof inp.selectionEnd === 'number' && inp.selectionStart !== inp.selectionEnd) {
-                                        text = inp.value.substring(inp.selectionStart, inp.selectionEnd);
-                                        editable = inp;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (text && text.trim().length > 0) {
-                                window.__lastSelectedText = text;
-                                window.__lastSelectedEditable = editable || document.activeElement;
-                                window.__lastSelectionTime = Date.now();
-                            }
-                        }
-
-                        document.addEventListener('selectionchange', recordSelection, true);
-                        document.addEventListener('mouseup', recordSelection, true);
-                        document.addEventListener('keyup', recordSelection, true);
-                    })();
-                """.trimIndent(), null)
 
                 if (videoTriggerPref.value == 0) {
                     triggerAutoPlayClicks(view)

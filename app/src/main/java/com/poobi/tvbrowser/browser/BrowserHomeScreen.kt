@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +32,7 @@ import androidx.core.content.FileProvider
 import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvSearchField
+import com.poobi.tvbrowser.shared.mouseWheelHorizontalScroll
 import org.json.JSONArray
 import java.io.File
 
@@ -169,10 +171,14 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                 }
                             }
                         }
+                        val tabsListState = rememberLazyListState()
                         LazyRow(
+                            state = tabsListState,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
-                            modifier = Modifier.focusRequester(tabsLazyRowFocusRequester)
+                            modifier = Modifier
+                                .focusRequester(tabsLazyRowFocusRequester)
+                                .mouseWheelHorizontalScroll(tabsListState)
                         ) {
                             items(savedTabsArray.length()) { index ->
                                 val item = savedTabsArray.getJSONObject(index)
@@ -255,9 +261,12 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                             }
                         }
 
+                        val bookmarksListState = rememberLazyListState()
                         LazyRow(
+                            state = bookmarksListState,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
+                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
+                            modifier = Modifier.mouseWheelHorizontalScroll(bookmarksListState)
                         ) {
                             items(endIdx - startIdx) { offset ->
                                 val index = bookmarksArray.length() - 1 - (startIdx + offset)
@@ -310,9 +319,13 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                             }
                         }
 
+                        val historyListState = rememberLazyListState()
                         LazyRow(
+                            state = historyListState,
                             horizontalArrangement = Arrangement.spacedBy(8.dp), 
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .mouseWheelHorizontalScroll(historyListState),
                             contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
                         ) {
                             items(historyArray.length()) { index ->
@@ -363,9 +376,13 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                             }
                         }
 
+                        val downloadsListState = rememberLazyListState()
                         LazyRow(
+                            state = downloadsListState,
                             horizontalArrangement = Arrangement.spacedBy(8.dp), 
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .mouseWheelHorizontalScroll(downloadsListState),
                             contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
                         ) {
                             items(downloadsArray.length()) { index ->

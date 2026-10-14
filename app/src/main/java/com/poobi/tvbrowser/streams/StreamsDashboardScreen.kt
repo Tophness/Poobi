@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,6 +27,7 @@ import com.poobi.tvbrowser.browser.TvFocusableHoldToDeleteBox
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvSearchField
 import com.poobi.tvbrowser.shared.KeyTracker
+import com.poobi.tvbrowser.shared.mouseWheelHorizontalScroll
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 
@@ -136,8 +138,13 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                     }
                 }
                 
+                val searchHistoryListState = rememberLazyListState()
                 LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp), 
+                    state = searchHistoryListState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp)
+                        .mouseWheelHorizontalScroll(searchHistoryListState), 
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
                 ) {
@@ -196,8 +203,12 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                         (0 until itemsToShow.length()).map { itemsToShow.getJSONObject(it) }
                     }
 
+                    val mainCardsListState = rememberLazyListState()
                     LazyRow(
-                        modifier = Modifier.fillMaxSize(), 
+                        state = mainCardsListState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .mouseWheelHorizontalScroll(mainCardsListState), 
                         horizontalArrangement = Arrangement.spacedBy(10.dp), 
                         verticalAlignment = Alignment.CenterVertically,
                         contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)

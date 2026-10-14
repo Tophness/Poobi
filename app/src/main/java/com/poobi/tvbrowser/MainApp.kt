@@ -781,16 +781,6 @@ fun MainApp(
                 cursorX = contextMenu.x,
                 cursorY = contextMenu.y,
                 url = contextMenu.url,
-                selectedText = contextMenu.selectedText,
-                isEditable = contextMenu.isEditable,
-                onCopy = {
-                    browserViewModel.copySelectedText(contextMenu.selectedText)
-                    browserViewModel.dismissDialog()
-                },
-                onPaste = {
-                    browserViewModel.pasteToWebpage()
-                    browserViewModel.dismissDialog()
-                },
                 onOpenInNewTab = {
                     browserViewModel.loadUrlAndBrowse(context, contextMenu.url, newTab = true)
                     browserViewModel.dismissDialog()

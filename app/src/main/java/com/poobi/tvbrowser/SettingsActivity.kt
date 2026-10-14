@@ -863,7 +863,6 @@ class SettingsActivity : AppCompatActivity() {
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (isBindingMenuShortcut) Color(0xFF00BCD4).copy(alpha = 0.15f) else Color.Transparent)
-                        .border(if (isBindingMenuShortcut) 2.dp else 0.dp, Color(0xFF00BCD4), RoundedCornerShape(8.dp))
                         .padding(if (isBindingMenuShortcut) 14.dp else 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {

@@ -1,5 +1,6 @@
 package com.poobi.tvbrowser
 
+import android.content.Context
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -84,7 +85,18 @@ class MainActivity : AppCompatActivity() {
         browserViewModel.triggerContextMenuAtCursor(cursorManager.cursorX.value, cursorManager.cursorY.value)
     }
 
+    private fun sendControlKey(targetView: View, keyCode: Int) {
+        val now = android.os.SystemClock.uptimeMillis()
+        val meta = KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, meta)
+        val up = KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, meta)
+        targetView.dispatchKeyEvent(down)
+        targetView.dispatchKeyEvent(up)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
         super.onCreate(savedInstanceState)
         HardwareInputManager.init(this)
         AdBlockManager.init(this)
@@ -217,6 +229,59 @@ class MainActivity : AppCompatActivity() {
                 alternativeUrls = altUrls ?: emptyList(),
                 alternativeNames = altNames ?: emptyList()
             )
+        }
+
+        browserViewModel.onShowNativeTextMenu = { screenX, screenY, isEditable, hasSelection ->
+            val wv = browserViewModel.currentWebView
+            if (wv != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                val hasClip = clipboard?.primaryClip?.let { it.itemCount > 0 && !it.getItemAt(0).text.isNullOrEmpty() } == true
+
+                val callback = object : android.view.ActionMode.Callback2() {
+                    override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
+                        mode.title = null
+                        if (isEditable && hasSelection) {
+                            menu.add(android.view.Menu.NONE, android.R.id.cut, 0, "Cut")
+                                .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+                        }
+                        if (hasSelection) {
+                            menu.add(android.view.Menu.NONE, android.R.id.copy, 1, "Copy")
+                                .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+                        }
+                        if (isEditable && hasClip) {
+                            menu.add(android.view.Menu.NONE, android.R.id.paste, 2, "Paste")
+                                .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+                        }
+                        if (isEditable || hasSelection) {
+                            menu.add(android.view.Menu.NONE, android.R.id.selectAll, 3, "Select All")
+                                .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+                        }
+                        return true
+                    }
+
+                    override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean = false
+
+                    override fun onActionItemClicked(mode: android.view.ActionMode, item: android.view.MenuItem): Boolean {
+                        when (item.itemId) {
+                            android.R.id.cut -> sendControlKey(wv, KeyEvent.KEYCODE_X)
+                            android.R.id.copy -> sendControlKey(wv, KeyEvent.KEYCODE_C)
+                            android.R.id.paste -> sendControlKey(wv, KeyEvent.KEYCODE_V)
+                            android.R.id.selectAll -> sendControlKey(wv, KeyEvent.KEYCODE_A)
+                        }
+                        mode.finish()
+                        return true
+                    }
+
+                    override fun onDestroyActionMode(mode: android.view.ActionMode) {}
+
+                    override fun onGetContentRect(mode: android.view.ActionMode, view: android.view.View, outRect: android.graphics.Rect) {
+                        val x = screenX.toInt()
+                        val y = screenY.toInt()
+                        outRect.set(x - 20, y - 20, x + 20, y + 20)
+                    }
+                }
+                startActionMode(callback, android.view.ActionMode.TYPE_FLOATING)
+            }
         }
 
         lifecycleScope.launch {
@@ -382,10 +447,15 @@ class MainActivity : AppCompatActivity() {
             HardwareInputManager.notifyMouseUsed()
             cursorManager.updatePosition(event.x, event.y)
 
+            val isBrowsingWebPage = browserViewModel.currentAppTab.value == 0 && 
+                                    browserViewModel.isBrowsing.value && 
+                                    !browserViewModel.topBarVisible.value &&
+                                    browserViewModel.customView.value == null
+
             when (event.action) {
                 MotionEvent.ACTION_SCROLL -> {
                     val vScroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
-                    if (browserViewModel.currentAppTab.value == 0 && browserViewModel.isBrowsing.value && !browserViewModel.topBarVisible.value) {
+                    if (isBrowsingWebPage) {
                         browserViewModel.currentWebView?.scrollBy(0, (-vScroll * 140).toInt())
                         return true
                     }
@@ -394,12 +464,16 @@ class MainActivity : AppCompatActivity() {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         when (event.actionButton) {
                             MotionEvent.BUTTON_SECONDARY -> {
-                                handleRightClick(event.x, event.y)
-                                return true
+                                if (isBrowsingWebPage) {
+                                    handleRightClick(event.x, event.y)
+                                    return true
+                                }
                             }
                             MotionEvent.BUTTON_TERTIARY -> {
-                                handleMiddleClick(event.x, event.y)
-                                return true
+                                if (isBrowsingWebPage) {
+                                    handleMiddleClick(event.x, event.y)
+                                    return true
+                                }
                             }
                         }
                     }
@@ -418,17 +492,27 @@ class MainActivity : AppCompatActivity() {
             val isRightClick = (buttonState and MotionEvent.BUTTON_SECONDARY != 0)
             val isMiddleClick = (buttonState and MotionEvent.BUTTON_TERTIARY != 0)
 
+            val isBrowsingWebPage = browserViewModel.currentAppTab.value == 0 && 
+                                    browserViewModel.isBrowsing.value && 
+                                    !browserViewModel.topBarVisible.value &&
+                                    browserViewModel.customView.value == null
+
             if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_POINTER_DOWN) {
                 if (isRightClick) {
-                    handleRightClick(event.x, event.y)
-                    return true
+                    if (isBrowsingWebPage) {
+                        handleRightClick(event.x, event.y)
+                        return true
+                    }
+                    // When on Home screen or TopBar address bar, let Compose receive the right-click
                 }
                 if (isMiddleClick) {
-                    handleMiddleClick(event.x, event.y)
-                    return true
+                    if (isBrowsingWebPage) {
+                        handleMiddleClick(event.x, event.y)
+                        return true
+                    }
                 }
 
-                if (browserViewModel.currentAppTab.value == 0 && browserViewModel.isBrowsing.value && !browserViewModel.topBarVisible.value) {
+                if (isBrowsingWebPage) {
                     val wv = browserViewModel.currentWebView
                     if (wv != null && !wv.hasFocus()) {
                         wv.requestFocus()
@@ -437,7 +521,10 @@ class MainActivity : AppCompatActivity() {
             }
 
             if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_POINTER_UP) {
-                if (isRightClick || isMiddleClick) {
+                if (isRightClick && isBrowsingWebPage) {
+                    return true
+                }
+                if (isMiddleClick && isBrowsingWebPage) {
                     return true
                 }
             }
@@ -447,12 +534,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleRightClick(screenX: Float, screenY: Float) {
-        lastRightClickTime = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        if (now - lastRightClickTime < 300L) {
+            return
+        }
+        lastRightClickTime = now
+
         if (browserViewModel.currentDialog.value != null) {
             browserViewModel.dismissDialog()
             return
         }
-        if (browserViewModel.currentAppTab.value == 0 && browserViewModel.isBrowsing.value) {
+        val isWebpageActive = browserViewModel.currentAppTab.value == 0 && 
+                              browserViewModel.isBrowsing.value && 
+                              !browserViewModel.topBarVisible.value &&
+                              browserViewModel.customView.value == null
+        if (isWebpageActive) {
             browserViewModel.triggerContextMenuAtCursor(screenX, screenY)
         }
     }
@@ -727,22 +823,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val isNativeVideoActive = playerEngine.isPlayerActive.value
-        val isCustomViewActive = browserViewModel.customView.value != null
-
-        if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_MENU) {
-            if (!isNativeVideoActive && !isCustomViewActive) {
-                if (browserViewModel.topBarVisible.value) {
-                    browserViewModel.hideTopBar()
-                    cursorManager.clearKeyStates()
-                } else {
-                    browserViewModel.showTopBar()
-                    cursorManager.clearKeyStates()
-                }
-                return true
-            }
-        }
-
         if (playerEngine.isPlayerActive.value) {
             if (playerEngine.showDiskSubtitlePicker.value) {
                 if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK) {
@@ -891,13 +971,6 @@ class MainActivity : AppCompatActivity() {
                     return pView.dispatchKeyEvent(event)
                 }
                 return true
-            }
-
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                if (event.keyCode == KeyEvent.KEYCODE_MENU) {
-                    playerEngine.showResolutionSelector()
-                    return true
-                }
             }
 
             if (pView != null && !isUpNextFocused) {

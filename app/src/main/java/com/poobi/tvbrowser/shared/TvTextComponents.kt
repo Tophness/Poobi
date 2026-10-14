@@ -1,33 +1,28 @@
 package com.poobi.tvbrowser.shared
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -81,47 +76,17 @@ fun TvInputField(
     val keyboardController = LocalSoftwareKeyboardController.current
     var isReadOnly by remember { mutableStateOf(true) }
 
-    val clipboard = remember { context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager }
-    val canPaste = remember(value) {
-        clipboard?.primaryClip?.let { it.itemCount > 0 && !it.getItemAt(0).text.isNullOrEmpty() } == true
-    }
-
     Column(modifier = modifier.fillMaxWidth()) {
         if (label.isNotEmpty()) {
             Text(label, color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
         }
+
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             placeholder = { Text(placeholder, color = Color.Gray) },
             readOnly = isReadOnly,
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-            trailingIcon = if (canPaste) {
-                {
-                    Box(
-                        modifier = Modifier
-                            .padding(end = 6.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFF00BCD4).copy(alpha = 0.2f))
-                            .clickable {
-                                val clipText = clipboard?.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
-                                if (!clipText.isNullOrEmpty()) {
-                                    isReadOnly = false
-                                    onValueChange(value + clipText)
-                                }
-                            }
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "PASTE",
-                            color = Color(0xFF00BCD4),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            } else null,
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
@@ -130,25 +95,22 @@ fun TvInputField(
                         isReadOnly = true
                     }
                 }
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.type == PointerEventType.Press) {
+                                isReadOnly = false
+                            }
+                        }
+                    }
+                }
                 .onPreviewKeyEvent { keyEvent ->
                     val nativeEvent = keyEvent.nativeKeyEvent
                     if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
                         val keyCode = nativeEvent.keyCode
                         val isEnterKey = keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
                         val isDpadCenter = keyCode == KeyEvent.KEYCODE_DPAD_CENTER
-                        val isPasteKey = (keyCode == KeyEvent.KEYCODE_V && (nativeEvent.isCtrlPressed || nativeEvent.isMetaPressed)) || 
-                                          keyCode == KeyEvent.KEYCODE_PASTE
-
-                        if (isPasteKey) {
-                            val clipText = clipboard?.primaryClip?.let { clip ->
-                                if (clip.itemCount > 0) clip.getItemAt(0).coerceToText(context)?.toString() else null
-                            }
-                            if (!clipText.isNullOrEmpty()) {
-                                isReadOnly = false
-                                onValueChange(value + clipText)
-                                return@onPreviewKeyEvent true
-                            }
-                        }
 
                         if (isReadOnly) {
                             if (isEnterKey || isDpadCenter) {

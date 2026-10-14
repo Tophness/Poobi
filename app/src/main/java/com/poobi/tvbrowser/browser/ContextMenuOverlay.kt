@@ -28,10 +28,6 @@ fun ContextMenuOverlay(
     cursorX: Float,
     cursorY: Float,
     url: String,
-    selectedText: String = "",
-    isEditable: Boolean = false,
-    onCopy: () -> Unit = {},
-    onPaste: () -> Unit = {},
     onOpenInNewTab: () -> Unit,
     onRefresh: () -> Unit,
     onBlockElement: () -> Unit,
@@ -42,7 +38,6 @@ fun ContextMenuOverlay(
     val isRemoteInitiated = remember { KeyTracker.isKeyFresh() }
 
     LaunchedEffect(Unit) {
-        // Only pre-focus the first item if the menu was opened via remote D-pad
         if (isRemoteInitiated) {
             firstItemFocusRequester.requestFocus()
         }
@@ -53,17 +48,10 @@ fun ContextMenuOverlay(
     val screenH = displayMetrics.heightPixels
     val density = displayMetrics.density
     val menuWidthPx = (240 * density).toInt()
-    val menuHeightPx = (280 * density).toInt()
+    val menuHeightPx = (200 * density).toInt()
 
     val clampedX = cursorX.toInt().coerceIn(16, (screenW - menuWidthPx - 16).coerceAtLeast(16))
     val clampedY = cursorY.toInt().coerceIn(16, (screenH - menuHeightPx - 16).coerceAtLeast(16))
-
-    val firstButton = when {
-        selectedText.isNotBlank() -> "copy"
-        isEditable -> "paste"
-        url.isNotEmpty() && url.startsWith("http") -> "new_tab"
-        else -> "refresh"
-    }
 
     Box(
         modifier = Modifier
@@ -80,32 +68,10 @@ fun ContextMenuOverlay(
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            if (selectedText.isNotBlank()) {
-                ContextMenuBtn(
-                    text = "Copy",
-                    focusRequester = if (firstButton == "copy") firstItemFocusRequester else null,
-                    onClick = {
-                        onCopy()
-                        onDismiss()
-                    }
-                )
-            }
-
-            if (isEditable) {
-                ContextMenuBtn(
-                    text = "Paste",
-                    focusRequester = if (firstButton == "paste") firstItemFocusRequester else null,
-                    onClick = {
-                        onPaste()
-                        onDismiss()
-                    }
-                )
-            }
-
             if (url.isNotEmpty() && url.startsWith("http")) {
                 ContextMenuBtn(
                     text = "Open in New Tab",
-                    focusRequester = if (firstButton == "new_tab") firstItemFocusRequester else null,
+                    focusRequester = firstItemFocusRequester,
                     onClick = {
                         onOpenInNewTab()
                         onDismiss()
@@ -115,7 +81,7 @@ fun ContextMenuOverlay(
 
             ContextMenuBtn(
                 text = "Refresh Page",
-                focusRequester = if (firstButton == "refresh") firstItemFocusRequester else null,
+                focusRequester = if (url.isEmpty() || !url.startsWith("http")) firstItemFocusRequester else null,
                 onClick = {
                     onRefresh()
                     onDismiss()

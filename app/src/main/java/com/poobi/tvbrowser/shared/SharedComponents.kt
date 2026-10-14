@@ -12,12 +12,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -45,7 +46,29 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// Elegant, zero-dependency in-memory LRU cache to prevent re-fetching list images
+fun Modifier.mouseWheelHorizontalScroll(
+    state: LazyListState
+): Modifier = this.pointerInput(state) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent()
+            if (event.type == PointerEventType.Scroll) {
+                var totalDelta = 0f
+                for (change in event.changes) {
+                    val deltaY = change.scrollDelta.y
+                    val deltaX = change.scrollDelta.x
+                    val delta = if (deltaY != 0f) deltaY else deltaX
+                    totalDelta += delta
+                    change.consume()
+                }
+                if (totalDelta != 0f) {
+                    state.dispatchRawDelta(totalDelta * 180f)
+                }
+            }
+        }
+    }
+}
+
 object ImageCache {
     private val cacheSize = (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt().coerceAtLeast(1024 * 4)
 
@@ -69,7 +92,7 @@ fun TvFocusableBox(
     onLongClick: (() -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     isTabStyle: Boolean = false,
-    isSelected: Boolean = false, // Handles active selected tab backgrounds
+    isSelected: Boolean = false,
     content: @Composable BoxScope.(isFocused: Boolean) -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -120,11 +143,8 @@ fun TvFocusableBox(
                     while (true) {
                         val event = awaitPointerEvent()
                         when (event.type) {
-                            PointerEventType.Enter, PointerEventType.Move -> {
+                            PointerEventType.Enter -> {
                                 isPointerHovered = true
-                                try {
-                                    internalFocusRequester.requestFocus()
-                                } catch (_: Exception) {}
                             }
                             PointerEventType.Exit -> {
                                 isPointerHovered = false
@@ -153,7 +173,6 @@ fun RemoteImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop
 ) {
-    // Instantly initialize from memory cache if available to prevent flashing
     var imageBitmap by remember(url) { 
         mutableStateOf<ImageBitmap?>(
             ImageCache.get(url)?.asImageBitmap()
