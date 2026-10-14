@@ -31,6 +31,7 @@ import com.poobi.tvbrowser.shared.isFutureDate
 import com.poobi.tvbrowser.shared.KeyTracker
 import com.poobi.tvbrowser.streams.StreamsEvent
 import com.poobi.tvbrowser.streams.StreamsViewModel
+import com.poobi.tvbrowser.shared.KeyShortcut
 import com.poobi.tvbrowser.shared.update.UpdateManager
 import com.poobi.tvbrowser.shared.update.ApkInstaller
 import com.poobi.tvbrowser.torrent.TorrentStreamServer
@@ -64,6 +65,9 @@ object PythonMessageBridge {
 }
 
 class MainActivity : AppCompatActivity() {
+
+    private var menuShortcut = KeyShortcut.DEFAULT
+    private var lastMenuPressTime = 0L
 
     private val browserViewModel: BrowserViewModel by viewModels()
     private val streamsViewModel: StreamsViewModel by viewModels()
@@ -322,8 +326,42 @@ class MainActivity : AppCompatActivity() {
         initPythonAsync()
     }
 
+    private fun handleMenuButton(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - lastMenuPressTime < 350L) {
+            return true
+        }
+        lastMenuPressTime = now
+
+        val isNativeVideoActive = playerEngine.isPlayerActive.value
+        val isCustomViewActive = browserViewModel.customView.value != null
+
+        if (isNativeVideoActive) {
+            if (playerEngine.showQualitySelector.value) {
+                playerEngine.dismissQualitySelector()
+            } else {
+                playerEngine.showResolutionSelector()
+            }
+            return true
+        }
+
+        if (!isCustomViewActive) {
+            if (browserViewModel.topBarVisible.value) {
+                browserViewModel.hideTopBar()
+                cursorManager.clearKeyStates()
+            } else {
+                browserViewModel.showTopBar()
+                cursorManager.clearKeyStates()
+            }
+            return true
+        }
+
+        return false
+    }
+
     override fun onResume() {
         super.onResume()
+        menuShortcut = KeyShortcut.loadFromPrefs(getSharedPreferences("BrowserSettings", MODE_PRIVATE))
         HardwareInputManager.updateConnectedDevices(this)
         browserViewModel.reloadPreferences()
         browserViewModel.refreshLists()
@@ -631,7 +669,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun dispatchKeyShortcutEvent(event: KeyEvent): Boolean {
+        if (menuShortcut.matches(event)) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                handleMenuButton()
+            }
+            return true
+        }
+        return super.dispatchKeyShortcutEvent(event)
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val isMenuTrigger = event.keyCode == KeyEvent.KEYCODE_MENU || menuShortcut.matches(event)
+        if (isMenuTrigger) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                handleMenuButton()
+            }
+            return true
+        }
+
         if (event.action == KeyEvent.ACTION_DOWN) {
             KeyTracker.lastKeyCode = event.keyCode
             KeyTracker.lastKeyPressTime = System.currentTimeMillis()

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import android.Manifest
+import android.view.KeyEvent
 import androidx.lifecycle.lifecycleScope
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
@@ -50,6 +51,7 @@ import com.google.android.gms.common.api.Scope
 import com.google.api.services.drive.DriveScopes
 import com.poobi.tvbrowser.browser.AdBlockManager
 import com.poobi.tvbrowser.shared.HardwareInputManager
+import com.poobi.tvbrowser.shared.KeyShortcut
 import com.poobi.tvbrowser.shared.PythonDialogListener
 import com.poobi.tvbrowser.shared.sync.DriveSyncManager
 import com.poobi.tvbrowser.shared.TvFocusableBox
@@ -107,6 +109,10 @@ class SettingsActivity : AppCompatActivity() {
     private var silentBlock by mutableStateOf(true)
     private var clickjack by mutableStateOf(true)
     private var adblockUrl by mutableStateOf("")
+
+    private var menuShortcut by mutableStateOf(KeyShortcut.DEFAULT)
+    private var isBindingMenuShortcut by mutableStateOf(false)
+    private var bindingPreviewText by mutableStateOf("")
 
     private var extractPref by mutableStateOf(0)
     private var fallbackPref by mutableStateOf(0)
@@ -317,6 +323,8 @@ class SettingsActivity : AppCompatActivity() {
         silentBlock = prefs.getBoolean("silent_popup_block", true)
         clickjack = prefs.getBoolean("clickjack_prevention", true)
         adblockUrl = prefs.getString("custom_adblock_url", "https://easylist.to/easylist/easylist.txt") ?: ""
+
+        menuShortcut = KeyShortcut.loadFromPrefs(prefs)
 
         extractPref = prefs.getInt("extract_video_pref", 0)
         fallbackPref = prefs.getInt("exo_fallback_pref", 0)
@@ -599,6 +607,57 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (isBindingMenuShortcut) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                    isBindingMenuShortcut = false
+                    bindingPreviewText = ""
+                    return true
+                }
+                if (KeyShortcut.isModifierKey(event.keyCode)) {
+                    bindingPreviewText = KeyShortcut.getModifiersString(event)
+                    return true
+                } else {
+                    val newShortcut = KeyShortcut(
+                        keyCode = event.keyCode,
+                        alt = event.isAltPressed,
+                        ctrl = event.isCtrlPressed,
+                        shift = event.isShiftPressed,
+                        meta = event.isMetaPressed
+                    )
+                    menuShortcut = newShortcut
+                    KeyShortcut.saveToPrefs(prefs, newShortcut)
+                    isBindingMenuShortcut = false
+                    bindingPreviewText = ""
+                    Toast.makeText(this, "Shortcut set to: ${newShortcut.getDisplayString()}", Toast.LENGTH_SHORT).show()
+                    return true
+                }
+            } else if (event.action == KeyEvent.ACTION_UP) {
+                if (KeyShortcut.isModifierKey(event.keyCode)) {
+                    bindingPreviewText = KeyShortcut.getModifiersString(event)
+                    return true
+                }
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchKeyShortcutEvent(event: KeyEvent): Boolean {
+        if (isBindingMenuShortcut) {
+            return dispatchKeyEvent(event)
+        }
+        return super.dispatchKeyShortcutEvent(event)
+    }
+
+    override fun onKeyShortcut(keyCode: Int, event: KeyEvent): Boolean {
+        if (isBindingMenuShortcut) {
+            return dispatchKeyEvent(event)
+        }
+        return super.onKeyShortcut(keyCode, event)
+    }
+
     @Composable
     fun SidebarCategoryItem(
         category: Category, 
@@ -763,28 +822,107 @@ class SettingsActivity : AppCompatActivity() {
 
     @Composable
     fun InterfacePanel() {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            PanelHeader("Interface Navigation Settings")
-            ToggleSettingRow("Scroll up for Navigation Bar", scrollTopbar) { scrollTopbar = it }
-            DropdownSettingRow("Default Pointer Navigation Mode", listOf("Simulated Pointer (Cursor)", "Physical target navigation (D-pad selection)"), navMode) { navMode = it }
-            DropdownSettingRow("Scraper Result Tab Order", listOf("Web, Torrents", "Torrents, Web"), if (scrapeTabOrder == "Web,Torrents") 0 else 1) { 
-                scrapeTabOrder = if (it == 0) "Web,Torrents" else "Torrents,Web"
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+            item { PanelHeader("Interface Navigation Settings") }
+            item { ToggleSettingRow("Scroll up for Navigation Bar", scrollTopbar) { scrollTopbar = it } }
+            item { DropdownSettingRow("Default Pointer Navigation Mode", listOf("Simulated Pointer (Cursor)", "Physical target navigation (D-pad selection)"), navMode) { navMode = it } }
+            item {
+                DropdownSettingRow("Scraper Result Tab Order", listOf("Web, Torrents", "Torrents, Web"), if (scrapeTabOrder == "Web,Torrents") 0 else 1) { 
+                    scrapeTabOrder = if (it == 0) "Web,Torrents" else "Torrents,Web"
+                }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
-            PanelHeader("Hardware Devices & External Input")
+            item {
+                Spacer(modifier = Modifier.height(6.dp))
+                PanelHeader("Hardware Devices & External Input")
+            }
 
-            DropdownSettingRow(
-                label = "Hardware Keyboard Mode",
-                options = listOf("Auto-detect (Recommended)", "Always Enabled", "Disabled (TV Remote Mode)"),
-                selectedIndex = hwKeyboardMode
-            ) { hwKeyboardMode = it }
+            item {
+                DropdownSettingRow(
+                    label = "Hardware Keyboard Mode",
+                    options = listOf("Auto-detect (Recommended)", "Always Enabled", "Disabled (TV Remote Mode)"),
+                    selectedIndex = hwKeyboardMode
+                ) { hwKeyboardMode = it }
+            }
 
-            DropdownSettingRow(
-                label = "Physical Mouse Mode",
-                options = listOf("Auto-detect (Recommended)", "Always Enabled", "Disabled (TV Remote Mode)"),
-                selectedIndex = hwMouseMode
-            ) { hwMouseMode = it }
+            item {
+                DropdownSettingRow(
+                    label = "Physical Mouse Mode",
+                    options = listOf("Auto-detect (Recommended)", "Always Enabled", "Disabled (TV Remote Mode)"),
+                    selectedIndex = hwMouseMode
+                ) { hwMouseMode = it }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isBindingMenuShortcut) Color(0xFF00BCD4).copy(alpha = 0.15f) else Color.Transparent)
+                        .border(if (isBindingMenuShortcut) 2.dp else 0.dp, Color(0xFF00BCD4), RoundedCornerShape(8.dp))
+                        .padding(if (isBindingMenuShortcut) 14.dp else 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isBindingMenuShortcut) "Press desired key combination" else "Menu Button Keybind",
+                            color = if (isBindingMenuShortcut) Color.White else Color.LightGray,
+                            fontSize = 16.sp,
+                            fontWeight = if (isBindingMenuShortcut) FontWeight.Bold else FontWeight.Normal
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (isBindingMenuShortcut) bindingPreviewText.ifEmpty { "Listening for keys..." } else "Current: ${menuShortcut.getDisplayString()}",
+                            color = if (isBindingMenuShortcut) Color(0xFFFFB74D) else Color(0xFF00BCD4),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            onClick = {
+                                if (isBindingMenuShortcut) {
+                                    isBindingMenuShortcut = false
+                                    bindingPreviewText = ""
+                                } else {
+                                    bindingPreviewText = "Listening for keys..."
+                                    isBindingMenuShortcut = true
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isBindingMenuShortcut) Color(0xFFE53935) else Color(0xFF00BCD4)
+                            ),
+                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                        ) {
+                            Text(
+                                text = if (isBindingMenuShortcut) "Cancel" else "Rebind",
+                                color = if (isBindingMenuShortcut) Color.White else Color.Black,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        if (!isBindingMenuShortcut) {
+                            Button(
+                                onClick = {
+                                    val def = KeyShortcut.DEFAULT
+                                    menuShortcut = def
+                                    KeyShortcut.saveToPrefs(prefs, def)
+                                    Toast.makeText(this@SettingsActivity, "Reset to default: ${def.getDisplayString()}", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333338)),
+                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
+                            ) {
+                                Text("Reset", color = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -2399,6 +2537,7 @@ class SettingsActivity : AppCompatActivity() {
                     putString("subsource_apikey", subsourceApikey)
                 }.apply()
 
+                KeyShortcut.saveToPrefs(prefs, menuShortcut)
                 HardwareInputManager.updateActiveStates(applicationContext)
 
                 val appContext = applicationContext
