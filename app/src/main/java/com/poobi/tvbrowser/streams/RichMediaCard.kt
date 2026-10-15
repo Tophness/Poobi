@@ -155,7 +155,7 @@ fun RichMediaCard(
         ) {
             Text(
                 text = title,
-                color = Color.White,
+                color = if (isFocused) Color.Black else Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
@@ -163,7 +163,12 @@ fun RichMediaCard(
             )
 
             if (season != null && episode != null) {
-                Text("S$season E$episode", color = Color(0xFF40C4FF), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "S$season E$episode", 
+                    color = if (isFocused) Color(0xFF004D40) else Color(0xFF40C4FF), 
+                    fontSize = 11.sp, 
+                    fontWeight = FontWeight.Bold
+                )
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -171,7 +176,7 @@ fun RichMediaCard(
             if (overview.isNotEmpty()) {
                 TvMarqueeText(
                     text = overview,
-                    color = Color.LightGray,
+                    color = if (isFocused) Color(0xFF222222) else Color.LightGray,
                     fontSize = 10.sp,
                     maxLines = 3,
                     isFocused = isFocused,
@@ -182,7 +187,7 @@ fun RichMediaCard(
             if (genresStr.isNotEmpty()) {
                 TvMarqueeText(
                     text = genresStr,
-                    color = Color(0xFFFFB74D),
+                    color = if (isFocused) Color(0xFFBF360C) else Color(0xFFFFB74D),
                     fontSize = 11.sp,
                     maxLines = 1,
                     isFocused = isFocused,
@@ -191,8 +196,17 @@ fun RichMediaCard(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(mediaType.uppercase(), color = Color(0xFF4CAF50), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Text(" • $year", color = Color(0xFFB0BEC5), fontSize = 11.sp)
+                Text(
+                    text = mediaType.uppercase(), 
+                    color = if (isFocused) Color(0xFF1B5E20) else Color(0xFF4CAF50), 
+                    fontSize = 11.sp, 
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = " • $year", 
+                    color = if (isFocused) Color(0xFF37474F) else Color(0xFFB0BEC5), 
+                    fontSize = 11.sp
+                )
             }
         }
     }

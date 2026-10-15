@@ -12,7 +12,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -24,10 +23,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -68,23 +65,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
-
-fun Modifier.tvSettingsFocus(
-    shape: RoundedCornerShape = RoundedCornerShape(8.dp)
-): Modifier = composed {
-    var isFocused by remember { mutableStateOf(false) }
-    this
-        .onFocusChanged { isFocused = it.isFocused }
-        .border(
-            width = if (isFocused) 2.dp else 0.dp,
-            color = if (isFocused) Color(0xFF00BCD4) else Color.Transparent,
-            shape = shape
-        )
-        .background(
-            color = if (isFocused) Color(0xFF00BCD4).copy(alpha = 0.15f) else Color.Transparent,
-            shape = shape
-        )
-}
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -221,10 +201,10 @@ class SettingsActivity : AppCompatActivity() {
 
         setContent {
             var selectedCategory by remember { mutableStateOf(Category.General) }
-            val firstCategoryFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+            val firstCategoryFocusRequester = remember { FocusRequester() }
 
             LaunchedEffect(Unit) {
-                kotlinx.coroutines.delay(60)
+                delay(60)
                 try {
                     firstCategoryFocusRequester.requestFocus()
                 } catch (_: Exception) {}
@@ -252,12 +232,15 @@ class SettingsActivity : AppCompatActivity() {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Button(
-                        onClick = { saveAndExit() }, 
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)), 
-                        modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
-                    ) {
-                        Text("Save & Exit", color = Color.White, fontWeight = FontWeight.Bold)
+                    TvFocusableBox(
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        defaultColor = Color(0xFF4CAF50),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = { saveAndExit() }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Save & Exit", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 
@@ -438,61 +421,60 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun ensureStoragePermission(onGranted: () -> Unit): Boolean {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        if (android.os.Environment.isExternalStorageManager()) {
-            onGranted()
-            return true
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (android.os.Environment.isExternalStorageManager()) {
+                onGranted()
+                return true
+            }
 
-        pendingStorageAction = onGranted
+            pendingStorageAction = onGranted
 
-        AlertDialog.Builder(this)
-            .setTitle("Storage Permission Required")
-            .setMessage("Poobi needs 'All files access' to save and restore backups in your Downloads folder. Please enable it on the next screen.")
-            .setPositiveButton("Allow Access") { _, _ ->
-                try {
-                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                        data = android.net.Uri.parse("package:$packageName")
-                    }
-                    manageStorageLauncher.launch(intent)
-                } catch (_: Exception) {
+            AlertDialog.Builder(this)
+                .setTitle("Storage Permission Required")
+                .setMessage("Poobi needs 'All files access' to save and restore backups in your Downloads folder. Please enable it on the next screen.")
+                .setPositiveButton("Allow Access") { _, _ ->
                     try {
-                        val fallbackIntent = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                        manageStorageLauncher.launch(fallbackIntent)
-                    } catch (e: Exception) {
-                        // Fallback directly to App Details Settings screen if Leanback/TV ROM omits All Files list
-                        val appDetailsIntent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
                             data = android.net.Uri.parse("package:$packageName")
                         }
-                        manageStorageLauncher.launch(appDetailsIntent)
+                        manageStorageLauncher.launch(intent)
+                    } catch (_: Exception) {
+                        try {
+                            val fallbackIntent = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                            manageStorageLauncher.launch(fallbackIntent)
+                        } catch (e: Exception) {
+                            val appDetailsIntent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = android.net.Uri.parse("package:$packageName")
+                            }
+                            manageStorageLauncher.launch(appDetailsIntent)
+                        }
                     }
                 }
+                .setNegativeButton("Cancel") { _, _ ->
+                    pendingStorageAction = null
+                }
+                .show()
+
+            return false
+        } else {
+            val readPerm = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+            val writePerm = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+
+            if (readPerm == PackageManager.PERMISSION_GRANTED && writePerm == PackageManager.PERMISSION_GRANTED) {
+                onGranted()
+                return true
             }
-            .setNegativeButton("Cancel") { _, _ ->
-                pendingStorageAction = null
-            }
-            .show()
 
-        return false
-    } else {
-        val readPerm = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-        val writePerm = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-
-        if (readPerm == PackageManager.PERMISSION_GRANTED && writePerm == PackageManager.PERMISSION_GRANTED) {
-            onGranted()
-            return true
-        }
-
-        pendingStorageAction = onGranted
-        legacyStoragePermissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            pendingStorageAction = onGranted
+            legacyStoragePermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                )
             )
-        )
-        return false
+            return false
+        }
     }
-}
 
     private suspend fun syncToPython() = withContext(Dispatchers.IO) {
         try {
@@ -665,35 +647,27 @@ class SettingsActivity : AppCompatActivity() {
         itemFocusRequester: FocusRequester? = null,
         onSelect: () -> Unit
     ) {
-        var isFocused by remember { mutableStateOf(false) }
-        Box(
+        TvFocusableBox(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (itemFocusRequester != null) Modifier.focusRequester(itemFocusRequester) else Modifier)
-                .clip(RoundedCornerShape(8.dp))
-                .onFocusChanged { state ->
-                    if (state.isFocused) {
-                        onSelect()
-                    }
-                    isFocused = state.isFocused
-                }
-                .clickable { onSelect() }
-                .focusable()
-                .border(
-                    width = if (isFocused) 2.dp else 0.dp,
-                    color = if (isFocused) Color(0xFF00BCD4) else Color.Transparent,
-                    shape = RoundedCornerShape(8.dp)
+                .then(if (itemFocusRequester != null) Modifier.focusRequester(itemFocusRequester) else Modifier),
+            isSelected = isSelected,
+            onClick = onSelect,
+            onFocus = onSelect
+        ) { isFocused ->
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = category.name, 
+                    color = if (isFocused) Color.Black else if (isSelected) Color.White else Color.LightGray, 
+                    fontSize = 16.sp, 
+                    fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal
                 )
-                .background(
-                    when {
-                        isSelected -> Color(0xFF00BCD4)
-                        isFocused -> Color(0xFF00BCD4).copy(alpha = 0.15f)
-                        else -> Color.Transparent
-                    }
-                )
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            Text(category.name, color = if (isSelected) Color.White else Color.LightGray, fontSize = 16.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+            }
         }
     }
 
@@ -724,17 +698,20 @@ class SettingsActivity : AppCompatActivity() {
                 Spacer(modifier = Modifier.height(8.dp))
                 val isCheckingUpdates by UpdateManager.isChecking.collectAsState()
                 val currentVerDisplay = "${UpdateManager.getAppVersionName(this@SettingsActivity)}${if (BuildConfig.DEBUG) "-debug" else ""}"
-                Button(
-                    onClick = { UpdateManager.checkForUpdates(this@SettingsActivity, isManual = true) },
-                    enabled = !isCheckingUpdates,
-                    modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp)),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4))
-                ) {
-                    Text(
-                        text = if (isCheckingUpdates) "Checking for Updates..." else "Check for Updates (v$currentVerDisplay)",
-                        color = Color.Black,
-                        fontWeight = FontWeight.Bold
-                    )
+                
+                TvFocusableBox(
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    defaultColor = Color(0xFF00BCD4),
+                    shape = RoundedCornerShape(20.dp),
+                    onClick = { UpdateManager.checkForUpdates(this@SettingsActivity, isManual = true) }
+                ) { isFocused ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = if (isCheckingUpdates) "Checking for Updates..." else "Check for Updates (v$currentVerDisplay)",
+                            color = if (isFocused) Color.Black else Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -883,7 +860,10 @@ class SettingsActivity : AppCompatActivity() {
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Button(
+                        TvFocusableBox(
+                            modifier = Modifier.height(40.dp),
+                            defaultColor = if (isBindingMenuShortcut) Color(0xFFE53935) else Color(0xFF00BCD4),
+                            shape = RoundedCornerShape(20.dp),
                             onClick = {
                                 if (isBindingMenuShortcut) {
                                     isBindingMenuShortcut = false
@@ -892,31 +872,32 @@ class SettingsActivity : AppCompatActivity() {
                                     bindingPreviewText = "Listening for keys..."
                                     isBindingMenuShortcut = true
                                 }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isBindingMenuShortcut) Color(0xFFE53935) else Color(0xFF00BCD4)
-                            ),
-                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                        ) {
-                            Text(
-                                text = if (isBindingMenuShortcut) "Cancel" else "Rebind",
-                                color = if (isBindingMenuShortcut) Color.White else Color.Black,
-                                fontWeight = FontWeight.Bold
-                            )
+                            }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = if (isBindingMenuShortcut) "Cancel" else "Rebind",
+                                    color = if (isFocused) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
 
                         if (!isBindingMenuShortcut) {
-                            Button(
+                            TvFocusableBox(
+                                modifier = Modifier.height(40.dp),
+                                defaultColor = Color(0xFF333338),
+                                shape = RoundedCornerShape(20.dp),
                                 onClick = {
                                     val def = KeyShortcut.DEFAULT
                                     menuShortcut = def
                                     KeyShortcut.saveToPrefs(prefs, def)
                                     Toast.makeText(this@SettingsActivity, "Reset to default: ${def.getDisplayString()}", Toast.LENGTH_SHORT).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333338)),
-                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                            ) {
-                                Text("Reset", color = Color.White)
+                                }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                                    Text("Reset", color = if (isFocused) Color.Black else Color.White)
+                                }
                             }
                         }
                     }
@@ -1018,32 +999,45 @@ class SettingsActivity : AppCompatActivity() {
                     item { Text("Provider Packages", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
                     items(providerPacksList) { pack ->
                         var isChecked by remember { mutableStateOf(prefs.getBoolean("pack_$pack", true)) }
-                        Row(
+                        TvFocusableBox(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(40.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    isChecked = !isChecked
-                                    lifecycleScope.launch(Dispatchers.IO) {
-                                        prefs.edit().putBoolean("pack_$pack", isChecked).apply()
-                                    }
+                                .height(44.dp),
+                            onClick = {
+                                isChecked = !isChecked
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    prefs.edit().putBoolean("pack_$pack", isChecked).apply()
                                 }
-                                .tvSettingsFocus()
-                                .padding(horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(pack, color = Color.LightGray, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                            Checkbox(
-                                checked = isChecked, 
-                                onCheckedChange = { checked -> 
-                                    isChecked = checked
-                                    lifecycleScope.launch(Dispatchers.IO) {
-                                        prefs.edit().putBoolean("pack_$pack", checked).apply()
-                                    }
-                                }, 
-                                modifier = Modifier.scale(0.85f)
-                            )
+                            }
+                        ) { isFocused ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = pack, 
+                                    color = if (isFocused) Color.Black else Color.LightGray, 
+                                    fontSize = 14.sp, 
+                                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Checkbox(
+                                    checked = isChecked, 
+                                    onCheckedChange = { checked -> 
+                                        isChecked = checked
+                                        lifecycleScope.launch(Dispatchers.IO) {
+                                            prefs.edit().putBoolean("pack_$pack", checked).apply()
+                                        }
+                                    }, 
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = if (isFocused) Color.Black else Color(0xFF00BCD4),
+                                        checkmarkColor = if (isFocused) Color.White else Color.Black
+                                    ),
+                                    modifier = Modifier.scale(0.85f)
+                                )
+                            }
                         }
                     }
                 }
@@ -1071,24 +1065,32 @@ class SettingsActivity : AppCompatActivity() {
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                enabled = enforceWhitelist,
+                            TvFocusableBox(
+                                modifier = Modifier.height(36.dp),
+                                defaultColor = Color(0xFF333338),
+                                shape = RoundedCornerShape(20.dp),
                                 onClick = {
                                     val filteredP = providerHosts.filter { it.contains(hostSearchQuery, true) }
                                     val filteredR = resolveurlHosts.filter { it.contains(hostSearchQuery, true) }
                                     filteredP.forEach { if (!whitelistedHosts.contains(it)) whitelistedHosts.add(it) }
                                     filteredR.forEach { if (!whitelistedHosts.contains(it)) whitelistedHosts.add(it) }
-                                },
-                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                            ) { Text("Select All", fontSize = 12.sp) }
+                                }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                    Text("Select All", color = if (isFocused) Color.Black else Color.White, fontSize = 12.sp)
+                                }
+                            }
 
-                            Button(
-                                enabled = enforceWhitelist,
-                                onClick = {
-                                    whitelistedHosts.clear()
-                                },
-                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                            ) { Text("Clear All", fontSize = 12.sp) }
+                            TvFocusableBox(
+                                modifier = Modifier.height(36.dp),
+                                defaultColor = Color(0xFF333338),
+                                shape = RoundedCornerShape(20.dp),
+                                onClick = { whitelistedHosts.clear() }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                    Text("Clear All", color = if (isFocused) Color.Black else Color.White, fontSize = 12.sp)
+                                }
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -1099,28 +1101,40 @@ class SettingsActivity : AppCompatActivity() {
                                 LazyColumn(modifier = Modifier.fillMaxSize().background(Color(0x0DFFFFFF))) {
                                     val filtered = providerHosts.filter { it.contains(hostSearchQuery, true) }
                                     items(filtered) { host ->
-                                        Row(
+                                        TvFocusableBox(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(36.dp)
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .clickable(enabled = enforceWhitelist) {
-                                                    val isCurrentlyWhitelisted = whitelistedHosts.contains(host)
-                                                    if (isCurrentlyWhitelisted) whitelistedHosts.remove(host) else whitelistedHosts.add(host)
+                                                .height(36.dp),
+                                            onClick = {
+                                                if (enforceWhitelist) {
+                                                    if (whitelistedHosts.contains(host)) whitelistedHosts.remove(host) else whitelistedHosts.add(host)
                                                 }
-                                                .tvSettingsFocus()
-                                                .padding(horizontal = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(host, color = if (enforceWhitelist) Color.White else Color.Gray, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                                            Checkbox(
-                                                checked = whitelistedHosts.contains(host),
-                                                enabled = enforceWhitelist,
-                                                onCheckedChange = { checked ->
-                                                    if (checked) whitelistedHosts.add(host) else whitelistedHosts.remove(host)
-                                                },
-                                                modifier = Modifier.scale(0.75f)
-                                            )
+                                            }
+                                        ) { isFocused ->
+                                            Row(
+                                                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = host, 
+                                                    color = if (isFocused) Color.Black else if (enforceWhitelist) Color.White else Color.Gray, 
+                                                    fontSize = 12.sp, 
+                                                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Checkbox(
+                                                    checked = whitelistedHosts.contains(host),
+                                                    enabled = enforceWhitelist,
+                                                    onCheckedChange = { checked ->
+                                                        if (checked) whitelistedHosts.add(host) else whitelistedHosts.remove(host)
+                                                    },
+                                                    colors = CheckboxDefaults.colors(
+                                                        checkedColor = if (isFocused) Color.Black else Color(0xFF00BCD4),
+                                                        checkmarkColor = if (isFocused) Color.White else Color.Black
+                                                    ),
+                                                    modifier = Modifier.scale(0.75f)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1133,28 +1147,40 @@ class SettingsActivity : AppCompatActivity() {
                                 LazyColumn(modifier = Modifier.fillMaxSize().background(Color(0x0DFFFFFF))) {
                                     val filtered = resolveurlHosts.filter { it.contains(hostSearchQuery, true) }
                                     items(filtered) { host ->
-                                        Row(
+                                        TvFocusableBox(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(36.dp)
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .clickable(enabled = enforceWhitelist) {
-                                                    val isCurrentlyWhitelisted = whitelistedHosts.contains(host)
-                                                    if (isCurrentlyWhitelisted) whitelistedHosts.remove(host) else whitelistedHosts.add(host)
+                                                .height(36.dp),
+                                            onClick = {
+                                                if (enforceWhitelist) {
+                                                    if (whitelistedHosts.contains(host)) whitelistedHosts.remove(host) else whitelistedHosts.add(host)
                                                 }
-                                                .tvSettingsFocus()
-                                                .padding(horizontal = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(host, color = if (enforceWhitelist) Color.White else Color.Gray, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                                            Checkbox(
-                                                checked = whitelistedHosts.contains(host),
-                                                enabled = enforceWhitelist,
-                                                onCheckedChange = { checked ->
-                                                    if (checked) whitelistedHosts.add(host) else whitelistedHosts.remove(host)
-                                                },
-                                                modifier = Modifier.scale(0.75f)
-                                            )
+                                            }
+                                        ) { isFocused ->
+                                            Row(
+                                                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = host, 
+                                                    color = if (isFocused) Color.Black else if (enforceWhitelist) Color.White else Color.Gray, 
+                                                    fontSize = 12.sp, 
+                                                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Checkbox(
+                                                    checked = whitelistedHosts.contains(host),
+                                                    enabled = enforceWhitelist,
+                                                    onCheckedChange = { checked ->
+                                                        if (checked) whitelistedHosts.add(host) else whitelistedHosts.remove(host)
+                                                    },
+                                                    colors = CheckboxDefaults.colors(
+                                                        checkedColor = if (isFocused) Color.Black else Color(0xFF00BCD4),
+                                                        checkmarkColor = if (isFocused) Color.White else Color.Black
+                                                    ),
+                                                    modifier = Modifier.scale(0.75f)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1203,9 +1229,21 @@ class SettingsActivity : AppCompatActivity() {
                                 }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Button(onClick = { editProfileIndex = index; editProfileData = JSONObject(profile.toString()); showEditDialog = true }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Edit") }
+                            TvFocusableBox(
+                                modifier = Modifier.height(36.dp),
+                                defaultColor = Color(0xFF333338),
+                                shape = RoundedCornerShape(20.dp),
+                                onClick = { editProfileIndex = index; editProfileData = JSONObject(profile.toString()); showEditDialog = true }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                    Text("Edit", color = if (isFocused) Color.Black else Color.White)
+                                }
+                            }
                             Spacer(modifier = Modifier.width(4.dp))
-                            Button(
+                            TvFocusableBox(
+                                modifier = Modifier.height(36.dp),
+                                defaultColor = Color(0xFFE53935),
+                                shape = RoundedCornerShape(20.dp),
                                 onClick = { 
                                     val arr = JSONArray()
                                     for(i in 0 until profilesList.length()) { 
@@ -1216,17 +1254,28 @@ class SettingsActivity : AppCompatActivity() {
                                         prefs.edit().putString("autoplay_profiles", listString).apply()
                                     }
                                     profilesList = arr 
-                                }, 
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red), 
-                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                            ) { Text("Delete") }
+                                }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                    Text("Delete", color = if (isFocused) Color.Black else Color.White)
+                                }
+                            }
                         }
                     }
                 }
 
                 item {
                     Spacer(modifier = Modifier.height(10.dp))
-                    Button(onClick = { editProfileIndex = -1; editProfileData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New Profile"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("script", ""); put("use_script", true); put("selectors", JSONArray()) }; showEditDialog = true }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Add New Autoplay Profile") }
+                    TvFocusableBox(
+                        modifier = Modifier.height(44.dp),
+                        defaultColor = Color(0xFF00BCD4),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = { editProfileIndex = -1; editProfileData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New Profile"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("script", ""); put("use_script", true); put("selectors", JSONArray()) }; showEditDialog = true }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                            Text("Add New Autoplay Profile", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }
@@ -1248,8 +1297,15 @@ class SettingsActivity : AppCompatActivity() {
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Action Mode", color = Color.Gray, modifier = Modifier.weight(1f))
-                            Button(onClick = { useScript = !useScript }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) {
-                                Text(if (useScript) "Custom Script" else "Simple Element List")
+                            TvFocusableBox(
+                                modifier = Modifier.height(36.dp),
+                                defaultColor = Color(0xFF333338),
+                                shape = RoundedCornerShape(20.dp),
+                                onClick = { useScript = !useScript }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                    Text(if (useScript) "Custom Script" else "Simple Element List", color = if (isFocused) Color.Black else Color.White)
+                                }
                             }
                         }
 
@@ -1263,34 +1319,73 @@ class SettingsActivity : AppCompatActivity() {
                                         Box(modifier = Modifier.weight(1f)) {
                                             TvInputField(value = s, onValueChange = { selectors[idx] = it }, placeholder = ".button-class", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
                                         }
-                                        Button(onClick = { selectors.removeAt(idx) }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("X") }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        TvFocusableBox(
+                                            modifier = Modifier.size(36.dp),
+                                            defaultColor = Color(0xFFE53935),
+                                            shape = RoundedCornerShape(18.dp),
+                                            onClick = { selectors.removeAt(idx) }
+                                        ) { isFocused ->
+                                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                Text("X", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
                                     }
                                 }
                                 item {
-                                    Button(onClick = { selectors.add("") }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("+ Add Selector") }
+                                    TvFocusableBox(
+                                        modifier = Modifier.height(36.dp),
+                                        defaultColor = Color(0xFF00BCD4),
+                                        shape = RoundedCornerShape(20.dp),
+                                        onClick = { selectors.add("") }
+                                    ) { isFocused ->
+                                        Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                            Text("+ Add Selector", color = if (isFocused) Color.Black else Color.White)
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 },
                 confirmButton = {
-                    Button(onClick = {
-                        editProfileData.put("name", name)
-                        editProfileData.put("urlPatterns", JSONArray(patterns.split(",").map { it.trim() }))
-                        editProfileData.put("use_script", useScript)
-                        editProfileData.put("script", script)
-                        editProfileData.put("selectors", JSONArray(selectors.toList()))
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF4CAF50),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = {
+                            editProfileData.put("name", name)
+                            editProfileData.put("urlPatterns", JSONArray(patterns.split(",").map { it.trim() }))
+                            editProfileData.put("use_script", useScript)
+                            editProfileData.put("script", script)
+                            editProfileData.put("selectors", JSONArray(selectors.toList()))
 
-                        if (editProfileIndex >= 0) profilesList.put(editProfileIndex, editProfileData) else profilesList.put(editProfileData)
-                        val listString = profilesList.toString()
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            prefs.edit().putString("autoplay_profiles", listString).apply()
+                            if (editProfileIndex >= 0) profilesList.put(editProfileIndex, editProfileData) else profilesList.put(editProfileData)
+                            val listString = profilesList.toString()
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                prefs.edit().putString("autoplay_profiles", listString).apply()
+                            }
+                            profilesList = JSONArray(listString)
+                            showEditDialog = false
                         }
-                        profilesList = JSONArray(listString)
-                        showEditDialog = false
-                    }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Save") }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                            Text("Save", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 },
-                dismissButton = { Button(onClick = { showEditDialog = false }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Cancel") } }
+                dismissButton = { 
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF333338),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = { showEditDialog = false }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                            Text("Cancel", color = if (isFocused) Color.Black else Color.White)
+                        }
+                    }
+                }
             )
         }
     }
@@ -1441,32 +1536,45 @@ class SettingsActivity : AppCompatActivity() {
             val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
             items(serviceKeys) { key ->
                 var isEnabled by remember { mutableStateOf(prefs.getBoolean("${key}_enabled", key != "bsplayer" && key != "podnadpisi")) }
-                Row(
+                TvFocusableBox(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(40.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            isEnabled = !isEnabled
-                            lifecycleScope.launch(Dispatchers.IO) {
-                                prefs.edit().putBoolean("${key}_enabled", isEnabled).apply()
-                            }
+                        .height(44.dp),
+                    onClick = {
+                        isEnabled = !isEnabled
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            prefs.edit().putBoolean("${key}_enabled", isEnabled).apply()
                         }
-                        .tvSettingsFocus()
-                        .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(key.replace("_", " ").replaceFirstChar { it.uppercase() }, color = Color.LightGray, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                    Checkbox(
-                        checked = isEnabled, 
-                        onCheckedChange = { checked -> 
-                            isEnabled = checked
-                            lifecycleScope.launch(Dispatchers.IO) {
-                                prefs.edit().putBoolean("${key}_enabled", checked).apply()
-                            }
-                        }, 
-                        modifier = Modifier.scale(0.85f)
-                    )
+                    }
+                ) { isFocused ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = key.replace("_", " ").replaceFirstChar { it.uppercase() }, 
+                            color = if (isFocused) Color.Black else Color.LightGray, 
+                            fontSize = 14.sp, 
+                            fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Checkbox(
+                            checked = isEnabled, 
+                            onCheckedChange = { checked -> 
+                                isEnabled = checked
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    prefs.edit().putBoolean("${key}_enabled", checked).apply()
+                                }
+                            }, 
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = if (isFocused) Color.Black else Color(0xFF00BCD4),
+                                checkmarkColor = if (isFocused) Color.White else Color.Black
+                            ),
+                            modifier = Modifier.scale(0.85f)
+                        )
+                    }
                 }
             }
         }
@@ -1489,24 +1597,31 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 },
                 confirmButton = {
-                    Button(
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF4CAF50),
+                        shape = RoundedCornerShape(20.dp),
                         onClick = {
                             val intValue = customSubCountInput.toIntOrNull() ?: 5
                             countPref = intValue
                             showCustomSubCountDialog = false
-                        },
-                        modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                    ) {
-                        Text("OK", color = Color.White)
+                        }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                            Text("OK", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 },
                 dismissButton = {
-                    Button(
-                        onClick = { showCustomSubCountDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                        modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                    ) {
-                        Text("Cancel", color = Color.White)
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF333338),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = { showCustomSubCountDialog = false }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                            Text("Cancel", color = if (isFocused) Color.Black else Color.White)
+                        }
                     }
                 }
             )
@@ -1591,11 +1706,11 @@ class SettingsActivity : AppCompatActivity() {
                                             val prioritiesStr = JSONArray(list).toString()
                                             prefs.edit().putString("sort_priorities", prioritiesStr).apply()
                                         }
-                                    ) {
+                                    ) { isFocused ->
                                         Icon(
                                             painter = painterResource(id = R.drawable.ic_arrow_up),
                                             contentDescription = "Move Up",
-                                            tint = Color.White,
+                                            tint = if (isFocused) Color.Black else Color.White,
                                             modifier = Modifier.fillMaxSize().padding(6.dp)
                                         )
                                     }
@@ -1613,11 +1728,11 @@ class SettingsActivity : AppCompatActivity() {
                                             val prioritiesStr = JSONArray(list).toString()
                                             prefs.edit().putString("sort_priorities", prioritiesStr).apply()
                                         }
-                                    ) {
+                                    ) { isFocused ->
                                         Icon(
                                             painter = painterResource(id = R.drawable.ic_arrow_down),
                                             contentDescription = "Move Down",
-                                            tint = Color.White,
+                                            tint = if (isFocused) Color.Black else Color.White,
                                             modifier = Modifier.fillMaxSize().padding(6.dp)
                                         )
                                     }
@@ -1683,11 +1798,11 @@ class SettingsActivity : AppCompatActivity() {
                                             val prioritiesStr = JSONArray(list).toString()
                                             prefs.edit().putString("torrent_sort_priorities", prioritiesStr).apply()
                                         }
-                                    ) {
+                                    ) { isFocused ->
                                         Icon(
                                             painter = painterResource(id = R.drawable.ic_arrow_up),
                                             contentDescription = "Move Up",
-                                            tint = Color.White,
+                                            tint = if (isFocused) Color.Black else Color.White,
                                             modifier = Modifier.fillMaxSize().padding(6.dp)
                                         )
                                     }
@@ -1705,11 +1820,11 @@ class SettingsActivity : AppCompatActivity() {
                                             val prioritiesStr = JSONArray(list).toString()
                                             prefs.edit().putString("torrent_sort_priorities", prioritiesStr).apply()
                                         }
-                                    ) {
+                                    ) { isFocused ->
                                         Icon(
                                             painter = painterResource(id = R.drawable.ic_arrow_down),
                                             contentDescription = "Move Down",
-                                            tint = Color.White,
+                                            tint = if (isFocused) Color.Black else Color.White,
                                             modifier = Modifier.fillMaxSize().padding(6.dp)
                                         )
                                     }
@@ -1749,8 +1864,22 @@ class SettingsActivity : AppCompatActivity() {
                                     rulesList = JSONArray(rulesStr) 
                                 }
                             )
-                            Button(onClick = { editRuleIndex = index; editRuleData = JSONObject(rule.toString()); showEditDialog = true }, modifier = Modifier.padding(start = 8.dp).tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Edit") }
-                            Button(
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TvFocusableBox(
+                                modifier = Modifier.height(36.dp),
+                                defaultColor = Color(0xFF333338),
+                                shape = RoundedCornerShape(20.dp),
+                                onClick = { editRuleIndex = index; editRuleData = JSONObject(rule.toString()); showEditDialog = true }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                    Text("Edit", color = if (isFocused) Color.Black else Color.White)
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TvFocusableBox(
+                                modifier = Modifier.height(36.dp),
+                                defaultColor = Color(0xFFE53935),
+                                shape = RoundedCornerShape(20.dp),
                                 onClick = {
                                     val arr = JSONArray()
                                     for (i in 0 until rulesList.length()) {
@@ -1761,19 +1890,26 @@ class SettingsActivity : AppCompatActivity() {
                                         prefs.edit().putString("blocked_elements", rulesStr).apply()
                                     }
                                     rulesList = arr
-                                },
-                                modifier = Modifier
-                                    .padding(start = 8.dp)
-                                    .tvSettingsFocus(RoundedCornerShape(20.dp)),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                            ) {
-                                Text("Delete")
+                                }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                    Text("Delete", color = if (isFocused) Color.Black else Color.White)
+                                }
                             }
                         }
                     }
                 }
             }
-            Button(onClick = { editRuleIndex = -1; editRuleData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New CSS Rule"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("selectors", JSONArray()) }; showEditDialog = true }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Add New CSS Block Rule") }
+            TvFocusableBox(
+                modifier = Modifier.height(44.dp),
+                defaultColor = Color(0xFF00BCD4),
+                shape = RoundedCornerShape(20.dp),
+                onClick = { editRuleIndex = -1; editRuleData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New CSS Rule"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("selectors", JSONArray()) }; showEditDialog = true }
+            ) { isFocused ->
+                Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                    Text("Add New CSS Block Rule", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
         }
 
         if (showEditDialog) {
@@ -1792,20 +1928,40 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 },
                 confirmButton = {
-                    Button(onClick = {
-                        editRuleData.put("name", name)
-                        editRuleData.put("urlPatterns", JSONArray(patterns.split(",").map { it.trim() }))
-                        editRuleData.put("selectors", JSONArray(selectors.split("\n").map { it.trim() }))
-                        if (editRuleIndex >= 0) rulesList.put(editRuleIndex, editRuleData) else rulesList.put(editRuleData)
-                        val rulesStr = rulesList.toString()
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            prefs.edit().putString("blocked_elements", rulesStr).apply()
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF4CAF50),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = {
+                            editRuleData.put("name", name)
+                            editRuleData.put("urlPatterns", JSONArray(patterns.split(",").map { it.trim() }))
+                            editRuleData.put("selectors", JSONArray(selectors.split("\n").map { it.trim() }))
+                            if (editRuleIndex >= 0) rulesList.put(editRuleIndex, editRuleData) else rulesList.put(editRuleData)
+                            val rulesStr = rulesList.toString()
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                prefs.edit().putString("blocked_elements", rulesStr).apply()
+                            }
+                            rulesList = JSONArray(rulesStr)
+                            showEditDialog = false
                         }
-                        rulesList = JSONArray(rulesStr)
-                        showEditDialog = false
-                    }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Save") }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                            Text("Save", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 },
-                dismissButton = { Button(onClick = { showEditDialog = false }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Cancel") } }
+                dismissButton = { 
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF333338),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = { showEditDialog = false }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                            Text("Cancel", color = if (isFocused) Color.Black else Color.White)
+                        }
+                    }
+                }
             )
         }
     }
@@ -1902,23 +2058,37 @@ class SettingsActivity : AppCompatActivity() {
             PanelHeader("Trakt.tv Sync Integration")
             if (traktUser.isNotEmpty()) {
                 Text("Authorized account: $traktUser", color = Color(0xFF4CAF50), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        try {
-                            Python.getInstance().getModule("trakt.trakt_auth").callAttr("logout_trakt")
-                            withContext(Dispatchers.Main) {
-                                traktUser = ""
-                                Toast.makeText(this@SettingsActivity, "Logged out of Trakt", Toast.LENGTH_SHORT).show()
-                            }
-                        } catch (e: Exception) {}
+                TvFocusableBox(
+                    modifier = Modifier.height(40.dp),
+                    defaultColor = Color(0xFFE53935),
+                    shape = RoundedCornerShape(20.dp),
+                    onClick = {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            try {
+                                Python.getInstance().getModule("trakt.trakt_auth").callAttr("logout_trakt")
+                                withContext(Dispatchers.Main) {
+                                    traktUser = ""
+                                    Toast.makeText(this@SettingsActivity, "Logged out of Trakt", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {}
+                        }
                     }
-                }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) {
-                    Text("Logout Trakt", color = Color.White)
+                ) { isFocused ->
+                    Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                        Text("Logout Trakt", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             } else {
                 Text("Trakt account not linked.", color = Color.Gray)
-                Button(onClick = { startTraktAuthFlow() }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) {
-                    Text("Authorize Trakt Account")
+                TvFocusableBox(
+                    modifier = Modifier.height(40.dp),
+                    defaultColor = Color(0xFF00BCD4),
+                    shape = RoundedCornerShape(20.dp),
+                    onClick = { startTraktAuthFlow() }
+                ) { isFocused ->
+                    Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                        Text("Authorize Trakt Account", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -1938,19 +2108,33 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 },
                 confirmButton = {
-                    Button(onClick = {
-                        val intent = Intent(this@SettingsActivity, MainActivity::class.java).apply {
-                            putExtra("open_url", traktVerificationUrl)
-                            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF00BCD4),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = {
+                            val intent = Intent(this@SettingsActivity, MainActivity::class.java).apply {
+                                putExtra("open_url", traktVerificationUrl)
+                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            }
+                            startActivity(intent)
                         }
-                        startActivity(intent)
-                    }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) {
-                        Text("Open Link", color = Color.White)
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                            Text("Open Link", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 },
                 dismissButton = {
-                    Button(onClick = { showTraktAuthDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray), modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) {
-                        Text("Cancel", color = Color.White)
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF333338),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = { showTraktAuthDialog = false }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                            Text("Cancel", color = if (isFocused) Color.Black else Color.White)
+                        }
                     }
                 }
             )
@@ -1983,65 +2167,81 @@ class SettingsActivity : AppCompatActivity() {
 
             if (isAuthorized) {
                 Text("Authorized TMDb Session Active", color = Color(0xFF4CAF50), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        try {
-                            val py = Python.getInstance()
-                            py.getModule("tmdb.tmdb_utils").callAttr("delete_session")
-                            withContext(Dispatchers.Main) {
-                                isAuthorized = false
-                                Toast.makeText(this@SettingsActivity, "Logged out of TMDb", Toast.LENGTH_SHORT).show()
-                            }
-                        } catch (e: Exception) {}
+                TvFocusableBox(
+                    modifier = Modifier.height(40.dp),
+                    defaultColor = Color(0xFFE53935),
+                    shape = RoundedCornerShape(20.dp),
+                    onClick = {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            try {
+                                val py = Python.getInstance()
+                                py.getModule("tmdb.tmdb_utils").callAttr("delete_session")
+                                withContext(Dispatchers.Main) {
+                                    isAuthorized = false
+                                    Toast.makeText(this@SettingsActivity, "Logged out of TMDb", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {}
+                        }
                     }
-                }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) {
-                    Text("Logout", color = Color.White)
+                ) { isFocused ->
+                    Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                        Text("Logout", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             } else {
                 TvInputField(value = usernameVal, onValueChange = { usernameVal = it }, label = "Username", placeholder = "Username", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
                 TvInputField(value = passwordVal, onValueChange = { passwordVal = it }, label = "Password", placeholder = "Password", isPassword = true, containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
 
-                Button(onClick = {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        try {
-                            val py = Python.getInstance(); val control = py.getModule("modules.control")
-                            control.callAttr("setSetting", "tmdb.user", usernameVal); control.callAttr("setSetting", "tmdb.pass", passwordVal)
+                TvFocusableBox(
+                    modifier = Modifier.height(40.dp),
+                    defaultColor = Color(0xFF00BCD4),
+                    shape = RoundedCornerShape(20.dp),
+                    onClick = {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            try {
+                                val py = Python.getInstance(); val control = py.getModule("modules.control")
+                                control.callAttr("setSetting", "tmdb.user", usernameVal); control.callAttr("setSetting", "tmdb.pass", passwordVal)
 
-                            control.callAttr("set_dialog_listener", object : PythonDialogListener {
-                                override fun infoDialog(message: String, heading: String, sound: Boolean, icon: String) {
-                                    runOnUiThread { Toast.makeText(this@SettingsActivity, "$heading: $message", Toast.LENGTH_LONG).show() }
-                                }
-                                override fun okDialog(message: String, heading: String): Boolean {
-                                    val future = CompletableDeferred<Boolean>()
-                                    runOnUiThread {
-                                        AlertDialog.Builder(this@SettingsActivity).setTitle(heading).setMessage(message)
-                                            .setPositiveButton("OK") { _, _ -> future.complete(true) }.setOnCancelListener { future.complete(true) }.show()
+                                control.callAttr("set_dialog_listener", object : PythonDialogListener {
+                                    override fun infoDialog(message: String, heading: String, sound: Boolean, icon: String) {
+                                        runOnUiThread { Toast.makeText(this@SettingsActivity, "$heading: $message", Toast.LENGTH_LONG).show() }
                                     }
-                                    return runBlocking { future.await() }
-                                }
-                                override fun yesnoDialog(message: String, heading: String, nolabel: String, yeslabel: String): Boolean {
-                                    val future = CompletableDeferred<Boolean>()
-                                    runOnUiThread {
-                                        AlertDialog.Builder(this@SettingsActivity).setTitle(heading).setMessage(message)
-                                            .setPositiveButton(yeslabel.ifEmpty { "Yes" }) { _, _ -> future.complete(true) }
-                                            .setNegativeButton(nolabel.ifEmpty { "No" }) { _, _ -> future.complete(false) }.setOnCancelListener { future.complete(false) }.show()
+                                    override fun okDialog(message: String, heading: String): Boolean {
+                                        val future = CompletableDeferred<Boolean>()
+                                        runOnUiThread {
+                                            AlertDialog.Builder(this@SettingsActivity).setTitle(heading).setMessage(message)
+                                                .setPositiveButton("OK") { _, _ -> future.complete(true) }.setOnCancelListener { future.complete(true) }.show()
+                                        }
+                                        return runBlocking { future.await() }
                                     }
-                                    return runBlocking { future.await() }
-                                }
-                            })
+                                    override fun yesnoDialog(message: String, heading: String, nolabel: String, yeslabel: String): Boolean {
+                                        val future = CompletableDeferred<Boolean>()
+                                        runOnUiThread {
+                                            AlertDialog.Builder(this@SettingsActivity).setTitle(heading).setMessage(message)
+                                                .setPositiveButton(yeslabel.ifEmpty { "Yes" }) { _, _ -> future.complete(true) }
+                                                .setNegativeButton(nolabel.ifEmpty { "No" }) { _, _ -> future.complete(false) }.setOnCancelListener { future.complete(false) }.show()
+                                        }
+                                        return runBlocking { future.await() }
+                                    }
+                                })
 
-                            py.getModule("tmdb.tmdb_utils").callAttr("authTMDb")
-                            withContext(Dispatchers.Main) {
-                                isAuthorized = true
-                                Toast.makeText(this@SettingsActivity, "Credentials verified successfully", Toast.LENGTH_SHORT).show()
-                            }
-                        } catch (e: Exception) {
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(this@SettingsActivity, "TMDb Authentication failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                py.getModule("tmdb.tmdb_utils").callAttr("authTMDb")
+                                withContext(Dispatchers.Main) {
+                                    isAuthorized = true
+                                    Toast.makeText(this@SettingsActivity, "Credentials verified successfully", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(this@SettingsActivity, "TMDb Authentication failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
                     }
-                }, modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))) { Text("Login") }
+                ) { isFocused ->
+                    Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                        Text("Login", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     }
@@ -2120,14 +2320,26 @@ class SettingsActivity : AppCompatActivity() {
 
                 if (torrentCacheCleanMode == 3) {
                     item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth().clickable { showDaysPickerDialog = true }.tvSettingsFocus(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))
-                        ) {
-                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TvFocusableBox(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            onClick = { showDaysPickerDialog = true }
+                        ) { isFocused ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp), 
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("Clean Interval", color = Color.LightGray, fontSize = 12.sp)
-                                    Text(if (torrentCacheCleanDays > 0) "Every $torrentCacheCleanDays days" else "Disabled / Click to set", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    Text("Clean Interval", color = if (isFocused) Color(0xFF222222) else Color.LightGray, fontSize = 12.sp)
+                                    Text(
+                                        text = if (torrentCacheCleanDays > 0) "Every $torrentCacheCleanDays days" else "Disabled / Click to set", 
+                                        color = if (isFocused) Color.Black else Color.White, 
+                                        fontSize = 16.sp, 
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }
@@ -2144,16 +2356,19 @@ class SettingsActivity : AppCompatActivity() {
                                 Text("Total Cached P2P Storage", color = Color.LightGray, fontSize = 12.sp)
                                 Text("%.2f MB".format(cacheSize / (1024f * 1024f)), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             }
-                            Button(
+                            TvFocusableBox(
+                                modifier = Modifier.height(40.dp),
+                                defaultColor = Color(0xFFE53935),
+                                shape = RoundedCornerShape(20.dp),
                                 onClick = {
                                     val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
                                     server.clearAllCache()
                                     refreshCache()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                            ) {
-                                Text("Clear All")
+                                }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                                    Text("Clear All", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
@@ -2168,16 +2383,19 @@ class SettingsActivity : AppCompatActivity() {
                                     Text(cacheItem.name, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text("%.2f MB".format(cacheItem.size / (1024f * 1024f)), color = Color.Gray, fontSize = 11.sp)
                                 }
-                                Button(
+                                TvFocusableBox(
+                                    modifier = Modifier.height(36.dp),
+                                    defaultColor = Color(0xFF333338),
+                                    shape = RoundedCornerShape(20.dp),
                                     onClick = {
                                         val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
                                         server.deleteCacheItem(cacheItem.path)
                                         refreshCache()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                    modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                                ) {
-                                    Text("Clear", fontSize = 11.sp)
+                                    }
+                                ) { isFocused ->
+                                    Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                        Text("Clear", color = if (isFocused) Color.Black else Color.White, fontSize = 11.sp)
+                                    }
                                 }
                             }
                         }
@@ -2212,24 +2430,27 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 },
                 confirmButton = {
-                    Button(
-                        onClick = {
-                            showDaysPickerDialog = false
-                        },
-                        modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                    ) {
-                        Text("OK", color = Color.White)
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF4CAF50),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = { showDaysPickerDialog = false }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                            Text("OK", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 },
                 dismissButton = {
-                    Button(
-                        onClick = {
-                            showDaysPickerDialog = false
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                        modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                    ) {
-                        Text("Cancel", color = Color.White)
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF333338),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = { showDaysPickerDialog = false }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                            Text("Cancel", color = if (isFocused) Color.Black else Color.White)
+                        }
                     }
                 }
             )
@@ -2256,7 +2477,10 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             item {
-                Button(
+                TvFocusableBox(
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    defaultColor = Color(0xFF4CAF50),
+                    shape = RoundedCornerShape(20.dp),
                     onClick = {
                         ensureStoragePermission {
                             lifecycleScope.launch {
@@ -2270,16 +2494,19 @@ class SettingsActivity : AppCompatActivity() {
                                 }
                             }
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                    modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
-                ) {
-                    Text("Save Backup", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                ) { isFocused ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Save Backup", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
             item {
-                Button(
+                TvFocusableBox(
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    defaultColor = Color(0xFF00BCD4),
+                    shape = RoundedCornerShape(20.dp),
                     onClick = {
                         ensureStoragePermission {
                             lifecycleScope.launch {
@@ -2295,11 +2522,11 @@ class SettingsActivity : AppCompatActivity() {
                                 }
                             }
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4)),
-                    modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
-                ) {
-                    Text("Restore Backup", color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
+                ) { isFocused ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Restore Backup", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
@@ -2324,27 +2551,34 @@ class SettingsActivity : AppCompatActivity() {
 
             if (isSignedState) {
                 item {
-                    Button(
+                    TvFocusableBox(
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        defaultColor = Color(0xFFE53935),
+                        shape = RoundedCornerShape(20.dp),
                         onClick = {
                             onSignOutRequested?.invoke {
                                 googleSignInStatusState.value = "Not signed in."
                                 isGoogleSignedInState.value = false
                                 Toast.makeText(this@SettingsActivity, "Signed out successfully", Toast.LENGTH_SHORT).show()
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                        modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
-                    ) {
-                        Text("Logout", color = Color.White)
+                        }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Logout", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             } else {
                 item {
-                    Button(
-                        onClick = { onSignInRequested?.invoke() },
-                        modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
-                    ) {
-                        Text("Sign in with Google")
+                    TvFocusableBox(
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        defaultColor = Color(0xFF00BCD4),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = { onSignInRequested?.invoke() }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Sign in with Google", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -2358,7 +2592,10 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             item {
-                Button(
+                TvFocusableBox(
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    defaultColor = Color(0xFF00BCD4),
+                    shape = RoundedCornerShape(20.dp),
                     onClick = {
                         val account = GoogleSignIn.getLastSignedInAccount(this@SettingsActivity)
                         if (account != null) {
@@ -2387,10 +2624,11 @@ class SettingsActivity : AppCompatActivity() {
                         } else {
                             Toast.makeText(this@SettingsActivity, "Please sign in to Google first", Toast.LENGTH_SHORT).show()
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth().tvSettingsFocus(RoundedCornerShape(20.dp))
-                ) {
-                    Text("Force Sync Now (Two-Way)")
+                    }
+                ) { isFocused ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Force Sync Now (Two-Way)", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -2401,18 +2639,34 @@ class SettingsActivity : AppCompatActivity() {
 
     @Composable
     fun ToggleSettingRow(label: String, checked: Boolean, modifier: Modifier = Modifier, onCheckedChange: (Boolean) -> Unit) {
-        Row(
+        TvFocusableBox(
             modifier = modifier
                 .fillMaxWidth()
-                .height(48.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { onCheckedChange(!checked) }
-                .tvSettingsFocus()
-                .padding(horizontal = 8.dp), 
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(label, color = Color.LightGray, fontSize = 16.sp, modifier = Modifier.weight(1f))
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
+                .height(48.dp),
+            onClick = { onCheckedChange(!checked) }
+        ) { isFocused ->
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp), 
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = label, 
+                    color = if (isFocused) Color.Black else Color.LightGray, 
+                    fontSize = 16.sp, 
+                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = checked, 
+                    onCheckedChange = onCheckedChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = if (isFocused) Color.Black else Color.White,
+                        checkedTrackColor = if (isFocused) Color(0xFF004D40) else Color(0xFF00BCD4)
+                    )
+                )
+            }
         }
     }
 
@@ -2426,12 +2680,16 @@ class SettingsActivity : AppCompatActivity() {
             TvFocusableBox(
                 modifier = Modifier
                     .width(220.dp)
-                    .height(50.dp)
-                    .tvSettingsFocus(),
+                    .height(48.dp),
                 onClick = { showDialog = true }
-            ) {
-                Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
-                    Text(options.getOrNull(selectedIndex) ?: "", color = Color.White, fontSize = 14.sp)
+            ) { isFocused ->
+                Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+                    Text(
+                        text = options.getOrNull(selectedIndex) ?: "", 
+                        color = if (isFocused) Color.Black else Color.White, 
+                        fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+                        fontSize = 14.sp
+                    )
                 }
             }
         }
@@ -2445,11 +2703,15 @@ class SettingsActivity : AppCompatActivity() {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(options) { index, option ->
                             TvFocusableBox(
-                                modifier = Modifier.fillMaxWidth().height(48.dp).tvSettingsFocus(),
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
                                 onClick = { onSelect(index); showDialog = false }
-                            ) {
+                            ) { isFocused ->
                                 Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
-                                    Text(option, color = Color.White)
+                                    Text(
+                                        text = option, 
+                                        color = if (isFocused) Color.Black else Color.White,
+                                        fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal
+                                    )
                                 }
                             }
                         }

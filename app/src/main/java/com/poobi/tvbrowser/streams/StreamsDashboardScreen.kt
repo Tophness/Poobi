@@ -110,8 +110,13 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                     onClick = { 
                         viewModel.performSearch(searchInput) 
                     }
-                ) {
-                    Icon(painter = painterResource(id = R.drawable.ic_go), contentDescription = "Search", tint = Color.White, modifier = Modifier.fillMaxSize().padding(12.dp))
+                ) { isFocused ->
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_go), 
+                        contentDescription = "Search", 
+                        tint = if (isFocused) Color.Black else Color.White,
+                        modifier = Modifier.fillMaxSize().padding(12.dp)
+                    )
                 }
             }
 
@@ -130,7 +135,7 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                         ) {
                             Text(
                                 text = "Clear All",
-                                color = Color.White,
+                                color = if (isFocused) Color.Black else Color.White,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -176,7 +181,8 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                                 )
                                 Text(
                                     text = query,
-                                    color = Color.White
+                                    color = if (isFocused) Color.Black else Color.White,
+                                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal
                                 )
                                 if (isFocused || progress > 0f) {
                                     HoldToDeleteCloseButton(progress = progress)

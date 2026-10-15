@@ -469,10 +469,14 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                         false
                                     },
                                 onClick = { spinnerExpanded = true }
-                            ) {
+                            ) { isFocused ->
                                 val activeSeasonName = seasons!!.getJSONObject(selectedSeasonIndex).optString("name", "Season ${selectedSeasonIndex + 1}")
                                 Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
-                                    Text(activeSeasonName, color = Color.White)
+                                    Text(
+                                        text = activeSeasonName, 
+                                        color = if (isFocused) Color.Black else Color.White,
+                                        fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal
+                                    )
                                 }
                             }
 

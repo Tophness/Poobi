@@ -3,8 +3,6 @@ package com.poobi.tvbrowser.streams
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -14,7 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.poobi.tvbrowser.tvSettingsFocus
+import com.poobi.tvbrowser.shared.TvFocusableBox
 
 @Composable
 fun SubtitleWaitOverlay(
@@ -95,27 +93,33 @@ fun SubtitleWaitOverlay(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
+                TvFocusableBox(
+                    modifier = Modifier.height(40.dp),
+                    defaultColor = Color(0xFF4CAF50),
+                    shape = RoundedCornerShape(20.dp),
                     onClick = {
                         viewModel.cancelSubtitleDownloads()
                         viewModel.resolveAndPlayInternal(sourceDataJson)
                         onDismiss()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                    modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                ) {
-                    Text("Skip & Play", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                ) { isFocused ->
+                    Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                        Text("Skip & Play", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
 
-                Button(
+                TvFocusableBox(
+                    modifier = Modifier.height(40.dp),
+                    defaultColor = Color(0xFFE53935),
+                    shape = RoundedCornerShape(20.dp),
                     onClick = {
                         viewModel.cancelSubtitleDownloads()
                         onDismiss()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-                    modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                ) {
-                    Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                ) { isFocused ->
+                    Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                        Text("Cancel", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         },

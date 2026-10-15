@@ -7,18 +7,17 @@ import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -95,13 +94,13 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
             TvFocusableBox(
                 modifier = Modifier.size(60.dp).padding(start = 10.dp),
                 onClick = { 
-                    viewModel.loadUrlAndBrowse(context, urlInput)
+                    viewModel.loadUrlAndBrowse(context, urlInput) 
                 }
             ) { isFocused ->
                 Icon(
                     painter = painterResource(id = R.drawable.ic_go),
                     contentDescription = "Go",
-                    tint = Color.White,
+                    tint = if (isFocused) Color.Black else Color.White,
                     modifier = Modifier.fillMaxSize().padding(12.dp)
                 )
             }
@@ -152,22 +151,27 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                     .padding(bottom = 10.dp),
                                 horizontalArrangement = Arrangement.End
                             ) {
-                                Button(
-                                    onClick = { viewModel.restoreAllTabs(context) },
-                                    interactionSource = restoreAllInteractionSource,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isRestoreAllFocused) Color(0xFF40C4FF) else Color(0xFF00BCD4),
-                                        contentColor = if (isRestoreAllFocused) Color.Black else Color.White
-                                    ),
-                                    border = if (isRestoreAllFocused) BorderStroke(2.dp, Color.White) else null,
+                                TvFocusableBox(
                                     modifier = Modifier
-                                        .scale(restoreAllScale)
+                                        .height(40.dp)
                                         .focusRequester(restoreAllFocusRequester)
-                                        .focusProperties {
-                                            down = tabsLazyRowFocusRequester
-                                        }
-                                ) {
-                                    Text("Restore All Tabs", fontWeight = FontWeight.Bold)
+                                        .focusProperties { down = tabsLazyRowFocusRequester },
+                                    defaultColor = Color(0xFFE53935),
+                                    shape = RoundedCornerShape(20.dp),
+                                    onClick = { viewModel.restoreAllTabs(context) }
+                                ) { isFocused ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .padding(horizontal = 20.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Restore All Tabs",
+                                            color = if (isFocused) Color.Black else Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -217,6 +221,7 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                     TabItemCard(
                                         title = item.optString("title", "Saved Tab"),
                                         progress = progress,
+                                        isFocused = isFocused,
                                         onCloseClick = {
                                             if (index in viewModel.getWebViewsList().indices) {
                                                 viewModel.closeTab(index)
@@ -230,6 +235,99 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                             }
                                         }
                                     )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HomeTab.Bookmarks -> {
+                    Column {
+                        val startIdx = bookmarkPage * ITEMS_PER_PAGE
+                        val endIdx = minOf(startIdx + ITEMS_PER_PAGE, bookmarksArray.length())
+
+                        val clearBookmarksInteractionSource = remember { MutableInteractionSource() }
+                        val isClearBookmarksFocused by clearBookmarksInteractionSource.collectIsFocusedAsState()
+                        val clearBookmarksScale by animateFloatAsState(
+                            targetValue = if (isClearBookmarksFocused) 1.03f else 1.0f,
+                            animationSpec = tween(durationMillis = 150),
+                            label = "ClearBookmarksScale"
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (bookmarkPage > 0) {
+                                    Button(
+                                        onClick = { bookmarkPage-- },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
+                                    ) {
+                                        Text("< Prev", color = Color.White)
+                                    }
+                                }
+                                if (endIdx < bookmarksArray.length()) {
+                                    Button(
+                                        onClick = { bookmarkPage++ },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
+                                    ) {
+                                        Text("Next >", color = Color.White)
+                                    }
+                                }
+                            }
+
+                            if (bookmarksArray.length() > 0) {
+                                TvFocusableBox(
+                                    modifier = Modifier.height(40.dp),
+                                    defaultColor = Color(0xFFE53935),
+                                    shape = RoundedCornerShape(20.dp),
+                                    onClick = {
+                                        viewModel.prefs.edit().putString("favorites", "[]").apply()
+                                        viewModel.refreshLists()
+                                    }
+                                ) { isFocused ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .padding(horizontal = 20.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Clear Bookmarks",
+                                            color = if (isFocused) Color.Black else Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        val bookmarksListState = rememberLazyListState()
+                        LazyRow(
+                            state = bookmarksListState,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
+                            modifier = Modifier.mouseWheelHorizontalScroll(bookmarksListState)
+                        ) {
+                            items(endIdx - startIdx) { offset ->
+                                val index = bookmarksArray.length() - 1 - (startIdx + offset)
+                                if (index >= 0) {
+                                    val item = bookmarksArray.getJSONObject(index)
+                                    val itemUrl = item.optString("url")
+                                    TvFocusableHoldToDeleteBox(
+                                        modifier = Modifier.width(200.dp).height(160.dp),
+                                        onTriggerDelete = { viewModel.removeFromList("favorites", itemUrl) },
+                                        onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true) }
+                                    ) { isFocused, progress ->
+                                        BrowserCardItem(
+                                            item = item,
+                                            listKey = "favorites",
+                                            progress = progress,
+                                            isFocused = isFocused
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -302,20 +400,27 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                         )
 
                         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.End) {
-                            Button(
+                            TvFocusableBox(
+                                modifier = Modifier.height(40.dp),
+                                defaultColor = Color(0xFFE53935),
+                                shape = RoundedCornerShape(20.dp),
                                 onClick = {
                                     viewModel.prefs.edit().putString("history", "[]").apply()
                                     viewModel.refreshLists()
-                                },
-                                interactionSource = clearHistoryInteractionSource,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isClearHistoryFocused) Color(0xFF40C4FF) else Color(0xFFE53935),
-                                    contentColor = if (isClearHistoryFocused) Color.Black else Color.White
-                                ),
-                                border = if (isClearHistoryFocused) BorderStroke(2.dp, Color.White) else null,
-                                modifier = Modifier.scale(clearHistoryScale)
-                            ) {
-                                Text("Clear History", fontWeight = FontWeight.Bold)
+                                }
+                            ) { isFocused ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .padding(horizontal = 20.dp),
+                                        contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Clear History",
+                                        color = if (isFocused) Color.Black else Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
 
@@ -359,20 +464,27 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                         )
 
                         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.End) {
-                            Button(
+                            TvFocusableBox(
+                                modifier = Modifier.height(40.dp),
+                                defaultColor = Color(0xFFE53935),
+                                shape = RoundedCornerShape(20.dp),
                                 onClick = {
                                     viewModel.prefs.edit().putString("downloads", "[]").apply()
                                     viewModel.refreshLists()
-                                },
-                                interactionSource = clearDownloadsInteractionSource,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isClearDownloadsFocused) Color(0xFF40C4FF) else Color(0xFFE53935),
-                                    contentColor = if (isClearDownloadsFocused) Color.Black else Color.White
-                                ),
-                                border = if (isClearDownloadsFocused) BorderStroke(2.dp, Color.White) else null,
-                                modifier = Modifier.scale(clearDownloadsScale)
-                            ) {
-                                Text("Clear Downloads", fontWeight = FontWeight.Bold)
+                                }
+                            ) { isFocused ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .padding(horizontal = 20.dp),
+                                        contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Clear Downloads",
+                                        color = if (isFocused) Color.Black else Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
 
@@ -450,12 +562,12 @@ fun HomeCategoryButton(
             Icon(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
-                tint = Color.White,
+                tint = if (isFocused) Color.Black else Color.White,
                 modifier = Modifier.size(24.dp)
             )
             Text(
                 text = text,
-                color = Color.White,
+                color = if (isFocused) Color.Black else Color.White,
                 fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal
             )
         }

@@ -253,9 +253,12 @@ fun SubtitleAlignmentOverlay(
                             onValueChange = { searchQuery = it },
                             placeholder = "e.g. jumped off",
                             focusRequester = focusRequester,
-                            modifier = Modifier.focusProperties {
-                                up = FocusRequester.Cancel
-                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .focusProperties {
+                                    up = FocusRequester.Cancel
+                                },
                             onAction = {
                                 if (searchQuery.isNotBlank()) {
                                     manager.findAndJumpToCue(player, searchQuery)

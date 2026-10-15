@@ -731,11 +731,22 @@ fun MainApp(
                             }
                         },
                         confirmButton = {
-                            Button(
-                                onClick = { playerEngine.dismissQualitySelector() },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                            ) {
-                                Text("Close", color = Color.White)
+                            TvFocusableBox(
+                                modifier = Modifier
+                                    .width(120.dp)
+                                    .height(40.dp),
+                                onClick = { playerEngine.dismissQualitySelector() }
+                            ) { isFocused ->
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Close",
+                                        color = if (isFocused) Color.Black else Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     )
@@ -1231,20 +1242,26 @@ fun MainApp(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Button(
-                            onClick = { streamsViewModel.forcePlayTorrentNow() },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                        ) {
-                            Text("Play Now", color = Color.White, fontWeight = FontWeight.Bold)
+                        TvFocusableBox(
+                            modifier = Modifier.height(40.dp),
+                            defaultColor = Color(0xFF4CAF50),
+                            shape = RoundedCornerShape(20.dp),
+                            onClick = { streamsViewModel.forcePlayTorrentNow() }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                                Text("Play Now", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            }
                         }
                         
-                        Button(
-                            onClick = { streamsViewModel.cancelTorrentBuffering() },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                        ) {
-                            Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
+                        TvFocusableBox(
+                            modifier = Modifier.height(40.dp),
+                            defaultColor = Color(0xFFE53935),
+                            shape = RoundedCornerShape(20.dp),
+                            onClick = { streamsViewModel.cancelTorrentBuffering() }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                                Text("Cancel", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -1340,49 +1357,61 @@ fun MainApp(
                 },
                 confirmButton = {
                     if (isUpdateDownloading) {
-                        Button(
-                            onClick = { UpdateManager.cancelDownload() },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-                            modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                        ) {
-                            Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
+                        TvFocusableBox(
+                            modifier = Modifier.height(40.dp),
+                            defaultColor = Color(0xFFE53935),
+                            shape = RoundedCornerShape(20.dp),
+                            onClick = { UpdateManager.cancelDownload() }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                                Text("Cancel", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            }
                         }
                     } else {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Button(
+                            TvFocusableBox(
+                                modifier = Modifier.height(40.dp),
+                                defaultColor = Color(0xFF333338),
+                                shape = RoundedCornerShape(20.dp),
                                 onClick = {
                                     val prefs = context.getSharedPreferences("BrowserSettings", android.content.Context.MODE_PRIVATE)
                                     prefs.edit().putBoolean("auto_update_check", false).apply()
                                     android.widget.Toast.makeText(context, "Automatic update checks disabled (Re-enable in Settings)", android.widget.Toast.LENGTH_LONG).show()
                                     UpdateManager.dismissUpdate()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333338)),
-                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                            ) {
-                                Text("Never Ask Again", color = Color(0xFFB0BEC5), fontSize = 13.sp)
+                                }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                    Text("Never Ask Again", color = if (isFocused) Color.Black else Color(0xFFB0BEC5), fontSize = 13.sp)
+                                }
                             }
 
-                            Button(
-                                onClick = { UpdateManager.dismissUpdate() },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                            ) {
-                                Text("Later", color = Color.White)
+                            TvFocusableBox(
+                                modifier = Modifier.height(40.dp),
+                                defaultColor = Color.DarkGray,
+                                shape = RoundedCornerShape(20.dp),
+                                onClick = { UpdateManager.dismissUpdate() }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                                    Text("Later", color = if (isFocused) Color.Black else Color.White)
+                                }
                             }
 
-                            Button(
+                            TvFocusableBox(
+                                modifier = Modifier.height(40.dp),
+                                defaultColor = Color(0xFF4CAF50),
+                                shape = RoundedCornerShape(20.dp),
                                 onClick = {
                                     if (activity != null) {
                                         UpdateManager.startDownloadAndInstall(activity, update)
                                     }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                                modifier = Modifier.tvSettingsFocus(RoundedCornerShape(20.dp))
-                            ) {
-                                Text("Install", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                                    Text("Install", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }

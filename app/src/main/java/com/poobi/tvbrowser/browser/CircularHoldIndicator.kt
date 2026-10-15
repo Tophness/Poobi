@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
@@ -17,10 +18,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import com.poobi.tvbrowser.shared.HardwareInputManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -38,24 +44,33 @@ fun TvFocusableHoldToDeleteBox(
     val coroutineScope = rememberCoroutineScope()
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    var isPointerHovered by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val isMouseActive by HardwareInputManager.lastInputWasMouse.collectAsState()
+
+    val isHighlighted = if (isMouseActive) {
+        isPointerHovered
+    } else {
+        isFocused
+    }
 
     var holdProgress by remember { mutableStateOf(0f) }
     var holdJob by remember { mutableStateOf<Job?>(null) }
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.03f else 1.0f,
+        targetValue = if (isHighlighted) 1.03f else 1.0f,
         animationSpec = tween(durationMillis = 150),
         label = "DeleteFocusScale"
     )
 
     val backgroundColor = when {
-        isFocused -> Color(0xFF40C4FF)
+        isHighlighted -> Color(0xFF40C4FF)
         isSelected && isTabStyle -> Color(0xFF40C4FF)
         else -> Color(0xFF333333)
     }
 
     val borderColor = when {
-        isFocused -> Color.White
+        isHighlighted -> Color.White
         else -> Color.Transparent
     }
 
@@ -70,12 +85,29 @@ fun TvFocusableHoldToDeleteBox(
             .scale(scale)
             .clip(shape)
             .background(backgroundColor)
-            .border(if (isFocused) 2.dp else 0.dp, borderColor, shape)
+            .border(if (isHighlighted) 2.dp else 0.dp, borderColor, shape)
             .onFocusChanged { state ->
                 if (state.isFocused) {
                     onFocus?.invoke()
                 }
             }
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        when (event.type) {
+                            PointerEventType.Enter, PointerEventType.Move -> {
+                                HardwareInputManager.notifyMouseUsed()
+                                isPointerHovered = true
+                            }
+                            PointerEventType.Exit -> {
+                                isPointerHovered = false
+                            }
+                        }
+                    }
+                }
+            }
+            .focusRequester(focusRequester)
             .onPreviewKeyEvent { keyEvent ->
                 val nativeEvent = keyEvent.nativeKeyEvent
                 val isOkKey = nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || 
@@ -122,6 +154,6 @@ fun TvFocusableHoldToDeleteBox(
             .focusable(interactionSource = interactionSource),
         contentAlignment = Alignment.Center
     ) {
-        content(isFocused, holdProgress)
+        content(isHighlighted, holdProgress)
     }
 }

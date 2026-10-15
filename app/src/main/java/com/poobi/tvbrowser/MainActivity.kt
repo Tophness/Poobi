@@ -736,27 +736,36 @@ class MainActivity : AppCompatActivity() {
                 1 -> browserViewModel.restoreAllTabs(this@MainActivity, idle = false)
                 2 -> browserViewModel.restoreAllTabs(this@MainActivity, idle = true)
                 0 -> {
+                    val density = resources.displayMetrics.density
                     val checkBox = android.widget.CheckBox(this@MainActivity).apply {
                         text = "Remember choice"
                         setTextColor(android.graphics.Color.WHITE)
-                        setPadding(40, 10, 40, 10)
+                        isFocusable = true
+                        setPadding((10 * density).toInt(), (8 * density).toInt(), (16 * density).toInt(), (8 * density).toInt())
                     }
 
-                    AlertDialog.Builder(this@MainActivity)
+                    val container = android.widget.FrameLayout(this@MainActivity).apply {
+                        setPadding((20 * density).toInt(), 0, (12 * density).toInt(), 0)
+                        clipChildren = false
+                        clipToPadding = false
+                        addView(checkBox)
+                    }
+
+                    val dialog = AlertDialog.Builder(this@MainActivity)
                         .setTitle("Restore Session?")
                         .setMessage("Do you want to restore your previous tabs?")
-                        .setView(checkBox)
-                        .setPositiveButton("Restore & Load") { _, _ ->
-                            if (checkBox.isChecked) {
-                                prefs.edit().putInt("restore_tabs_pref", 1).apply()
-                            }
-                            browserViewModel.restoreAllTabs(this@MainActivity, idle = false)
-                        }
-                        .setNeutralButton("Restore") { _, _ ->
+                        .setView(container)
+                        .setPositiveButton("Restore") { _, _ ->
                             if (checkBox.isChecked) {
                                 prefs.edit().putInt("restore_tabs_pref", 2).apply()
                             }
                             browserViewModel.restoreAllTabs(this@MainActivity, idle = true)
+                        }
+                        .setNeutralButton("Restore & Load") { _, _ ->
+                            if (checkBox.isChecked) {
+                                prefs.edit().putInt("restore_tabs_pref", 1).apply()
+                            }
+                            browserViewModel.restoreAllTabs(this@MainActivity, idle = false)
                         }
                         .setNegativeButton("New Session") { _, _ ->
                             if (checkBox.isChecked) {
@@ -765,7 +774,29 @@ class MainActivity : AppCompatActivity() {
                             prefs.edit().putString("saved_tabs", "[]").apply()
                             browserViewModel.refreshLists()
                         }
-                        .show()
+                        .create()
+
+                    dialog.setOnShowListener {
+                        val btnRestore = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                        val btnRestoreAndLoad = dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+                        val btnNewSession = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+
+                        val parent = btnRestore?.parent as? android.widget.LinearLayout
+                        if (parent != null) {
+                            parent.gravity = android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL
+                            btnRestore?.let { parent.removeView(it) }
+                            btnRestoreAndLoad?.let { parent.removeView(it) }
+                            btnNewSession?.let { parent.removeView(it) }
+
+                            btnRestore?.let { parent.addView(it) }
+                            btnRestoreAndLoad?.let { parent.addView(it) }
+                            btnNewSession?.let { parent.addView(it) }
+                        }
+
+                        btnRestore?.requestFocus()
+                    }
+
+                    dialog.show()
                 }
             }
         }
@@ -791,6 +822,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (event.action == KeyEvent.ACTION_DOWN) {
+            HardwareInputManager.notifyKeyboardUsed()
             KeyTracker.lastKeyCode = event.keyCode
             KeyTracker.lastKeyPressTime = System.currentTimeMillis()
 

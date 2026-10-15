@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,6 +54,9 @@ fun BrowserCardItem(
             }
         }
     }
+
+    val primaryTextColor = if (isFocused) Color.Black else Color.White
+    val secondaryTextColor = if (isFocused) Color(0xFF222222) else Color(0xFFAAAAAA)
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -92,8 +96,9 @@ fun BrowserCardItem(
 
             Text(
                 text = title,
-                color = Color.White,
+                color = primaryTextColor,
                 fontSize = 14.sp,
+                fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 6.dp)
@@ -101,17 +106,17 @@ fun BrowserCardItem(
 
             if (listKey == "downloads") {
                 var statusText by remember { mutableStateOf("Checking...") }
-                var statusColor by remember { mutableStateOf(Color(0xFFAAAAAA)) }
+                var statusColor by remember { mutableStateOf(secondaryTextColor) }
 
-                LaunchedEffect(title) {
+                LaunchedEffect(title, isFocused) {
                     val file = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), title)
                     if (file.exists()) {
                         val sizeMb = file.length() / (1024f * 1024f)
                         statusText = String.format("%.2f MB", sizeMb)
-                        statusColor = Color(0xFFAAAAAA)
+                        statusColor = if (isFocused) Color(0xFF222222) else Color(0xFFAAAAAA)
                     } else {
                         statusText = "Missing"
-                        statusColor = Color(0xFFFF5252)
+                        statusColor = if (isFocused) Color(0xFFB71C1C) else Color(0xFFFF5252)
                     }
                 }
 
@@ -124,7 +129,7 @@ fun BrowserCardItem(
             } else {
                 Text(
                     text = url,
-                    color = Color(0xFFAAAAAA),
+                    color = secondaryTextColor,
                     fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -132,7 +137,6 @@ fun BrowserCardItem(
             }
         }
 
-        // Close delete button visible during active focus or hold
         if (isFocused || progress > 0f) {
             Box(
                 modifier = Modifier
@@ -149,6 +153,7 @@ fun BrowserCardItem(
 fun TabItemCard(
     title: String,
     progress: Float,
+    isFocused: Boolean = false,
     onCloseClick: (() -> Unit)? = null
 ) {
     Row(
@@ -159,8 +164,9 @@ fun TabItemCard(
     ) {
         Text(
             text = title,
-            color = Color.White,
-            fontSize = 18.sp,
+            color = if (isFocused) Color.Black else Color.White,
+            fontSize = 16.sp,
+            fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)

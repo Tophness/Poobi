@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.composed
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -93,15 +94,17 @@ fun TvFocusableBox(
     onFocus: (() -> Unit)? = null,
     isTabStyle: Boolean = false,
     isSelected: Boolean = false,
+    defaultColor: Color = Color(0xFF333333),
+    highlightColor: Color = Color(0xFF40C4FF),
+    shape: RoundedCornerShape = if (isTabStyle) RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 0.dp, bottomEnd = 0.dp) else RoundedCornerShape(8.dp),
     content: @Composable BoxScope.(isFocused: Boolean) -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val isHovered by interactionSource.collectIsHoveredAsState()
     var isPointerHovered by remember { mutableStateOf(false) }
-    val internalFocusRequester = remember { FocusRequester() }
+    val isMouseActive by HardwareInputManager.lastInputWasMouse.collectAsState()
 
-    val isHighlighted = isFocused || isHovered || isPointerHovered
+    val isHighlighted = if (isMouseActive) isPointerHovered else isFocused
 
     val scale by animateFloatAsState(
         targetValue = if (isHighlighted) 1.03f else 1.0f,
@@ -110,20 +113,14 @@ fun TvFocusableBox(
     )
 
     val backgroundColor = when {
-        isHighlighted -> Color(0xFF40C4FF)
-        isSelected && isTabStyle -> Color(0xFF40C4FF)
-        else -> Color(0xFF333333)
+        isHighlighted -> highlightColor
+        isSelected && isTabStyle -> highlightColor
+        else -> defaultColor
     }
 
     val borderColor = when {
         isHighlighted -> Color.White
         else -> Color.Transparent
-    }
-
-    val shape = if (isTabStyle) {
-        RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
-    } else {
-        RoundedCornerShape(8.dp)
     }
 
     Box(
@@ -137,13 +134,13 @@ fun TvFocusableBox(
                     onFocus?.invoke()
                 }
             }
-            .hoverable(interactionSource = interactionSource)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
                         when (event.type) {
-                            PointerEventType.Enter -> {
+                            PointerEventType.Enter, PointerEventType.Move -> {
+                                HardwareInputManager.notifyMouseUsed()
                                 isPointerHovered = true
                             }
                             PointerEventType.Exit -> {
@@ -153,7 +150,6 @@ fun TvFocusableBox(
                     }
                 }
             }
-            .focusRequester(internalFocusRequester)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,

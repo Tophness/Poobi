@@ -68,13 +68,14 @@ fun BrowserTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(60.dp)
+                .height(46.dp)
                 .background(Color(0xFF222222)),
             verticalAlignment = Alignment.CenterVertically
         ) {
             LazyRow(
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(start = 20.dp, end = 10.dp)
+                contentPadding = PaddingValues(start = 16.dp, end = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 itemsIndexed(viewModel.getWebViewsList()) { index, wv ->
                     val metadata = wv.tag as? TabMetadata
@@ -83,8 +84,8 @@ fun BrowserTopBar(
                     
                     TvFocusableHoldToDeleteBox(
                         modifier = Modifier
-                            .width(240.dp)
-                            .height(50.dp)
+                            .width(220.dp)
+                            .height(42.dp)
                             .focusRequester(itemFocusRequester),
                         isTabStyle = true,
                         isSelected = index == activeIndex,
@@ -94,14 +95,14 @@ fun BrowserTopBar(
                         TabItemCard(
                             title = title,
                             progress = progress,
+                            isFocused = isFocused,
                             onCloseClick = { viewModel.closeTab(index) }
                         )
                     }
                 }
             }
             
-            Spacer(modifier = Modifier.width(10.dp))
-            Box(modifier = Modifier.padding(end = 20.dp)) {
+            Box(modifier = Modifier.padding(end = 16.dp)) {
                 TopBarIconButton(R.drawable.ic_add) { viewModel.createNewTab(context) }
             }
         }
@@ -109,8 +110,8 @@ fun BrowserTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(65.dp)
-                .padding(horizontal = 20.dp)
+                .height(54.dp)
+                .padding(horizontal = 16.dp)
                 .onPreviewKeyEvent { keyEvent ->
                     if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
                         keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
@@ -121,17 +122,16 @@ fun BrowserTopBar(
                     }
                 },
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             TvFocusableBox(
-                modifier = Modifier
-                    .size(40.dp),
+                modifier = Modifier.size(40.dp),
                 onClick = { viewModel.showHomeScreen() }
             ) { isFocused ->
                 Icon(
                     painter = painterResource(id = R.drawable.ic_home),
                     contentDescription = "Home",
-                    tint = Color.White,
+                    tint = if (isFocused) Color.Black else Color.White,
                     modifier = Modifier.fillMaxSize().padding(8.dp)
                 )
             }
@@ -153,8 +153,7 @@ fun BrowserTopBar(
                 onAction = { viewModel.loadUrlAndBrowse(context, urlInput) },
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 4.dp)
-                    .height(48.dp)
+                    .height(40.dp)
                     .focusRequester(addressBarFocusRequester)
             )
 
@@ -195,17 +194,16 @@ fun BrowserTopBar(
     }
 }
 
-
 @Composable
 fun TopBarIconButton(iconId: Int, tint: Color = Color.White, onClick: () -> Unit) {
     TvFocusableBox(
         modifier = Modifier.size(40.dp),
         onClick = onClick
-    ) {
+    ) { isFocused ->
         Icon(
             painter = painterResource(id = iconId),
             contentDescription = null,
-            tint = tint,
+            tint = if (isFocused) Color.Black else tint,
             modifier = Modifier.fillMaxSize().padding(8.dp)
         )
     }

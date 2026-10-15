@@ -19,6 +19,9 @@ object HardwareInputManager {
     const val MODE_ALWAYS = 1
     const val MODE_DISABLED = 2
 
+    private val _lastInputWasMouse = MutableStateFlow(false)
+    val lastInputWasMouse: StateFlow<Boolean> = _lastInputWasMouse.asStateFlow()
+
     private val _isKeyboardConnected = MutableStateFlow(false)
     val isKeyboardConnected: StateFlow<Boolean> = _isKeyboardConnected.asStateFlow()
 
@@ -67,7 +70,6 @@ object HardwareInputManager {
         if (device == null || device.isVirtual) return false
         val sources = device.sources
         if ((sources and InputDevice.SOURCE_KEYBOARD) != InputDevice.SOURCE_KEYBOARD) return false
-        // Distinguish full alphabetic keyboards from TV remotes
         val hasKeys = device.hasKeys(KeyEvent.KEYCODE_A, KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_ENTER)
         return hasKeys[0] && hasKeys[1] && hasKeys[2]
     }
@@ -137,12 +139,14 @@ object HardwareInputManager {
     }
 
     fun notifyMouseUsed() {
+        _lastInputWasMouse.value = true
         if (!_isMouseConnected.value) {
             _isMouseConnected.value = true
         }
     }
 
     fun notifyKeyboardUsed() {
+        _lastInputWasMouse.value = false
         if (!_isKeyboardConnected.value) {
             _isKeyboardConnected.value = true
         }
