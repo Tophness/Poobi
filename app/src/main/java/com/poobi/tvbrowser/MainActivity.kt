@@ -186,6 +186,12 @@ class MainActivity : AppCompatActivity() {
             }
         )
 
+        browserViewModel.onEditorAction = { keyCode: Int ->
+            browserViewModel.currentWebView?.let { wv ->
+                sendControlKey(wv, keyCode)
+            }
+        }
+
         browserViewModel.onPlayNativeVideo = { videoUrl, title, altUrls, altNames ->
             val metadata = browserViewModel.currentWebView?.tag as? com.poobi.tvbrowser.browser.TabMetadata
             

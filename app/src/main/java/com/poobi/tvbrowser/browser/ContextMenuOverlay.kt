@@ -1,10 +1,12 @@
 package com.poobi.tvbrowser.browser
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -14,20 +16,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.poobi.tvbrowser.shared.TvFocusableBox
+import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.KeyTracker
+import com.poobi.tvbrowser.shared.TvFocusableBox
 
 @Composable
 fun ContextMenuOverlay(
     cursorX: Float,
     cursorY: Float,
     url: String,
+    selectedText: String = "",
+    isEditable: Boolean = false,
+    hasSelection: Boolean = false,
+    hasClipboard: Boolean = false,
+    onCut: () -> Unit = {},
+    onCopy: () -> Unit = {},
+    onPaste: () -> Unit = {},
+    onSelectAll: () -> Unit = {},
     onOpenInNewTab: () -> Unit,
     onRefresh: () -> Unit,
     onBlockElement: () -> Unit,
@@ -47,11 +62,13 @@ fun ContextMenuOverlay(
     val screenW = displayMetrics.widthPixels
     val screenH = displayMetrics.heightPixels
     val density = displayMetrics.density
-    val menuWidthPx = (240 * density).toInt()
-    val menuHeightPx = (200 * density).toInt()
+    val menuWidthPx = (220 * density).toInt()
+    val menuHeightPx = (320 * density).toInt()
 
     val clampedX = cursorX.toInt().coerceIn(16, (screenW - menuWidthPx - 16).coerceAtLeast(16))
     val clampedY = cursorY.toInt().coerceIn(16, (screenH - menuHeightPx - 16).coerceAtLeast(16))
+
+    var firstAssigned = false
 
     Box(
         modifier = Modifier
@@ -64,37 +81,94 @@ fun ContextMenuOverlay(
                 .offset { IntOffset(clampedX, clampedY) }
                 .width(220.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xE6222222))
+                .background(Color(0xE6222225))
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            if (url.isNotEmpty() && url.startsWith("http")) {
+            if (isEditable && hasSelection) {
+                val req = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
                 ContextMenuBtn(
-                    text = "Open in New Tab",
-                    focusRequester = firstItemFocusRequester,
-                    onClick = {
-                        onOpenInNewTab()
-                        onDismiss()
-                    }
+                    text = "Cut",
+                    icon = { CutMenuIcon() },
+                    focusRequester = req,
+                    onClick = { onCut(); onDismiss() }
                 )
             }
 
+            if (hasSelection) {
+                val req = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
+                ContextMenuBtn(
+                    text = "Copy",
+                    icon = { CopyMenuIcon() },
+                    focusRequester = req,
+                    onClick = { onCopy(); onDismiss() }
+                )
+            }
+
+            if (isEditable && hasClipboard) {
+                val req = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
+                ContextMenuBtn(
+                    text = "Paste",
+                    icon = { PasteMenuIcon() },
+                    focusRequester = req,
+                    onClick = { onPaste(); onDismiss() }
+                )
+            }
+
+            if (isEditable) {
+                val req = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
+                ContextMenuBtn(
+                    text = "Select All",
+                    icon = { SelectAllMenuIcon() },
+                    focusRequester = req,
+                    onClick = { onSelectAll(); onDismiss() }
+                )
+            }
+
+            if (url.isNotEmpty() && url.startsWith("http")) {
+                val req = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
+                ContextMenuBtn(
+                    text = "Open in New Tab",
+                    icon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_add),
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    focusRequester = req,
+                    onClick = { onOpenInNewTab(); onDismiss() }
+                )
+            }
+
+            val refreshReq = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
             ContextMenuBtn(
                 text = "Refresh Page",
-                focusRequester = if (url.isEmpty() || !url.startsWith("http")) firstItemFocusRequester else null,
-                onClick = {
-                    onRefresh()
-                    onDismiss()
-                }
+                icon = {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_refresh),
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                focusRequester = refreshReq,
+                onClick = { onRefresh(); onDismiss() }
             )
 
             ContextMenuBtn(
                 text = "Block Element",
+                icon = {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_close),
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
                 focusRequester = null,
-                onClick = {
-                    onBlockElement()
-                    onDismiss()
-                }
+                onClick = { onBlockElement(); onDismiss() }
             )
         }
     }
@@ -103,6 +177,7 @@ fun ContextMenuOverlay(
 @Composable
 private fun ContextMenuBtn(
     text: String,
+    icon: @Composable () -> Unit,
     focusRequester: FocusRequester?,
     onClick: () -> Unit
 ) {
@@ -115,10 +190,12 @@ private fun ContextMenuBtn(
         modifier = modifier,
         onClick = onClick
     ) { isHighlighted ->
-        Box(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 15.dp),
-            contentAlignment = Alignment.CenterStart
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            icon()
             Text(
                 text = text,
                 color = if (isHighlighted) Color.Black else Color.White,
@@ -126,6 +203,45 @@ private fun ContextMenuBtn(
                 fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Normal
             )
         }
+    }
+}
+
+@Composable
+private fun CutMenuIcon() {
+    Canvas(modifier = Modifier.size(16.dp)) {
+        val stroke = 1.5.dp.toPx()
+        drawCircle(color = Color.White, radius = 2.5.dp.toPx(), center = Offset(4.dp.toPx(), 12.dp.toPx()), style = Stroke(stroke))
+        drawCircle(color = Color.White, radius = 2.5.dp.toPx(), center = Offset(12.dp.toPx(), 12.dp.toPx()), style = Stroke(stroke))
+        drawLine(color = Color.White, start = Offset(5.dp.toPx(), 10.dp.toPx()), end = Offset(13.dp.toPx(), 2.dp.toPx()), strokeWidth = stroke)
+        drawLine(color = Color.White, start = Offset(11.dp.toPx(), 10.dp.toPx()), end = Offset(3.dp.toPx(), 2.dp.toPx()), strokeWidth = stroke)
+    }
+}
+
+@Composable
+private fun CopyMenuIcon() {
+    Canvas(modifier = Modifier.size(16.dp)) {
+        val stroke = 1.5.dp.toPx()
+        drawRect(color = Color.White, topLeft = Offset(5.dp.toPx(), 1.dp.toPx()), size = Size(9.dp.toPx(), 11.dp.toPx()), style = Stroke(stroke))
+        drawRect(color = Color.White, topLeft = Offset(2.dp.toPx(), 4.dp.toPx()), size = Size(9.dp.toPx(), 11.dp.toPx()), style = Stroke(stroke))
+    }
+}
+
+@Composable
+private fun PasteMenuIcon() {
+    Canvas(modifier = Modifier.size(16.dp)) {
+        val stroke = 1.5.dp.toPx()
+        drawRect(color = Color.White, topLeft = Offset(2.dp.toPx(), 3.dp.toPx()), size = Size(12.dp.toPx(), 12.dp.toPx()), style = Stroke(stroke))
+        drawRect(color = Color.White, topLeft = Offset(5.dp.toPx(), 1.dp.toPx()), size = Size(6.dp.toPx(), 3.dp.toPx()))
+    }
+}
+
+@Composable
+private fun SelectAllMenuIcon() {
+    Canvas(modifier = Modifier.size(16.dp)) {
+        val stroke = 1.5.dp.toPx()
+        drawRect(color = Color.White, topLeft = Offset(2.dp.toPx(), 2.dp.toPx()), size = Size(12.dp.toPx(), 12.dp.toPx()), style = Stroke(stroke))
+        drawLine(color = Color.White, start = Offset(5.dp.toPx(), 6.dp.toPx()), end = Offset(11.dp.toPx(), 6.dp.toPx()), strokeWidth = stroke)
+        drawLine(color = Color.White, start = Offset(5.dp.toPx(), 10.dp.toPx()), end = Offset(11.dp.toPx(), 10.dp.toPx()), strokeWidth = stroke)
     }
 }
 

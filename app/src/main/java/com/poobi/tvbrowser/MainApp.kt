@@ -788,10 +788,33 @@ fun MainApp(
 
         if (dialogState is BrowserDialogState.ContextMenu) {
             val contextMenu = dialogState as BrowserDialogState.ContextMenu
+            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            val hasClip = clipboard?.primaryClip?.let { it.itemCount > 0 && !it.getItemAt(0).text.isNullOrEmpty() } == true
+
             com.poobi.tvbrowser.browser.ContextMenuOverlay(
                 cursorX = contextMenu.x,
                 cursorY = contextMenu.y,
                 url = contextMenu.url,
+                selectedText = contextMenu.selectedText,
+                isEditable = contextMenu.isEditable,
+                hasSelection = contextMenu.hasSelection,
+                hasClipboard = hasClip,
+                onCut = {
+                    browserViewModel.executeCut(contextMenu.selectedText, context)
+                    browserViewModel.dismissDialog()
+                },
+                onCopy = {
+                    browserViewModel.executeCopy(contextMenu.selectedText, context)
+                    browserViewModel.dismissDialog()
+                },
+                onPaste = {
+                    browserViewModel.onEditorAction?.invoke(KeyEvent.KEYCODE_V)
+                    browserViewModel.dismissDialog()
+                },
+                onSelectAll = {
+                    browserViewModel.onEditorAction?.invoke(KeyEvent.KEYCODE_A)
+                    browserViewModel.dismissDialog()
+                },
                 onOpenInNewTab = {
                     browserViewModel.loadUrlAndBrowse(context, contextMenu.url, newTab = true)
                     browserViewModel.dismissDialog()

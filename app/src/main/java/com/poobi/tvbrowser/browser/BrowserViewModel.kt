@@ -48,7 +48,7 @@ sealed class BrowserDialogState {
     data class SaveBlockRule(val url: String, val selector: String) : BrowserDialogState()
     data class SaveAutoplayProfile(val url: String, val selectors: List<String>) : BrowserDialogState()
     data class Error(val message: String) : BrowserDialogState()
-    data class ContextMenu(val url: String, val x: Float, val y: Float) : BrowserDialogState()
+    data class ContextMenu(val url: String, val x: Float, val y: Float, val selectedText: String = "", val isEditable: Boolean = false, val hasSelection: Boolean = false) : BrowserDialogState()
     data class PlaybackHijackAsk(val url: String, val title: String?, val alternativeUrls: List<String>?, val alternativeNames: List<String>?, val view: View?, val callback: WebChromeClient.CustomViewCallback?) : BrowserDialogState()
 }
 
@@ -90,6 +90,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private var pendingCustomView: View? = null
     var customViewCallback: WebChromeClient.CustomViewCallback? = null
     var onPlayNativeVideo: ((videoUrl: String, title: String?, alternativeUrls: List<String>?, alternativeNames: List<String>?) -> Unit)? = null
+    var onEditorAction: ((Int) -> Unit)? = null
     var onShowNativeTextMenu: ((screenX: Float, screenY: Float, isEditable: Boolean, hasSelection: Boolean) -> Unit)? = null
 
     val currentWebView: WebView? get() = if (_currentTabIndex.value in _webViews.indices) _webViews[_currentTabIndex.value] else null
@@ -427,6 +428,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun executeCopy(selectedText: String, context: Context) {
+        if (selectedText.isNotEmpty()) {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Copied Text", selectedText))
+            Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun triggerContextMenuAtCursor(cursorX: Float, cursorY: Float) {
         val wv = currentWebView ?: return
         val density = appContext.resources.displayMetrics.density
@@ -467,25 +476,42 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         p = p.parentElement;
                     }
                 }
-                if (!targetInput && el) targetInput = checkEditable(el.querySelector('input, textarea'));
-                if (!targetInput && el && el.parentElement) targetInput = checkEditable(el.parentElement.querySelector('input, textarea'));
+                if (!targetInput && el) targetInput = checkEditable(el.querySelector('input, textarea, [contenteditable="true"]'));
+                if (!targetInput && el && el.parentElement) targetInput = checkEditable(el.parentElement.querySelector('input, textarea, [contenteditable="true"]'));
                 if (!targetInput) targetInput = checkEditable(document.activeElement);
 
                 var isEditable = targetInput !== null;
-                if (isEditable && targetInput) {
-                    targetInput.focus();
+
+                var selText = '';
+                var sStart = -1;
+                var sEnd = -1;
+
+                if (targetInput && typeof targetInput.selectionStart === 'number' && typeof targetInput.selectionEnd === 'number' && targetInput.selectionStart !== targetInput.selectionEnd) {
+                    sStart = targetInput.selectionStart;
+                    sEnd = targetInput.selectionEnd;
+                    selText = targetInput.value.substring(sStart, sEnd);
                 }
 
-                var hasSelection = false;
-                if (window.getSelection && window.getSelection().toString().trim().length > 0) {
-                    hasSelection = true;
+                window.__savedRange = null;
+                var sel = window.getSelection();
+                if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                    try {
+                        window.__savedRange = sel.getRangeAt(0).cloneRange();
+                        if (!selText) {
+                            selText = sel.toString();
+                        }
+                    } catch(e) {}
                 }
-                if (!hasSelection && targetInput && typeof targetInput.selectionStart === 'number' && typeof targetInput.selectionEnd === 'number') {
-                    hasSelection = (targetInput.selectionStart !== targetInput.selectionEnd);
-                }
+
+                var hasSelection = selText.trim().length > 0;
+
+                window.__targetInput = targetInput;
+                window.__selStart = sStart;
+                window.__selEnd = sEnd;
 
                 return {
                     link: link || '',
+                    selectedText: selText,
                     isEditable: isEditable,
                     hasSelection: hasSelection
                 };
@@ -495,21 +521,81 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 try {
                     val json = JSONObject(result)
                     val link = json.optString("link")
+                    val selectedText = json.optString("selectedText")
                     val isEditable = json.optBoolean("isEditable", false)
                     val hasSelection = json.optBoolean("hasSelection", false)
 
-                    if (isEditable || hasSelection) {
-                        onShowNativeTextMenu?.invoke(cursorX, cursorY, isEditable, hasSelection)
-                    } else {
-                        _currentDialog.value = BrowserDialogState.ContextMenu(
-                            url = link,
-                            x = cursorX,
-                            y = cursorY
-                        )
-                    }
+                    _currentDialog.value = BrowserDialogState.ContextMenu(
+                        url = link,
+                        x = cursorX,
+                        y = cursorY,
+                        selectedText = selectedText,
+                        isEditable = isEditable,
+                        hasSelection = hasSelection
+                    )
                 } catch (e: Exception) { }
             }
         }
+    }
+
+    fun executeCut(selectedText: String, context: Context) {
+        val wv = currentWebView ?: return
+
+        if (selectedText.isNotEmpty()) {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Cut Text", selectedText))
+            Toast.makeText(context, "Cut to clipboard", Toast.LENGTH_SHORT).show()
+        }
+
+        val quotedText = JSONObject.quote(selectedText)
+        val script = """
+            (function() {
+                var text = $quotedText;
+                var el = window.__targetInput || document.activeElement;
+
+                if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+                    el.focus();
+                    var val = el.value || '';
+                    var idx = text ? val.indexOf(text) : -1;
+                    var s = window.__selStart;
+                    var e = window.__selEnd;
+
+                    if (typeof el.setRangeText === 'function') {
+                        if (typeof s === 'number' && typeof e === 'number' && e > s && val.substring(s, e) === text) {
+                            el.setRangeText('', s, e, 'end');
+                        } else if (idx !== -1) {
+                            el.setRangeText('', idx, idx + text.length, 'end');
+                        } else if (typeof el.selectionStart === 'number' && typeof el.selectionEnd === 'number' && el.selectionEnd > el.selectionStart) {
+                            el.setRangeText('', el.selectionStart, el.selectionEnd, 'end');
+                        }
+                    } else if (idx !== -1) {
+                        el.value = val.substring(0, idx) + val.substring(idx + text.length);
+                        el.setSelectionRange(idx, idx);
+                    }
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    return 'cut_input';
+                }
+
+                if (window.__savedRange) {
+                    try {
+                        window.__savedRange.deleteContents();
+                        var sel = window.getSelection();
+                        if (sel) {
+                            sel.removeAllRanges();
+                            sel.addRange(window.__savedRange);
+                        }
+                        if (el) {
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                        return 'cut_range';
+                    } catch(e) {}
+                }
+
+                return 'cut_none';
+            })();
+        """.trimIndent()
+
+        wv.evaluateJavascript(script, null)
     }
 
     fun openLinkAtInNewTab(screenX: Float, screenY: Float) {
