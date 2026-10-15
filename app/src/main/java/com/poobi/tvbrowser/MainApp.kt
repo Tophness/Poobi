@@ -69,6 +69,7 @@ import com.poobi.tvbrowser.streams.StreamsDashboardScreen
 import com.poobi.tvbrowser.streams.StreamsViewModel
 import com.poobi.tvbrowser.streams.NewEpisodeNotificationOverlay
 import com.poobi.tvbrowser.streams.SubtitleWaitOverlay
+import com.poobi.tvbrowser.shared.update.UpdateDialog
 import org.json.JSONArray
 
 enum class AppTab { Browser, Streams }
@@ -928,24 +929,45 @@ fun MainApp(
                     )
                 },
                 confirmButton = {
-                    Button(
-                        onClick = {
-                            browserViewModel.startDownload(context, download.url, download.fileName)
-                            browserViewModel.dismissDialog()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Download", color = Color.White)
+                        TvFocusableBox(
+                            modifier = Modifier.height(40.dp),
+                            defaultColor = Color(0xFF4CAF50),
+                            shape = RoundedCornerShape(20.dp),
+                            onClick = {
+                                browserViewModel.startDownload(context, download.url, download.fileName)
+                                browserViewModel.dismissDialog()
+                            }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "Download",
+                                    color = if (isFocused) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        TvFocusableBox(
+                            modifier = Modifier.height(40.dp),
+                            defaultColor = Color(0xFF333338),
+                            shape = RoundedCornerShape(20.dp),
+                            onClick = { browserViewModel.dismissDialog() }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "Cancel",
+                                    color = if (isFocused) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 },
-                dismissButton = {
-                    Button(
-                        onClick = { browserViewModel.dismissDialog() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                    ) {
-                        Text("Cancel", color = Color.White)
-                    }
-                }
+                dismissButton = null
             )
         }
 
@@ -1321,131 +1343,7 @@ fun MainApp(
             }
         )
 
-        val updateInfoState by UpdateManager.updateInfo.collectAsState()
-        val isUpdateDownloading by UpdateManager.isDownloading.collectAsState()
-        val updateDownloadProgress by UpdateManager.downloadProgress.collectAsState()
-
-        updateInfoState?.let { update ->
-            val activity = LocalContext.current as? android.app.Activity
-            val context = LocalContext.current
-
-            AlertDialog(
-                onDismissRequest = {
-                    if (!isUpdateDownloading) {
-                        UpdateManager.dismissUpdate()
-                    }
-                },
-                title = {
-                    Text(
-                        text = "New Update Available (${update.versionName})",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
-                },
-                containerColor = Color(0xFF222225),
-                text = {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "A new version of Poobi is available for your device architecture.",
-                            color = Color.LightGray,
-                            fontSize = 14.sp
-                        )
-
-                        if (update.releaseNotes.isNotBlank()) {
-                            Text(
-                                text = update.releaseNotes,
-                                color = Color.Gray,
-                                fontSize = 12.sp,
-                                maxLines = 6,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        if (isUpdateDownloading) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            LinearProgressIndicator(
-                                progress = { updateDownloadProgress },
-                                modifier = Modifier.fillMaxWidth().height(8.dp),
-                                color = Color(0xFF00BCD4),
-                                trackColor = Color(0xFF333338)
-                            )
-                            Text(
-                                text = "Downloading: ${(updateDownloadProgress * 100).toInt()}%",
-                                color = Color(0xFF00BCD4),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.align(Alignment.End)
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    if (isUpdateDownloading) {
-                        TvFocusableBox(
-                            modifier = Modifier.height(40.dp),
-                            defaultColor = Color(0xFFE53935),
-                            shape = RoundedCornerShape(20.dp),
-                            onClick = { UpdateManager.cancelDownload() }
-                        ) { isFocused ->
-                            Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
-                                Text("Cancel", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    } else {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            TvFocusableBox(
-                                modifier = Modifier.height(40.dp),
-                                defaultColor = Color(0xFF333338),
-                                shape = RoundedCornerShape(20.dp),
-                                onClick = {
-                                    val prefs = context.getSharedPreferences("BrowserSettings", android.content.Context.MODE_PRIVATE)
-                                    prefs.edit().putBoolean("auto_update_check", false).apply()
-                                    android.widget.Toast.makeText(context, "Automatic update checks disabled (Re-enable in Settings)", android.widget.Toast.LENGTH_LONG).show()
-                                    UpdateManager.dismissUpdate()
-                                }
-                            ) { isFocused ->
-                                Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                    Text("Never Ask Again", color = if (isFocused) Color.Black else Color(0xFFB0BEC5), fontSize = 13.sp)
-                                }
-                            }
-
-                            TvFocusableBox(
-                                modifier = Modifier.height(40.dp),
-                                defaultColor = Color.DarkGray,
-                                shape = RoundedCornerShape(20.dp),
-                                onClick = { UpdateManager.dismissUpdate() }
-                            ) { isFocused ->
-                                Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                                    Text("Later", color = if (isFocused) Color.Black else Color.White)
-                                }
-                            }
-
-                            TvFocusableBox(
-                                modifier = Modifier.height(40.dp),
-                                defaultColor = Color(0xFF4CAF50),
-                                shape = RoundedCornerShape(20.dp),
-                                onClick = {
-                                    if (activity != null) {
-                                        UpdateManager.startDownloadAndInstall(activity, update)
-                                    }
-                                }
-                            ) { isFocused ->
-                                Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
-                                    Text("Install", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-            )
-        }
+        UpdateDialog()
     }
 }
 

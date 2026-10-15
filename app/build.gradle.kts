@@ -47,14 +47,37 @@ fun parseSemanticVersion(tag: String): Triple<Int, Int, Int> {
 }
 
 fun getLatestGitTag(): String {
+    try {
+        runGit("fetch", "--tags")
+    } catch (_: Exception) {}
+
+    val exactTag = runGit("describe", "--tags", "--exact-match")
+    if (exactTag.isNotEmpty()) {
+        return exactTag.trim()
+    }
+
     val raw = runGit("describe", "--tags", "--abbrev=0")
     if (raw.isNotEmpty()) {
         return raw.trim()
     }
-    val allTags = runGit("tag", "--sort=-v:refname")
+
+    val allTags = runGit("tag")
     if (allTags.isNotEmpty()) {
-        return allTags.lines().firstOrNull { it.isNotBlank() }?.trim() ?: ""
+        val sorted = allTags.lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .sortedWith { t1, t2 ->
+                val v1 = parseSemanticVersion(t1)
+                val v2 = parseSemanticVersion(t2)
+                when {
+                    v1.first != v2.first -> v1.first.compareTo(v2.first)
+                    v1.second != v2.second -> v1.second.compareTo(v2.second)
+                    else -> v1.third.compareTo(v2.third)
+                }
+            }
+        return sorted.lastOrNull() ?: ""
     }
+
     return ""
 }
 
@@ -264,36 +287,7 @@ tasks.register("publishGithubRelease") {
             }.result.get()
         } catch (_: Exception) {}
 
-        var latestRemoteTag = ""
-        try {
-            val listUrl = URL("https://api.github.com/repos/$repoOwner/$repoName/releases?per_page=5")
-            val listConn = (listUrl.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                setRequestProperty("Authorization", "Bearer $token")
-                setRequestProperty("Accept", "application/vnd.github+json")
-                setRequestProperty("User-Agent", "Poobi-Gradle-Publisher")
-            }
-            if (listConn.responseCode == 200) {
-                val array = org.json.JSONArray(listConn.inputStream.bufferedReader().use { it.readText() })
-                for (i in 0 until array.length()) {
-                    val rel = array.getJSONObject(i)
-                    if (!rel.optBoolean("draft", false) && !rel.optBoolean("prerelease", false)) {
-                        val tag = rel.optString("tag_name", "").removePrefix("v").removePrefix("V")
-                        if (tag.isNotEmpty() && (latestRemoteTag.isEmpty() || isVersionGreater(tag, latestRemoteTag))) {
-                            latestRemoteTag = tag
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            println("Note: Could not check releases list: ${e.message}")
-        }
-
-        var version = getGitVersionName()
-        if (latestRemoteTag.isNotEmpty() && !isVersionGreater(version, latestRemoteTag)) {
-            val (rMajor, rMinor, rPatch) = parseSemanticVersion(latestRemoteTag)
-            version = "$rMajor.$rMinor.${rPatch + 1}"
-        }
+        val version = getGitVersionName()
 
         val tagName = if (version.startsWith("v", ignoreCase = true)) {
             "V" + version.substring(1)
@@ -301,7 +295,7 @@ tasks.register("publishGithubRelease") {
             "V$version"
         }
 
-        println("Publishing GitHub Release: $tagName for $repoOwner/$repoName (Latest remote was: V$latestRemoteTag)")
+        println("Publishing GitHub Release: $tagName for $repoOwner/$repoName")
 
         try {
             project.providers.exec {
@@ -373,6 +367,8 @@ tasks.register("publishGithubRelease") {
             File(layout.buildDirectory.asFile.get(), "outputs/apk/x86_64/release/app-x86_64-release.apk")
         )
 
+        val existingAssets = releaseJson.optJSONArray("assets")
+
         for (apk in apks) {
             if (!apk.exists()) {
                 println("Warning: APK not found at ${apk.absolutePath}, skipping.")
@@ -380,6 +376,31 @@ tasks.register("publishGithubRelease") {
             }
 
             val assetName = "Poobi-${tagName}-${apk.name}"
+
+            if (existingAssets != null) {
+                for (i in 0 until existingAssets.length()) {
+                    val assetObj = existingAssets.getJSONObject(i)
+                    if (assetObj.optString("name") == assetName) {
+                        val assetId = assetObj.optLong("id")
+                        println("Deleting existing asset $assetName (ID: $assetId) from GitHub release...")
+                        try {
+                            val delUrl = URL("https://api.github.com/repos/$repoOwner/$repoName/releases/assets/$assetId")
+                            val delConn = (delUrl.openConnection() as HttpURLConnection).apply {
+                                requestMethod = "DELETE"
+                                setRequestProperty("Authorization", "Bearer $token")
+                                setRequestProperty("Accept", "application/vnd.github+json")
+                                setRequestProperty("User-Agent", "Poobi-Gradle-Publisher")
+                                setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+                            }
+                            delConn.responseCode
+                        } catch (e: Exception) {
+                            println("Note: Failed deleting existing asset: ${e.message}")
+                        }
+                        break
+                    }
+                }
+            }
+
             val uploadUrl = URL("$baseUploadUrl?name=$assetName")
             println("Uploading $assetName (${apk.length() / (1024 * 1024)} MB)...")
 

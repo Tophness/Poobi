@@ -54,6 +54,7 @@ import com.poobi.tvbrowser.shared.sync.DriveSyncManager
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvInputField
 import com.poobi.tvbrowser.shared.update.UpdateManager
+import com.poobi.tvbrowser.shared.update.UpdateDialog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -263,6 +264,8 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
             }
+
+            UpdateDialog()
         }
     }
 
