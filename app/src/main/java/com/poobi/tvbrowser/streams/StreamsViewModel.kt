@@ -2511,7 +2511,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 var foundSource: JSONObject? = null
                 val startTime = System.currentTimeMillis()
 
-                val userTimeoutSec = prefs.getInt("global_timeout", 30)
+                val userTimeoutSec = prefs.getInt("global_timeout", 220)
                 val timeout = userTimeoutSec * 1000L
                 var frameCount = 0
 

@@ -118,12 +118,12 @@ class SettingsActivity : AppCompatActivity() {
     private var torrentCacheCleanDaysStr by mutableStateOf("")
     private var torrentPrebufferPieces by mutableStateOf(1)
 
-    private var timeoutMode by mutableStateOf("Both")
-    private var globalTimeout by mutableStateOf(30)
-    private var globalTimeoutStr by mutableStateOf("30")
-    private var sourceTimeout by mutableStateOf(15)
-    private var sourceTimeoutStr by mutableStateOf("15")
-    private var enforceWhitelist by mutableStateOf(true)
+    private var timeoutMode by mutableStateOf("Per-Source")
+    private var globalTimeout by mutableStateOf(220)
+    private var globalTimeoutStr by mutableStateOf("220")
+    private var sourceTimeout by mutableStateOf(220)
+    private var sourceTimeoutStr by mutableStateOf("220")
+    private var enforceWhitelist by mutableStateOf(false)
     private val whitelistedHosts = mutableStateListOf<String>()
 
     private var subRenderingMode by mutableStateOf(0)
@@ -333,12 +333,12 @@ class SettingsActivity : AppCompatActivity() {
         torrentCacheCleanDaysStr = if (torrentCacheCleanDays > 0) torrentCacheCleanDays.toString() else ""
         torrentPrebufferPieces = prefs.getInt("torrent_prebuffer_pieces", 1)
 
-        timeoutMode = prefs.getString("timeout_mode", "Both") ?: "Both"
-        globalTimeout = prefs.getInt("global_timeout", 30)
+        timeoutMode = prefs.getString("timeout_mode", "Per-Source") ?: "Per-Source"
+        globalTimeout = prefs.getInt("global_timeout", 220)
         globalTimeoutStr = globalTimeout.toString()
-        sourceTimeout = prefs.getInt("per_source_timeout", 15)
+        sourceTimeout = prefs.getInt("per_source_timeout", 220)
         sourceTimeoutStr = sourceTimeout.toString()
-        enforceWhitelist = prefs.getBoolean("use_only_whitelisted_hosts", true)
+        enforceWhitelist = prefs.getBoolean("use_only_whitelisted_hosts", false)
         
         whitelistedHosts.clear()
         val hostsJson = prefs.getString("whitelisted_hosts", "[]") ?: "[]"
@@ -481,10 +481,10 @@ class SettingsActivity : AppCompatActivity() {
             val py = Python.getInstance()
             val main = py.getModule("main")
             val cfg = JSONObject().apply {
-                put("timeout_mode", prefs.getString("timeout_mode", "Both"))
-                put("global_timeout", prefs.getInt("global_timeout", 30))
-                put("per_source_timeout", prefs.getInt("per_source_timeout", 15))
-                put("use_only_whitelisted_hosts", prefs.getBoolean("use_only_whitelisted_hosts", true))
+                put("timeout_mode", prefs.getString("timeout_mode", "Per-Source"))
+                put("global_timeout", prefs.getInt("global_timeout", 220))
+                put("per_source_timeout", prefs.getInt("per_source_timeout", 220))
+                put("use_only_whitelisted_hosts", prefs.getBoolean("use_only_whitelisted_hosts", false))
                 put("whitelisted_hosts", JSONArray(prefs.getString("whitelisted_hosts", "[]")))
                 put("enabled_packs", JSONArray(prefs.getString("enabled_packs", "[]")))
                 put("subtitles_languages", prefs.getString("subtitles_languages", "English"))
@@ -971,7 +971,7 @@ class SettingsActivity : AppCompatActivity() {
                                     }
                                 }, 
                                 label = "Global Engine Timeout (Seconds)",
-                                placeholder = "30",
+                                placeholder = "220",
                                 containerColor = Color(0xFF222225),
                                 imeAction = ImeAction.Done
                             )
@@ -987,7 +987,7 @@ class SettingsActivity : AppCompatActivity() {
                                     }
                                 }, 
                                 label = "Per-Source Timeout Limit (Seconds)",
-                                placeholder = "15",
+                                placeholder = "220",
                                 containerColor = Color(0xFF222225),
                                 imeAction = ImeAction.Done
                             )
