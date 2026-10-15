@@ -2,14 +2,9 @@ package com.poobi.tvbrowser.browser
 
 import android.content.Context
 import android.content.Intent
-import android.view.KeyEvent
 import android.webkit.MimeTypeMap
 import android.widget.Toast
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -19,14 +14,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.TvFocusableBox
@@ -38,7 +33,10 @@ import java.io.File
 enum class HomeTab { Tabs, Bookmarks, History, Downloads }
 
 @Composable
-fun BrowserHomeScreen(viewModel: BrowserViewModel) {
+fun BrowserHomeScreen(
+    viewModel: BrowserViewModel,
+    searchBarFocusRequester: FocusRequester? = null
+) {
     val context = LocalContext.current
 
     var urlInput by remember { mutableStateOf("") }
@@ -49,7 +47,11 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
     val downloadsArray by viewModel.downloadsList.collectAsState()
     val savedTabsArray by viewModel.savedTabsList.collectAsState()
 
+    val searchFieldFocusRequester = searchBarFocusRequester ?: remember { FocusRequester() }
     val openTabsFocusRequester = remember { FocusRequester() }
+    val bookmarksFocusRequester = remember { FocusRequester() }
+    val historyFocusRequester = remember { FocusRequester() }
+    val downloadsFocusRequester = remember { FocusRequester() }
     val restoreAllFocusRequester = remember { FocusRequester() }
     val tabsLazyRowFocusRequester = remember { FocusRequester() }
 
@@ -64,7 +66,7 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 10.dp),
+                .padding(top = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             TvSearchField(
@@ -72,27 +74,32 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                 onValueChange = { urlInput = it },
                 placeholder = "Search Google or type a URL...",
                 onSearch = { viewModel.loadUrlAndBrowse(context, urlInput) },
+                focusRequester = searchFieldFocusRequester,
                 modifier = Modifier
                     .weight(1f)
-                    .height(60.dp)
-                    .onPreviewKeyEvent { keyEvent ->
-                        val nativeEvent = keyEvent.nativeKeyEvent
-                        val isActionDown = nativeEvent.action == KeyEvent.ACTION_DOWN
-                        
-                        if (isActionDown) {
-                            when (nativeEvent.keyCode) {
-                                KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                    openTabsFocusRequester.requestFocus()
-                                    true
-                                }
-                                else -> false
-                            }
-                        } else false
+                    .height(36.dp)
+                    .focusProperties {
+                        down = when (activeTab) {
+                            HomeTab.Tabs -> openTabsFocusRequester
+                            HomeTab.Bookmarks -> bookmarksFocusRequester
+                            HomeTab.History -> historyFocusRequester
+                            HomeTab.Downloads -> downloadsFocusRequester
+                        }
                     }
             )
 
             TvFocusableBox(
-                modifier = Modifier.size(60.dp).padding(start = 10.dp),
+                modifier = Modifier
+                    .padding(start = 10.dp)
+                    .size(36.dp)
+                    .focusProperties {
+                        down = when (activeTab) {
+                            HomeTab.Tabs -> openTabsFocusRequester
+                            HomeTab.Bookmarks -> bookmarksFocusRequester
+                            HomeTab.History -> historyFocusRequester
+                            HomeTab.Downloads -> downloadsFocusRequester
+                        }
+                    },
                 onClick = { 
                     viewModel.loadUrlAndBrowse(context, urlInput) 
                 }
@@ -101,7 +108,7 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                     painter = painterResource(id = R.drawable.ic_go),
                     contentDescription = "Go",
                     tint = if (isFocused) Color.Black else Color.White,
-                    modifier = Modifier.fillMaxSize().padding(12.dp)
+                    modifier = Modifier.fillMaxSize().padding(8.dp)
                 )
             }
         }
@@ -109,7 +116,7 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 20.dp),
+                .padding(top = 16.dp),
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
@@ -117,11 +124,41 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                 text = "Open Tabs", 
                 iconRes = R.drawable.ic_tab, 
                 isSelected = activeTab == HomeTab.Tabs,
-                focusRequester = openTabsFocusRequester
+                focusRequester = openTabsFocusRequester,
+                modifier = Modifier.focusProperties {
+                    up = searchFieldFocusRequester
+                }
             ) { activeTab = HomeTab.Tabs }
-            HomeCategoryButton("Bookmarks", R.drawable.ic_heart_empty, activeTab == HomeTab.Bookmarks) { activeTab = HomeTab.Bookmarks }
-            HomeCategoryButton("History", R.drawable.ic_history, activeTab == HomeTab.History) { activeTab = HomeTab.History }
-            HomeCategoryButton("Downloads", R.drawable.ic_download, activeTab == HomeTab.Downloads) { activeTab = HomeTab.Downloads }
+
+            HomeCategoryButton(
+                text = "Bookmarks", 
+                iconRes = R.drawable.ic_heart_empty, 
+                isSelected = activeTab == HomeTab.Bookmarks,
+                focusRequester = bookmarksFocusRequester,
+                modifier = Modifier.focusProperties {
+                    up = searchFieldFocusRequester
+                }
+            ) { activeTab = HomeTab.Bookmarks }
+
+            HomeCategoryButton(
+                text = "History", 
+                iconRes = R.drawable.ic_history, 
+                isSelected = activeTab == HomeTab.History,
+                focusRequester = historyFocusRequester,
+                modifier = Modifier.focusProperties {
+                    up = searchFieldFocusRequester
+                }
+            ) { activeTab = HomeTab.History }
+
+            HomeCategoryButton(
+                text = "Downloads", 
+                iconRes = R.drawable.ic_download, 
+                isSelected = activeTab == HomeTab.Downloads,
+                focusRequester = downloadsFocusRequester,
+                modifier = Modifier.focusProperties {
+                    up = searchFieldFocusRequester
+                }
+            ) { activeTab = HomeTab.Downloads }
         }
 
         Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color(0xFF00BCD4)))
@@ -135,46 +172,7 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
         ) {
             when (activeTab) {
                 HomeTab.Tabs -> {
-                    Column {
-                        if (savedTabsArray.length() > 0) {
-                            val restoreAllInteractionSource = remember { MutableInteractionSource() }
-                            val isRestoreAllFocused by restoreAllInteractionSource.collectIsFocusedAsState()
-                            val restoreAllScale by animateFloatAsState(
-                                targetValue = if (isRestoreAllFocused) 1.03f else 1.0f,
-                                animationSpec = tween(durationMillis = 150),
-                                label = "RestoreAllScale"
-                            )
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 10.dp),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                TvFocusableBox(
-                                    modifier = Modifier
-                                        .height(40.dp)
-                                        .focusRequester(restoreAllFocusRequester)
-                                        .focusProperties { down = tabsLazyRowFocusRequester },
-                                    defaultColor = Color(0xFFE53935),
-                                    shape = RoundedCornerShape(20.dp),
-                                    onClick = { viewModel.restoreAllTabs(context) }
-                                ) { isFocused ->
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .padding(horizontal = 20.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "Restore All Tabs",
-                                            color = if (isFocused) Color.Black else Color.White,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                    Column(modifier = Modifier.fillMaxSize()) {
                         val tabsListState = rememberLazyListState()
                         LazyRow(
                             state = tabsListState,
@@ -187,15 +185,14 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                             items(savedTabsArray.length()) { index ->
                                 val item = savedTabsArray.getJSONObject(index)
                                 val itemUrl = item.optString("url")
-                                val isLastItem = index == savedTabsArray.length() - 1
                                 TvFocusableHoldToDeleteBox(
                                     modifier = Modifier
                                         .width(240.dp)
                                         .height(50.dp)
                                         .focusProperties {
-                                            up = restoreAllFocusRequester
-                                            if (isLastItem) {
-                                                right = restoreAllFocusRequester
+                                            up = openTabsFocusRequester
+                                            if (savedTabsArray.length() > 0) {
+                                                down = restoreAllFocusRequester
                                             }
                                         },
                                     onTriggerDelete = {
@@ -238,32 +235,61 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                 }
                             }
                         }
+
+                        if (savedTabsArray.length() > 0) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TvFocusableBox(
+                                    modifier = Modifier
+                                        .height(40.dp)
+                                        .focusRequester(restoreAllFocusRequester)
+                                        .focusProperties { 
+                                            up = tabsLazyRowFocusRequester 
+                                        },
+                                    defaultColor = Color(0xFFE53935),
+                                    shape = RoundedCornerShape(20.dp),
+                                    onClick = { viewModel.restoreAllTabs(context) }
+                                ) { isFocused ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .padding(horizontal = 24.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Restore All Tabs",
+                                            color = if (isFocused) Color.Black else Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
                 HomeTab.Bookmarks -> {
-                    Column {
+                    Column(modifier = Modifier.fillMaxSize()) {
                         val startIdx = bookmarkPage * ITEMS_PER_PAGE
                         val endIdx = minOf(startIdx + ITEMS_PER_PAGE, bookmarksArray.length())
 
-                        val clearBookmarksInteractionSource = remember { MutableInteractionSource() }
-                        val isClearBookmarksFocused by clearBookmarksInteractionSource.collectIsFocusedAsState()
-                        val clearBookmarksScale by animateFloatAsState(
-                            targetValue = if (isClearBookmarksFocused) 1.03f else 1.0f,
-                            animationSpec = tween(durationMillis = 150),
-                            label = "ClearBookmarksScale"
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (bookmarkPage > 0 || endIdx < bookmarksArray.length()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 if (bookmarkPage > 0) {
                                     Button(
                                         onClick = { bookmarkPage-- },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)),
+                                        modifier = Modifier.padding(end = 8.dp)
                                     ) {
                                         Text("< Prev", color = Color.White)
                                     }
@@ -277,8 +303,48 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                     }
                                 }
                             }
+                        }
 
-                            if (bookmarksArray.length() > 0) {
+                        val bookmarksListState = rememberLazyListState()
+                        LazyRow(
+                            state = bookmarksListState,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
+                            modifier = Modifier.mouseWheelHorizontalScroll(bookmarksListState)
+                        ) {
+                            items(endIdx - startIdx) { offset ->
+                                val index = bookmarksArray.length() - 1 - (startIdx + offset)
+                                if (index >= 0) {
+                                    val item = bookmarksArray.getJSONObject(index)
+                                    val itemUrl = item.optString("url")
+                                    TvFocusableHoldToDeleteBox(
+                                        modifier = Modifier
+                                            .width(200.dp)
+                                            .height(160.dp)
+                                            .focusProperties {
+                                                up = bookmarksFocusRequester
+                                            },
+                                        onTriggerDelete = { viewModel.removeFromList("favorites", itemUrl) },
+                                        onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true) }
+                                    ) { isFocused, progress ->
+                                        BrowserCardItem(
+                                            item = item,
+                                            listKey = "favorites",
+                                            progress = progress,
+                                            isFocused = isFocused
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (bookmarksArray.length() > 0) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 TvFocusableBox(
                                     modifier = Modifier.height(40.dp),
                                     defaultColor = Color(0xFFE53935),
@@ -291,7 +357,7 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxHeight()
-                                            .padding(horizontal = 20.dp),
+                                            .padding(horizontal = 24.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
@@ -303,127 +369,11 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                 }
                             }
                         }
-
-                        val bookmarksListState = rememberLazyListState()
-                        LazyRow(
-                            state = bookmarksListState,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
-                            modifier = Modifier.mouseWheelHorizontalScroll(bookmarksListState)
-                        ) {
-                            items(endIdx - startIdx) { offset ->
-                                val index = bookmarksArray.length() - 1 - (startIdx + offset)
-                                if (index >= 0) {
-                                    val item = bookmarksArray.getJSONObject(index)
-                                    val itemUrl = item.optString("url")
-                                    TvFocusableHoldToDeleteBox(
-                                        modifier = Modifier.width(200.dp).height(160.dp),
-                                        onTriggerDelete = { viewModel.removeFromList("favorites", itemUrl) },
-                                        onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true) }
-                                    ) { isFocused, progress ->
-                                        BrowserCardItem(
-                                            item = item,
-                                            listKey = "favorites",
-                                            progress = progress,
-                                            isFocused = isFocused
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                HomeTab.Bookmarks -> {
-                    Column {
-                        val startIdx = bookmarkPage * ITEMS_PER_PAGE
-                        val endIdx = minOf(startIdx + ITEMS_PER_PAGE, bookmarksArray.length())
-
-                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.End) {
-                            if (bookmarkPage > 0) {
-                                Button(
-                                    onClick = { bookmarkPage-- },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)),
-                                    modifier = Modifier.padding(end = 8.dp)
-                                ) {
-                                    Text("< Prev", color = Color.White)
-                                }
-                            }
-                            if (endIdx < bookmarksArray.length()) {
-                                Button(
-                                    onClick = { bookmarkPage++ },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
-                                ) {
-                                    Text("Next >", color = Color.White)
-                                }
-                            }
-                        }
-
-                        val bookmarksListState = rememberLazyListState()
-                        LazyRow(
-                            state = bookmarksListState,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
-                            modifier = Modifier.mouseWheelHorizontalScroll(bookmarksListState)
-                        ) {
-                            items(endIdx - startIdx) { offset ->
-                                val index = bookmarksArray.length() - 1 - (startIdx + offset)
-                                if (index >= 0) {
-                                    val item = bookmarksArray.getJSONObject(index)
-                                    val itemUrl = item.optString("url")
-                                    TvFocusableHoldToDeleteBox(
-                                        modifier = Modifier.width(200.dp).height(160.dp),
-                                        onTriggerDelete = { viewModel.removeFromList("favorites", itemUrl) },
-                                        onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true) }
-                                    ) { isFocused, progress ->
-                                        BrowserCardItem(
-                                            item = item,
-                                            listKey = "favorites",
-                                            progress = progress,
-                                            isFocused = isFocused
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
 
                 HomeTab.History -> {
-                    Column {
-                        val clearHistoryInteractionSource = remember { MutableInteractionSource() }
-                        val isClearHistoryFocused by clearHistoryInteractionSource.collectIsFocusedAsState()
-                        val clearHistoryScale by animateFloatAsState(
-                            targetValue = if (isClearHistoryFocused) 1.03f else 1.0f,
-                            animationSpec = tween(durationMillis = 150),
-                            label = "ClearHistoryScale"
-                        )
-
-                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.End) {
-                            TvFocusableBox(
-                                modifier = Modifier.height(40.dp),
-                                defaultColor = Color(0xFFE53935),
-                                shape = RoundedCornerShape(20.dp),
-                                onClick = {
-                                    viewModel.prefs.edit().putString("history", "[]").apply()
-                                    viewModel.refreshLists()
-                                }
-                            ) { isFocused ->
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxHeight()
-                                        .padding(horizontal = 20.dp),
-                                        contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Clear History",
-                                        color = if (isFocused) Color.Black else Color.White,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
+                    Column(modifier = Modifier.fillMaxSize()) {
                         val historyListState = rememberLazyListState()
                         LazyRow(
                             state = historyListState,
@@ -437,7 +387,12 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                 val item = historyArray.getJSONObject(historyArray.length() - 1 - index)
                                 val itemUrl = item.optString("url")
                                 TvFocusableHoldToDeleteBox(
-                                    modifier = Modifier.width(200.dp).height(160.dp),
+                                    modifier = Modifier
+                                        .width(200.dp)
+                                        .height(160.dp)
+                                        .focusProperties {
+                                            up = historyFocusRequester
+                                        },
                                     onTriggerDelete = { viewModel.removeFromList("history", itemUrl) },
                                     onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true) }
                                 ) { isFocused, progress ->
@@ -450,44 +405,43 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                 }
                             }
                         }
+
+                        if (historyArray.length() > 0) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TvFocusableBox(
+                                    modifier = Modifier.height(40.dp),
+                                    defaultColor = Color(0xFFE53935),
+                                    shape = RoundedCornerShape(20.dp),
+                                    onClick = {
+                                        viewModel.prefs.edit().putString("history", "[]").apply()
+                                        viewModel.refreshLists()
+                                    }
+                                ) { isFocused ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .padding(horizontal = 24.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Clear History",
+                                            color = if (isFocused) Color.Black else Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
                 HomeTab.Downloads -> {
-                    Column {
-                        val clearDownloadsInteractionSource = remember { MutableInteractionSource() }
-                        val isClearDownloadsFocused by clearDownloadsInteractionSource.collectIsFocusedAsState()
-                        val clearDownloadsScale by animateFloatAsState(
-                            targetValue = if (isClearDownloadsFocused) 1.03f else 1.0f,
-                            animationSpec = tween(durationMillis = 150),
-                            label = "ClearDownloadsScale"
-                        )
-
-                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.End) {
-                            TvFocusableBox(
-                                modifier = Modifier.height(40.dp),
-                                defaultColor = Color(0xFFE53935),
-                                shape = RoundedCornerShape(20.dp),
-                                onClick = {
-                                    viewModel.prefs.edit().putString("downloads", "[]").apply()
-                                    viewModel.refreshLists()
-                                }
-                            ) { isFocused ->
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxHeight()
-                                        .padding(horizontal = 20.dp),
-                                        contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Clear Downloads",
-                                        color = if (isFocused) Color.Black else Color.White,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
+                    Column(modifier = Modifier.fillMaxSize()) {
                         val downloadsListState = rememberLazyListState()
                         LazyRow(
                             state = downloadsListState,
@@ -501,7 +455,12 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                 val item = downloadsArray.getJSONObject(downloadsArray.length() - 1 - index)
                                 val itemTitle = item.optString("title")
                                 TvFocusableHoldToDeleteBox(
-                                    modifier = Modifier.width(200.dp).height(160.dp),
+                                    modifier = Modifier
+                                        .width(200.dp)
+                                        .height(160.dp)
+                                        .focusProperties {
+                                            up = downloadsFocusRequester
+                                        },
                                     onTriggerDelete = {
                                         try {
                                             val file = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), itemTitle)
@@ -529,6 +488,38 @@ fun BrowserHomeScreen(viewModel: BrowserViewModel) {
                                 }
                             }
                         }
+
+                        if (downloadsArray.length() > 0) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TvFocusableBox(
+                                    modifier = Modifier.height(40.dp),
+                                    defaultColor = Color(0xFFE53935),
+                                    shape = RoundedCornerShape(20.dp),
+                                    onClick = {
+                                        viewModel.prefs.edit().putString("downloads", "[]").apply()
+                                        viewModel.refreshLists()
+                                    }
+                                ) { isFocused ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .padding(horizontal = 24.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Clear Downloads",
+                                            color = if (isFocused) Color.Black else Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -542,20 +533,21 @@ fun HomeCategoryButton(
     iconRes: Int, 
     isSelected: Boolean,
     focusRequester: FocusRequester? = null,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val modifier = Modifier
-        .height(50.dp)
+    val buttonModifier = modifier
+        .height(46.dp)
         .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
 
     TvFocusableBox(
-        modifier = modifier,
+        modifier = buttonModifier,
         isTabStyle = true,
         onClick = onClick,
         onFocus = onClick 
     ) { isFocused ->
         Row(
-            modifier = Modifier.padding(horizontal = 25.dp).fillMaxHeight(),
+            modifier = Modifier.padding(horizontal = 22.dp).fillMaxHeight(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -563,7 +555,7 @@ fun HomeCategoryButton(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
                 tint = if (isFocused) Color.Black else Color.White,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(20.dp)
             )
             Text(
                 text = text,

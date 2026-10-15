@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,6 +44,7 @@ import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvMarqueeText
 import com.poobi.tvbrowser.shared.isFutureDate
 import com.poobi.tvbrowser.shared.KeyTracker
+import com.poobi.tvbrowser.shared.HardwareInputManager
 import org.json.JSONObject
 
 private fun formatDateToDMY(dateStr: String?): String {
@@ -554,24 +557,45 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                 ) {
                     if (mediaType == "tv") {
                         if (localEpisodes != null) {
-                            items(localEpisodes.length()) { idx ->
+                            items(
+                                count = localEpisodes.length(),
+                                key = { idx -> localEpisodes.getJSONObject(idx).optInt("episode_number", idx) }
+                            ) { idx ->
                                 val ep = localEpisodes.getJSONObject(idx)
                                 val num = ep.optInt("episode_number")
                                 val isWatched = ep.optBoolean("is_watched", false)
                                 val isTarget = (num == targetEpisodeToFocus)
-                                var isCardFocused by remember { mutableStateOf(false) }
+
+                                val playInteractionSource = remember { MutableInteractionSource() }
+                                val isPlayFocused by playInteractionSource.collectIsFocusedAsState()
+
+                                val trailerInteractionSource = remember { MutableInteractionSource() }
+                                val isTrailerFocused by trailerInteractionSource.collectIsFocusedAsState()
+
+                                val watchedInteractionSource = remember { MutableInteractionSource() }
+                                val isWatchedFocused by watchedInteractionSource.collectIsFocusedAsState()
+
+                                val isMouseActive by HardwareInputManager.lastInputWasMouse.collectAsState()
+                                var isPointerHovered by remember { mutableStateOf(false) }
+
+                                val isCardFocused = isPlayFocused || isTrailerFocused || isWatchedFocused
+                                val isHighlighted = if (isMouseActive) isPointerHovered else isCardFocused
+
+                                val isTrailerActive = if (isMouseActive) false else isTrailerFocused
+                                val isWatchedActive = if (isMouseActive) false else isWatchedFocused
+
                                 val airDate = ep.optString("air_date", "")
                                 
                                 val scale by androidx.compose.animation.core.animateFloatAsState(
-                                    targetValue = if (isCardFocused) 1.02f else 1.0f,
+                                    targetValue = if (isHighlighted) 1.02f else 1.0f,
                                     animationSpec = androidx.compose.animation.core.tween(durationMillis = 150),
                                     label = "CardFocusScale"
                                 )
 
-                                val cardBgColor = if (isCardFocused) Color(0xFF40C4FF) else Color(0xFF333333)
-                                val cardBorderColor = if (isCardFocused) Color.White else Color.Transparent
-                                val textColor = if (isCardFocused) Color.Black else Color.White
-                                val descColor = if (isCardFocused) Color(0xFF333333) else Color(0xFFAAAAAA)
+                                val cardBgColor = if (isHighlighted) Color(0xFF40C4FF) else Color(0xFF333333)
+                                val cardBorderColor = if (isHighlighted) Color.White else Color.Transparent
+                                val textColor = if (isHighlighted) Color.Black else Color.White
+                                val descColor = if (isHighlighted) Color(0xFF333333) else Color(0xFFAAAAAA)
 
                                 Row(
                                     modifier = Modifier
@@ -580,13 +604,25 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                         .scale(scale)
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(cardBgColor)
-                                        .border(if (isCardFocused) 2.dp else 0.dp, cardBorderColor, RoundedCornerShape(8.dp))
-                                        .onFocusChanged { state: FocusState ->
-                                            isCardFocused = state.hasFocus
+                                        .border(if (isHighlighted) 2.dp else 0.dp, cardBorderColor, RoundedCornerShape(8.dp))
+                                        .pointerInput(Unit) {
+                                            awaitPointerEventScope {
+                                                while (true) {
+                                                    val event = awaitPointerEvent()
+                                                    when (event.type) {
+                                                        PointerEventType.Enter, PointerEventType.Move -> {
+                                                            HardwareInputManager.notifyMouseUsed()
+                                                            isPointerHovered = true
+                                                        }
+                                                        PointerEventType.Exit -> {
+                                                            isPointerHovered = false
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         },
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    val playInteractionSource = remember { MutableInteractionSource() }
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
@@ -634,7 +670,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                                     val prefix = if (isFuture) "Airing: " else "Aired: "
                                                     Text(
                                                         text = "$prefix$formattedAirDate",
-                                                        color = if (isCardFocused) Color(0xFF2E2E35) else Color(0xFF00BCD4),
+                                                        color = if (isHighlighted) Color(0xFF2E2E35) else Color(0xFF00BCD4),
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         modifier = Modifier.padding(vertical = 2.dp)
@@ -651,17 +687,14 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                         }
                                     }
 
-                                    val trailerInteractionSource = remember { MutableInteractionSource() }
-                                    val isTrailerFocused by trailerInteractionSource.collectIsFocusedAsState()
-
                                     Box(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(
                                                 when {
-                                                    isTrailerFocused && isCardFocused -> Color.Black.copy(alpha = 0.15f)
-                                                    isTrailerFocused -> Color.White.copy(alpha = 0.15f)
+                                                    isTrailerActive && isHighlighted -> Color.Black.copy(alpha = 0.15f)
+                                                    isTrailerActive -> Color.White.copy(alpha = 0.15f)
                                                     else -> Color.Transparent
                                                 }
                                             )
@@ -683,8 +716,8 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                             imageVector = MovieIcon,
                                             contentDescription = "Trailer",
                                             tint = when {
-                                                isTrailerFocused -> Color(0xFFE53935)
-                                                isCardFocused -> Color.Black
+                                                isTrailerActive -> Color(0xFFE53935)
+                                                isHighlighted -> Color.Black
                                                 else -> Color(0xFF00BCD4)
                                             },
                                             modifier = Modifier.size(24.dp)
@@ -693,17 +726,14 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
                                     Spacer(modifier = Modifier.width(4.dp))
 
-                                    val watchedInteractionSource = remember { MutableInteractionSource() }
-                                    val isWatchedFocused by watchedInteractionSource.collectIsFocusedAsState()
-
                                     Box(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(
                                                 when {
-                                                    isWatchedFocused && isCardFocused -> Color.Black.copy(alpha = 0.15f)
-                                                    isWatchedFocused -> Color.White.copy(alpha = 0.15f)
+                                                    isWatchedActive && isHighlighted -> Color.Black.copy(alpha = 0.15f)
+                                                    isWatchedActive -> Color.White.copy(alpha = 0.15f)
                                                     else -> Color.Transparent
                                                 }
                                             )
@@ -728,8 +758,8 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                             contentDescription = "Toggle Watched Status",
                                             tint = when {
                                                 isWatched -> Color(0xFF00BCD4)
-                                                isWatchedFocused -> Color.White
-                                                isCardFocused -> Color.Black.copy(alpha = 0.4f)
+                                                isWatchedActive -> Color.White
+                                                isHighlighted -> Color.Black.copy(alpha = 0.4f)
                                                 else -> Color.White.copy(alpha = 0.2f)
                                             },
                                             modifier = Modifier.size(24.dp)

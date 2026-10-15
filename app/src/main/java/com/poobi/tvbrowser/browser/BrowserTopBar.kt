@@ -96,6 +96,7 @@ fun BrowserTopBar(
                             title = title,
                             progress = progress,
                             isFocused = isFocused,
+                            isSelected = index == activeIndex,
                             onCloseClick = { viewModel.closeTab(index) }
                         )
                     }

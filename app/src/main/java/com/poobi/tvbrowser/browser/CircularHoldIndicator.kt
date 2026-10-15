@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
@@ -58,14 +57,15 @@ fun TvFocusableHoldToDeleteBox(
     var holdJob by remember { mutableStateOf<Job?>(null) }
 
     val scale by animateFloatAsState(
-        targetValue = if (isHighlighted) 1.03f else 1.0f,
+        targetValue = if (isHighlighted && !isTabStyle) 1.03f else 1.0f,
         animationSpec = tween(durationMillis = 150),
         label = "DeleteFocusScale"
     )
 
     val backgroundColor = when {
+        isHighlighted && isSelected && isTabStyle -> Color(0xFFE53935)
         isHighlighted -> Color(0xFF40C4FF)
-        isSelected && isTabStyle -> Color(0xFF40C4FF)
+        isSelected && isTabStyle -> Color(0xFFE53935)
         else -> Color(0xFF333333)
     }
 

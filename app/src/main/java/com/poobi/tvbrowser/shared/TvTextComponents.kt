@@ -1,28 +1,36 @@
 package com.poobi.tvbrowser.shared
 
 import android.content.Context
+import android.os.Build
 import android.view.KeyEvent
+import android.view.WindowInsets
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -38,8 +46,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.view.WindowInsets
-import android.os.Build
 
 @Composable
 fun TvMarqueeText(
@@ -79,25 +85,42 @@ fun TvInputField(
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     var isReadOnly by remember { mutableStateOf(true) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        if (label.isNotEmpty()) {
-            Text(label, color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
-        }
+    val fieldModifier = if (label.isEmpty()) {
+        Modifier
+            .defaultMinSize(minHeight = 40.dp)
+            .then(modifier)
+            .fillMaxWidth()
+    } else {
+        Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 44.dp)
+    }
 
-        OutlinedTextField(
+    val content = @Composable {
+        BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = {
-                Box(modifier = Modifier.fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-                    Text(text = placeholder, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
-                }
-            },
             readOnly = isReadOnly,
-            textStyle = TextStyle(fontSize = 14.sp, platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)),
+            textStyle = TextStyle(
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Normal,
+                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+            ),
+            cursorBrush = SolidColor(Color(0xFF00BCD4)),
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-            modifier = Modifier
-                .fillMaxWidth()
+            keyboardOptions = KeyboardOptions(imeAction = imeAction),
+            keyboardActions = KeyboardActions(onAny = {
+                isReadOnly = true
+                keyboardController?.hide()
+                onAction()
+            }),
+            singleLine = true,
+            interactionSource = interactionSource,
+            modifier = fieldModifier
                 .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
                 .onFocusChanged { state ->
                     if (!state.isFocused) {
@@ -163,22 +186,42 @@ fun TvInputField(
                     keyboardController?.hide()
                     onAction()
                 },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                focusedContainerColor = containerColor,
-                unfocusedContainerColor = containerColor,
-                focusedBorderColor = Color(0xFF00BCD4),
-                unfocusedBorderColor = Color.Transparent
-            ),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = imeAction),
-            keyboardActions = KeyboardActions(onAny = { 
-                isReadOnly = true
-                keyboardController?.hide()
-                onAction()
-            })
+            decorationBox = { innerTextField ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(containerColor)
+                        .border(
+                            width = if (isFocused) 1.5.dp else 1.dp,
+                            color = if (isFocused) Color(0xFF00BCD4) else Color.Transparent,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            color = Color.Gray,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontSize = 14.sp
+                        )
+                    }
+                    innerTextField()
+                }
+            }
         )
+    }
+
+    if (label.isNotEmpty()) {
+        Column(modifier = modifier.fillMaxWidth()) {
+            Text(label, color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
+            content()
+        }
+    } else {
+        content()
     }
 }
 

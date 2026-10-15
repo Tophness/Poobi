@@ -74,7 +74,7 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
         if (activeCategoryIndex == 0 && searchResults == null) {
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 TvSearchField(
                     value = searchInput,
                     onValueChange = { searchInput = it },
@@ -83,7 +83,7 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                     focusRequester = searchFieldFocusRequester,
                     modifier = Modifier
                         .weight(1f)
-                        .height(60.dp)
+                        .height(36.dp)
                         .onPreviewKeyEvent { keyEvent ->
                             val nativeEvent = keyEvent.nativeKeyEvent
                             if (nativeEvent.action == KeyEvent.ACTION_DOWN && nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
@@ -96,8 +96,8 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                 )
                 TvFocusableBox(
                     modifier = Modifier
-                        .size(60.dp)
                         .padding(start = 10.dp)
+                        .size(36.dp)
                         .onPreviewKeyEvent { keyEvent ->
                             val nativeEvent = keyEvent.nativeKeyEvent
                             if (nativeEvent.action == KeyEvent.ACTION_DOWN && nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
@@ -115,13 +115,13 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                         painter = painterResource(id = R.drawable.ic_go), 
                         contentDescription = "Search", 
                         tint = if (isFocused) Color.Black else Color.White,
-                        modifier = Modifier.fillMaxSize().padding(12.dp)
+                        modifier = Modifier.fillMaxSize().padding(8.dp)
                     )
                 }
             }
 
             if (searchHistory.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Recent Searches", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     
@@ -148,15 +148,15 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                     state = searchHistoryListState,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 10.dp)
+                        .padding(top = 8.dp)
                         .mouseWheelHorizontalScroll(searchHistoryListState), 
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
+                    contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp)
                 ) {
                     itemsIndexed(searchHistory) { index, query ->
                         TvFocusableHoldToDeleteBox(
                             modifier = Modifier
-                                .height(45.dp)
+                                .height(42.dp)
                                 .let { if (index == 0) it.focusRequester(firstHistoryFocusRequester) else it },
                             onTriggerDelete = {
                                 val list = searchHistory.toMutableList()
@@ -177,12 +177,13 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                                     painter = painterResource(id = R.drawable.ic_history),
                                     contentDescription = null,
                                     tint = Color.Gray,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                                 Text(
                                     text = query,
                                     color = if (isFocused) Color.Black else Color.White,
-                                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal
+                                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 13.sp
                                 )
                                 if (isFocused || progress > 0f) {
                                     HoldToDeleteCloseButton(progress = progress)
@@ -288,7 +289,7 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(80.dp),
+                .height(72.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
@@ -296,7 +297,7 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
             itemsIndexed(categories) { index, pair ->
                 val isActive = activeCategoryIndex == index
                 TvFocusableBox(
-                    modifier = Modifier.height(45.dp),
+                    modifier = Modifier.height(42.dp),
                     onClick = { 
                         viewModel.setActiveCategoryIndex(index)
                         searchInput = ""
@@ -329,7 +330,7 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                             },
                             fontSize = 14.sp,
                             fontWeight = if (isActive || isFocused) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp)
                         )
                         if (isActive && !isFocused) {
                             Box(

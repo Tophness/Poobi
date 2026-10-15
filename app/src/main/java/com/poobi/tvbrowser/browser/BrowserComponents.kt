@@ -154,6 +154,7 @@ fun TabItemCard(
     title: String,
     progress: Float,
     isFocused: Boolean = false,
+    isSelected: Boolean = false,
     onCloseClick: (() -> Unit)? = null
 ) {
     Row(
@@ -164,9 +165,9 @@ fun TabItemCard(
     ) {
         Text(
             text = title,
-            color = if (isFocused) Color.Black else Color.White,
-            fontSize = 16.sp,
-            fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+            color = if (isFocused && !isSelected) Color.Black else Color.White,
+            fontSize = 15.sp,
+            fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)

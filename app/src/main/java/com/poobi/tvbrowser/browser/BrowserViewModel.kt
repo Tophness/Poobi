@@ -37,7 +37,8 @@ data class TabMetadata(
     val defaultUrl: String? = null, 
     val streamItemJson: String? = null,
     val season: Int? = null,
-    val episode: Int? = null
+    val episode: Int? = null,
+    var isIdle: Boolean = false
 )
 
 sealed class BrowserDialogState {
@@ -51,7 +52,6 @@ sealed class BrowserDialogState {
     data class ContextMenu(val url: String, val x: Float, val y: Float, val selectedText: String = "", val isEditable: Boolean = false, val hasSelection: Boolean = false) : BrowserDialogState()
     data class PlaybackHijackAsk(val url: String, val title: String?, val alternativeUrls: List<String>?, val alternativeNames: List<String>?, val view: View?, val callback: WebChromeClient.CustomViewCallback?) : BrowserDialogState()
 }
-
 
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -251,8 +251,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT
             )
-            visibility = View.GONE
-            tag = TabMetadata(defaultTitle = title, defaultUrl = url)
+            visibility = View.INVISIBLE
+            tag = TabMetadata(defaultTitle = title, defaultUrl = url, isIdle = idle)
         }
         setupWebView(newWebView)
         _webViews.add(newWebView)
@@ -277,7 +277,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
         
         val oldWebView = currentWebView
-        oldWebView?.visibility = View.GONE
+        oldWebView?.visibility = View.INVISIBLE
         _currentTabIndex.value = index
         _isBrowsing.value = true
         val targetWebView = _webViews[index]
@@ -287,7 +287,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
         val metadata = targetWebView.tag as? TabMetadata
         val idleUrl = metadata?.defaultUrl
-        if ((targetWebView.url.isNullOrBlank() || targetWebView.url == "about:blank") && !idleUrl.isNullOrBlank()) {
+        if (metadata?.isIdle == true && !idleUrl.isNullOrBlank()) {
+            metadata.isIdle = false
+            targetWebView.loadUrl(idleUrl)
+        } else if ((targetWebView.url.isNullOrBlank() || targetWebView.url == "about:blank") && !idleUrl.isNullOrBlank()) {
             targetWebView.loadUrl(idleUrl)
         }
         
@@ -301,12 +304,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             Log.e("TVBrowser", "closeTab failure: Index $index out of bounds (Size: ${_webViews.size})")
             return
         }
-        
-        val isActiveTab = (index == _currentTabIndex.value)
+
         val wv = _webViews[index]
-        
+        val wasBrowsing = _isBrowsing.value
+        val wasActiveTab = (index == _currentTabIndex.value)
+
         (wv.parent as? android.view.ViewGroup)?.removeView(wv)
-        
+
         try {
             wv.stopLoading()
             wv.loadUrl("about:blank")
@@ -314,24 +318,30 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         } catch (e: Exception) {
             Log.e("TVBrowser", "Error clearing WebView state", e)
         }
-        
-        if (isActiveTab) {
-            if (_webViews.size > 1) {
-                val newIndex = if (index == _webViews.size - 1) index - 1 else index
-                switchTab(newIndex)
-            } else {
-                showHomeScreen()
-            }
-        }
-        
-        _webViews.remove(wv)
+
+        _webViews.removeAt(index)
         wv.destroy()
         saveTabs()
-        
+
         if (_webViews.isEmpty()) {
             showHomeScreen()
         } else {
-            _currentTabIndex.value = _webViews.indexOf(currentWebView).coerceAtLeast(0)
+            if (wasBrowsing) {
+                if (wasActiveTab) {
+                    val newIndex = if (index >= _webViews.size) _webViews.size - 1 else index
+                    switchTab(newIndex)
+                } else {
+                    if (_currentTabIndex.value > index) {
+                        _currentTabIndex.value -= 1
+                    }
+                }
+            } else {
+                if (_currentTabIndex.value >= _webViews.size) {
+                    _currentTabIndex.value = _webViews.size - 1
+                } else if (_currentTabIndex.value < 0) {
+                    _currentTabIndex.value = 0
+                }
+            }
         }
     }
 
@@ -355,7 +365,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     defaultUrl = url,
                     streamItemJson = streamItemJson,
                     season = season,
-                    episode = episode
+                    episode = episode,
+                    isIdle = false
                 )
             } else {
                 if (_currentTabIndex.value == -1) {
@@ -366,7 +377,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     defaultUrl = url,
                     streamItemJson = streamItemJson,
                     season = season,
-                    episode = episode
+                    episode = episode,
+                    isIdle = false
                 )
                 currentWebView?.loadUrl(url)
                 _isBrowsing.value = true
@@ -376,17 +388,34 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun restoreAllTabs(context: Context, idle: Boolean = false) {
+    fun restoreAllTabs(context: Context, idle: Boolean? = null) {
+        val pref = prefs.getInt("restore_tabs_pref", 0)
+        val shouldBeIdle = idle ?: (pref == 2)
         val savedTabs = prefs.getString("saved_tabs", "[]") ?: "[]"
+
         try {
             val array = JSONArray(savedTabs)
             if (array.length() == 0) return
+
+            if (_webViews.isNotEmpty()) {
+                if (!shouldBeIdle) {
+                    for (wv in _webViews) {
+                        val metadata = wv.tag as? TabMetadata
+                        if (metadata?.isIdle == true && !metadata.defaultUrl.isNullOrBlank()) {
+                            metadata.isIdle = false
+                            wv.loadUrl(metadata.defaultUrl)
+                        }
+                    }
+                }
+                return
+            }
+
             for (i in 0 until array.length()) {
                 val obj = array.optJSONObject(i) ?: continue
                 val url = obj.optString("url")
                 if (url.isNotEmpty()) {
                     val title = obj.optString("title")
-                    createNewTab(context, url, switchTo = false, title = title, idle = idle)
+                    createNewTab(context, url, switchTo = false, title = title, idle = shouldBeIdle)
                 }
             }
             if (_currentTabIndex.value == -1 && _webViews.isNotEmpty()) {
@@ -637,7 +666,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             connection.readTimeout = 6000
             
             val responseCode = connection.responseCode
-            val responseMessage = connection.responseMessage ?: "OK"
             
             if (responseCode in 200..299) {
                 val content = connection.inputStream.bufferedReader().use { it.readText() }
@@ -701,28 +729,28 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView(wv: WebView) {
-		wv.isFocusable = true
-		wv.isFocusableInTouchMode = true
-		val defaultUA = WebSettings.getDefaultUserAgent(appContext)
-		val customUserAgent = prefs.getString("user_agent", defaultUA)
-		
-		wv.settings.apply {
-			javaScriptEnabled = true
-			domStorageEnabled = true
-			databaseEnabled = true
-			mediaPlaybackRequiresUserGesture = false
-			setSupportMultipleWindows(true)
-			javaScriptCanOpenWindowsAutomatically = false
-			mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-			userAgentString = customUserAgent
-			if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-				isAlgorithmicDarkeningAllowed = !isLightTheme.value
-			}
-		}
+        wv.isFocusable = true
+        wv.isFocusableInTouchMode = true
+        val defaultUA = WebSettings.getDefaultUserAgent(appContext)
+        val customUserAgent = prefs.getString("user_agent", defaultUA)
+        
+        wv.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            mediaPlaybackRequiresUserGesture = false
+            setSupportMultipleWindows(true)
+            javaScriptCanOpenWindowsAutomatically = false
+            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            userAgentString = customUserAgent
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                isAlgorithmicDarkeningAllowed = !isLightTheme.value
+            }
+        }
 
-		CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
 
-		wv.addJavascriptInterface(WebAppInterface(), "AndroidAutoplay")
+        wv.addJavascriptInterface(WebAppInterface(), "AndroidAutoplay")
 
         wv.setDownloadListener { url, _, contentDisposition, mimetype, contentLength ->
             val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
@@ -780,8 +808,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 applyBlockedElements(view)
                 saveTabs()
 
-                if (videoTriggerPref.value == 0) {
+                if (videoTriggerPref.value == 0 && _isBrowsing.value && view == currentWebView) {
                     triggerAutoPlayClicks(view)
+                }
+
+                if (!_isBrowsing.value || view != currentWebView) {
+                    view.evaluateJavascript("(function() { var v = document.querySelectorAll('video, audio'); for(var i=0; i<v.length; i++) { v[i].pause(); } })();", null)
                 }
 
                 view.evaluateJavascript("(function() { return document.documentElement.innerText; })();") { content ->
@@ -791,7 +823,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         headers["User-Agent"] = view.settings.userAgentString
                         if (url != null) {
                             interceptedMediaUrls[url] = headers
-                            if (extractVideoPref.value != 0) {
+                            if (extractVideoPref.value != 0 && _isBrowsing.value && view == currentWebView) {
                                 attemptVideoExtraction(null, null)
                             }
                         }
@@ -855,7 +887,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                                 
                                 interceptedMediaUrls[localFileUrl] = headers
                                 
-                                if (videoTriggerPref.value == 0 && _isBrowsing.value && wasEmpty) {
+                                if (videoTriggerPref.value == 0 && _isBrowsing.value && view == currentWebView && wasEmpty) {
                                     view?.post { attemptVideoExtraction(null, null) }
                                 }
                                 
@@ -871,7 +903,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         }
 
                         interceptedMediaUrls[requestedUrl] = headers
-                        if (videoTriggerPref.value == 0 && _isBrowsing.value && wasEmpty) {
+                        if (videoTriggerPref.value == 0 && _isBrowsing.value && view == currentWebView && wasEmpty) {
                             view?.post { attemptVideoExtraction(null, null) }
                         }
                     }
@@ -938,23 +970,23 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val profiles = JSONArray(profilesJson)
         var executedAny = false
 
-		for (i in 0 until profiles.length()) {
-			val obj = profiles.getJSONObject(i)
-			val patterns = obj.getJSONArray("urlPatterns")
-			var matchesPattern = false
-			for (j in 0 until patterns.length()) {
-				val pattern = patterns.getString(j).replace(".", "\\.").replace("*", ".*").replace("?", ".")
-				if (java.util.regex.Pattern.compile(pattern, java.util.regex.Pattern.CASE_INSENSITIVE).matcher(url).find()) {
-					matchesPattern = true; break
-				}
-			}
+        for (i in 0 until profiles.length()) {
+            val obj = profiles.getJSONObject(i)
+            val patterns = obj.getJSONArray("urlPatterns")
+            var matchesPattern = false
+            for (j in 0 until patterns.length()) {
+                val pattern = patterns.getString(j).replace(".", "\\.").replace("*", ".*").replace("?", ".")
+                if (java.util.regex.Pattern.compile(pattern, java.util.regex.Pattern.CASE_INSENSITIVE).matcher(url).find()) {
+                    matchesPattern = true; break
+                }
+            }
 
-			if (matchesPattern && obj.optBoolean("enabled", true)) {
-				executedAny = true
-				val scriptToRun = obj.getString("script")
-				wv.evaluateJavascript(scriptToRun, null)
-			}
-		}
+            if (matchesPattern && obj.optBoolean("enabled", true)) {
+                executedAny = true
+                val scriptToRun = obj.getString("script")
+                wv.evaluateJavascript(scriptToRun, null)
+            }
+        }
 
         if (!executedAny) {
             wv.evaluateJavascript(DEFAULT_AUTOPLAY_SCRIPT, null)

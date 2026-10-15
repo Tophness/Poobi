@@ -31,6 +31,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -196,6 +197,7 @@ fun MainApp(
     val browserTabFocusRequester = remember { FocusRequester() }
     val streamsTabFocusRequester = remember { FocusRequester() }
     val streamsContentTabFocusRequester = remember { FocusRequester() }
+    val homeSearchBarFocusRequester = remember { FocusRequester() }
 
     val isBufferingTorrent by streamsViewModel.isBufferingTorrent.collectAsState()
     val torrentBufferStatus by streamsViewModel.torrentBufferStatus.collectAsState()
@@ -250,7 +252,12 @@ fun MainApp(
                             onFocus = { browserViewModel.currentAppTab.value = 0 },
                             onClick = { browserViewModel.currentAppTab.value = 0 },
                             focusRequester = browserTabFocusRequester,
-                            keyTracker = KeyTracker
+                            keyTracker = KeyTracker,
+                            modifier = Modifier.focusProperties {
+                                if (!isBrowsing) {
+                                    down = homeSearchBarFocusRequester
+                                }
+                            }
                         )
 
                         ModernTab(
@@ -307,20 +314,28 @@ fun MainApp(
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     when (currentTab) {
                         AppTab.Browser -> {
-                            if (isBrowsing) {
-                                Column {
-                                    if (topBarVisible) {
-                                        BrowserTopBar(
-                                            viewModel = browserViewModel,
-                                            onNavigateDown = {
-                                                browserViewModel.hideTopBar()
-                                                cursorManager.clearKeyStates()
-                                                cursorManager.wakeCursor()
-                                            }
-                                        )
-                                    }
-                                    
-                                    if (browserViewModel.getWebViewsList().isNotEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                if (browserViewModel.getWebViewsList().isNotEmpty()) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .then(
+                                                if (!isBrowsing) {
+                                                    Modifier.alpha(0f).focusProperties { canFocus = false }
+                                                } else Modifier
+                                            )
+                                    ) {
+                                        if (topBarVisible && isBrowsing) {
+                                            BrowserTopBar(
+                                                viewModel = browserViewModel,
+                                                onNavigateDown = {
+                                                    browserViewModel.hideTopBar()
+                                                    cursorManager.clearKeyStates()
+                                                    cursorManager.wakeCursor()
+                                                }
+                                            )
+                                        }
+
                                         AndroidView(
                                             factory = { ctx ->
                                                 android.widget.FrameLayout(ctx).apply {
@@ -356,18 +371,31 @@ fun MainApp(
 
                                                 webViews.forEachIndexed { index, wv ->
                                                     val isCurrent = (index == activeIndex)
-                                                    wv.visibility = if (isCurrent) View.VISIBLE else View.GONE
+                                                    if (isBrowsing) {
+                                                        wv.visibility = if (isCurrent) View.VISIBLE else View.INVISIBLE
+                                                        wv.isFocusable = isCurrent
+                                                        wv.isFocusableInTouchMode = isCurrent
+                                                    } else {
+                                                        wv.visibility = View.INVISIBLE
+                                                        wv.isFocusable = false
+                                                        wv.isFocusableInTouchMode = false
+                                                    }
                                                 }
 
-                                                if (activeIndex in webViews.indices) {
+                                                if (isBrowsing && activeIndex in webViews.indices) {
                                                     webViews[activeIndex].requestFocus()
                                                 }
                                             }
                                         )
                                     }
                                 }
-                            } else {
-                                BrowserHomeScreen(browserViewModel)
+
+                                if (!isBrowsing) {
+                                    BrowserHomeScreen(
+                                        viewModel = browserViewModel,
+                                        searchBarFocusRequester = homeSearchBarFocusRequester
+                                    )
+                                }
                             }
                         }
                         AppTab.Streams -> {
