@@ -1,10 +1,6 @@
 package com.poobi.tvbrowser.shared
 
-import android.content.Context
-import android.os.Build
 import android.view.KeyEvent
-import android.view.WindowInsets
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
@@ -12,9 +8,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -24,8 +23,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -69,6 +68,7 @@ fun TvMarqueeText(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TvInputField(
     value: String,
@@ -84,19 +84,24 @@ fun TvInputField(
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     var isReadOnly by remember { mutableStateOf(true) }
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
+    val isImeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(isImeVisible) {
+        if (!isImeVisible) {
+            isReadOnly = true
+        }
+    }
+
     val fieldModifier = if (label.isEmpty()) {
-        Modifier
-            .defaultMinSize(minHeight = 40.dp)
-            .then(modifier)
-            .fillMaxWidth()
+        modifier
     } else {
         Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 44.dp)
+            .height(44.dp)
     }
 
     val content = @Composable {
@@ -143,6 +148,35 @@ fun TvInputField(
                         val keyCode = nativeEvent.keyCode
                         val isEnterKey = keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
                         val isDpadCenter = keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                        val isArrowKey = keyCode == KeyEvent.KEYCODE_DPAD_UP ||
+                                        keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+                                        keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+                                        keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+
+                        if (keyCode == KeyEvent.KEYCODE_BACK && !isReadOnly) {
+                            isReadOnly = true
+                            keyboardController?.hide()
+                            return@onPreviewKeyEvent true
+                        }
+
+                        if (isArrowKey) {
+                            if (!isReadOnly && !isImeVisible) {
+                                isReadOnly = true
+                            }
+
+                            if (isReadOnly) {
+                                val direction = when (keyCode) {
+                                    KeyEvent.KEYCODE_DPAD_UP -> FocusDirection.Up
+                                    KeyEvent.KEYCODE_DPAD_DOWN -> FocusDirection.Down
+                                    KeyEvent.KEYCODE_DPAD_LEFT -> FocusDirection.Left
+                                    KeyEvent.KEYCODE_DPAD_RIGHT -> FocusDirection.Right
+                                    else -> null
+                                }
+                                if (direction != null && focusManager.moveFocus(direction)) {
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                        }
 
                         if (isReadOnly) {
                             if (isEnterKey || isDpadCenter) {
@@ -180,11 +214,6 @@ fun TvInputField(
                         }
                     }
                     false
-                }
-                .smartDpadFocus(context = context, isReadOnly = isReadOnly) {
-                    isReadOnly = true
-                    keyboardController?.hide()
-                    onAction()
                 },
             decorationBox = { innerTextField ->
                 Box(
@@ -243,48 +272,4 @@ fun TvSearchField(
         focusRequester = focusRequester,
         onAction = onSearch
     )
-}
-
-fun Modifier.smartDpadFocus(
-    context: android.content.Context,
-    isReadOnly: Boolean = true,
-    onImeAction: () -> Unit
-): Modifier = composed {
-    val focusManager = LocalFocusManager.current
-    var isFocused by remember { mutableStateOf(false) }
-
-    this
-        .onFocusChanged { isFocused = it.isFocused }
-        .onPreviewKeyEvent { keyEvent ->
-            val nativeEvent = keyEvent.nativeKeyEvent
-            if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
-                val keyCode = nativeEvent.keyCode
-                if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
-                    keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-
-                    var isKeyboardOpen = false
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        val windowInsets = (context as? ComponentActivity)?.window?.decorView?.rootWindowInsets
-                        isKeyboardOpen = windowInsets?.isVisible(WindowInsets.Type.ime()) == true
-                    }
-                    if (nativeEvent.deviceId <= 0) {
-                        isKeyboardOpen = true
-                    }
-
-                    if (!isKeyboardOpen && isReadOnly) {
-                        val direction = when (keyCode) {
-                            KeyEvent.KEYCODE_DPAD_UP -> androidx.compose.ui.focus.FocusDirection.Up
-                            KeyEvent.KEYCODE_DPAD_DOWN -> androidx.compose.ui.focus.FocusDirection.Down
-                            KeyEvent.KEYCODE_DPAD_LEFT -> androidx.compose.ui.focus.FocusDirection.Left
-                            KeyEvent.KEYCODE_DPAD_RIGHT -> androidx.compose.ui.focus.FocusDirection.Right
-                            else -> null
-                        }
-                        if (direction != null && focusManager.moveFocus(direction)) {
-                            return@onPreviewKeyEvent true
-                        }
-                    }
-                }
-            }
-            false
-        }
 }

@@ -199,6 +199,7 @@ fun MainApp(
     val streamsTabFocusRequester = remember { FocusRequester() }
     val streamsContentTabFocusRequester = remember { FocusRequester() }
     val homeSearchBarFocusRequester = remember { FocusRequester() }
+    val streamsSearchBarFocusRequester = remember { FocusRequester() }
 
     val isBufferingTorrent by streamsViewModel.isBufferingTorrent.collectAsState()
     val torrentBufferStatus by streamsViewModel.torrentBufferStatus.collectAsState()
@@ -271,6 +272,8 @@ fun MainApp(
                             modifier = Modifier.focusProperties {
                                 if (isScrapeScreenActive) {
                                     down = streamsContentTabFocusRequester
+                                } else if (selectedMedia == null) {
+                                    down = streamsSearchBarFocusRequester
                                 }
                             }
                         )
@@ -394,7 +397,8 @@ fun MainApp(
                                 if (!isBrowsing) {
                                     BrowserHomeScreen(
                                         viewModel = browserViewModel,
-                                        searchBarFocusRequester = homeSearchBarFocusRequester
+                                        searchBarFocusRequester = homeSearchBarFocusRequester,
+                                        topTabFocusRequester = browserTabFocusRequester
                                     )
                                 }
                             }
@@ -408,7 +412,11 @@ fun MainApp(
                                     MediaDetailsScreen(streamsViewModel)
                                 }
                                 else -> {
-                                    StreamsDashboardScreen(streamsViewModel)
+                                    StreamsDashboardScreen(
+                                        viewModel = streamsViewModel,
+                                        searchBarFocusRequester = streamsSearchBarFocusRequester,
+                                        topTabFocusRequester = streamsTabFocusRequester
+                                    )
                                 }
                             }
                         }

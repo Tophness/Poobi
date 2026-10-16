@@ -35,7 +35,8 @@ enum class HomeTab { Tabs, Bookmarks, History, Downloads }
 @Composable
 fun BrowserHomeScreen(
     viewModel: BrowserViewModel,
-    searchBarFocusRequester: FocusRequester? = null
+    searchBarFocusRequester: FocusRequester? = null,
+    topTabFocusRequester: FocusRequester? = null
 ) {
     val context = LocalContext.current
 
@@ -48,6 +49,7 @@ fun BrowserHomeScreen(
     val savedTabsArray by viewModel.savedTabsList.collectAsState()
 
     val searchFieldFocusRequester = searchBarFocusRequester ?: remember { FocusRequester() }
+    val goButtonFocusRequester = remember { FocusRequester() }
     val openTabsFocusRequester = remember { FocusRequester() }
     val bookmarksFocusRequester = remember { FocusRequester() }
     val historyFocusRequester = remember { FocusRequester() }
@@ -79,11 +81,15 @@ fun BrowserHomeScreen(
                     .weight(1f)
                     .height(36.dp)
                     .focusProperties {
+                        right = goButtonFocusRequester
                         down = when (activeTab) {
                             HomeTab.Tabs -> openTabsFocusRequester
                             HomeTab.Bookmarks -> bookmarksFocusRequester
                             HomeTab.History -> historyFocusRequester
                             HomeTab.Downloads -> downloadsFocusRequester
+                        }
+                        if (topTabFocusRequester != null) {
+                            up = topTabFocusRequester
                         }
                     }
             )
@@ -92,12 +98,17 @@ fun BrowserHomeScreen(
                 modifier = Modifier
                     .padding(start = 10.dp)
                     .size(36.dp)
+                    .focusRequester(goButtonFocusRequester)
                     .focusProperties {
+                        left = searchFieldFocusRequester
                         down = when (activeTab) {
                             HomeTab.Tabs -> openTabsFocusRequester
                             HomeTab.Bookmarks -> bookmarksFocusRequester
                             HomeTab.History -> historyFocusRequester
                             HomeTab.Downloads -> downloadsFocusRequester
+                        }
+                        if (topTabFocusRequester != null) {
+                            up = topTabFocusRequester
                         }
                     },
                 onClick = { 

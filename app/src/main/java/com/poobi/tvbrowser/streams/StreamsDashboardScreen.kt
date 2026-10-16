@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -32,7 +33,11 @@ import kotlinx.coroutines.delay
 import org.json.JSONArray
 
 @Composable
-fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
+fun StreamsDashboardScreen(
+    viewModel: StreamsViewModel,
+    searchBarFocusRequester: FocusRequester? = null,
+    topTabFocusRequester: FocusRequester? = null
+) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val searchHistory by viewModel.searchHistory.collectAsState()
@@ -42,9 +47,10 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
     val activeCategoryIndex by viewModel.activeCategoryIndex.collectAsState()
     val progressCounts by viewModel.showProgressCounts.collectAsState()
     var searchInput by remember { mutableStateOf("") }
-    val firstHistoryFocusRequester = remember { FocusRequester() }
 
-    val searchFieldFocusRequester = remember { FocusRequester() }
+    val searchFieldFocusRequester = searchBarFocusRequester ?: remember { FocusRequester() }
+    val searchButtonFocusRequester = remember { FocusRequester() }
+    val firstHistoryFocusRequester = remember { FocusRequester() }
     val firstResultFocusRequester = remember { FocusRequester() }
 
     val categories = listOf(
@@ -84,28 +90,29 @@ fun StreamsDashboardScreen(viewModel: StreamsViewModel) {
                     modifier = Modifier
                         .weight(1f)
                         .height(36.dp)
-                        .onPreviewKeyEvent { keyEvent ->
-                            val nativeEvent = keyEvent.nativeKeyEvent
-                            if (nativeEvent.action == KeyEvent.ACTION_DOWN && nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                                if (searchHistory.isNotEmpty()) {
-                                    firstHistoryFocusRequester.requestFocus()
-                                    true
-                                } else false
-                            } else false
+                        .focusProperties {
+                            right = searchButtonFocusRequester
+                            if (topTabFocusRequester != null) {
+                                up = topTabFocusRequester
+                            }
+                            if (searchHistory.isNotEmpty()) {
+                                down = firstHistoryFocusRequester
+                            }
                         }
                 )
                 TvFocusableBox(
                     modifier = Modifier
                         .padding(start = 10.dp)
                         .size(36.dp)
-                        .onPreviewKeyEvent { keyEvent ->
-                            val nativeEvent = keyEvent.nativeKeyEvent
-                            if (nativeEvent.action == KeyEvent.ACTION_DOWN && nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                                if (searchHistory.isNotEmpty()) {
-                                    firstHistoryFocusRequester.requestFocus()
-                                    true
-                                } else false
-                            } else false
+                        .focusRequester(searchButtonFocusRequester)
+                        .focusProperties {
+                            left = searchFieldFocusRequester
+                            if (topTabFocusRequester != null) {
+                                up = topTabFocusRequester
+                            }
+                            if (searchHistory.isNotEmpty()) {
+                                down = firstHistoryFocusRequester
+                            }
                         },
                     onClick = { 
                         viewModel.performSearch(searchInput) 
