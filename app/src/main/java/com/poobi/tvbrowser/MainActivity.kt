@@ -1,6 +1,7 @@
 package com.poobi.tvbrowser
 
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -36,6 +37,7 @@ import com.poobi.tvbrowser.shared.KeyShortcut
 import com.poobi.tvbrowser.shared.update.UpdateManager
 import com.poobi.tvbrowser.shared.update.ApkInstaller
 import com.poobi.tvbrowser.torrent.TorrentStreamServer
+import com.poobi.tvbrowser.tvhome.TvHomeSyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -94,6 +96,87 @@ class MainActivity : AppCompatActivity() {
         targetView.dispatchKeyEvent(up)
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action
+        val data = intent.data
+
+        val openUrl = intent.getStringExtra("open_url")
+        if (!openUrl.isNullOrEmpty()) {
+            browserViewModel.loadUrlAndBrowse(this, openUrl, newTab = true)
+            browserViewModel.currentAppTab.value = 0
+            return
+        }
+
+        if (action == Intent.ACTION_VIEW && data != null) {
+            if (data.scheme == "poobi" || (data.scheme in listOf("http", "https") && data.host == "poobi.app")) {
+                val path = if (data.scheme == "poobi") data.host else data.path?.removePrefix("/")
+                when (path) {
+                    "play", "details" -> {
+                        val mediaType = data.getQueryParameter("type") ?: data.getQueryParameter("media_type") ?: "movie"
+                        val id = data.getQueryParameter("id") ?: ""
+                        val title = data.getQueryParameter("title") ?: ""
+                        val season = data.getQueryParameter("season")?.toIntOrNull()
+                        val episode = data.getQueryParameter("episode")?.toIntOrNull()
+                        val shouldPlay = data.getQueryParameter("play") == "true" ||
+                                         intent.getBooleanExtra("android.intent.extra.START_PLAYBACK", false) ||
+                                         path == "play"
+
+                        if (id.isNotEmpty() || title.isNotEmpty()) {
+                            browserViewModel.currentAppTab.value = 1
+                            val item = JSONObject().apply {
+                                put("id", id)
+                                put("title", title)
+                                put("name", title)
+                                put("media_type", mediaType)
+                            }
+                            streamsViewModel.selectMediaItem(item, initialSeason = season)
+                            if (shouldPlay) {
+                                streamsViewModel.performScrape(item, season, episode)
+                            }
+                        }
+                    }
+                    "favorites" -> {
+                        browserViewModel.currentAppTab.value = 1
+                        streamsViewModel.setActiveCategoryIndex(1)
+                        streamsViewModel.loadFavorites()
+                    }
+                    "recent" -> {
+                        browserViewModel.currentAppTab.value = 1
+                        streamsViewModel.setActiveCategoryIndex(2)
+                        streamsViewModel.loadRecentlyPlayed()
+                    }
+                    "search" -> {
+                        val query = data.getQueryParameter("q") ?: data.getQueryParameter("query") ?: ""
+                        if (query.isNotEmpty()) {
+                            browserViewModel.currentAppTab.value = 1
+                            streamsViewModel.performSearch(query)
+                        }
+                    }
+                }
+            } else if (data.scheme in listOf("http", "https")) {
+                browserViewModel.loadUrlAndBrowse(this, data.toString(), newTab = true)
+                browserViewModel.currentAppTab.value = 0
+            }
+        } else if (action == "android.media.action.MEDIA_PLAY_FROM_SEARCH" || action == Intent.ACTION_SEARCH) {
+            val query = intent.getStringExtra(android.app.SearchManager.QUERY)
+                ?: intent.getStringExtra("android.intent.extra.title")
+                ?: intent.getStringExtra("query")
+                ?: ""
+
+            if (query.isNotBlank()) {
+                browserViewModel.currentAppTab.value = 1
+                streamsViewModel.performSearch(query)
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
@@ -101,6 +184,8 @@ class MainActivity : AppCompatActivity() {
         HardwareInputManager.init(this)
         AdBlockManager.init(this)
         startTorrentServer()
+        TvHomeSyncManager.init(this)
+        TvHomeSyncManager.clearAllWatchNext(this)
 
         cursorManager = CursorManager(this, browserViewModel)
         playerEngine = PlayerEngine(
@@ -394,6 +479,7 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null) {
             checkStartupTabs()
         }
+        handleIncomingIntent(intent)
         initPythonAsync()
     }
 

@@ -36,6 +36,7 @@ import com.poobi.tvbrowser.shared.SelectedSubtitleInfo
 import com.poobi.tvbrowser.shared.StreamResumeManager
 import com.poobi.tvbrowser.shared.SubtitleCacheManager
 import com.poobi.tvbrowser.shared.SubtitleData
+import com.poobi.tvbrowser.tvhome.TvHomeSyncManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -1134,19 +1135,39 @@ class PlayerEngine(
                 if (dur > 0) {
                     StreamResumeManager.savePosition(prefs, title, pos, isCompleted)
 
-                    if (isCompleted) {
-                        val season = lastScrapedSeason
-                        val episode = lastScrapedEpisode
-                        if (season != null && episode != null) {
-                            onVideoWatched(season, episode)
+                    val item = lastScrapedItem
+                    val season = lastScrapedSeason
+                    val episode = lastScrapedEpisode
+
+                    if (item != null) {
+                        if (isCompleted) {
+                            if (season != null && episode != null) {
+                                onVideoWatched(season, episode)
+                                TvHomeSyncManager.removeWatchNext(context, item, season, episode)
+                                val nextEp = _nextEpisodeData.value
+                                TvHomeSyncManager.updateWatchNextNext(context, item, season, episode + 1, nextEp)
+                            } else {
+                                TvHomeSyncManager.removeWatchNext(context, item, null, null)
+                            }
+                        } else if (pos > 5000L) {
+                            TvHomeSyncManager.updateWatchNextContinue(
+                                context = context,
+                                item = item,
+                                season = season,
+                                episode = episode,
+                                positionMs = pos,
+                                durationMs = dur
+                            )
                         }
-                        lastScrapedItem?.let { item ->
-                            @Suppress("OPT_IN_USAGE")
+                    }
+
+                    if (isCompleted) {
+                        lastScrapedItem?.let { sItem ->
                             playerScope.launch {
                                 try {
                                     val py = Python.getInstance()
                                     val scrobbler = py.getModule("trakt.trakt_scrobble")
-                                    scrobbler.callAttr("scrobble", item.toString(), lastScrapedSeason, lastScrapedEpisode, 100.0)
+                                    scrobbler.callAttr("scrobble", sItem.toString(), lastScrapedSeason, lastScrapedEpisode, 100.0)
                                 } catch (e: Exception) {
                                     Log.e("TVBrowser", "Scrobble failed: ${e.message}")
                                 }

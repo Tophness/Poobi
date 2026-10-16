@@ -12,6 +12,7 @@ import com.chaquo.python.Python
 import com.poobi.tvbrowser.shared.StreamResumeManager
 import com.poobi.tvbrowser.shared.SubtitleData
 import com.poobi.tvbrowser.torrent.TorrentSortCriteria
+import com.poobi.tvbrowser.tvhome.TvHomeSyncManager
 import com.poobi.tvbrowser.torrent.TorrentStreamServer
 import com.poobi.tvbrowser.torrent.TorrentSorter
 import kotlinx.coroutines.*
@@ -703,9 +704,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     if (i != index) newList.put(array.get(i))
                 }
                 prefs.edit().putString("streams_recently_played", newList.toString()).apply()
-                
+
                 if (displayTitle.isNotEmpty()) {
                     StreamResumeManager.removePosition(prefs, displayTitle)
+                }
+
+                TvHomeSyncManager.syncRecentlyWatchedChannel(context)
+                if (item != null) {
+                    val s = if (entry.has("season")) entry.getInt("season") else null
+                    val e = if (entry.has("episode")) entry.getInt("episode") else null
+                    TvHomeSyncManager.removeWatchNext(context, item, s, e)
                 }
                 
                 withContext(Dispatchers.Main) {
@@ -846,6 +854,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             if (newList.size > 20) newList.removeAt(newList.size - 1)
 
             prefs.edit().putString("streams_recently_played", newList.toString()).apply()
+            TvHomeSyncManager.syncRecentlyWatchedChannel(context)
         }
     }
 
@@ -976,6 +985,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 _events.value = StreamsEvent.ShowToast("Added to Favorites")
             }
             prefs.edit().putString("streams_favorites", array.toString()).apply()
+            TvHomeSyncManager.syncFavoritesChannel(context)
             refreshFavoritesSet()
 
             if (isCurrentlyViewingFavorites) {
@@ -1115,6 +1125,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
                 withContext(Dispatchers.Main) {
                     if (success) {
+                        if (!currentStatus) {
+                            TvHomeSyncManager.removeWatchNext(context, item, null, null)
+                        }
                         _events.value = StreamsEvent.ShowToast(if (currentStatus) "Marked as unwatched" else "Marked as watched")
                     } else {
                         _isMovieWatched.value = currentStatus

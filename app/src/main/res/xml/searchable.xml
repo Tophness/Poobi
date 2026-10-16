@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<searchable xmlns:android="http://schemas.android.com/apk/res/android"
+    android:label="Poobi"
+    android:hint="Search Movies &amp; TV Shows"
+    android:searchSettingsDescription="Search Movies and TV Shows on Poobi"
+    android:searchSuggestAuthority="com.poobi.tvbrowser.search"
+    android:searchSuggestIntentAction="android.intent.action.VIEW"
+    android:searchSuggestSelection=" ?"
+    android:searchSuggestThreshold="1"
+    android:includeInGlobalSearch="true">
+</searchable>
