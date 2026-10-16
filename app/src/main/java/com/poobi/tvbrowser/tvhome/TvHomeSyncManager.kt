@@ -204,7 +204,7 @@ object TvHomeSyncManager {
     ): Uri {
         val builder = Uri.Builder()
             .scheme("poobi")
-            .authority("play")
+            .authority(if (autoPlay) "play" else "details")
             .appendQueryParameter("type", mediaType)
             .appendQueryParameter("id", id)
 
@@ -537,32 +537,49 @@ object TvHomeSyncManager {
                 val title = titleRaw.replace(Regex("\\s\\(\\d{4}\\)$"), "")
                 val overview = item.optString("overview", "")
 
-                val season = if (item.has("season")) item.optInt("season") else null
-                val episode = if (item.has("episode")) item.optInt("episode") else null
+                val season = if (channelType != "fav" && item.has("season")) item.optInt("season") else null
+                val episode = if (channelType != "fav" && item.has("episode")) item.optInt("episode") else null
 
                 val (landscapeUri, aspectRatio) = resolveLandscapeImage(context, item, season, episode)
 
+                val isAutoPlay = (channelType == "recent")
                 val deepLink = buildDeepLinkUri(
                     mediaType = if (isTv) "tv" else "movie",
                     id = id,
                     title = title,
                     season = season,
                     episode = episode,
-                    autoPlay = (channelType == "recent")
+                    autoPlay = isAutoPlay
                 )
 
                 val displayTitle = if (season != null && episode != null) "$title S${season}E${episode}" else title
+
+                val programType = if (isTv) {
+                    if (channelType == "recent" && season != null && episode != null) {
+                        TvContractCompat.PreviewPrograms.TYPE_TV_EPISODE
+                    } else {
+                        TvContractCompat.PreviewPrograms.TYPE_TV_SERIES
+                    }
+                } else {
+                    TvContractCompat.PreviewPrograms.TYPE_MOVIE
+                }
 
                 val builder = PreviewProgram.Builder()
                     .setChannelId(channelId)
                     .setTitle(displayTitle)
                     .setDescription(overview)
-                    .setType(if (isTv) TvContractCompat.PreviewPrograms.TYPE_TV_SERIES else TvContractCompat.PreviewPrograms.TYPE_MOVIE)
+                    .setType(programType)
                     .setPosterArtAspectRatio(aspectRatio)
                     .setPosterArtUri(landscapeUri)
                     .setIntentUri(deepLink)
                     .setInternalProviderId("${channelType}_${id}_${season ?: 0}_${episode ?: 0}")
                     .setWeight(count - index)
+
+                if (programType == TvContractCompat.PreviewPrograms.TYPE_TV_EPISODE && season != null && episode != null) {
+                    builder.setEpisodeTitle("S${season}E${episode}")
+                        .setSeasonNumber(season)
+                        .setEpisodeNumber(episode)
+                }
 
                 if (channelType == "recent") {
                     val searchTitle = item.optString("display_title").ifEmpty { displayTitle }

@@ -861,12 +861,107 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun findItem(id: String, title: String? = null): JSONObject? {
+        if (id.isNotEmpty()) {
+            val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+            try {
+                val array = JSONArray(favsJson)
+                for (i in 0 until array.length()) {
+                    val it = array.optJSONObject(i) ?: continue
+                    if (it.optString("id") == id || (it.optString("imdb").isNotEmpty() && it.optString("imdb") == id)) {
+                        return it
+                    }
+                }
+            } catch (_: Exception) {}
+
+            val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+            try {
+                val array = JSONArray(recentJson)
+                for (i in 0 until array.length()) {
+                    val entry = array.optJSONObject(i) ?: continue
+                    val it = entry.optJSONObject("item") ?: continue
+                    if (it.optString("id") == id || (it.optString("imdb").isNotEmpty() && it.optString("imdb") == id)) {
+                        return it
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        if (!title.isNullOrBlank()) {
+            val cleanTitle = title.trim().lowercase()
+            val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+            try {
+                val array = JSONArray(favsJson)
+                for (i in 0 until array.length()) {
+                    val it = array.optJSONObject(i) ?: continue
+                    val t = it.optString("title").ifEmpty { it.optString("name") }.trim().lowercase()
+                    if (t == cleanTitle) {
+                        return it
+                    }
+                }
+            } catch (_: Exception) {}
+
+            val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+            try {
+                val array = JSONArray(recentJson)
+                for (i in 0 until array.length()) {
+                    val entry = array.optJSONObject(i) ?: continue
+                    val it = entry.optJSONObject("item") ?: continue
+                    val t = it.optString("title").ifEmpty { it.optString("name") }.trim().lowercase()
+                    if (t == cleanTitle) {
+                        return it
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        return null
+    }
+
+    fun findRecentlyPlayedEntry(id: String, season: Int?, episode: Int?, title: String? = null): JSONObject? {
+        val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+        try {
+            val array = JSONArray(recentJson)
+            for (i in 0 until array.length()) {
+                val entry = array.optJSONObject(i) ?: continue
+                val item = entry.optJSONObject("item") ?: continue
+                val itemId = item.optString("id")
+                val itemImdb = item.optString("imdb")
+
+                val matchesId = id.isNotEmpty() && (itemId == id || (itemImdb.isNotEmpty() && itemImdb == id))
+                val matchesTitle = !matchesId && !title.isNullOrBlank() && 
+                    (item.optString("title").equals(title, ignoreCase = true) || 
+                     item.optString("name").equals(title, ignoreCase = true) ||
+                     entry.optString("display_title").startsWith(title, ignoreCase = true))
+
+                if (matchesId || matchesTitle) {
+                    if (season != null && episode != null) {
+                        val entrySeason = if (entry.has("season")) entry.optInt("season") else null
+                        val entryEpisode = if (entry.has("episode")) entry.optInt("episode") else null
+                        if (entrySeason == season && entryEpisode == episode) {
+                            return entry
+                        }
+                    } else if (season == null && episode == null) {
+                        val isTv = item.optString("media_type") == "tv" || item.has("name")
+                        if (!isTv || (!entry.has("season") && !entry.has("episode"))) {
+                            return entry
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("StreamsViewModel", "Error finding recently played entry: ${e.message}")
+        }
+        return null
+    }
+
     fun selectRecentlyPlayedItem(entry: JSONObject) {
-        val item = entry.getJSONObject("item")
+        val item = entry.optJSONObject("item") ?: entry
         val season = if (entry.has("season")) entry.getInt("season") else null
         val episode = if (entry.has("episode")) entry.getInt("episode") else null
         val videoUrl = entry.optString("video_url")
-        val title = entry.optString("display_title")
+        val title = entry.optString("display_title").ifEmpty {
+            item.optString("title").ifEmpty { item.optString("name", "Unknown") }
+        }
 
         lastScrapedSeason = season
         lastScrapedEpisode = episode
@@ -1007,6 +1102,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _itemSeasons.value = null
         _lastWatchedEpisode.value = null
         _isMovieWatched.value = false
+        if (initialSeason == null) {
+            lastScrapedSeason = null
+            lastScrapedEpisode = null
+        }
         
         val id = item.optInt("id")
         val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }

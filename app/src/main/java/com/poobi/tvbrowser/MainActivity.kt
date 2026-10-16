@@ -129,33 +129,68 @@ class MainActivity : AppCompatActivity() {
                                          path == "play"
 
                         if (id.isNotEmpty() || title.isNotEmpty()) {
-                            browserViewModel.currentAppTab.value = 1
-                            val item = JSONObject().apply {
-                                put("id", id)
-                                put("title", title)
-                                put("name", title)
-                                put("media_type", mediaType)
+                            if (playerEngine.isPlayerActive.value) {
+                                playerEngine.stopAndRelease()
                             }
-                            streamsViewModel.selectMediaItem(item, initialSeason = season)
+                            browserViewModel.currentAppTab.value = 1
+                            streamsViewModel.clearScrapedSources()
+
                             if (shouldPlay) {
-                                streamsViewModel.performScrape(item, season, episode)
+                                val recentEntry = streamsViewModel.findRecentlyPlayedEntry(id, season, episode, title)
+                                if (recentEntry != null) {
+                                    streamsViewModel.selectRecentlyPlayedItem(recentEntry)
+                                } else {
+                                    val existingItem = streamsViewModel.findItem(id, title)
+                                    val item = existingItem ?: JSONObject().apply {
+                                        put("id", id)
+                                        put("title", title)
+                                        put("name", title)
+                                        put("media_type", mediaType)
+                                    }
+                                    streamsViewModel.selectMediaItem(item, initialSeason = season)
+                                    streamsViewModel.performScrape(item, season, episode)
+                                }
+                            } else {
+                                val existingItem = streamsViewModel.findItem(id, title)
+                                val item = existingItem ?: JSONObject().apply {
+                                    put("id", id)
+                                    put("title", title)
+                                    put("name", title)
+                                    put("media_type", mediaType)
+                                }
+                                streamsViewModel.selectMediaItem(item, initialSeason = season)
                             }
                         }
                     }
                     "favorites" -> {
+                        if (playerEngine.isPlayerActive.value) {
+                            playerEngine.stopAndRelease()
+                        }
                         browserViewModel.currentAppTab.value = 1
+                        streamsViewModel.clearSelectedMedia()
+                        streamsViewModel.clearScrapedSources()
                         streamsViewModel.setActiveCategoryIndex(1)
                         streamsViewModel.loadFavorites()
                     }
                     "recent" -> {
+                        if (playerEngine.isPlayerActive.value) {
+                            playerEngine.stopAndRelease()
+                        }
                         browserViewModel.currentAppTab.value = 1
+                        streamsViewModel.clearSelectedMedia()
+                        streamsViewModel.clearScrapedSources()
                         streamsViewModel.setActiveCategoryIndex(2)
                         streamsViewModel.loadRecentlyPlayed()
                     }
                     "search" -> {
+                        if (playerEngine.isPlayerActive.value) {
+                            playerEngine.stopAndRelease()
+                        }
                         val query = data.getQueryParameter("q") ?: data.getQueryParameter("query") ?: ""
                         if (query.isNotEmpty()) {
                             browserViewModel.currentAppTab.value = 1
+                            streamsViewModel.clearSelectedMedia()
+                            streamsViewModel.clearScrapedSources()
                             streamsViewModel.performSearch(query)
                         }
                     }
@@ -171,7 +206,12 @@ class MainActivity : AppCompatActivity() {
                 ?: ""
 
             if (query.isNotBlank()) {
+                if (playerEngine.isPlayerActive.value) {
+                    playerEngine.stopAndRelease()
+                }
                 browserViewModel.currentAppTab.value = 1
+                streamsViewModel.clearSelectedMedia()
+                streamsViewModel.clearScrapedSources()
                 streamsViewModel.performSearch(query)
             }
         }

@@ -22,12 +22,12 @@ class PoobiSearchProvider : ContentProvider() {
 
         private val COLUMNS = arrayOf(
             BaseColumns._ID,
-            SearchManager.SUGGEST_COLUMN_TEXT_1,            // Title
-            SearchManager.SUGGEST_COLUMN_TEXT_2,            // Description / Year
-            SearchManager.SUGGEST_COLUMN_RESULT_CARD_IMAGE, // Poster Image
-            SearchManager.SUGGEST_COLUMN_INTENT_DATA,       // Deep Link URI (Watch on Poobi)
-            SearchManager.SUGGEST_COLUMN_INTENT_ACTION,     // android.intent.action.VIEW
-            SearchManager.SUGGEST_COLUMN_CONTENT_TYPE,      // video/mp4
+            SearchManager.SUGGEST_COLUMN_TEXT_1,
+            SearchManager.SUGGEST_COLUMN_TEXT_2,
+            SearchManager.SUGGEST_COLUMN_RESULT_CARD_IMAGE,
+            SearchManager.SUGGEST_COLUMN_INTENT_DATA,
+            SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
+            SearchManager.SUGGEST_COLUMN_CONTENT_TYPE,
             SearchManager.SUGGEST_COLUMN_PRODUCTION_YEAR,
             SearchManager.SUGGEST_COLUMN_DURATION
         )
@@ -76,7 +76,7 @@ class PoobiSearchProvider : ContentProvider() {
                 mediaType = mediaType,
                 id = id,
                 title = title,
-                autoPlay = true
+                autoPlay = (mediaType != "tv")
             ).toString()
 
             cursor.addRow(
