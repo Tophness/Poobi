@@ -1135,6 +1135,18 @@ class PlayerEngine(
                 if (dur > 0) {
                     StreamResumeManager.savePosition(prefs, title, pos, isCompleted)
 
+                    try {
+                        val recentArray = org.json.JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
+                        for (i in 0 until recentArray.length()) {
+                            val entry = recentArray.getJSONObject(i)
+                            if (entry.optString("display_title") == title) {
+                                entry.put("duration_ms", dur)
+                                prefs.edit().putString("streams_recently_played", recentArray.toString()).apply()
+                                break
+                            }
+                        }
+                    } catch (_: Exception) {}
+
                     val item = lastScrapedItem
                     val season = lastScrapedSeason
                     val episode = lastScrapedEpisode
@@ -1159,6 +1171,7 @@ class PlayerEngine(
                                 durationMs = dur
                             )
                         }
+                        TvHomeSyncManager.syncRecentlyWatchedChannel(context)
                     }
 
                     if (isCompleted) {

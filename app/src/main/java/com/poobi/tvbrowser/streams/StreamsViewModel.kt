@@ -765,7 +765,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         season: Int?, 
         episode: Int?, 
         videoUrl: String? = null, 
-        headers: Map<String, String>? = null
+        headers: Map<String, String>? = null,
+        durationMs: Long = 0L
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
@@ -843,6 +844,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 put("item", savedItem)
                 if (season != null) put("season", season)
                 if (episode != null) put("episode", episode)
+                val finalDuration = if (durationMs > 0L) durationMs else existing?.optLong("duration_ms", 0L) ?: 0L
+                if (finalDuration > 0L) put("duration_ms", finalDuration)
 
                 val finalUrl = videoUrl ?: existing?.optString("video_url")
                 if (!finalUrl.isNullOrEmpty()) put("video_url", finalUrl)

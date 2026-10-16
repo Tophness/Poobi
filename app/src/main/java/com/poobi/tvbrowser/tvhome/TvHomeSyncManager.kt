@@ -14,6 +14,7 @@ import androidx.tvprovider.media.tv.TvContractCompat
 import androidx.tvprovider.media.tv.WatchNextProgram
 import com.chaquo.python.Python
 import com.poobi.tvbrowser.R
+import com.poobi.tvbrowser.shared.StreamResumeManager
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -443,6 +444,8 @@ object TvHomeSyncManager {
                     val cloned = JSONObject(item.toString())
                     if (entry.has("season")) cloned.put("season", entry.getInt("season"))
                     if (entry.has("episode")) cloned.put("episode", entry.getInt("episode"))
+                    if (entry.has("duration_ms")) cloned.put("duration_ms", entry.getLong("duration_ms"))
+                    if (entry.has("display_title")) cloned.put("display_title", entry.getString("display_title"))
                     items.add(cloned)
                 }
             }
@@ -560,6 +563,23 @@ object TvHomeSyncManager {
                     .setIntentUri(deepLink)
                     .setInternalProviderId("${channelType}_${id}_${season ?: 0}_${episode ?: 0}")
                     .setWeight(count - index)
+
+                if (channelType == "recent") {
+                    val searchTitle = item.optString("display_title").ifEmpty { displayTitle }
+                    val resumePos = StreamResumeManager.getPosition(context, searchTitle)
+                    val dur = item.optLong("duration_ms", 0L)
+
+                    if (resumePos > 0L && dur > 0L) {
+                        val posInt = resumePos.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+                        val durInt = dur.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+                        val percent = ((posInt.toDouble() / durInt.toDouble()) * 100.0).toLong().coerceIn(1L, 99L)
+
+                        builder.setLastPlaybackPositionMillis(posInt)
+                        builder.setDurationMillis(durInt)
+                        builder.setInteractionType(TvContractCompat.PreviewProgramColumns.INTERACTION_TYPE_VIEWS)
+                        builder.setInteractionCount(percent)
+                    }
+                }
 
                 try {
                     helper.publishPreviewProgram(builder.build())
