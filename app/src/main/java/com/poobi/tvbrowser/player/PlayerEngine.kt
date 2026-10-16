@@ -1116,7 +1116,7 @@ class PlayerEngine(
         isReleasing = false
     }
 
-    private fun saveProgress() {
+    fun saveProgress() {
         val player = exoPlayer
         if (player != null && player.playerError == null && hasReachedReady && !lastIsTrailer) {
             val title = lastVideoTitle
@@ -1137,11 +1137,14 @@ class PlayerEngine(
 
                     try {
                         val recentArray = org.json.JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
+                        val currentId = lastScrapedItem?.optString("id")
                         for (i in 0 until recentArray.length()) {
                             val entry = recentArray.getJSONObject(i)
-                            if (entry.optString("display_title") == title) {
+                            val itm = entry.optJSONObject("item")
+                            val itmId = itm?.optString("id")
+                            if (entry.optString("display_title") == title || (itmId != null && currentId != null && itmId == currentId)) {
                                 entry.put("duration_ms", dur)
-                                prefs.edit().putString("streams_recently_played", recentArray.toString()).apply()
+                                prefs.edit().putString("streams_recently_played", recentArray.toString()).commit()
                                 break
                             }
                         }
@@ -1155,23 +1158,9 @@ class PlayerEngine(
                         if (isCompleted) {
                             if (season != null && episode != null) {
                                 onVideoWatched(season, episode)
-                                TvHomeSyncManager.removeWatchNext(context, item, season, episode)
-                                val nextEp = _nextEpisodeData.value
-                                TvHomeSyncManager.updateWatchNextNext(context, item, season, episode + 1, nextEp)
-                            } else {
-                                TvHomeSyncManager.removeWatchNext(context, item, null, null)
                             }
-                        } else if (pos > 5000L) {
-                            TvHomeSyncManager.updateWatchNextContinue(
-                                context = context,
-                                item = item,
-                                season = season,
-                                episode = episode,
-                                positionMs = pos,
-                                durationMs = dur
-                            )
                         }
-                        TvHomeSyncManager.syncRecentlyWatchedChannel(context)
+                        TvHomeSyncManager.syncWatchNext(context)
                     }
 
                     if (isCompleted) {

@@ -227,7 +227,16 @@ fun StreamsDashboardScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
                     ) {
-                        itemsIndexed(objList) { index, wrapper ->
+                        itemsIndexed(
+                            items = objList,
+                            key = { idx, wrapper ->
+                                val itm = if (wrapper.has("item")) wrapper.getJSONObject("item") else wrapper
+                                val id = itm.optString("id").ifEmpty { itm.optString("imdb", idx.toString()) }
+                                val s = wrapper.optInt("season", -1)
+                                val e = wrapper.optInt("episode", -1)
+                                "${activeCategoryIndex}_${id}_${s}_${e}"
+                            }
+                        ) { index, wrapper ->
                             val item = if (wrapper.has("item")) wrapper.getJSONObject("item") else wrapper
                             val sNum = if (wrapper.has("season")) wrapper.getInt("season") else null
                             val eNum = if (wrapper.has("episode")) wrapper.getInt("episode") else null
@@ -238,7 +247,15 @@ fun StreamsDashboardScreen(
                             val newerCount = counts.second
 
                             val isFirstResult = index == 0 && activeCategoryIndex == 0 && searchResults != null
-                            val itemFocusModifier = if (isFirstResult) Modifier.focusRequester(firstResultFocusRequester) else Modifier
+                            val itemFocusModifier = if (isFirstResult) {
+                                Modifier.focusRequester(firstResultFocusRequester)
+                            } else {
+                                Modifier
+                            }.focusProperties {
+                                if (topTabFocusRequester != null) {
+                                    up = topTabFocusRequester
+                                }
+                            }
 
                             if (isDeletable) {
                                 TvFocusableHoldToDeleteBox(
@@ -247,7 +264,7 @@ fun StreamsDashboardScreen(
                                         if (activeCategoryIndex == 1) {
                                             viewModel.toggleFavorite(item, isCurrentlyViewingFavorites = true)
                                         } else if (activeCategoryIndex == 2) {
-                                            viewModel.removeFromRecentlyPlayed(index)
+                                            viewModel.removeFromRecentlyPlayed(wrapper)
                                         }
                                     },
                                     onClick = { 

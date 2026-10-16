@@ -182,6 +182,16 @@ class MainActivity : AppCompatActivity() {
                         streamsViewModel.setActiveCategoryIndex(2)
                         streamsViewModel.loadRecentlyPlayed()
                     }
+                    "new_episodes" -> {
+                        if (playerEngine.isPlayerActive.value) {
+                            playerEngine.stopAndRelease()
+                        }
+                        browserViewModel.currentAppTab.value = 1
+                        streamsViewModel.clearSelectedMedia()
+                        streamsViewModel.clearScrapedSources()
+                        streamsViewModel.setActiveCategoryIndex(1)
+                        streamsViewModel.loadFavorites()
+                    }
                     "search" -> {
                         if (playerEngine.isPlayerActive.value) {
                             playerEngine.stopAndRelease()
@@ -225,7 +235,6 @@ class MainActivity : AppCompatActivity() {
         AdBlockManager.init(this)
         startTorrentServer()
         TvHomeSyncManager.init(this)
-        TvHomeSyncManager.clearAllWatchNext(this)
 
         cursorManager = CursorManager(this, browserViewModel)
         playerEngine = PlayerEngine(
@@ -565,6 +574,20 @@ class MainActivity : AppCompatActivity() {
         streamsViewModel.refreshFavoritesSet()
         registerPythonDialogListenerAsync()
         ApkInstaller.resumePendingInstallIfPermitted(this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (::playerEngine.isInitialized && playerEngine.isPlayerActive.value) {
+            playerEngine.saveProgress()
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (::playerEngine.isInitialized && playerEngine.isPlayerActive.value) {
+            playerEngine.saveProgress()
+        }
     }
 
     private fun isMouseEvent(event: MotionEvent): Boolean {

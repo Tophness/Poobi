@@ -262,6 +262,10 @@ fun MainApp(
                             }
                         )
 
+                        val activeCategoryIndex by streamsViewModel.activeCategoryIndex.collectAsState()
+                        val searchResults by streamsViewModel.searchResults.collectAsState()
+                        val isSearchInputVisible = activeCategoryIndex == 0 && searchResults == null
+
                         ModernTab(
                             text = "Streams",
                             isSelected = currentTab == AppTab.Streams,
@@ -273,7 +277,9 @@ fun MainApp(
                                 if (isScrapeScreenActive) {
                                     down = streamsContentTabFocusRequester
                                 } else if (selectedMedia == null) {
-                                    down = streamsSearchBarFocusRequester
+                                    if (isSearchInputVisible) {
+                                        down = streamsSearchBarFocusRequester
+                                    }
                                 }
                             }
                         )

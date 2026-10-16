@@ -197,7 +197,26 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         loadGenres()
         purgeOldSubtitles()
         loadProgressCounts()
+        loadSavedNotifications()
         startBackgroundTraktCheck()
+    }
+
+    private fun loadSavedNotifications() {
+        val json = prefs.getString("saved_new_episodes", "[]") ?: "[]"
+        try {
+            val arr = JSONArray(json)
+            val list = mutableListOf<JSONObject>()
+            for (i in 0 until arr.length()) {
+                list.add(arr.getJSONObject(i))
+            }
+            _activeNotifications.value = list
+        } catch (_: Exception) {}
+    }
+
+    private fun saveNotifications(list: List<JSONObject>) {
+        val arr = JSONArray()
+        list.forEach { arr.put(it) }
+        prefs.edit().putString("saved_new_episodes", arr.toString()).apply()
     }
 
     fun getTraktNextEpisode(item: JSONObject): Pair<Int, Int>? {
@@ -365,11 +384,15 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         if (index in currentList.indices) {
             currentList.removeAt(index)
             _activeNotifications.value = currentList
+            saveNotifications(currentList)
+            TvHomeSyncManager.syncNewEpisodesChannel(context, currentList)
         }
     }
 
     fun dismissAllNotifications() {
         _activeNotifications.value = emptyList()
+        saveNotifications(emptyList())
+        TvHomeSyncManager.syncNewEpisodesChannel(context, emptyList())
     }
 
     fun playNotificationEpisode(notification: JSONObject, index: Int) {
@@ -664,14 +687,37 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     
-    fun removeFromRecentlyPlayed(index: Int) {
+    fun removeFromRecentlyPlayed(entryToRemove: JSONObject) {
         viewModelScope.launch(Dispatchers.IO) {
             val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
             val array = JSONArray(recentJson)
-            if (index >= 0 && index < array.length()) {
-                val entry = array.getJSONObject(index)
+            val targetItem = entryToRemove.optJSONObject("item") ?: entryToRemove
+            val targetId = targetItem.optString("id")
+            val targetImdb = targetItem.optString("imdb")
+            val targetSeason = if (entryToRemove.has("season")) entryToRemove.optInt("season") else null
+            val targetEpisode = if (entryToRemove.has("episode")) entryToRemove.optInt("episode") else null
+            val targetTitle = entryToRemove.optString("display_title")
+
+            var foundIndex = -1
+            for (i in 0 until array.length()) {
+                val entry = array.getJSONObject(i)
+                val itm = entry.optJSONObject("item") ?: entry
+                val id = itm.optString("id")
+                val imdb = itm.optString("imdb")
+                val sameId = (id.isNotEmpty() && id == targetId) || (imdb.isNotEmpty() && imdb == targetImdb)
+                val sameSeason = (if (entry.has("season")) entry.optInt("season") else null) == targetSeason
+                val sameEpisode = (if (entry.has("episode")) entry.optInt("episode") else null) == targetEpisode
+                val sameTitle = targetTitle.isNotEmpty() && entry.optString("display_title") == targetTitle
+
+                if ((sameId && sameSeason && sameEpisode) || sameTitle) {
+                    foundIndex = i
+                    break
+                }
+            }
+
+            if (foundIndex != -1) {
+                val entry = array.getJSONObject(foundIndex)
                 val displayTitle = entry.optString("display_title")
-                
                 val item = entry.optJSONObject("item")
                 if (item != null) {
                     val season = if (entry.has("season")) entry.getInt("season") else 0
@@ -698,24 +744,24 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         com.poobi.tvbrowser.shared.SubtitleCacheManager.removeSubtitles(context, itemKey)
                     }
                 }
-                
+
                 val newList = JSONArray()
                 for (i in 0 until array.length()) {
-                    if (i != index) newList.put(array.get(i))
+                    if (i != foundIndex) newList.put(array.get(i))
                 }
-                prefs.edit().putString("streams_recently_played", newList.toString()).apply()
+                prefs.edit().putString("streams_recently_played", newList.toString()).commit()
 
                 if (displayTitle.isNotEmpty()) {
                     StreamResumeManager.removePosition(prefs, displayTitle)
                 }
 
-                TvHomeSyncManager.syncRecentlyWatchedChannel(context)
                 if (item != null) {
                     val s = if (entry.has("season")) entry.getInt("season") else null
                     val e = if (entry.has("episode")) entry.getInt("episode") else null
                     TvHomeSyncManager.removeWatchNext(context, item, s, e)
                 }
-                
+                TvHomeSyncManager.syncWatchNext(context)
+
                 withContext(Dispatchers.Main) {
                     loadRecentlyPlayed()
                 }
@@ -857,7 +903,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             if (newList.size > 20) newList.removeAt(newList.size - 1)
 
             prefs.edit().putString("streams_recently_played", newList.toString()).apply()
-            TvHomeSyncManager.syncRecentlyWatchedChannel(context)
+            TvHomeSyncManager.syncWatchNext(context)
         }
     }
 
@@ -1231,6 +1277,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                             TvHomeSyncManager.removeWatchNext(context, item, null, null)
                         }
                         _events.value = StreamsEvent.ShowToast(if (currentStatus) "Marked as unwatched" else "Marked as watched")
+                        TvHomeSyncManager.syncWatchNext(context)
                     } else {
                         _isMovieWatched.value = currentStatus
                         _events.value = StreamsEvent.ShowToast("Failed to update status on Trakt")
@@ -1290,6 +1337,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                             } catch (e: Exception) {}
                         }
                         _events.value = StreamsEvent.ShowToast(if (isCurrentlyWatched) "Episode marked unwatched" else "Episode marked watched")
+                        TvHomeSyncManager.syncWatchNext(context)
                     } else {
                         toggleEpisodeWatchedLocalState(season, episode, isCurrentlyWatched)
                         _events.value = StreamsEvent.ShowToast("Failed to update Trakt")
@@ -2842,6 +2890,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 								val currentList = _activeNotifications.value.toMutableList()
 								currentList.addAll(enrichedList)
 								_activeNotifications.value = currentList
+								saveNotifications(currentList)
+								TvHomeSyncManager.syncNewEpisodesChannel(context, currentList)
 							}
 						}
 					}

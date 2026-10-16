@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.net.Uri
 import android.util.Log
 import android.util.LruCache
-import androidx.tvprovider.media.tv.ChannelLogoUtils
 import androidx.tvprovider.media.tv.PreviewChannel
 import androidx.tvprovider.media.tv.PreviewChannelHelper
 import androidx.tvprovider.media.tv.PreviewProgram
@@ -23,7 +22,7 @@ object TvHomeSyncManager {
     private const val TAG = "TvHomeSyncManager"
     private const val PREFS_NAME = "TvHomePrefs"
     private const val KEY_CHANNEL_FAVORITES = "tv_channel_favorites_id"
-    private const val KEY_CHANNEL_RECENTS = "tv_channel_recents_id"
+    private const val KEY_CHANNEL_NEW_EPISODES = "tv_channel_new_episodes_id"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -31,30 +30,17 @@ object TvHomeSyncManager {
     private val backdropCache = LruCache<String, String>(100)
 
     private var favSyncJob: Job? = null
-    private var recentsSyncJob: Job? = null
+    private var newEpSyncJob: Job? = null
+    private var watchNextSyncJob: Job? = null
 
     fun init(context: Context) {
         scope.launch {
             try {
                 syncFavoritesChannelInternal(context)
-                syncRecentlyWatchedChannelInternal(context)
+                syncNewEpisodesChannelInternal(context)
+                syncWatchNextInternal(context)
             } catch (e: Exception) {
                 Log.w(TAG, "TvHome initialization error: ${e.message}")
-            }
-        }
-    }
-
-    fun clearAllWatchNext(context: Context) {
-        scope.launch {
-            try {
-                val deletedRows = context.contentResolver.delete(
-                    TvContractCompat.WatchNextPrograms.CONTENT_URI,
-                    null,
-                    null
-                )
-                Log.d(TAG, "Cleared $deletedRows stale Watch Next items.")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed clearing Watch Next: ${e.message}")
             }
         }
     }
@@ -223,24 +209,124 @@ object TvHomeSyncManager {
         return builder.build()
     }
 
-    fun updateWatchNextContinue(
-        context: Context,
-        item: JSONObject,
-        season: Int?,
-        episode: Int?,
-        positionMs: Long,
-        durationMs: Long
-    ) {
+    fun getWatchNextInternalId(item: JSONObject, season: Int? = null, episode: Int? = null): String {
+        val isTv = item.optString("media_type") == "tv" || item.has("name") || (season != null && episode != null)
+        val id = item.optString("id").ifEmpty { item.optString("imdb", "0") }
+        return if (isTv) "poobi_tv_$id" else "poobi_movie_$id"
+    }
+
+    private fun getExistingWatchNextPrograms(context: Context): MutableMap<String, Long> {
+        val existingMap = mutableMapOf<String, Long>()
+        try {
+            val cursor = context.contentResolver.query(
+                TvContractCompat.WatchNextPrograms.CONTENT_URI,
+                arrayOf(
+                    TvContractCompat.WatchNextPrograms._ID,
+                    TvContractCompat.WatchNextPrograms.COLUMN_INTERNAL_PROVIDER_ID
+                ),
+                null,
+                null,
+                null
+            )
+            cursor?.use {
+                val idCol = it.getColumnIndex(TvContractCompat.WatchNextPrograms._ID)
+                val providerIdCol = it.getColumnIndex(TvContractCompat.WatchNextPrograms.COLUMN_INTERNAL_PROVIDER_ID)
+
+                if (idCol == -1) return existingMap
+
+                while (it.moveToNext()) {
+                    val programId = it.getLong(idCol)
+                    val internalId = if (providerIdCol != -1) it.getString(providerIdCol) ?: "" else ""
+
+                    if (internalId.isNotEmpty()) {
+                        if (existingMap.containsKey(internalId)) {
+                            try {
+                                context.contentResolver.delete(
+                                    TvContractCompat.buildWatchNextProgramUri(programId),
+                                    null,
+                                    null
+                                )
+                                Log.d(TAG, "Deleted duplicate Watch Next entry: $programId ($internalId)")
+                            } catch (_: Exception) {}
+                        } else {
+                            existingMap[internalId] = programId
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error querying Watch Next programs: ${e.message}", e)
+        }
+        return existingMap
+    }
+
+    fun removeWatchNext(context: Context, item: JSONObject, season: Int? = null, episode: Int? = null) {
         scope.launch {
             try {
-                val isTv = season != null && episode != null
+                val internalId = getWatchNextInternalId(item, season, episode)
+                val existingMap = getExistingWatchNextPrograms(context)
+                val programId = existingMap[internalId]
+                if (programId != null && programId > 0) {
+                    context.contentResolver.delete(
+                        TvContractCompat.buildWatchNextProgramUri(programId),
+                        null,
+                        null
+                    )
+                    context.contentResolver.notifyChange(TvContractCompat.WatchNextPrograms.CONTENT_URI, null)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed removing from Watch Next: ${e.message}")
+            }
+        }
+    }
+
+    fun syncWatchNext(context: Context) {
+        watchNextSyncJob?.cancel()
+        watchNextSyncJob = scope.launch {
+            delay(200)
+            syncWatchNextInternal(context)
+        }
+    }
+
+    private suspend fun syncWatchNextInternal(context: Context) {
+        try {
+            val helper = PreviewChannelHelper(context)
+            val existingPrograms = getExistingWatchNextPrograms(context)
+            val prefs = context.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
+            val recentArray = JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
+
+            val processedShows = mutableSetOf<String>()
+            val now = System.currentTimeMillis()
+
+            for (index in 0 until recentArray.length().coerceAtMost(20)) {
+                val entry = recentArray.getJSONObject(index)
+                val item = entry.optJSONObject("item") ?: continue
+                val season = if (entry.has("season")) entry.optInt("season") else null
+                val episode = if (entry.has("episode")) entry.optInt("episode") else null
+                val isTv = item.optString("media_type") == "tv" || item.has("name") || (season != null && episode != null)
                 val id = item.optString("id").ifEmpty { item.optString("imdb", "0") }
-                val internalId = if (isTv) "tv_${id}_${season}_${episode}" else "movie_${id}"
+                if (id.isEmpty() || id == "0") continue
+
+                val internalId = getWatchNextInternalId(item, season, episode)
+                if (processedShows.contains(internalId)) continue
+                processedShows.add(internalId)
+
+                val displayTitle = entry.optString("display_title").ifEmpty {
+                    val t = item.optString("title").ifEmpty { item.optString("name", "Unknown") }
+                    if (season != null && episode != null) "$t S${season}E$episode" else t
+                }
+
+                val resumePos = StreamResumeManager.getPosition(context, displayTitle)
+                val dur = entry.optLong("duration_ms", 0L)
+                val isCompleted = dur > 0L && resumePos >= (dur * 0.92f).toLong()
+
+                if (isCompleted && !isTv) {
+                    continue
+                }
 
                 val titleRaw = item.optString("title").ifEmpty { item.optString("name", "Unknown") }
                 val title = titleRaw.replace(Regex("\\s\\(\\d{4}\\)$"), "")
                 val overview = item.optString("overview", "")
-
                 val (landscapeUri, aspectRatio) = resolveLandscapeImage(context, item, season, episode)
 
                 val deepLink = buildDeepLinkUri(
@@ -252,131 +338,58 @@ object TvHomeSyncManager {
                     autoPlay = true
                 )
 
+                val engagementTime = now - (index * 1000L)
                 val builder = WatchNextProgram.Builder()
                     .setType(if (isTv) TvContractCompat.WatchNextPrograms.TYPE_TV_EPISODE else TvContractCompat.WatchNextPrograms.TYPE_MOVIE)
-                    .setWatchNextType(TvContractCompat.WatchNextPrograms.WATCH_NEXT_TYPE_CONTINUE)
-                    .setLastEngagementTimeUtcMillis(System.currentTimeMillis())
+                    .setWatchNextType(if (isCompleted) TvContractCompat.WatchNextPrograms.WATCH_NEXT_TYPE_NEXT else TvContractCompat.WatchNextPrograms.WATCH_NEXT_TYPE_CONTINUE)
+                    .setLastEngagementTimeUtcMillis(engagementTime)
                     .setTitle(title)
                     .setDescription(overview)
                     .setPosterArtUri(landscapeUri)
                     .setPosterArtAspectRatio(aspectRatio)
                     .setIntentUri(deepLink)
                     .setInternalProviderId(internalId)
-                    .setLastPlaybackPositionMillis(positionMs.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt())
-                    .setDurationMillis(durationMs.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt())
 
-                if (isTv) {
+                if (isTv && season != null && episode != null) {
                     builder.setEpisodeTitle("S${season}E${episode}")
-                        .setSeasonNumber(season ?: 1)
-                        .setEpisodeNumber(episode ?: 1)
+                        .setSeasonNumber(season)
+                        .setEpisodeNumber(episode)
                 }
 
-                upsertWatchNext(context, internalId, builder.build())
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed updating Watch Next continue: ${e.message}", e)
-            }
-        }
-    }
-
-    fun updateWatchNextNext(
-        context: Context,
-        item: JSONObject,
-        season: Int,
-        episode: Int,
-        nextEpisodeJson: JSONObject?
-    ) {
-        scope.launch {
-            try {
-                val id = item.optString("id").ifEmpty { item.optString("imdb", "0") }
-                val internalId = "tv_${id}_${season}_${episode}"
-
-                val showTitleRaw = item.optString("title").ifEmpty { item.optString("name", "Unknown") }
-                val showTitle = showTitleRaw.replace(Regex("\\s\\(\\d{4}\\)$"), "")
-                val epName = nextEpisodeJson?.optString("name") ?: "Episode $episode"
-                val overview = nextEpisodeJson?.optString("overview") ?: item.optString("overview", "")
-
-                val (landscapeUri, aspectRatio) = resolveLandscapeImage(
-                    context, 
-                    item, 
-                    season, 
-                    episode, 
-                    nextEpisodeJson?.optString("still_path")
-                )
-
-                val deepLink = buildDeepLinkUri(
-                    mediaType = "tv",
-                    id = id,
-                    title = showTitle,
-                    season = season,
-                    episode = episode,
-                    autoPlay = true
-                )
-
-                val builder = WatchNextProgram.Builder()
-                    .setType(TvContractCompat.WatchNextPrograms.TYPE_TV_EPISODE)
-                    .setWatchNextType(TvContractCompat.WatchNextPrograms.WATCH_NEXT_TYPE_NEXT)
-                    .setLastEngagementTimeUtcMillis(System.currentTimeMillis())
-                    .setTitle(showTitle)
-                    .setEpisodeTitle(epName)
-                    .setSeasonNumber(season)
-                    .setEpisodeNumber(episode)
-                    .setDescription(overview)
-                    .setPosterArtUri(landscapeUri)
-                    .setPosterArtAspectRatio(aspectRatio)
-                    .setIntentUri(deepLink)
-                    .setInternalProviderId(internalId)
-
-                upsertWatchNext(context, internalId, builder.build())
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed updating Watch Next (next episode): ${e.message}", e)
-            }
-        }
-    }
-
-    fun removeWatchNext(context: Context, item: JSONObject, season: Int?, episode: Int?) {
-        scope.launch {
-            try {
-                val isTv = season != null && episode != null
-                val id = item.optString("id").ifEmpty { item.optString("imdb", "0") }
-                val internalId = if (isTv) "tv_${id}_${season}_${episode}" else "movie_${id}"
-
-                val existingId = getExistingWatchNextProgramId(context, internalId)
-                if (existingId != null && existingId > 0) {
-                    val programUri = TvContractCompat.buildWatchNextProgramUri(existingId)
-                    context.contentResolver.delete(programUri, null, null)
+                if (!isCompleted && resumePos > 5000L && dur > 0L) {
+                    builder.setLastPlaybackPositionMillis(resumePos.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt())
+                    builder.setDurationMillis(dur.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt())
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed removing from Watch Next: ${e.message}")
-            }
-        }
-    }
 
-    private fun upsertWatchNext(context: Context, internalId: String, program: WatchNextProgram) {
-        val helper = PreviewChannelHelper(context)
-        val existingId = getExistingWatchNextProgramId(context, internalId)
-        if (existingId != null && existingId > 0) {
-            helper.updateWatchNextProgram(program, existingId)
-        } else {
-            helper.publishWatchNextProgram(program)
-        }
-    }
+                val existingProgramId = existingPrograms.remove(internalId)
+                val program = builder.build()
 
-    private fun getExistingWatchNextProgramId(context: Context, internalProviderId: String): Long? {
-        return try {
-            val cursor = context.contentResolver.query(
-                TvContractCompat.WatchNextPrograms.CONTENT_URI,
-                arrayOf(TvContractCompat.WatchNextPrograms._ID, TvContractCompat.WatchNextPrograms.COLUMN_INTERNAL_PROVIDER_ID),
-                "${TvContractCompat.WatchNextPrograms.COLUMN_INTERNAL_PROVIDER_ID} = ?",
-                arrayOf(internalProviderId),
-                null
-            )
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    it.getLong(it.getColumnIndexOrThrow(TvContractCompat.WatchNextPrograms._ID))
-                } else null
+                if (existingProgramId != null && existingProgramId > 0) {
+                    try {
+                        helper.updateWatchNextProgram(program, existingProgramId)
+                    } catch (e: Exception) {
+                        helper.publishWatchNextProgram(program)
+                    }
+                } else {
+                    helper.publishWatchNextProgram(program)
+                }
             }
+
+            for ((_, orphanId) in existingPrograms) {
+                try {
+                    context.contentResolver.delete(
+                        TvContractCompat.buildWatchNextProgramUri(orphanId),
+                        null,
+                        null
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error removing orphan Watch Next item $orphanId: ${e.message}")
+                }
+            }
+
+            context.contentResolver.notifyChange(TvContractCompat.WatchNextPrograms.CONTENT_URI, null)
         } catch (e: Exception) {
-            null
+            Log.e(TAG, "Failed syncing Watch Next from recently played: ${e.message}", e)
         }
     }
 
@@ -388,11 +401,11 @@ object TvHomeSyncManager {
         }
     }
 
-    fun syncRecentlyWatchedChannel(context: Context) {
-        recentsSyncJob?.cancel()
-        recentsSyncJob = scope.launch {
+    fun syncNewEpisodesChannel(context: Context, notificationsList: List<JSONObject>? = null) {
+        newEpSyncJob?.cancel()
+        newEpSyncJob = scope.launch {
             delay(500)
-            syncRecentlyWatchedChannelInternal(context)
+            syncNewEpisodesChannelInternal(context, notificationsList)
         }
     }
 
@@ -414,45 +427,36 @@ object TvHomeSyncManager {
             val favsArray = JSONArray(prefs.getString("streams_favorites", "[]") ?: "[]")
             val items = (0 until favsArray.length()).map { favsArray.getJSONObject(it) }.take(25)
 
-            syncProgramsForChannel(context, helper, channelId, items, "fav")
+            syncProgramsForFavoritesChannel(context, helper, channelId, items)
         } catch (e: Exception) {
             Log.e(TAG, "Failed syncing Favorites channel: ${e.message}", e)
         }
     }
 
-    private suspend fun syncRecentlyWatchedChannelInternal(context: Context) {
+    private suspend fun syncNewEpisodesChannelInternal(context: Context, notificationsList: List<JSONObject>? = null) {
         try {
             val helper = PreviewChannelHelper(context)
             val channelId = getOrCreateChannel(
                 context = context,
                 helper = helper,
-                prefKey = KEY_CHANNEL_RECENTS,
-                displayName = "Recently Watched",
-                description = "Recently played media on Poobi",
-                appLinkUri = "poobi://recent",
-                internalId = "poobi_channel_recent",
-                isDefault = false
+                prefKey = KEY_CHANNEL_NEW_EPISODES,
+                displayName = "New Episodes",
+                description = "Newly aired episodes for your favorite shows",
+                appLinkUri = "poobi://new_episodes",
+                internalId = "poobi_channel_new_episodes",
+                isDefault = true
             ) ?: return
 
-            val prefs = context.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
-            val recentArray = JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
-            val items = mutableListOf<JSONObject>()
-            for (i in 0 until recentArray.length().coerceAtMost(25)) {
-                val entry = recentArray.getJSONObject(i)
-                val item = entry.optJSONObject("item")
-                if (item != null) {
-                    val cloned = JSONObject(item.toString())
-                    if (entry.has("season")) cloned.put("season", entry.getInt("season"))
-                    if (entry.has("episode")) cloned.put("episode", entry.getInt("episode"))
-                    if (entry.has("duration_ms")) cloned.put("duration_ms", entry.getLong("duration_ms"))
-                    if (entry.has("display_title")) cloned.put("display_title", entry.getString("display_title"))
-                    items.add(cloned)
-                }
+            val episodes = notificationsList ?: run {
+                val prefs = context.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
+                val raw = prefs.getString("saved_new_episodes", "[]") ?: "[]"
+                val arr = JSONArray(raw)
+                (0 until arr.length()).map { arr.getJSONObject(it) }
             }
 
-            syncProgramsForChannel(context, helper, channelId, items, "recent")
+            syncProgramsForNewEpisodesChannel(context, helper, channelId, episodes)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed syncing Recently Watched channel: ${e.message}", e)
+            Log.e(TAG, "Failed syncing New Episodes channel: ${e.message}", e)
         }
     }
 
@@ -477,8 +481,7 @@ object TvHomeSyncManager {
         }
 
         try {
-            val all = helper.allChannels
-            for (ch in all) {
+            for (ch in helper.allChannels) {
                 if (ch.internalProviderId == internalId) {
                     prefs.edit().putLong(prefKey, ch.id).apply()
                     return ch.id
@@ -514,12 +517,11 @@ object TvHomeSyncManager {
         }
     }
 
-    private suspend fun syncProgramsForChannel(
+    private suspend fun syncProgramsForFavoritesChannel(
         context: Context,
         helper: PreviewChannelHelper,
         channelId: Long,
-        items: List<JSONObject>,
-        channelType: String
+        items: List<JSONObject>
     ) {
         try {
             context.contentResolver.delete(
@@ -537,75 +539,113 @@ object TvHomeSyncManager {
                 val title = titleRaw.replace(Regex("\\s\\(\\d{4}\\)$"), "")
                 val overview = item.optString("overview", "")
 
-                val season = if (channelType != "fav" && item.has("season")) item.optInt("season") else null
-                val episode = if (channelType != "fav" && item.has("episode")) item.optInt("episode") else null
+                val (landscapeUri, aspectRatio) = resolveLandscapeImage(context, item)
 
-                val (landscapeUri, aspectRatio) = resolveLandscapeImage(context, item, season, episode)
-
-                val isAutoPlay = (channelType == "recent")
                 val deepLink = buildDeepLinkUri(
                     mediaType = if (isTv) "tv" else "movie",
                     id = id,
                     title = title,
-                    season = season,
-                    episode = episode,
-                    autoPlay = isAutoPlay
+                    autoPlay = false
                 )
-
-                val displayTitle = if (season != null && episode != null) "$title S${season}E${episode}" else title
-
-                val programType = if (isTv) {
-                    if (channelType == "recent" && season != null && episode != null) {
-                        TvContractCompat.PreviewPrograms.TYPE_TV_EPISODE
-                    } else {
-                        TvContractCompat.PreviewPrograms.TYPE_TV_SERIES
-                    }
-                } else {
-                    TvContractCompat.PreviewPrograms.TYPE_MOVIE
-                }
 
                 val builder = PreviewProgram.Builder()
                     .setChannelId(channelId)
-                    .setTitle(displayTitle)
+                    .setTitle(title)
                     .setDescription(overview)
-                    .setType(programType)
+                    .setType(if (isTv) TvContractCompat.PreviewPrograms.TYPE_TV_SERIES else TvContractCompat.PreviewPrograms.TYPE_MOVIE)
                     .setPosterArtAspectRatio(aspectRatio)
                     .setPosterArtUri(landscapeUri)
                     .setIntentUri(deepLink)
-                    .setInternalProviderId("${channelType}_${id}_${season ?: 0}_${episode ?: 0}")
+                    .setInternalProviderId("fav_$id")
                     .setWeight(count - index)
-
-                if (programType == TvContractCompat.PreviewPrograms.TYPE_TV_EPISODE && season != null && episode != null) {
-                    builder.setEpisodeTitle("S${season}E${episode}")
-                        .setSeasonNumber(season)
-                        .setEpisodeNumber(episode)
-                }
-
-                if (channelType == "recent") {
-                    val searchTitle = item.optString("display_title").ifEmpty { displayTitle }
-                    val resumePos = StreamResumeManager.getPosition(context, searchTitle)
-                    val dur = item.optLong("duration_ms", 0L)
-
-                    if (resumePos > 0L && dur > 0L) {
-                        val posInt = resumePos.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
-                        val durInt = dur.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
-                        val percent = ((posInt.toDouble() / durInt.toDouble()) * 100.0).toLong().coerceIn(1L, 99L)
-
-                        builder.setLastPlaybackPositionMillis(posInt)
-                        builder.setDurationMillis(durInt)
-                        builder.setInteractionType(TvContractCompat.PreviewProgramColumns.INTERACTION_TYPE_VIEWS)
-                        builder.setInteractionCount(percent)
-                    }
-                }
 
                 try {
                     helper.publishPreviewProgram(builder.build())
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed publishing program $displayTitle: ${e.message}")
+                    Log.e(TAG, "Failed publishing favorite $title: ${e.message}")
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed syncing programs for channel $channelId: ${e.message}", e)
+            Log.e(TAG, "Failed syncing programs for favorites channel: ${e.message}", e)
+        }
+    }
+
+    private suspend fun syncProgramsForNewEpisodesChannel(
+        context: Context,
+        helper: PreviewChannelHelper,
+        channelId: Long,
+        notifications: List<JSONObject>
+    ) {
+        try {
+            context.contentResolver.delete(
+                TvContractCompat.buildPreviewProgramsUriForChannel(channelId),
+                null,
+                null
+            )
+
+            val count = notifications.size
+            for (index in notifications.indices) {
+                val notification = notifications[index]
+                val itemObj = notification.optJSONObject("item")
+                val showTitle = notification.optString("show_title", "Unknown")
+                val epName = notification.optString("episode_name", "New Episode")
+                val season = notification.optInt("season", 1)
+                val episodeNum = notification.optInt("number", 1)
+                val overview = notification.optString("episode_overview").takeIf { it.isNotEmpty() }
+                    ?: itemObj?.optString("overview")
+                    ?: ""
+
+                val showId = notification.optInt("show_id", 0).let {
+                    if (it > 0) it.toString() else itemObj?.optString("id") ?: "0"
+                }
+
+                val item = itemObj ?: JSONObject().apply {
+                    put("id", showId)
+                    put("name", showTitle)
+                    put("media_type", "tv")
+                }
+
+                val (landscapeUri, aspectRatio) = resolveLandscapeImage(
+                    context,
+                    item,
+                    season,
+                    episodeNum,
+                    notification.optString("still_path")
+                )
+
+                val deepLink = buildDeepLinkUri(
+                    mediaType = "tv",
+                    id = showId,
+                    title = showTitle,
+                    season = season,
+                    episode = episodeNum,
+                    autoPlay = true
+                )
+
+                val builder = PreviewProgram.Builder()
+                    .setChannelId(channelId)
+                    .setTitle(showTitle)
+                    .setEpisodeTitle("S${season}E${episodeNum}: $epName")
+                    .setDescription(overview)
+                    .setType(TvContractCompat.PreviewPrograms.TYPE_TV_EPISODE)
+                    .setSeasonNumber(season)
+                    .setEpisodeNumber(episodeNum)
+                    .setPosterArtAspectRatio(aspectRatio)
+                    .setPosterArtUri(landscapeUri)
+                    .setIntentUri(deepLink)
+                    .setInternalProviderId("new_ep_${showId}_${season}_${episodeNum}")
+                    .setWeight(count - index)
+
+                try {
+                    helper.publishPreviewProgram(builder.build())
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed publishing new episode program: ${e.message}")
+                }
+            }
+
+            context.contentResolver.notifyChange(TvContractCompat.Channels.CONTENT_URI, null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed syncing programs for New Episodes channel: ${e.message}", e)
         }
     }
 }
