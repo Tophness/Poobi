@@ -766,6 +766,15 @@ class PlayerEngine(
 
             override fun onPlayerError(error: PlaybackException) {
                 if (isReleasing || !_isPlayerActive.value) return
+                if (error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED) {
+                    Log.w("PlayerEngine", "Transient decoding error. Re-preparing without error dialog.")
+                    exoPlayer?.let { player ->
+                        val pos = player.currentPosition
+                        player.prepare()
+                        player.seekTo(pos)
+                        return
+                    }
+                }
                 Log.e("PlayerEngine", "onPlayerError occurred! Error code name: ${error.errorCodeName}, message: ${error.message}", error)
                 Log.e("PlayerEngine", "Failed playing stream URL: $videoUrl")
                 onPlaybackError(error, videoUrl + (if (fromStreams) "|from_streams" else ""))

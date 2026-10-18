@@ -1112,25 +1112,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         selectMediaItem(item, initialSeason = season)
 
         if (videoUrl.isNotEmpty()) {
-            val isTorrent = videoUrl.contains("127.0.0.1:11470") || videoUrl.contains("localhost:11470")
-            if (isTorrent) {
-                val path = android.net.Uri.parse(videoUrl).path?.removePrefix("/") ?: ""
-                val parts = path.split("/").filter { it.isNotEmpty() }
-                val infoHash = parts.getOrNull(0) ?: ""
-                val fileIdx = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                if (infoHash.isNotEmpty()) {
-                    val sourceDataStr = entry.optString("source_data").ifEmpty {
-                        JSONObject().apply {
-                            put("infoHash", infoHash)
-                            put("fileIdx", fileIdx)
-                        }.toString()
-                    }
-                    lastSelectedSource = try { JSONObject(sourceDataStr) } catch (e: Exception) { null }
-                    performTorrentPreBuffering(infoHash, fileIdx, sourceDataStr)
-                    return
-                }
-            }
-
             val headersMap = mutableMapOf<String, String>()
             entry.optJSONObject("headers")?.let { headers ->
                 headers.keys().forEach { headersMap[it] = headers.getString(it) }
