@@ -10,6 +10,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -17,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poobi.tvbrowser.shared.TvFocusableBox
+import kotlinx.coroutines.delay
 
 @Composable
 fun UpdateDialog() {
@@ -27,6 +30,20 @@ fun UpdateDialog() {
     updateInfoState?.let { update ->
         val activity = LocalContext.current as? Activity
         val context = LocalContext.current
+
+        val cancelFocusRequester = remember { FocusRequester() }
+        val installFocusRequester = remember { FocusRequester() }
+
+        LaunchedEffect(isUpdateDownloading) {
+            delay(100)
+            try {
+                if (isUpdateDownloading) {
+                    cancelFocusRequester.requestFocus()
+                } else {
+                    installFocusRequester.requestFocus()
+                }
+            } catch (_: Exception) {}
+        }
 
         AlertDialog(
             onDismissRequest = {
@@ -85,13 +102,19 @@ fun UpdateDialog() {
             confirmButton = {
                 if (isUpdateDownloading) {
                     TvFocusableBox(
-                        modifier = Modifier.height(40.dp),
-                        defaultColor = Color(0xFFE53935),
+                        modifier = Modifier
+                            .height(40.dp)
+                            .focusRequester(cancelFocusRequester),
+                        defaultColor = Color(0xFF333338),
                         shape = RoundedCornerShape(20.dp),
                         onClick = { UpdateManager.cancelDownload() }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
-                            Text("Cancel", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "Cancel",
+                                color = if (isFocused) Color.Black else Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 } else {
@@ -117,17 +140,19 @@ fun UpdateDialog() {
 
                         TvFocusableBox(
                             modifier = Modifier.height(40.dp),
-                            defaultColor = Color.DarkGray,
+                            defaultColor = Color(0xFF333338),
                             shape = RoundedCornerShape(20.dp),
                             onClick = { UpdateManager.dismissUpdate() }
                         ) { isFocused ->
                             Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                                Text("Later", color = if (isFocused) Color.Black else Color.White)
+                                Text("Later", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
 
                         TvFocusableBox(
-                            modifier = Modifier.height(40.dp),
+                            modifier = Modifier
+                                .height(40.dp)
+                                .focusRequester(installFocusRequester),
                             defaultColor = Color(0xFF4CAF50),
                             shape = RoundedCornerShape(20.dp),
                             onClick = {

@@ -639,6 +639,7 @@ class PlayerEngine(
         _currentQuality.value = null
         _isPlayerActive.value = true
         isReleasing = false
+        (context as? android.app.Activity)?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         subtitleOffsetUs = 0L
         subtitleAlignmentManager.setOffset(0L)
@@ -673,7 +674,7 @@ class PlayerEngine(
                     .setAudioProcessors(arrayOf(audioWaveformCapturer))
                     .build()
             }
-        }
+        }.setEnableDecoderFallback(true)
 
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory(dataSourceFactory)
@@ -1110,6 +1111,7 @@ class PlayerEngine(
             Log.e("PlayerEngine", "Error releasing player", e)
         }
         exoPlayer = null
+        (context as? android.app.Activity)?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         _isPlayerActive.value = false
         _isControllerVisible.value = false
         onPlayerReleased()

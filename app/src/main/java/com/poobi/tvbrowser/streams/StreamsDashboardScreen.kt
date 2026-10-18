@@ -46,12 +46,15 @@ fun StreamsDashboardScreen(
     val isScraping by viewModel.isScraping.collectAsState()
     val activeCategoryIndex by viewModel.activeCategoryIndex.collectAsState()
     val progressCounts by viewModel.showProgressCounts.collectAsState()
+    val liveSuggestions by viewModel.liveSuggestions.collectAsState()
+    val predictedQuery by viewModel.predictedQuery.collectAsState()
     var searchInput by remember { mutableStateOf("") }
 
-    val searchFieldFocusRequester = searchBarFocusRequester ?: remember { FocusRequester() }
-    val searchButtonFocusRequester = remember { FocusRequester() }
-    val firstHistoryFocusRequester = remember { FocusRequester() }
-    val firstResultFocusRequester = remember { FocusRequester() }
+    val predictedSuffix = remember(searchInput, predictedQuery) {
+        if (searchInput.length >= 2 && predictedQuery.startsWith(searchInput, ignoreCase = true)) {
+            predictedQuery.substring(searchInput.length)
+        } else ""
+    }
 
     val categories = listOf(
         "Search" to { viewModel.loadSearchHistory() },
@@ -64,6 +67,16 @@ fun StreamsDashboardScreen(
         "Top Rated" to { viewModel.loadLibraryCategory("Top Rated Movies", "get_top_rated", "movie") }
     )
 
+    val searchFieldFocusRequester = searchBarFocusRequester ?: remember { FocusRequester() }
+    val searchButtonFocusRequester = remember { FocusRequester() }
+    val firstHistoryFocusRequester = remember { FocusRequester() }
+    val firstCardFocusRequester = remember { FocusRequester() }
+    val categoryTabFocusRequesters = remember(categories.size) { List(categories.size) { FocusRequester() } }
+
+    val currentTabFocusTarget = remember(activeCategoryIndex, categoryTabFocusRequesters) {
+        categoryTabFocusRequesters.getOrNull(activeCategoryIndex) ?: FocusRequester.Default
+    }
+
     val isDeletable = activeCategoryIndex == 1 || activeCategoryIndex == 2
 
     LaunchedEffect(searchResults) {
@@ -72,20 +85,43 @@ fun StreamsDashboardScreen(
             try {
                 delay(200)
                 if (KeyTracker.lastKeyPressTime < startTime) {
-                    firstResultFocusRequester.requestFocus()
+                    firstCardFocusRequester.requestFocus()
                 }
             } catch (e: Exception) {}
         }
     }
 
+    val hasCardsInCenter = when {
+        activeCategoryIndex != 0 -> libraryItems != null && libraryItems!!.length() > 0
+        searchResults != null -> searchResults!!.length() > 0
+        liveSuggestions.isNotEmpty() -> true
+        else -> false
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
-        if (activeCategoryIndex == 0 && searchResults == null) {
+        if (activeCategoryIndex == 0) {
             Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 TvSearchField(
                     value = searchInput,
-                    onValueChange = { searchInput = it },
+                    onValueChange = { 
+                        searchInput = it
+                        viewModel.updateLiveSearch(it)
+                    },
                     placeholder = "Search Movie or TV Show...",
-                    onSearch = { viewModel.performSearch(searchInput) },
+                    predictedSuffix = predictedSuffix,
+                    onAcceptPrediction = {
+                        if (predictedSuffix.isNotEmpty()) {
+                            val full = searchInput + predictedSuffix
+                            searchInput = full
+                            viewModel.updateLiveSearch(full)
+                        }
+                    },
+                    onSearch = { 
+                        val queryToSearch = if (predictedSuffix.isNotEmpty()) searchInput + predictedSuffix else searchInput
+                        searchInput = queryToSearch
+                        viewModel.clearLiveSearch()
+                        viewModel.performSearch(queryToSearch) 
+                    },
                     focusRequester = searchFieldFocusRequester,
                     modifier = Modifier
                         .weight(1f)
@@ -95,8 +131,10 @@ fun StreamsDashboardScreen(
                             if (topTabFocusRequester != null) {
                                 up = topTabFocusRequester
                             }
-                            if (searchHistory.isNotEmpty()) {
-                                down = firstHistoryFocusRequester
+                            down = when {
+                                hasCardsInCenter -> firstCardFocusRequester
+                                searchHistory.isNotEmpty() -> firstHistoryFocusRequester
+                                else -> currentTabFocusTarget
                             }
                         }
                 )
@@ -110,12 +148,17 @@ fun StreamsDashboardScreen(
                             if (topTabFocusRequester != null) {
                                 up = topTabFocusRequester
                             }
-                            if (searchHistory.isNotEmpty()) {
-                                down = firstHistoryFocusRequester
+                            down = when {
+                                hasCardsInCenter -> firstCardFocusRequester
+                                searchHistory.isNotEmpty() -> firstHistoryFocusRequester
+                                else -> currentTabFocusTarget
                             }
                         },
                     onClick = { 
-                        viewModel.performSearch(searchInput) 
+                        val queryToSearch = if (predictedSuffix.isNotEmpty()) searchInput + predictedSuffix else searchInput
+                        searchInput = queryToSearch
+                        viewModel.clearLiveSearch()
+                        viewModel.performSearch(queryToSearch) 
                     }
                 ) { isFocused ->
                     Icon(
@@ -127,8 +170,8 @@ fun StreamsDashboardScreen(
                 }
             }
 
-            if (searchHistory.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
+            if (searchResults == null && liveSuggestions.isEmpty() && searchHistory.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Recent Searches", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     
@@ -164,14 +207,22 @@ fun StreamsDashboardScreen(
                         TvFocusableHoldToDeleteBox(
                             modifier = Modifier
                                 .height(42.dp)
-                                .let { if (index == 0) it.focusRequester(firstHistoryFocusRequester) else it },
+                                .let { if (index == 0) it.focusRequester(firstHistoryFocusRequester) else it }
+                                .focusProperties {
+                                    up = searchFieldFocusRequester
+                                    down = currentTabFocusTarget
+                                },
                             onTriggerDelete = {
                                 val list = searchHistory.toMutableList()
                                 list.removeAt(index)
                                 viewModel.prefs.edit().putString("streams_search_history", JSONArray(list).toString()).apply()
                                 viewModel.loadSearchHistory()
                             },
-                            onClick = { searchInput = query; viewModel.performSearch(query) }
+                            onClick = { 
+                                searchInput = query
+                                viewModel.clearLiveSearch()
+                                viewModel.performSearch(query) 
+                            }
                         ) { isFocused, progress ->
                             Row(
                                 modifier = Modifier
@@ -206,6 +257,44 @@ fun StreamsDashboardScreen(
             if (isScraping) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     CircularProgressIndicator(color = Color(0xFF00BCD4))
+                }
+            } else if (activeCategoryIndex == 0 && searchResults == null && liveSuggestions.isNotEmpty()) {
+                val suggestionsListState = rememberLazyListState()
+                LazyRow(
+                    state = suggestionsListState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .mouseWheelHorizontalScroll(suggestionsListState),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
+                ) {
+                    itemsIndexed(
+                        items = liveSuggestions,
+                        key = { idx, item -> "sug_${item.optString("id", idx.toString())}" }
+                    ) { index, item ->
+                        TvFocusableBox(
+                            modifier = Modifier
+                                .wrapContentSize()
+                                .then(if (index == 0) Modifier.focusRequester(firstCardFocusRequester) else Modifier)
+                                .focusProperties {
+                                    up = searchFieldFocusRequester
+                                    down = currentTabFocusTarget
+                                },
+                            onClick = { 
+                                viewModel.clearLiveSearch()
+                                viewModel.selectMediaItem(item) 
+                            }
+                        ) { isFocused ->
+                            RichMediaCard(
+                                item = item,
+                                viewModel = viewModel,
+                                isFocused = isFocused,
+                                progress = 0f,
+                                isDeletable = false
+                            )
+                        }
+                    }
                 }
             } else {
                 val itemsToShow = if (activeCategoryIndex == 0) searchResults else libraryItems
@@ -246,16 +335,12 @@ fun StreamsDashboardScreen(
                             val unwatchedCount = counts.first
                             val newerCount = counts.second
 
-                            val isFirstResult = index == 0 && activeCategoryIndex == 0 && searchResults != null
-                            val itemFocusModifier = if (isFirstResult) {
-                                Modifier.focusRequester(firstResultFocusRequester)
-                            } else {
-                                Modifier
-                            }.focusProperties {
-                                if (topTabFocusRequester != null) {
-                                    up = topTabFocusRequester
+                            val itemFocusModifier = Modifier
+                                .then(if (index == 0) Modifier.focusRequester(firstCardFocusRequester) else Modifier)
+                                .focusProperties {
+                                    up = if (activeCategoryIndex == 0) searchFieldFocusRequester else (topTabFocusRequester ?: FocusRequester.Default)
+                                    down = currentTabFocusTarget
                                 }
-                            }
 
                             if (isDeletable) {
                                 TvFocusableHoldToDeleteBox(
@@ -321,16 +406,32 @@ fun StreamsDashboardScreen(
             itemsIndexed(categories) { index, pair ->
                 val isActive = activeCategoryIndex == index
                 TvFocusableBox(
-                    modifier = Modifier.height(42.dp),
+                    modifier = Modifier
+                        .height(42.dp)
+                        .focusRequester(categoryTabFocusRequesters[index])
+                        .focusProperties {
+                            up = when {
+                                hasCardsInCenter -> firstCardFocusRequester
+                                activeCategoryIndex == 0 && searchHistory.isNotEmpty() -> firstHistoryFocusRequester
+                                activeCategoryIndex == 0 -> searchFieldFocusRequester
+                                else -> topTabFocusRequester ?: FocusRequester.Default
+                            }
+                        },
                     onClick = { 
-                        viewModel.setActiveCategoryIndex(index)
-                        searchInput = ""
-                        if (index > 0) pair.second() else viewModel.loadSearchHistory() 
+                        if (activeCategoryIndex != index) {
+                            viewModel.setActiveCategoryIndex(index)
+                            searchInput = ""
+                            viewModel.clearLiveSearch()
+                            if (index > 0) pair.second() else viewModel.loadSearchHistory() 
+                        }
                     },
                     onFocus = { 
-                        viewModel.setActiveCategoryIndex(index)
-                        searchInput = ""
-                        if (index > 0) pair.second() else viewModel.loadSearchHistory() 
+                        if (activeCategoryIndex != index) {
+                            viewModel.setActiveCategoryIndex(index)
+                            searchInput = ""
+                            viewModel.clearLiveSearch()
+                            if (index > 0) pair.second() else viewModel.loadSearchHistory() 
+                        }
                     }
                 ) { isFocused ->
                     Box(

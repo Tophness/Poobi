@@ -239,7 +239,15 @@ class TorrentStreamServer private constructor(
                 return
             }
 
-            val torrentInfo = handle.torrentFile()
+            var torrentInfo = handle.torrentFile()
+            var metaAttempts = 0
+            while (torrentInfo == null && metaAttempts < 125) {
+                if (cancellationToken.count == 0L) return
+                Thread.sleep(200)
+                torrentInfo = handle.torrentFile()
+                metaAttempts++
+            }
+
             if (torrentInfo == null) {
                 onError("Torrent metadata parse error.")
                 return
@@ -365,7 +373,14 @@ class TorrentStreamServer private constructor(
                 )
             }
 
-            val torrentInfo = handle.torrentFile() 
+            var torrentInfo = handle.torrentFile() 
+            var metaAttempts = 0
+            while (torrentInfo == null && metaAttempts < 125) {
+                Thread.sleep(200)
+                torrentInfo = handle.torrentFile()
+                metaAttempts++
+            }
+
             if (torrentInfo == null) {
                 return newFixedLengthResponse(
                     Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Metadata unavailable"

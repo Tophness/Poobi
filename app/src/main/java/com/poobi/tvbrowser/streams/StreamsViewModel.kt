@@ -145,6 +145,14 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _isMovieWatched = MutableStateFlow(false)
     val isMovieWatched: StateFlow<Boolean> = _isMovieWatched.asStateFlow()
 
+    private val _liveSuggestions = MutableStateFlow<List<JSONObject>>(emptyList())
+    val liveSuggestions: StateFlow<List<JSONObject>> = _liveSuggestions.asStateFlow()
+
+    private val _predictedQuery = MutableStateFlow("")
+    val predictedQuery: StateFlow<String> = _predictedQuery.asStateFlow()
+
+    private var liveSearchJob: Job? = null
+
     var lastScrapedSeason: Int? = null
     var lastScrapedEpisode: Int? = null
     var lastSelectedSource: JSONObject? = null
@@ -590,14 +598,94 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun updateLiveSearch(query: String) {
+        liveSearchJob?.cancel()
+        val clean = query.trim()
+        if (clean.length < 2) {
+            _liveSuggestions.value = emptyList()
+            _predictedQuery.value = ""
+            return
+        }
+
+        liveSearchJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(250)
+            if (!isActive) return@launch
+            try {
+                val cached = searchCache.get(clean)
+                val resultsArray = if (cached != null) {
+                    cached
+                } else {
+                    val py = Python.getInstance()
+                    val scraper = py.getModule("main")
+                    val resultsJson = scraper.callAttr("search", clean).toString()
+                    val arr = JSONArray(resultsJson)
+                    if (arr.length() > 0) searchCache.put(clean, arr)
+                    arr
+                }
+
+                if (!isActive) return@launch
+
+                val itemsList = mutableListOf<JSONObject>()
+                for (i in 0 until resultsArray.length().coerceAtMost(12)) {
+                    val it = resultsArray.getJSONObject(i)
+                    if (it.optString("media_type") in listOf("movie", "tv")) {
+                        itemsList.add(it)
+                    }
+                }
+
+                var bestMatch = ""
+                for (it in itemsList) {
+                    val orig = it.optString("orig_title").ifEmpty { it.optString("title") }.replace(Regex("\\s\\(\\d{4}\\)$"), "").trim()
+                    if (orig.startsWith(clean, ignoreCase = true) && !orig.equals(clean, ignoreCase = true)) {
+                        bestMatch = orig
+                        break
+                    }
+                }
+
+                if (bestMatch.isEmpty()) {
+                    for (it in itemsList) {
+                        val orig = it.optString("orig_title").ifEmpty { it.optString("title") }.replace(Regex("\\s\\(\\d{4}\\)$"), "").trim()
+                        if (orig.contains(clean, ignoreCase = true) && !orig.equals(clean, ignoreCase = true)) {
+                            val wordMatch = orig.split(" ").find { it.startsWith(clean, ignoreCase = true) }
+                            if (wordMatch != null) {
+                                bestMatch = orig
+                                break
+                            }
+                        }
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    _liveSuggestions.value = itemsList
+                    _predictedQuery.value = bestMatch
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+        }
+    }
+
+    fun clearLiveSearch() {
+        liveSearchJob?.cancel()
+        _liveSuggestions.value = emptyList()
+        _predictedQuery.value = ""
+    }
+
     fun performSearch(query: String) {
         if (query.isBlank()) return
         addToSearchHistory(query)
+        clearLiveSearch()
         
         val cached = searchCache.get(query)
         if (cached != null) {
-            _searchResults.value = cached
-            _isScraping.value = false
+            if (cached.length() > 0) {
+                _searchResults.value = cached
+                _isScraping.value = false
+            } else {
+                _searchResults.value = null
+                _isScraping.value = false
+                _events.value = StreamsEvent.ShowToast("No results found for \"$query\"")
+            }
             return
         }
 
@@ -611,16 +699,21 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val scraper = py.getModule("main")
                 val resultsJson = scraper.callAttr("search", query).toString()
                 val results = JSONArray(resultsJson)
-                searchCache.put(query, results)
                 withContext(Dispatchers.Main) {
-                    _searchResults.value = results
                     _isScraping.value = false
+                    if (results.length() > 0) {
+                        searchCache.put(query, results)
+                        _searchResults.value = results
+                    } else {
+                        _searchResults.value = null
+                        _events.value = StreamsEvent.ShowToast("No results found for \"$query\"")
+                    }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     _events.value = StreamsEvent.ShowToast("Search error: ${e.message}")
                     _isScraping.value = false
-                    _searchResults.value = JSONArray()
+                    _searchResults.value = null
                 }
             }
         }
@@ -795,7 +888,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
-        addToRecentlyPlayed(displayTitle, item, season, episode, url, headers)
+        addToRecentlyPlayed(displayTitle, item, season, episode, url, headers, sourceData = lastSelectedSource?.toString())
 
         val autoSubMode = prefs.getInt("auto_sub_pref", 0)
         if (autoSubMode == 0) {
@@ -812,7 +905,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         episode: Int?, 
         videoUrl: String? = null, 
         headers: Map<String, String>? = null,
-        durationMs: Long = 0L
+        durationMs: Long = 0L,
+        sourceData: String? = null
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
@@ -898,6 +992,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                 val finalHeaders = if (headers != null) JSONObject(headers) else existing?.optJSONObject("headers")
                 if (finalHeaders != null) put("headers", finalHeaders)
+
+                val finalSourceData = sourceData ?: existing?.optString("source_data")
+                if (!finalSourceData.isNullOrEmpty()) put("source_data", finalSourceData)
             }
             newList.add(0, newEntry)
             if (newList.size > 20) newList.removeAt(newList.size - 1)
@@ -1015,6 +1112,25 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         selectMediaItem(item, initialSeason = season)
 
         if (videoUrl.isNotEmpty()) {
+            val isTorrent = videoUrl.contains("127.0.0.1:11470") || videoUrl.contains("localhost:11470")
+            if (isTorrent) {
+                val path = android.net.Uri.parse(videoUrl).path?.removePrefix("/") ?: ""
+                val parts = path.split("/").filter { it.isNotEmpty() }
+                val infoHash = parts.getOrNull(0) ?: ""
+                val fileIdx = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                if (infoHash.isNotEmpty()) {
+                    val sourceDataStr = entry.optString("source_data").ifEmpty {
+                        JSONObject().apply {
+                            put("infoHash", infoHash)
+                            put("fileIdx", fileIdx)
+                        }.toString()
+                    }
+                    lastSelectedSource = try { JSONObject(sourceDataStr) } catch (e: Exception) { null }
+                    performTorrentPreBuffering(infoHash, fileIdx, sourceDataStr)
+                    return
+                }
+            }
+
             val headersMap = mutableMapOf<String, String>()
             entry.optJSONObject("headers")?.let { headers ->
                 headers.keys().forEach { headersMap[it] = headers.getString(it) }

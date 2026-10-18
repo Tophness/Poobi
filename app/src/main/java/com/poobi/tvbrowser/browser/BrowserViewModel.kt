@@ -115,6 +115,100 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val _savedTabsList = MutableStateFlow<JSONArray>(JSONArray())
     val savedTabsList: StateFlow<JSONArray> = _savedTabsList.asStateFlow()
 
+    private val _browserPredictedQuery = MutableStateFlow("")
+    val browserPredictedQuery: StateFlow<String> = _browserPredictedQuery.asStateFlow()
+
+    private var browserSuggestJob: kotlinx.coroutines.Job? = null
+
+    fun updateBrowserSuggestions(query: String) {
+        browserSuggestJob?.cancel()
+        val clean = query.trim()
+        if (clean.length < 2) {
+            _browserPredictedQuery.value = ""
+            return
+        }
+
+        browserSuggestJob = viewModelScope.launch(Dispatchers.IO) {
+            val history = _historyList.value
+            val favorites = _favoritesList.value
+            var localMatch = ""
+
+            for (i in 0 until favorites.length()) {
+                val item = favorites.optJSONObject(i) ?: continue
+                val url = item.optString("url").removePrefix("https://").removePrefix("http://").removePrefix("www.")
+                val title = item.optString("title")
+                if (url.startsWith(clean, ignoreCase = true) && !url.equals(clean, ignoreCase = true)) {
+                    localMatch = url
+                    break
+                }
+                if (title.startsWith(clean, ignoreCase = true) && !title.equals(clean, ignoreCase = true)) {
+                    localMatch = title
+                    break
+                }
+            }
+
+            if (localMatch.isEmpty()) {
+                for (i in 0 until history.length()) {
+                    val item = history.optJSONObject(i) ?: continue
+                    val url = item.optString("url").removePrefix("https://").removePrefix("http://").removePrefix("www.")
+                    val title = item.optString("title")
+                    if (url.startsWith(clean, ignoreCase = true) && !url.equals(clean, ignoreCase = true)) {
+                        localMatch = url
+                        break
+                    }
+                    if (title.startsWith(clean, ignoreCase = true) && !title.equals(clean, ignoreCase = true)) {
+                        localMatch = title
+                        break
+                    }
+                }
+            }
+
+            if (localMatch.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    _browserPredictedQuery.value = localMatch
+                }
+                return@launch
+            }
+
+            kotlinx.coroutines.delay(150)
+            if (browserSuggestJob?.isActive != true) return@launch
+
+            try {
+                val encoded = java.net.URLEncoder.encode(clean, "UTF-8")
+                val url = URL("https://suggestqueries.google.com/complete/search?client=firefox&q=$encoded")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 3000
+                conn.readTimeout = 3000
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+                if (conn.responseCode == 200) {
+                    val response = conn.inputStream.bufferedReader().use { it.readText() }
+                    val jsonArray = JSONArray(response)
+                    if (jsonArray.length() > 1) {
+                        val suggestions = jsonArray.getJSONArray(1)
+                        for (i in 0 until suggestions.length()) {
+                            val sug = suggestions.getString(i)
+                            if (sug.startsWith(clean, ignoreCase = true) && !sug.equals(clean, ignoreCase = true)) {
+                                withContext(Dispatchers.Main) {
+                                    _browserPredictedQuery.value = sug
+                                }
+                                return@launch
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+
+            withContext(Dispatchers.Main) {
+                _browserPredictedQuery.value = ""
+            }
+        }
+    }
+
+    fun clearBrowserSuggestions() {
+        browserSuggestJob?.cancel()
+        _browserPredictedQuery.value = ""
+    }
+
     private var currentHost = ""
     var isExtractionActive = false
     val recordedSelectors = mutableListOf<String>()

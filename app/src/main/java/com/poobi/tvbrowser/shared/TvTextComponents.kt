@@ -8,10 +8,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
@@ -36,15 +36,26 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+object InputFieldState {
+    var isEditing: Boolean = false
+    var onDismissRequest: (() -> Unit)? = null
+}
 
 @Composable
 fun TvMarqueeText(
@@ -68,6 +79,23 @@ fun TvMarqueeText(
     )
 }
 
+class PredictiveTextVisualTransformation(private val suffix: String) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        if (suffix.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
+        val combined = buildAnnotatedString {
+            append(text)
+            withStyle(SpanStyle(color = Color.Gray)) {
+                append(suffix)
+            }
+        }
+        val offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int = offset
+            override fun transformedToOriginal(offset: Int): Int = offset.coerceAtMost(text.length)
+        }
+        return TransformedText(combined, offsetMapping)
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TvInputField(
@@ -80,6 +108,8 @@ fun TvInputField(
     containerColor: Color = Color(0xFF333333),
     imeAction: ImeAction = ImeAction.Search,
     focusRequester: FocusRequester? = null,
+    predictedSuffix: String = "",
+    onAcceptPrediction: (() -> Unit)? = null,
     onAction: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -96,12 +126,28 @@ fun TvInputField(
         }
     }
 
+    LaunchedEffect(isReadOnly) {
+        InputFieldState.isEditing = !isReadOnly
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            InputFieldState.isEditing = false
+        }
+    }
+
     val fieldModifier = if (label.isEmpty()) {
         modifier
     } else {
         Modifier
             .fillMaxWidth()
             .height(44.dp)
+    }
+
+    val visualTransformation = remember(isPassword, predictedSuffix) {
+        if (isPassword) PasswordVisualTransformation()
+        else if (predictedSuffix.isNotEmpty()) PredictiveTextVisualTransformation(predictedSuffix)
+        else VisualTransformation.None
     }
 
     val content = @Composable {
@@ -116,7 +162,7 @@ fun TvInputField(
                 platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
             ),
             cursorBrush = SolidColor(Color(0xFF00BCD4)),
-            visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+            visualTransformation = visualTransformation,
             keyboardOptions = KeyboardOptions(imeAction = imeAction),
             keyboardActions = KeyboardActions(onAny = {
                 isReadOnly = true
@@ -159,11 +205,12 @@ fun TvInputField(
                             return@onPreviewKeyEvent true
                         }
 
-                        if (isArrowKey) {
-                            if (!isReadOnly && !isImeVisible) {
-                                isReadOnly = true
-                            }
+                        if (keyCode == KeyEvent.KEYCODE_TAB && predictedSuffix.isNotEmpty()) {
+                            onAcceptPrediction?.invoke()
+                            return@onPreviewKeyEvent true
+                        }
 
+                        if (isArrowKey) {
                             if (isReadOnly) {
                                 val direction = when (keyCode) {
                                     KeyEvent.KEYCODE_DPAD_UP -> FocusDirection.Up
@@ -175,6 +222,16 @@ fun TvInputField(
                                 if (direction != null && focusManager.moveFocus(direction)) {
                                     return@onPreviewKeyEvent true
                                 }
+                            } else {
+                                if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                                    isReadOnly = true
+                                    keyboardController?.hide()
+                                    val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) FocusDirection.Up else FocusDirection.Down
+                                    if (focusManager.moveFocus(direction)) {
+                                        return@onPreviewKeyEvent true
+                                    }
+                                }
+                                return@onPreviewKeyEvent false
                             }
                         }
 
@@ -261,6 +318,8 @@ fun TvSearchField(
     placeholder: String,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
+    predictedSuffix: String = "",
+    onAcceptPrediction: (() -> Unit)? = null,
     onSearch: () -> Unit
 ) {
     TvInputField(
@@ -270,6 +329,8 @@ fun TvSearchField(
         modifier = modifier,
         imeAction = ImeAction.Search,
         focusRequester = focusRequester,
+        predictedSuffix = predictedSuffix,
+        onAcceptPrediction = onAcceptPrediction,
         onAction = onSearch
     )
 }

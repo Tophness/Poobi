@@ -47,6 +47,13 @@ fun BrowserHomeScreen(
     val bookmarksArray by viewModel.favoritesList.collectAsState()
     val downloadsArray by viewModel.downloadsList.collectAsState()
     val savedTabsArray by viewModel.savedTabsList.collectAsState()
+    val browserPredictedQuery by viewModel.browserPredictedQuery.collectAsState()
+
+    val predictedSuffix = remember(urlInput, browserPredictedQuery) {
+        if (urlInput.length >= 2 && browserPredictedQuery.startsWith(urlInput, ignoreCase = true)) {
+            browserPredictedQuery.substring(urlInput.length)
+        } else ""
+    }
 
     val searchFieldFocusRequester = searchBarFocusRequester ?: remember { FocusRequester() }
     val goButtonFocusRequester = remember { FocusRequester() }
@@ -73,9 +80,25 @@ fun BrowserHomeScreen(
         ) {
             TvSearchField(
                 value = urlInput,
-                onValueChange = { urlInput = it },
+                onValueChange = { 
+                    urlInput = it
+                    viewModel.updateBrowserSuggestions(it)
+                },
                 placeholder = "Search Google or type a URL...",
-                onSearch = { viewModel.loadUrlAndBrowse(context, urlInput) },
+                predictedSuffix = predictedSuffix,
+                onAcceptPrediction = {
+                    if (predictedSuffix.isNotEmpty()) {
+                        val full = urlInput + predictedSuffix
+                        urlInput = full
+                        viewModel.updateBrowserSuggestions(full)
+                    }
+                },
+                onSearch = { 
+                    val toLoad = if (predictedSuffix.isNotEmpty()) urlInput + predictedSuffix else urlInput
+                    urlInput = toLoad
+                    viewModel.clearBrowserSuggestions()
+                    viewModel.loadUrlAndBrowse(context, toLoad) 
+                },
                 focusRequester = searchFieldFocusRequester,
                 modifier = Modifier
                     .weight(1f)
@@ -112,7 +135,10 @@ fun BrowserHomeScreen(
                         }
                     },
                 onClick = { 
-                    viewModel.loadUrlAndBrowse(context, urlInput) 
+                    val toLoad = if (predictedSuffix.isNotEmpty()) urlInput + predictedSuffix else urlInput
+                    urlInput = toLoad
+                    viewModel.clearBrowserSuggestions()
+                    viewModel.loadUrlAndBrowse(context, toLoad) 
                 }
             ) { isFocused ->
                 Icon(

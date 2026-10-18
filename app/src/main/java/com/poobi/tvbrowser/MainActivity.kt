@@ -245,6 +245,14 @@ class MainActivity : AppCompatActivity() {
 
                 if (streamsViewModel.isTryingAll.value) {
                     streamsViewModel.onPlaybackError()
+                } else if (streamsViewModel.isPlayingFromSavedLink) {
+                    streamsViewModel.isPlayingFromSavedLink = false
+                    val item = streamsViewModel.selectedItem.value
+                    val season = streamsViewModel.lastScrapedSeason
+                    val episode = streamsViewModel.lastScrapedEpisode
+                    if (item != null) {
+                        streamsViewModel.performScrape(item, season, episode)
+                    }
                 } else {
                     val fromStreams = rawUrl.endsWith("|from_streams")
                     val url = if (fromStreams) rawUrl.removeSuffix("|from_streams") else rawUrl
@@ -252,15 +260,7 @@ class MainActivity : AppCompatActivity() {
                     val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
                     val fallbackPref = prefs.getInt("exo_fallback_pref", 0)
 
-                    if (streamsViewModel.isPlayingFromSavedLink) {
-                        streamsViewModel.isPlayingFromSavedLink = false
-                        val item = streamsViewModel.selectedItem.value
-                        val season = streamsViewModel.lastScrapedSeason
-                        val episode = streamsViewModel.lastScrapedEpisode
-                        if (item != null) {
-                            streamsViewModel.performScrape(item, season, episode)
-                        }
-                    } else if (fromStreams) {
+                    if (fromStreams) {
                         when (fallbackPref) {
                             1 -> {
                                 val item = streamsViewModel.selectedItem.value
@@ -989,13 +989,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        if (com.poobi.tvbrowser.shared.InputFieldState.isEditing && event.keyCode == KeyEvent.KEYCODE_BACK) {
+            return super.dispatchKeyEvent(event)
+        }
+
         if (event.keyCode == KeyEvent.KEYCODE_BACK && (System.currentTimeMillis() - lastRightClickTime) < 500L) {
             return true
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val isImeVisible = window.decorView.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true
-            if (isImeVisible && event.keyCode != KeyEvent.KEYCODE_BACK) {
+            if (isImeVisible) {
                 return super.dispatchKeyEvent(event)
             }
         }

@@ -482,6 +482,7 @@ fun MainApp(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
                             player = playerEngine.exoPlayer
+                            keepScreenOn = true
                             useController = true
                             setShowSubtitleButton(true)
                             setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
@@ -691,6 +692,7 @@ fun MainApp(
                         }
                     },
                     update = { view ->
+                        view.keepScreenOn = true
                         if (view.player != playerEngine.exoPlayer) {
                             view.player = playerEngine.exoPlayer
                         }
