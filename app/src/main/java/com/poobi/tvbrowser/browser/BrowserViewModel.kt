@@ -7,6 +7,8 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.Message
 import android.util.Log
 import android.view.View
@@ -38,7 +40,9 @@ data class TabMetadata(
     val streamItemJson: String? = null,
     val season: Int? = null,
     val episode: Int? = null,
-    var isIdle: Boolean = false
+    var isIdle: Boolean = false,
+    var isDesktopMode: Boolean = false,
+    var zoomLevel: Int = 100
 )
 
 sealed class BrowserDialogState {
@@ -59,7 +63,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val prefs: SharedPreferences = appContext.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
 
     private val _webViews = mutableStateListOf<WebView>()
-    private val _webViewHosts = java.util.WeakHashMap<WebView, String>()
+    private val webViewHosts = ConcurrentHashMap<WebView, String>()
+    private val webViewUserAgents = ConcurrentHashMap<WebView, String>()
 
     val interceptedMediaUrls = ConcurrentHashMap<String, Map<String, String>>()
     val interceptedSubtitleUrls = ConcurrentHashMap<String, Map<String, String>>()
@@ -86,6 +91,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private val _customView = MutableStateFlow<View?>(null)
     val customView: StateFlow<View?> = _customView.asStateFlow()
+
+    private val _isDesktopMode = MutableStateFlow(false)
+    val isDesktopMode: StateFlow<Boolean> = _isDesktopMode.asStateFlow()
+
+    private val _currentZoomLevel = MutableStateFlow(100)
+    val currentZoomLevel: StateFlow<Int> = _currentZoomLevel.asStateFlow()
 
     private var pendingCustomView: View? = null
     var customViewCallback: WebChromeClient.CustomViewCallback? = null
@@ -224,6 +235,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     companion object {
+        const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+
         const val DEFAULT_AUTOPLAY_SCRIPT = """
             (function() {
                 if (window.autoPlayInjected) return;
@@ -337,7 +350,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         url: String? = null, 
         switchTo: Boolean = true, 
         title: String? = null,
-        idle: Boolean = false
+        idle: Boolean = false,
+        isDesktop: Boolean = false,
+        zoom: Int = 100
     ): WebView {
         val newWebView = WebView(context).apply {
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
@@ -346,7 +361,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT
             )
             visibility = View.INVISIBLE
-            tag = TabMetadata(defaultTitle = title, defaultUrl = url, isIdle = idle)
+            tag = TabMetadata(
+                defaultTitle = title, 
+                defaultUrl = url, 
+                isIdle = idle,
+                isDesktopMode = isDesktop,
+                zoomLevel = zoom
+            )
         }
         setupWebView(newWebView)
         _webViews.add(newWebView)
@@ -380,6 +401,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         interceptedSubtitleUrls.clear()
 
         val metadata = targetWebView.tag as? TabMetadata
+        _isDesktopMode.value = metadata?.isDesktopMode ?: false
+        _currentZoomLevel.value = metadata?.zoomLevel ?: 100
+
         val idleUrl = metadata?.defaultUrl
         if (metadata?.isIdle == true && !idleUrl.isNullOrBlank()) {
             metadata.isIdle = false
@@ -413,6 +437,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             Log.e("TVBrowser", "Error clearing WebView state", e)
         }
 
+        webViewHosts.remove(wv)
+        webViewUserAgents.remove(wv)
         _webViews.removeAt(index)
         wv.destroy()
         saveTabs()
@@ -466,13 +492,19 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 if (_currentTabIndex.value == -1) {
                     _currentTabIndex.value = 0
                 }
+                val prevMeta = currentWebView?.tag as? TabMetadata
+                val existingDesktop = prevMeta?.isDesktopMode ?: false
+                val existingZoom = prevMeta?.zoomLevel ?: 100
+
                 currentWebView?.tag = TabMetadata(
                     defaultTitle = currentWebView?.title,
                     defaultUrl = url,
                     streamItemJson = streamItemJson,
                     season = season,
                     episode = episode,
-                    isIdle = false
+                    isIdle = false,
+                    isDesktopMode = existingDesktop,
+                    zoomLevel = existingZoom
                 )
                 currentWebView?.loadUrl(url)
                 _isBrowsing.value = true
@@ -509,7 +541,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val url = obj.optString("url")
                 if (url.isNotEmpty()) {
                     val title = obj.optString("title")
-                    createNewTab(context, url, switchTo = false, title = title, idle = shouldBeIdle)
+                    val isDesktop = obj.optBoolean("is_desktop", false)
+                    val zoom = obj.optInt("zoom", 100)
+                    createNewTab(
+                        context = context, 
+                        url = url, 
+                        switchTo = false, 
+                        title = title, 
+                        idle = shouldBeIdle,
+                        isDesktop = isDesktop,
+                        zoom = zoom
+                    )
                 }
             }
             if (_currentTabIndex.value == -1 && _webViews.isNotEmpty()) {
@@ -526,6 +568,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _topBarVisible.value = false
         _currentUrl.value = ""
         _currentTabIndex.value = -1
+        _isDesktopMode.value = false
+        _currentZoomLevel.value = 100
     }
 
     fun isFavorited(url: String): Boolean {
@@ -549,6 +593,57 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         } else {
             saveToList("favorites", url, wv.title ?: url, "${url.hashCode()}.png")
         }
+    }
+
+    fun toggleDesktopMode(context: Context? = null) {
+        val wv = currentWebView ?: return
+        val metadata = wv.tag as? TabMetadata ?: return
+        val newMode = !metadata.isDesktopMode
+        metadata.isDesktopMode = newMode
+        _isDesktopMode.value = newMode
+        
+        applyDesktopMode(wv, newMode)
+        saveTabs()
+        wv.reload()
+
+        val msg = if (newMode) "Desktop mode enabled" else "Mobile mode enabled"
+        Toast.makeText(context ?: appContext, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun applyDesktopMode(wv: WebView, isDesktop: Boolean) {
+        val defaultUA = prefs.getString("user_agent", WebSettings.getDefaultUserAgent(appContext)) ?: WebSettings.getDefaultUserAgent(appContext)
+        val selectedUA = if (isDesktop) DESKTOP_USER_AGENT else defaultUA
+        webViewUserAgents[wv] = selectedUA
+        wv.settings.userAgentString = selectedUA
+        wv.settings.useWideViewPort = isDesktop
+        wv.settings.loadWithOverviewMode = isDesktop
+    }
+
+    fun zoomIn(context: Context? = null) {
+        val current = _currentZoomLevel.value
+        val next = (current + 10).coerceAtMost(300)
+        setZoomLevel(next, context)
+    }
+
+    fun zoomOut(context: Context? = null) {
+        val current = _currentZoomLevel.value
+        val next = (current - 10).coerceAtLeast(50)
+        setZoomLevel(next, context)
+    }
+
+    fun resetZoom(context: Context? = null) {
+        setZoomLevel(100, context)
+    }
+
+    fun setZoomLevel(percent: Int, context: Context? = null) {
+        val clamped = percent.coerceIn(50, 300)
+        _currentZoomLevel.value = clamped
+        val wv = currentWebView ?: return
+        val metadata = wv.tag as? TabMetadata
+        metadata?.zoomLevel = clamped
+        wv.settings.textZoom = clamped
+        saveTabs()
+        Toast.makeText(context ?: appContext, "Zoom: $clamped%", Toast.LENGTH_SHORT).show()
     }
 
     fun executeCopy(selectedText: String, context: Context) {
@@ -826,7 +921,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         wv.isFocusable = true
         wv.isFocusableInTouchMode = true
         val defaultUA = WebSettings.getDefaultUserAgent(appContext)
-        val customUserAgent = prefs.getString("user_agent", defaultUA)
+        val customUserAgent = prefs.getString("user_agent", defaultUA) ?: defaultUA
+
+        val metadata = wv.tag as? TabMetadata
+        val isDesktop = metadata?.isDesktopMode ?: false
+        val zoom = metadata?.zoomLevel ?: 100
+        val selectedUA = if (isDesktop) DESKTOP_USER_AGENT else customUserAgent
+        
+        webViewUserAgents[wv] = selectedUA
         
         wv.settings.apply {
             javaScriptEnabled = true
@@ -836,7 +938,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             setSupportMultipleWindows(true)
             javaScriptCanOpenWindowsAutomatically = false
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-            userAgentString = customUserAgent
+            userAgentString = selectedUA
+            useWideViewPort = isDesktop
+            loadWithOverviewMode = isDesktop
+            setSupportZoom(true)
+            builtInZoomControls = true
+            displayZoomControls = false
+            textZoom = zoom
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                 isAlgorithmicDarkeningAllowed = !isLightTheme.value
             }
@@ -884,7 +992,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 interceptedSubtitleUrls.clear()
                 if (url != null && view != null) {
                     val host = Uri.parse(url).host ?: ""
-                    _webViewHosts[view] = host
+                    webViewHosts[view] = host
                     if (view == currentWebView) currentHost = host
                 }
             }
@@ -914,7 +1022,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     if (content != null && content.contains("#EXTM3U")) {
                         val headers = mutableMapOf<String, String>()
                         CookieManager.getInstance().getCookie(url ?: "")?.let { headers["Cookie"] = it }
-                        headers["User-Agent"] = view.settings.userAgentString
+                        headers["User-Agent"] = webViewUserAgents[view] ?: view.settings.userAgentString
                         if (url != null) {
                             interceptedMediaUrls[url] = headers
                             if (extractVideoPref.value != 0 && _isBrowsing.value && view == currentWebView) {
@@ -954,12 +1062,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         CookieManager.getInstance().getCookie(requestedUrl)?.let {
                             headers["Cookie"] = it
                         }
-                        
-                        val userAgent = prefs.getString("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36") ?: ""
+
+                        val activeUserAgent = (if (view != null) webViewUserAgents[view] else null)
+                            ?: prefs.getString("user_agent", DESKTOP_USER_AGENT)
+                            ?: DESKTOP_USER_AGENT
                         val viewUrl = _currentUrl.value
 
                         if (!headers.containsKey("User-Agent")) {
-                            headers["User-Agent"] = userAgent
+                            headers["User-Agent"] = activeUserAgent
                         }
 
                         if (!headers.containsKey("Referer")) {
@@ -981,8 +1091,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                                 
                                 interceptedMediaUrls[localFileUrl] = headers
                                 
-                                if (videoTriggerPref.value == 0 && _isBrowsing.value && view == currentWebView && wasEmpty) {
-                                    view?.post { attemptVideoExtraction(null, null) }
+                                if (videoTriggerPref.value == 0 && _isBrowsing.value && wasEmpty) {
+                                    view?.post { 
+                                        if (view == currentWebView) {
+                                            attemptVideoExtraction(null, null) 
+                                        }
+                                    }
                                 }
                                 
                                 return WebResourceResponse(
@@ -997,8 +1111,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         }
 
                         interceptedMediaUrls[requestedUrl] = headers
-                        if (videoTriggerPref.value == 0 && _isBrowsing.value && view == currentWebView && wasEmpty) {
-                            view?.post { attemptVideoExtraction(null, null) }
+                        if (videoTriggerPref.value == 0 && _isBrowsing.value && wasEmpty) {
+                            view?.post { 
+                                if (view == currentWebView) {
+                                    attemptVideoExtraction(null, null) 
+                                }
+                            }
                         }
                     }
                     if (requestedUrl.contains(".srt") || requestedUrl.contains(".vtt") || requestedUrl.contains(".ass")) {
@@ -1006,7 +1124,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     }
 
                     val filterOption = AdBlockUtils.mapRequestToFilterOption(request)
-                    val host = _webViewHosts[view] ?: currentHost
+                    val host = (if (view != null) webViewHosts[view] else null) ?: currentHost
                     if (AdBlockManager.shouldBlock(requestedUrl, filterOption, host)) {
                         return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream("".toByteArray()))
                     }
@@ -1086,7 +1204,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             wv.evaluateJavascript(DEFAULT_AUTOPLAY_SCRIPT, null)
         }
 
-        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val handler = Handler(Looper.getMainLooper())
         var attempts = 0
         val extractionTask = object : Runnable {
             override fun run() {
@@ -1849,6 +1967,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             val obj = JSONObject().apply {
                 put("url", url)
                 put("title", wv.title?.takeIf { it.isNotBlank() } ?: metadata?.defaultTitle ?: url)
+                put("is_desktop", metadata?.isDesktopMode ?: false)
+                put("zoom", metadata?.zoomLevel ?: 100)
             }
             array.put(obj)
         }

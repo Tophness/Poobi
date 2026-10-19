@@ -658,7 +658,6 @@ class MainActivity : AppCompatActivity() {
                         handleRightClick(event.x, event.y)
                         return true
                     }
-                    // When on Home screen or TopBar address bar, let Compose receive the right-click
                 }
                 if (isMiddleClick) {
                     if (isBrowsingWebPage) {
@@ -1176,6 +1175,23 @@ class MainActivity : AppCompatActivity() {
                             browserViewModel.currentDialog.value == null
         
         if (isBrowserMode) {
+            if (event.isCtrlPressed && event.action == KeyEvent.ACTION_DOWN) {
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_EQUALS, KeyEvent.KEYCODE_PLUS, KeyEvent.KEYCODE_NUMPAD_ADD -> {
+                        browserViewModel.zoomIn(this)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_MINUS, KeyEvent.KEYCODE_NUMPAD_SUBTRACT -> {
+                        browserViewModel.zoomOut(this)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_0, KeyEvent.KEYCODE_NUMPAD_0 -> {
+                        browserViewModel.resetZoom(this)
+                        return true
+                    }
+                }
+            }
+
             val isHwKeyboard = HardwareInputManager.isHardwareKeyboardActive(this)
             val isEnterKey = event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
             val isAlphaKey = isHwKeyboard && HardwareInputManager.isAlphaKeyboardDevice(event.device)
