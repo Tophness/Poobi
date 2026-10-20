@@ -241,7 +241,10 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
         val downTime = SystemClock.uptimeMillis()
         val eventTime = SystemClock.uptimeMillis()
 
-        viewModel.currentWebView?.requestFocus()
+        val wv = viewModel.currentWebView
+        if (wv != null && !wv.hasFocus()) {
+            wv.requestFocus()
+        }
 
         val properties = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_FINGER }
         val coordinates = MotionEvent.PointerCoords().apply { x = _cursorX.value; y = _cursorY.value; pressure = 1.0f; size = 1.0f }
@@ -249,8 +252,13 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
         val downEvent = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_DOWN, 1, arrayOf(properties), arrayOf(coordinates), 0, 0, 1.0f, 1.0f, 0, 0, 0, 0)
         val upEvent = MotionEvent.obtain(downTime, eventTime + 100, MotionEvent.ACTION_UP, 1, arrayOf(properties), arrayOf(coordinates), 0, 0, 1.0f, 1.0f, 0, 0, 0, 0)
 
-        activity.window.superDispatchTouchEvent(downEvent)
-        activity.window.superDispatchTouchEvent(upEvent)
+        if (wv != null) {
+            wv.dispatchTouchEvent(downEvent)
+            wv.dispatchTouchEvent(upEvent)
+        } else {
+            activity.window.superDispatchTouchEvent(downEvent)
+            activity.window.superDispatchTouchEvent(upEvent)
+        }
 
         downEvent.recycle()
         upEvent.recycle()
