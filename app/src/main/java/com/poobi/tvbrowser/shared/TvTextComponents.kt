@@ -125,12 +125,16 @@ fun TvInputField(
         mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length)))
     }
 
-    if (textFieldValue.text != value) {
-        textFieldValue = textFieldValue.copy(
-            text = value,
-            selection = TextRange(value.length)
-        )
+    LaunchedEffect(value) {
+        if (textFieldValue.text != value) {
+            textFieldValue = textFieldValue.copy(
+                text = value,
+                selection = TextRange(value.length)
+            )
+        }
     }
+
+    var isAcceptingRight by remember { mutableStateOf(false) }
 
     val isImeVisible = WindowInsets.isImeVisible
     LaunchedEffect(isImeVisible) {
@@ -208,28 +212,34 @@ fun TvInputField(
                 }
                 .onPreviewKeyEvent { keyEvent ->
                     val nativeEvent = keyEvent.nativeKeyEvent
-                    if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
-                        val keyCode = nativeEvent.keyCode
-                        val isEnterKey = keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
-                        val isDpadCenter = keyCode == KeyEvent.KEYCODE_DPAD_CENTER
-                        val isArrowKey = keyCode == KeyEvent.KEYCODE_DPAD_UP ||
-                                        keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
-                                        keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
-                                        keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                    val keyCode = nativeEvent.keyCode
+                    val isEnterKey = keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+                    val isDpadCenter = keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                    val isArrowKey = keyCode == KeyEvent.KEYCODE_DPAD_UP ||
+                                    keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+                                    keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+                                    keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
 
-                        if (keyCode == KeyEvent.KEYCODE_BACK && !isReadOnly) {
-                            isReadOnly = true
-                            keyboardController?.hide()
+                    if (keyCode == KeyEvent.KEYCODE_BACK && !isReadOnly) {
+                        isReadOnly = true
+                        isAcceptingRight = false
+                        keyboardController?.hide()
+                        return@onPreviewKeyEvent true
+                    }
+
+                    if (keyCode == KeyEvent.KEYCODE_TAB && predictedSuffix.isNotEmpty()) {
+                        if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
                             return@onPreviewKeyEvent true
-                        }
-
-                        if (keyCode == KeyEvent.KEYCODE_TAB && predictedSuffix.isNotEmpty()) {
+                        } else if (nativeEvent.action == KeyEvent.ACTION_UP) {
                             onAcceptPrediction?.invoke()
                             return@onPreviewKeyEvent true
                         }
+                    }
 
-                        if (isArrowKey) {
-                            if (isReadOnly) {
+                    if (isArrowKey) {
+                        if (isReadOnly) {
+                            isAcceptingRight = false
+                            if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
                                 val direction = when (keyCode) {
                                     KeyEvent.KEYCODE_DPAD_UP -> FocusDirection.Up
                                     KeyEvent.KEYCODE_DPAD_DOWN -> FocusDirection.Down
@@ -240,13 +250,29 @@ fun TvInputField(
                                 if (direction != null && focusManager.moveFocus(direction)) {
                                     return@onPreviewKeyEvent true
                                 }
-                            } else {
-                                val isCursorAtEnd = textFieldValue.selection.collapsed && textFieldValue.selection.max >= textFieldValue.text.length
-                                if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && isCursorAtEnd && predictedSuffix.isNotEmpty()) {
-                                    onAcceptPrediction?.invoke()
+                            }
+                        } else {
+                            val isCursorAtEnd = textFieldValue.selection.collapsed && textFieldValue.selection.max >= textFieldValue.text.length
+                            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && isCursorAtEnd && predictedSuffix.isNotEmpty()) {
+                                if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
+                                    isAcceptingRight = true
                                     return@onPreviewKeyEvent true
+                                } else if (nativeEvent.action == KeyEvent.ACTION_UP) {
+                                    if (isAcceptingRight) {
+                                        isAcceptingRight = false
+                                        onAcceptPrediction?.invoke()
+                                        return@onPreviewKeyEvent true
+                                    }
                                 }
-                                if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                            }
+
+                            if (nativeEvent.action == KeyEvent.ACTION_UP && isAcceptingRight) {
+                                isAcceptingRight = false
+                                return@onPreviewKeyEvent true
+                            }
+
+                            if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                                if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
                                     isReadOnly = true
                                     keyboardController?.hide()
                                     val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) FocusDirection.Up else FocusDirection.Down
@@ -254,11 +280,13 @@ fun TvInputField(
                                         return@onPreviewKeyEvent true
                                     }
                                 }
-                                return@onPreviewKeyEvent false
                             }
+                            return@onPreviewKeyEvent false
                         }
+                    }
 
-                        if (isReadOnly) {
+                    if (isReadOnly) {
+                        if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
                             if (isEnterKey || isDpadCenter) {
                                 val isHwKeyboard = HardwareInputManager.isHardwareKeyboardActive(context)
                                 if (isEnterKey && isHwKeyboard && value.isNotBlank()) {
@@ -284,7 +312,9 @@ fun TvInputField(
                                     return@onPreviewKeyEvent true
                                 }
                             }
-                        } else {
+                        }
+                    } else {
+                        if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
                             if (isEnterKey || isDpadCenter) {
                                 isReadOnly = true
                                 keyboardController?.hide()

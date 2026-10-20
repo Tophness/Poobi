@@ -988,7 +988,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        if (com.poobi.tvbrowser.shared.InputFieldState.isEditing && event.keyCode == KeyEvent.KEYCODE_BACK) {
+        if (com.poobi.tvbrowser.shared.InputFieldState.isEditing) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                HardwareInputManager.notifyKeyboardUsed()
+            }
             return super.dispatchKeyEvent(event)
         }
 
