@@ -123,8 +123,7 @@ fun StreamsDashboardScreen(
                         }
                     },
                     onSearch = { 
-                        val queryToSearch = if (predictedSuffix.isNotEmpty()) searchInput + predictedSuffix else searchInput
-                        searchInput = queryToSearch
+                        val queryToSearch = searchInput
                         viewModel.clearLiveSearch()
                         viewModel.performSearch(queryToSearch) 
                     },
@@ -161,8 +160,7 @@ fun StreamsDashboardScreen(
                             }
                         },
                     onClick = { 
-                        val queryToSearch = if (predictedSuffix.isNotEmpty()) searchInput + predictedSuffix else searchInput
-                        searchInput = queryToSearch
+                        val queryToSearch = searchInput
                         viewModel.clearLiveSearch()
                         viewModel.performSearch(queryToSearch) 
                     }

@@ -38,12 +38,14 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -119,6 +121,17 @@ fun TvInputField(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
+    var textFieldValue by remember {
+        mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length)))
+    }
+
+    if (textFieldValue.text != value) {
+        textFieldValue = textFieldValue.copy(
+            text = value,
+            selection = TextRange(value.length)
+        )
+    }
+
     val isImeVisible = WindowInsets.isImeVisible
     LaunchedEffect(isImeVisible) {
         if (!isImeVisible) {
@@ -152,8 +165,13 @@ fun TvInputField(
 
     val content = @Composable {
         BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
+            value = textFieldValue,
+            onValueChange = { newTfv ->
+                textFieldValue = newTfv
+                if (newTfv.text != value) {
+                    onValueChange(newTfv.text)
+                }
+            },
             readOnly = isReadOnly,
             textStyle = TextStyle(
                 color = Color.White,
@@ -223,6 +241,11 @@ fun TvInputField(
                                     return@onPreviewKeyEvent true
                                 }
                             } else {
+                                val isCursorAtEnd = textFieldValue.selection.collapsed && textFieldValue.selection.max >= textFieldValue.text.length
+                                if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && isCursorAtEnd && predictedSuffix.isNotEmpty()) {
+                                    onAcceptPrediction?.invoke()
+                                    return@onPreviewKeyEvent true
+                                }
                                 if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                                     isReadOnly = true
                                     keyboardController?.hide()

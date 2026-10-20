@@ -94,8 +94,7 @@ fun BrowserHomeScreen(
                     }
                 },
                 onSearch = { 
-                    val toLoad = if (predictedSuffix.isNotEmpty()) urlInput + predictedSuffix else urlInput
-                    urlInput = toLoad
+                    val toLoad = urlInput
                     viewModel.clearBrowserSuggestions()
                     viewModel.loadUrlAndBrowse(context, toLoad) 
                 },
@@ -135,8 +134,7 @@ fun BrowserHomeScreen(
                         }
                     },
                 onClick = { 
-                    val toLoad = if (predictedSuffix.isNotEmpty()) urlInput + predictedSuffix else urlInput
-                    urlInput = toLoad
+                    val toLoad = urlInput
                     viewModel.clearBrowserSuggestions()
                     viewModel.loadUrlAndBrowse(context, toLoad) 
                 }
