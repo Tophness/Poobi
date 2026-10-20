@@ -34,6 +34,89 @@ import java.net.URL
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
+open class WebAppView(context: Context) : WebView(context) {
+
+    private var lastValidInputConnection: android.view.inputmethod.InputConnection? = null
+    private var lastEditorInfo: android.view.inputmethod.EditorInfo? = null
+    private var lastValidConnectionTime: Long = 0L
+
+    override fun getWindowToken(): android.os.IBinder? {
+        val timeSinceValid = System.currentTimeMillis() - lastValidConnectionTime
+        if (timeSinceValid < 3000L && hasFocus()) {
+            val stack = Thread.currentThread().stackTrace
+            for (element in stack) {
+                if (element.className.contains("ImeAdapter", ignoreCase = true)) {
+                    return android.os.Binder()
+                }
+            }
+        }
+        return super.getWindowToken()
+    }
+
+    override fun onCheckIsTextEditor(): Boolean {
+        val timeSinceValid = System.currentTimeMillis() - lastValidConnectionTime
+        if (timeSinceValid < 3000L && hasFocus() && lastValidInputConnection != null) {
+            return true
+        }
+        return super.onCheckIsTextEditor()
+    }
+
+    override fun onCreateInputConnection(outAttrs: android.view.inputmethod.EditorInfo?): android.view.inputmethod.InputConnection? {
+        val timeSinceValid = System.currentTimeMillis() - lastValidConnectionTime
+        if (timeSinceValid < 3000L && hasFocus() && lastValidInputConnection != null && lastEditorInfo != null) {
+            outAttrs?.let {
+                it.inputType = lastEditorInfo!!.inputType
+                it.imeOptions = lastEditorInfo!!.imeOptions
+                it.actionLabel = lastEditorInfo!!.actionLabel
+                it.initialSelStart = lastEditorInfo!!.initialSelStart
+                it.initialSelEnd = lastEditorInfo!!.initialSelEnd
+            }
+            return lastValidInputConnection
+        }
+
+        val ic = super.onCreateInputConnection(outAttrs)
+        if (ic != null && outAttrs != null && outAttrs.inputType != android.view.inputmethod.EditorInfo.TYPE_NULL) {
+            lastValidConnectionTime = System.currentTimeMillis()
+            lastEditorInfo = android.view.inputmethod.EditorInfo().apply {
+                inputType = outAttrs.inputType
+                imeOptions = outAttrs.imeOptions
+                actionLabel = outAttrs.actionLabel
+                initialSelStart = outAttrs.initialSelStart
+                initialSelEnd = outAttrs.initialSelEnd
+            }
+
+            val wrapped = object : android.view.inputmethod.InputConnectionWrapper(ic, true) {
+                override fun closeConnection() {
+                    val time = System.currentTimeMillis() - lastValidConnectionTime
+                    if (time < 1500L && hasFocus()) {
+                        return
+                    }
+                    super.closeConnection()
+                }
+            }
+            lastValidInputConnection = wrapped
+
+            postDelayed({
+                if (hasFocus() && lastValidInputConnection != null) {
+                    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                    imm?.showSoftInput(this@WebAppView, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                }
+            }, 200)
+
+            return wrapped
+        }
+
+        return ic
+    }
+
+    override fun clearFocus() {
+        lastValidInputConnection = null
+        lastEditorInfo = null
+        lastValidConnectionTime = 0L
+        super.clearFocus()
+    }
+}
+
 data class TabMetadata(
     val defaultTitle: String?,
     val defaultUrl: String? = null, 
@@ -354,7 +437,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         isDesktop: Boolean = false,
         zoom: Int = 100
     ): WebView {
-        val newWebView = WebView(context).apply {
+        val newWebView = WebAppView(context).apply {
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
             layoutParams = android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
