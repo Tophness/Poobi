@@ -36,7 +36,8 @@ import org.json.JSONArray
 fun StreamsDashboardScreen(
     viewModel: StreamsViewModel,
     searchBarFocusRequester: FocusRequester? = null,
-    topTabFocusRequester: FocusRequester? = null
+    topTabFocusRequester: FocusRequester? = null,
+    cardFocusRequester: FocusRequester? = null
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -69,8 +70,13 @@ fun StreamsDashboardScreen(
 
     val searchFieldFocusRequester = searchBarFocusRequester ?: remember { FocusRequester() }
     val searchButtonFocusRequester = remember { FocusRequester() }
-    val firstHistoryFocusRequester = remember { FocusRequester() }
-    val firstCardFocusRequester = remember { FocusRequester() }
+
+    var lastFocusedHistoryIndex by remember { mutableStateOf(0) }
+    val lastHistoryFocusRequester = remember { FocusRequester() }
+
+    var lastFocusedCardIndex by remember(activeCategoryIndex, searchResults) { mutableStateOf(0) }
+    val lastCardFocusRequester = cardFocusRequester ?: remember { FocusRequester() }
+
     val categoryTabFocusRequesters = remember(categories.size) { List(categories.size) { FocusRequester() } }
 
     val currentTabFocusTarget = remember(activeCategoryIndex, categoryTabFocusRequesters) {
@@ -85,7 +91,7 @@ fun StreamsDashboardScreen(
             try {
                 delay(200)
                 if (KeyTracker.lastKeyPressTime < startTime) {
-                    firstCardFocusRequester.requestFocus()
+                    lastCardFocusRequester.requestFocus()
                 }
             } catch (e: Exception) {}
         }
@@ -132,8 +138,8 @@ fun StreamsDashboardScreen(
                                 up = topTabFocusRequester
                             }
                             down = when {
-                                hasCardsInCenter -> firstCardFocusRequester
-                                searchHistory.isNotEmpty() -> firstHistoryFocusRequester
+                                hasCardsInCenter -> lastCardFocusRequester
+                                searchHistory.isNotEmpty() -> lastHistoryFocusRequester
                                 else -> currentTabFocusTarget
                             }
                         }
@@ -149,8 +155,8 @@ fun StreamsDashboardScreen(
                                 up = topTabFocusRequester
                             }
                             down = when {
-                                hasCardsInCenter -> firstCardFocusRequester
-                                searchHistory.isNotEmpty() -> firstHistoryFocusRequester
+                                hasCardsInCenter -> lastCardFocusRequester
+                                searchHistory.isNotEmpty() -> lastHistoryFocusRequester
                                 else -> currentTabFocusTarget
                             }
                         },
@@ -193,6 +199,7 @@ fun StreamsDashboardScreen(
                     }
                 }
                 
+                val targetHistoryIndex = lastFocusedHistoryIndex.coerceIn(0, (searchHistory.size - 1).coerceAtLeast(0))
                 val searchHistoryListState = rememberLazyListState()
                 LazyRow(
                     state = searchHistoryListState,
@@ -204,14 +211,16 @@ fun StreamsDashboardScreen(
                     contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp)
                 ) {
                     itemsIndexed(searchHistory) { index, query ->
+                        val isTargetHistory = (index == targetHistoryIndex)
                         TvFocusableHoldToDeleteBox(
                             modifier = Modifier
                                 .height(42.dp)
-                                .let { if (index == 0) it.focusRequester(firstHistoryFocusRequester) else it }
+                                .then(if (isTargetHistory) Modifier.focusRequester(lastHistoryFocusRequester) else Modifier)
                                 .focusProperties {
                                     up = searchFieldFocusRequester
                                     down = currentTabFocusTarget
                                 },
+                            onFocus = { lastFocusedHistoryIndex = index },
                             onTriggerDelete = {
                                 val list = searchHistory.toMutableList()
                                 list.removeAt(index)
@@ -260,6 +269,7 @@ fun StreamsDashboardScreen(
                 }
             } else if (activeCategoryIndex == 0 && searchResults == null && liveSuggestions.isNotEmpty()) {
                 val suggestionsListState = rememberLazyListState()
+                val targetSuggestionIndex = lastFocusedCardIndex.coerceIn(0, (liveSuggestions.size - 1).coerceAtLeast(0))
                 LazyRow(
                     state = suggestionsListState,
                     modifier = Modifier
@@ -273,14 +283,16 @@ fun StreamsDashboardScreen(
                         items = liveSuggestions,
                         key = { idx, item -> "sug_${item.optString("id", idx.toString())}" }
                     ) { index, item ->
+                        val isTarget = (index == targetSuggestionIndex)
                         TvFocusableBox(
                             modifier = Modifier
                                 .wrapContentSize()
-                                .then(if (index == 0) Modifier.focusRequester(firstCardFocusRequester) else Modifier)
+                                .then(if (isTarget) Modifier.focusRequester(lastCardFocusRequester) else Modifier)
                                 .focusProperties {
                                     up = searchFieldFocusRequester
                                     down = currentTabFocusTarget
                                 },
+                            onFocus = { lastFocusedCardIndex = index },
                             onClick = { 
                                 viewModel.clearLiveSearch()
                                 viewModel.selectMediaItem(item) 
@@ -306,7 +318,8 @@ fun StreamsDashboardScreen(
                         (0 until itemsToShow.length()).map { itemsToShow.getJSONObject(it) }
                     }
 
-                    val mainCardsListState = rememberLazyListState()
+                    val targetCardIndex = lastFocusedCardIndex.coerceIn(0, (objList.size - 1).coerceAtLeast(0))
+                    val mainCardsListState = key(activeCategoryIndex) { rememberLazyListState() }
                     LazyRow(
                         state = mainCardsListState,
                         modifier = Modifier
@@ -335,8 +348,9 @@ fun StreamsDashboardScreen(
                             val unwatchedCount = counts.first
                             val newerCount = counts.second
 
+                            val isTarget = (index == targetCardIndex)
                             val itemFocusModifier = Modifier
-                                .then(if (index == 0) Modifier.focusRequester(firstCardFocusRequester) else Modifier)
+                                .then(if (isTarget) Modifier.focusRequester(lastCardFocusRequester) else Modifier)
                                 .focusProperties {
                                     up = if (activeCategoryIndex == 0) searchFieldFocusRequester else (topTabFocusRequester ?: FocusRequester.Default)
                                     down = currentTabFocusTarget
@@ -345,6 +359,7 @@ fun StreamsDashboardScreen(
                             if (isDeletable) {
                                 TvFocusableHoldToDeleteBox(
                                     modifier = Modifier.wrapContentSize().then(itemFocusModifier),
+                                    onFocus = { lastFocusedCardIndex = index },
                                     onTriggerDelete = {
                                         if (activeCategoryIndex == 1) {
                                             viewModel.toggleFavorite(item, isCurrentlyViewingFavorites = true)
@@ -372,6 +387,7 @@ fun StreamsDashboardScreen(
                             } else {
                                 TvFocusableBox(
                                     modifier = Modifier.wrapContentSize().then(itemFocusModifier),
+                                    onFocus = { lastFocusedCardIndex = index },
                                     onClick = { viewModel.selectMediaItem(item) }
                                 ) { isFocused ->
                                     RichMediaCard(
@@ -411,8 +427,8 @@ fun StreamsDashboardScreen(
                         .focusRequester(categoryTabFocusRequesters[index])
                         .focusProperties {
                             up = when {
-                                hasCardsInCenter -> firstCardFocusRequester
-                                activeCategoryIndex == 0 && searchHistory.isNotEmpty() -> firstHistoryFocusRequester
+                                hasCardsInCenter -> lastCardFocusRequester
+                                activeCategoryIndex == 0 && searchHistory.isNotEmpty() -> lastHistoryFocusRequester
                                 activeCategoryIndex == 0 -> searchFieldFocusRequester
                                 else -> topTabFocusRequester ?: FocusRequester.Default
                             }

@@ -858,6 +858,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             
             if (responseCode in 200..299) {
                 val content = connection.inputStream.bufferedReader().use { it.readText() }
+
+                if (!content.trimStart().startsWith("#EXTM3U")) {
+                    return null
+                }
                 
                 val isSubtitlePlaylist = content.contains(".vtt", ignoreCase = true) || 
                                          content.contains(".srt", ignoreCase = true) || 
@@ -1048,12 +1052,15 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream("".toByteArray()))
                     }
 
+                    val urlPath = requestedUrl.substringBefore('?').lowercase()
                     val urlLower = requestedUrl.lowercase()
-                    val isVideo = urlLower.contains("m3u8") || 
-                                 urlLower.contains("mpd") ||
-                                 urlLower.contains("/hls/") ||
-                                 urlLower.contains(".mp4") || 
-                                 urlLower.contains(".mkv")
+
+                    val isVideo = urlPath.contains("m3u8") || 
+                                 urlPath.contains("mpd") || 
+                                 urlPath.contains("/hls/") || 
+                                 urlPath.contains(".mp4") || 
+                                 urlPath.contains(".mkv") ||
+                                 (urlLower.contains(".m3u8") && !urlPath.endsWith(".gif"))
 
                     if (isVideo) {
                         val wasEmpty = interceptedMediaUrls.isEmpty()
@@ -1107,6 +1114,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                                     responseHeaders,
                                     ByteArrayInputStream(contentBytes)
                                 )
+                            } else {
+                                return super.shouldInterceptRequest(view, request)
                             }
                         }
 
@@ -1485,15 +1494,19 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val headers = interceptedMediaUrls[url] ?: emptyMap()
                 if (url.contains(".m3u8") || url.contains("/streamsvr/") || url.contains("m3u8-proxy") || url.contains("cached_playlist")) {
                     try {
-                        val connection = URL(url).openConnection() as HttpURLConnection
-                        headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
-                        if (!headers.containsKey("User-Agent")) {
-                            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                        val content = if (url.startsWith("file://")) {
+                            val path = Uri.parse(url).path ?: url.removePrefix("file://")
+                            File(path).readText()
+                        } else {
+                            val connection = URL(url).openConnection() as HttpURLConnection
+                            headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
+                            if (!headers.containsKey("User-Agent")) {
+                                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                            }
+                            connection.connectTimeout = 5000
+                            connection.readTimeout = 5000
+                            connection.inputStream.bufferedReader().use { it.readText() }
                         }
-                        connection.connectTimeout = 5000
-                        connection.readTimeout = 5000
-                        
-                        val content = connection.inputStream.bufferedReader().use { it.readText() }
                         
                         if (content.contains("#EXT-X-STREAM-INF")) {
                             if (!streamUrls.contains(url)) {

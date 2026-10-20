@@ -200,6 +200,7 @@ fun MainApp(
     val streamsContentTabFocusRequester = remember { FocusRequester() }
     val homeSearchBarFocusRequester = remember { FocusRequester() }
     val streamsSearchBarFocusRequester = remember { FocusRequester() }
+    val streamsCardFocusRequester = remember { FocusRequester() }
 
     val isBufferingTorrent by streamsViewModel.isBufferingTorrent.collectAsState()
     val torrentBufferStatus by streamsViewModel.torrentBufferStatus.collectAsState()
@@ -264,7 +265,13 @@ fun MainApp(
 
                         val activeCategoryIndex by streamsViewModel.activeCategoryIndex.collectAsState()
                         val searchResults by streamsViewModel.searchResults.collectAsState()
-                        val isSearchInputVisible = activeCategoryIndex == 0 && searchResults == null
+                        val libraryItems by streamsViewModel.libraryItems.collectAsState()
+                        val isSearchCategory = activeCategoryIndex == 0
+                        val hasCardsInCenter = when {
+                            activeCategoryIndex != 0 -> libraryItems != null && libraryItems!!.length() > 0
+                            searchResults != null -> searchResults!!.length() > 0
+                            else -> false
+                        }
 
                         ModernTab(
                             text = "Streams",
@@ -277,8 +284,10 @@ fun MainApp(
                                 if (isScrapeScreenActive) {
                                     down = streamsContentTabFocusRequester
                                 } else if (selectedMedia == null) {
-                                    if (isSearchInputVisible) {
+                                    if (isSearchCategory) {
                                         down = streamsSearchBarFocusRequester
+                                    } else if (hasCardsInCenter) {
+                                        down = streamsCardFocusRequester
                                     }
                                 }
                             }
@@ -421,7 +430,8 @@ fun MainApp(
                                     StreamsDashboardScreen(
                                         viewModel = streamsViewModel,
                                         searchBarFocusRequester = streamsSearchBarFocusRequester,
-                                        topTabFocusRequester = streamsTabFocusRequester
+                                        topTabFocusRequester = streamsTabFocusRequester,
+                                        cardFocusRequester = streamsCardFocusRequester
                                     )
                                 }
                             }

@@ -421,7 +421,9 @@ class PlayerEngine(
                 mergedHeaders.keys.filter { it.equals("referer", ignoreCase = true) }.forEach {
                     mergedHeaders.remove(it)
                 }
-                mergedHeaders["Referer"] = videoUrl
+                if (!videoUrl.startsWith("file://", ignoreCase = true)) {
+                    mergedHeaders["Referer"] = videoUrl
+                }
             }
         }
         return mergedHeaders
