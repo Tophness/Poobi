@@ -18,9 +18,16 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
+data class ReleaseNoteItem(
+    val versionName: String,
+    val releaseNotes: String,
+    val isLatest: Boolean
+)
+
 data class UpdateInfo(
     val versionName: String,
     val releaseNotes: String,
+    val releaseNotesList: List<ReleaseNoteItem> = emptyList(),
     val downloadUrl: String,
     val fileName: String
 )
@@ -105,13 +112,52 @@ object UpdateManager {
                             val downloadUrl = bestAsset.optString("browser_download_url")
                             val fileName = bestAsset.optString("name", "Poobi-update.apk")
 
+                            val latestNote = ReleaseNoteItem(
+                                versionName = tagName,
+                                releaseNotes = releaseNotes,
+                                isLatest = true
+                            )
+
                             withContext(Dispatchers.Main) {
                                 _updateInfo.value = UpdateInfo(
                                     versionName = tagName,
                                     releaseNotes = releaseNotes,
+                                    releaseNotesList = listOf(latestNote),
                                     downloadUrl = downloadUrl,
                                     fileName = fileName
                                 )
+                            }
+
+                            try {
+                                val listStr = fetchRawFromUrl(GITHUB_RELEASES_LIST_URL)
+                                if (listStr != null) {
+                                    val arr = JSONArray(listStr)
+                                    val fullList = mutableListOf<ReleaseNoteItem>()
+                                    for (i in 0 until arr.length()) {
+                                        val rel = arr.getJSONObject(i)
+                                        val relTag = rel.optString("tag_name", "").trim()
+                                        val relVersion = relTag.removePrefix("v").removePrefix("V")
+                                        if (isNewerVersion(relVersion, currentVersion)) {
+                                            val relBody = rel.optString("body", "No changelog provided.")
+                                            fullList.add(
+                                                ReleaseNoteItem(
+                                                    versionName = relTag,
+                                                    releaseNotes = relBody,
+                                                    isLatest = (fullList.isEmpty())
+                                                )
+                                            )
+                                        }
+                                    }
+                                    if (fullList.isNotEmpty()) {
+                                        withContext(Dispatchers.Main) {
+                                            _updateInfo.value = _updateInfo.value?.copy(
+                                                releaseNotesList = fullList
+                                            )
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to fetch intermediate release notes, falling back to latest only", e)
                             }
                         } else if (isManual) {
                             withContext(Dispatchers.Main) {

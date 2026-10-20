@@ -2,8 +2,11 @@ package com.poobi.tvbrowser.shared.update
 
 import android.app.Activity
 import android.content.Context
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -45,6 +48,10 @@ fun UpdateDialog() {
             } catch (_: Exception) {}
         }
 
+        val notesList = update.releaseNotesList.ifEmpty {
+            listOf(ReleaseNoteItem(update.versionName, update.releaseNotes, isLatest = true))
+        }
+
         AlertDialog(
             onDismissRequest = {
                 if (!isUpdateDownloading) {
@@ -71,14 +78,31 @@ fun UpdateDialog() {
                         fontSize = 14.sp
                     )
 
-                    if (update.releaseNotes.isNotBlank()) {
-                        Text(
-                            text = update.releaseNotes,
-                            color = Color.Gray,
-                            fontSize = 12.sp,
-                            maxLines = 6,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 220.dp)
+                            .verticalScroll(rememberScrollState())
+                            .focusable(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        notesList.forEach { note ->
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                if (notesList.size > 1 || !note.isLatest) {
+                                    Text(
+                                        text = if (note.isLatest) "${note.versionName} (Latest)" else note.versionName,
+                                        color = if (note.isLatest) Color(0xFF00BCD4) else Color(0xFFFFB74D),
+                                        fontSize = if (note.isLatest) 14.sp else 13.sp,
+                                        fontWeight = if (note.isLatest) FontWeight.Bold else FontWeight.SemiBold
+                                    )
+                                }
+                                Text(
+                                    text = note.releaseNotes,
+                                    color = if (note.isLatest) Color.White.copy(alpha = 0.9f) else Color.Gray,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
                     }
 
                     if (isUpdateDownloading) {

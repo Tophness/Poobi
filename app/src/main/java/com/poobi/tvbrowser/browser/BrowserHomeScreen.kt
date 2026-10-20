@@ -48,6 +48,10 @@ fun BrowserHomeScreen(
     val downloadsArray by viewModel.downloadsList.collectAsState()
     val savedTabsArray by viewModel.savedTabsList.collectAsState()
     val browserPredictedQuery by viewModel.browserPredictedQuery.collectAsState()
+    val hasIdleTabs by viewModel.hasIdleTabs.collectAsState()
+
+    val webViewsCount = viewModel.getWebViewsList().size
+    val showRestoreOrLoadButton = (webViewsCount == 0 && savedTabsArray.length() > 0) || hasIdleTabs
 
     val predictedSuffix = remember(urlInput, browserPredictedQuery) {
         if (urlInput.length >= 2 && browserPredictedQuery.startsWith(urlInput, ignoreCase = true)) {
@@ -220,13 +224,15 @@ fun BrowserHomeScreen(
                             items(savedTabsArray.length()) { index ->
                                 val item = savedTabsArray.getJSONObject(index)
                                 val itemUrl = item.optString("url")
+                                val isDesktop = item.optBoolean("is_desktop", false)
+
                                 TvFocusableHoldToDeleteBox(
                                     modifier = Modifier
                                         .width(240.dp)
                                         .height(50.dp)
                                         .focusProperties {
                                             up = openTabsFocusRequester
-                                            if (savedTabsArray.length() > 0) {
+                                            if (showRestoreOrLoadButton) {
                                                 down = restoreAllFocusRequester
                                             }
                                         },
@@ -246,7 +252,7 @@ fun BrowserHomeScreen(
                                         if (index in viewModel.getWebViewsList().indices) {
                                             viewModel.switchTab(index)
                                         } else {
-                                            viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true)
+                                            viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true, isDesktop = isDesktop)
                                         }
                                     }
                                 ) { isFocused, progress ->
@@ -271,7 +277,10 @@ fun BrowserHomeScreen(
                             }
                         }
 
-                        if (savedTabsArray.length() > 0) {
+                        if (showRestoreOrLoadButton) {
+                            val isLoadOnly = hasIdleTabs
+                            val buttonText = if (isLoadOnly) "Load All Tabs" else "Restore All Tabs"
+
                             Spacer(modifier = Modifier.height(16.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -285,9 +294,18 @@ fun BrowserHomeScreen(
                                         .focusProperties { 
                                             up = tabsLazyRowFocusRequester 
                                         },
-                                    defaultColor = Color(0xFFE53935),
+                                    defaultColor = if (isLoadOnly) Color(0xFF00BCD4) else Color(0xFFE53935),
                                     shape = RoundedCornerShape(20.dp),
-                                    onClick = { viewModel.restoreAllTabs(context) }
+                                    onClick = { 
+                                        if (isLoadOnly) {
+                                            viewModel.loadAllIdleTabs()
+                                            try {
+                                                tabsLazyRowFocusRequester.requestFocus()
+                                            } catch (_: Exception) {}
+                                        } else {
+                                            viewModel.restoreAllTabs(context, idle = true)
+                                        }
+                                    }
                                 ) { isFocused ->
                                     Box(
                                         modifier = Modifier
@@ -296,7 +314,7 @@ fun BrowserHomeScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = "Restore All Tabs",
+                                            text = buttonText,
                                             color = if (isFocused) Color.Black else Color.White,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -352,6 +370,8 @@ fun BrowserHomeScreen(
                                 if (index >= 0) {
                                     val item = bookmarksArray.getJSONObject(index)
                                     val itemUrl = item.optString("url")
+                                    val isDesktop = item.optBoolean("is_desktop", false)
+
                                     TvFocusableHoldToDeleteBox(
                                         modifier = Modifier
                                             .width(200.dp)
@@ -360,7 +380,7 @@ fun BrowserHomeScreen(
                                                 up = bookmarksFocusRequester
                                             },
                                         onTriggerDelete = { viewModel.removeFromList("favorites", itemUrl) },
-                                        onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true) }
+                                        onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true, isDesktop = isDesktop) }
                                     ) { isFocused, progress ->
                                         BrowserCardItem(
                                             item = item,
@@ -421,6 +441,8 @@ fun BrowserHomeScreen(
                             items(historyArray.length()) { index ->
                                 val item = historyArray.getJSONObject(historyArray.length() - 1 - index)
                                 val itemUrl = item.optString("url")
+                                val isDesktop = item.optBoolean("is_desktop", false)
+
                                 TvFocusableHoldToDeleteBox(
                                     modifier = Modifier
                                         .width(200.dp)
@@ -429,7 +451,7 @@ fun BrowserHomeScreen(
                                             up = historyFocusRequester
                                         },
                                     onTriggerDelete = { viewModel.removeFromList("history", itemUrl) },
-                                    onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true) }
+                                    onClick = { viewModel.loadUrlAndBrowse(context, itemUrl, newTab = true, isDesktop = isDesktop) }
                                 ) { isFocused, progress ->
                                     BrowserCardItem(
                                         item = item,

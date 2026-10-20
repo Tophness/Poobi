@@ -214,6 +214,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private var browserSuggestJob: kotlinx.coroutines.Job? = null
 
+    private val _hasIdleTabs = MutableStateFlow(false)
+    val hasIdleTabs: StateFlow<Boolean> = _hasIdleTabs.asStateFlow()
+
     fun updateBrowserSuggestions(query: String) {
         browserSuggestJob?.cancel()
         val clean = query.trim()
@@ -465,6 +468,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 _topBarVisible.value = true
             }
         }
+        updateIdleTabsState()
         return newWebView
     }
 
@@ -494,6 +498,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         } else if ((targetWebView.url.isNullOrBlank() || targetWebView.url == "about:blank") && !idleUrl.isNullOrBlank()) {
             targetWebView.loadUrl(idleUrl)
         }
+        updateIdleTabsState()
         
         val url = targetWebView.url ?: idleUrl ?: ""
         _currentUrl.value = url
@@ -525,6 +530,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _webViews.removeAt(index)
         wv.destroy()
         saveTabs()
+        updateIdleTabsState()
 
         if (_webViews.isEmpty()) {
             showHomeScreen()
@@ -554,7 +560,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         newTab: Boolean = false,
         streamItemJson: String? = null,
         season: Int? = null,
-        episode: Int? = null
+        episode: Int? = null,
+        isDesktop: Boolean = false
     ) {
         var url = inputUrl.trim()
         if (url.isNotEmpty()) {
@@ -562,36 +569,41 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 url = if (url.contains(".") && !url.contains(" ")) "https://$url" else "https://www.google.com/search?q=$url"
             }
             if (newTab || _webViews.isEmpty()) {
-                val newWv = createNewTab(context, url, switchTo = true)
+                val newWv = createNewTab(context, url, switchTo = true, isDesktop = isDesktop)
                 newWv.tag = TabMetadata(
                     defaultTitle = newWv.title,
                     defaultUrl = url,
                     streamItemJson = streamItemJson,
                     season = season,
                     episode = episode,
-                    isIdle = false
+                    isIdle = false,
+                    isDesktopMode = isDesktop
                 )
             } else {
                 if (_currentTabIndex.value == -1) {
                     _currentTabIndex.value = 0
                 }
                 val prevMeta = currentWebView?.tag as? TabMetadata
-                val existingDesktop = prevMeta?.isDesktopMode ?: false
+                val finalDesktop = if (isDesktop) true else (prevMeta?.isDesktopMode ?: false)
                 val existingZoom = prevMeta?.zoomLevel ?: 100
 
-                currentWebView?.tag = TabMetadata(
-                    defaultTitle = currentWebView?.title,
-                    defaultUrl = url,
-                    streamItemJson = streamItemJson,
-                    season = season,
-                    episode = episode,
-                    isIdle = false,
-                    isDesktopMode = existingDesktop,
-                    zoomLevel = existingZoom
-                )
-                currentWebView?.loadUrl(url)
+                currentWebView?.let { wv ->
+                    wv.tag = TabMetadata(
+                        defaultTitle = wv.title,
+                        defaultUrl = url,
+                        streamItemJson = streamItemJson,
+                        season = season,
+                        episode = episode,
+                        isIdle = false,
+                        isDesktopMode = finalDesktop,
+                        zoomLevel = existingZoom
+                    )
+                    applyDesktopMode(wv, finalDesktop)
+                    _isDesktopMode.value = finalDesktop
+                    wv.loadUrl(url)
+                    wv.visibility = View.VISIBLE
+                }
                 _isBrowsing.value = true
-                currentWebView?.visibility = View.VISIBLE
             }
             _topBarVisible.value = false
         }
@@ -608,13 +620,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
             if (_webViews.isNotEmpty()) {
                 if (!shouldBeIdle) {
-                    for (wv in _webViews) {
-                        val metadata = wv.tag as? TabMetadata
-                        if (metadata?.isIdle == true && !metadata.defaultUrl.isNullOrBlank()) {
-                            metadata.isIdle = false
-                            wv.loadUrl(metadata.defaultUrl)
-                        }
-                    }
+                    loadAllIdleTabs()
                 }
                 return
             }
@@ -643,7 +649,23 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         } catch (e: Exception) {
             Log.e("TVBrowser", "Error restoring tabs: ${e.message}")
         }
+        updateIdleTabsState()
         refreshLists()
+    }
+
+    fun loadAllIdleTabs() {
+        for (wv in _webViews) {
+            val metadata = wv.tag as? TabMetadata
+            if (metadata?.isIdle == true && !metadata.defaultUrl.isNullOrBlank()) {
+                metadata.isIdle = false
+                wv.loadUrl(metadata.defaultUrl)
+            }
+        }
+        updateIdleTabsState()
+    }
+
+    fun updateIdleTabsState() {
+        _hasIdleTabs.value = _webViews.any { (it.tag as? TabMetadata)?.isIdle == true }
     }
 
     fun showHomeScreen() {
@@ -674,7 +696,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         if (isFavorited(url)) {
             removeFromList("favorites", url)
         } else {
-            saveToList("favorites", url, wv.title ?: url, "${url.hashCode()}.png")
+            val isDesktop = (wv.tag as? TabMetadata)?.isDesktopMode ?: false
+            saveToList("favorites", url, wv.title ?: url, "${url.hashCode()}.png", isDesktop = isDesktop)
         }
     }
 
@@ -2014,11 +2037,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             val file = File(appContext.filesDir, filename)
             FileOutputStream(file).use { thumb.compress(Bitmap.CompressFormat.PNG, 80, it) }
             bitmap.recycle()
-            saveToList("history", url, title, filename)
+            val isDesktop = (wv.tag as? TabMetadata)?.isDesktopMode ?: false
+            saveToList("history", url, title, filename, isDesktop = isDesktop)
         } catch (e: Exception) {}
     }
 
-    private fun saveToList(key: String, url: String, title: String, thumbFile: String) {
+    private fun saveToList(key: String, url: String, title: String, thumbFile: String, isDesktop: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
             val jsonString = prefs.getString(key, "[]") ?: "[]"
             val array = JSONArray(jsonString)
@@ -2034,6 +2058,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 put("url", url)
                 put("title", title.ifEmpty { url })
                 put("thumb", thumbFile)
+                put("is_desktop", isDesktop)
             }
             array.put(obj)
             prefs.edit().putString(key, array.toString()).apply()
