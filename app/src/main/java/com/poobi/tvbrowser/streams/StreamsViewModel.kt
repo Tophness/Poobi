@@ -995,6 +995,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                 val finalSourceData = sourceData ?: existing?.optString("source_data")
                 if (!finalSourceData.isNullOrEmpty()) put("source_data", finalSourceData)
+
+                val finalAudioLang = existing?.optString("audio_language")
+                if (!finalAudioLang.isNullOrEmpty()) put("audio_language", finalAudioLang)
+                val finalAudioLabel = existing?.optString("audio_label")
+                if (!finalAudioLabel.isNullOrEmpty()) put("audio_label", finalAudioLabel)
+                if (existing != null && existing.has("audio_index")) put("audio_index", existing.getInt("audio_index"))
             }
             newList.add(0, newEntry)
             if (newList.size > 20) newList.removeAt(newList.size - 1)

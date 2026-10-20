@@ -62,6 +62,16 @@ sealed class QualityOption {
     ) : QualityOption()
 }
 
+private data class AudioTrackInfo(
+    val group: Tracks.Group,
+    val trackIndexInGroup: Int,
+    val overallIndex: Int,
+    val language: String?,
+    val label: String?,
+    val id: String?,
+    val isSelected: Boolean
+)
+
 class PlayerEngine(
     private val context: Context,
     val prefs: SharedPreferences,
@@ -184,6 +194,9 @@ class PlayerEngine(
     var isUpNextDismissed = false
 
     private var pendingSelectedSubtitleLabel: String? = null
+
+    private var hasRestoredAudioTrack = false
+    private var lastAudioTrackKey: String? = null
 
     init {
         playerScope.launch {
@@ -548,6 +561,155 @@ class PlayerEngine(
         _showQualitySelector.value = false
     }
 
+    private fun getAudioTracks(tracks: Tracks): List<AudioTrackInfo> {
+        val list = mutableListOf<AudioTrackInfo>()
+        var overallIdx = 0
+        for (group in tracks.groups) {
+            if (group.type == C.TRACK_TYPE_AUDIO) {
+                for (i in 0 until group.length) {
+                    val format = group.getTrackFormat(i)
+                    list.add(
+                        AudioTrackInfo(
+                            group = group,
+                            trackIndexInGroup = i,
+                            overallIndex = overallIdx++,
+                            language = format.language,
+                            label = format.label,
+                            id = format.id,
+                            isSelected = group.isTrackSelected(i)
+                        )
+                    )
+                }
+            }
+        }
+        return list
+    }
+
+    private fun getAudioTrackKey(track: AudioTrackInfo?): String {
+        if (track == null) return "none"
+        return "${track.overallIndex}_${track.language}_${track.label}_${track.id}"
+    }
+
+    private fun loadSavedAudioTrack(): Triple<String?, String?, Int>? {
+        val title = lastVideoTitle
+        val item = lastScrapedItem
+        val season = lastScrapedSeason
+        val episode = lastScrapedEpisode
+        val currentId = item?.optString("id")
+        val currentImdb = item?.optString("imdb")
+
+        try {
+            val recentArray = org.json.JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
+            for (i in 0 until recentArray.length()) {
+                val entry = recentArray.getJSONObject(i)
+                val itm = entry.optJSONObject("item")
+                val itmId = itm?.optString("id")
+                val itmImdb = itm?.optString("imdb")
+                val sameId = (itmId != null && currentId != null && itmId.isNotEmpty() && itmId == currentId) ||
+                             (itmImdb != null && currentImdb != null && itmImdb.isNotEmpty() && itmImdb == currentImdb)
+                val sameSeason = if (entry.has("season")) entry.optInt("season") == (season ?: -1) else season == null
+                val sameEpisode = if (entry.has("episode")) entry.optInt("episode") == (episode ?: -1) else episode == null
+                val sameTitle = !title.isNullOrEmpty() && entry.optString("display_title") == title
+
+                if ((sameId && sameSeason && sameEpisode) || sameTitle) {
+                    if (entry.has("audio_language") || entry.has("audio_label") || entry.has("audio_index")) {
+                        val lang = entry.optString("audio_language").takeIf { it.isNotEmpty() }
+                        val label = entry.optString("audio_label").takeIf { it.isNotEmpty() }
+                        val idx = if (entry.has("audio_index")) entry.getInt("audio_index") else -1
+                        return Triple(lang, label, idx)
+                    }
+                    break
+                }
+            }
+        } catch (_: Exception) {}
+        return null
+    }
+
+    private fun saveAudioTrackToRecentlyPlayed(lang: String?, label: String?, index: Int) {
+        val title = lastVideoTitle ?: return
+        val currentId = lastScrapedItem?.optString("id")
+        val currentImdb = lastScrapedItem?.optString("imdb")
+        val season = lastScrapedSeason
+        val episode = lastScrapedEpisode
+
+        try {
+            val recentArray = org.json.JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
+            var modified = false
+            for (i in 0 until recentArray.length()) {
+                val entry = recentArray.getJSONObject(i)
+                val itm = entry.optJSONObject("item")
+                val itmId = itm?.optString("id")
+                val itmImdb = itm?.optString("imdb")
+                val sameId = (itmId != null && currentId != null && itmId.isNotEmpty() && itmId == currentId) ||
+                             (itmImdb != null && currentImdb != null && itmImdb.isNotEmpty() && itmImdb == currentImdb)
+                val sameSeason = if (entry.has("season")) entry.optInt("season") == (season ?: -1) else season == null
+                val sameEpisode = if (entry.has("episode")) entry.optInt("episode") == (episode ?: -1) else episode == null
+                val sameTitle = entry.optString("display_title") == title
+
+                if ((sameId && sameSeason && sameEpisode) || sameTitle) {
+                    if (lang != null) entry.put("audio_language", lang) else entry.remove("audio_language")
+                    if (label != null) entry.put("audio_label", label) else entry.remove("audio_label")
+                    entry.put("audio_index", index)
+                    modified = true
+                    break
+                }
+            }
+            if (modified) {
+                prefs.edit().putString("streams_recently_played", recentArray.toString()).apply()
+            }
+        } catch (e: Exception) {
+            Log.e("PlayerEngine", "Error saving audio track selection", e)
+        }
+    }
+
+    private fun handleAudioTrackChange(tracks: Tracks) {
+        val audioTracks = getAudioTracks(tracks)
+        if (audioTracks.isEmpty()) return
+
+        val selectedTrack = audioTracks.find { it.isSelected }
+
+        if (!hasRestoredAudioTrack) {
+            val saved = loadSavedAudioTrack()
+            if (saved != null) {
+                val (savedLang, savedLabel, savedIndex) = saved
+                val match = audioTracks.find {
+                    !savedLabel.isNullOrEmpty() && it.label.equals(savedLabel, ignoreCase = true)
+                } ?: audioTracks.find {
+                    !savedLang.isNullOrEmpty() && !savedLang.equals("und", ignoreCase = true) && it.language.equals(savedLang, ignoreCase = true)
+                } ?: audioTracks.find {
+                    savedIndex >= 0 && it.overallIndex == savedIndex
+                }
+
+                if (match != null) {
+                    hasRestoredAudioTrack = true
+                    lastAudioTrackKey = getAudioTrackKey(match)
+                    if (!match.isSelected) {
+                        exoPlayer?.let { player ->
+                            player.trackSelectionParameters = player.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                                .addOverride(TrackSelectionOverride(match.group.mediaTrackGroup, match.trackIndexInGroup))
+                                .build()
+                        }
+                    }
+                    return
+                }
+            }
+            hasRestoredAudioTrack = true
+            lastAudioTrackKey = getAudioTrackKey(selectedTrack)
+            return
+        }
+
+        val currentKey = getAudioTrackKey(selectedTrack)
+        if (selectedTrack != null && lastAudioTrackKey != null && currentKey != lastAudioTrackKey) {
+            lastAudioTrackKey = currentKey
+            saveAudioTrackToRecentlyPlayed(selectedTrack.language, selectedTrack.label, selectedTrack.overallIndex)
+        } else if (lastAudioTrackKey == null && selectedTrack != null) {
+            lastAudioTrackKey = currentKey
+        }
+    }
+
     @OptIn(UnstableApi::class)
     fun launchVideo(
         videoUrl: String, 
@@ -634,6 +796,8 @@ class PlayerEngine(
         hasReachedReady = false
         hasTriggeredPlaybackStarted = false
         hasInitialQualitySelected = false
+        hasRestoredAudioTrack = false
+        lastAudioTrackKey = null
         _showUpNext.value = false
         _showQualitySelector.value = false
         _showDiskSubtitlePicker.value = false
@@ -739,6 +903,7 @@ class PlayerEngine(
             override fun onTracksChanged(tracks: Tracks) {
                 if (isReleasing || !_isPlayerActive.value) return
                 updateQualityOptions(tracks)
+                handleAudioTrackChange(tracks)
 
                 if (pendingSelectedSubtitleLabel != null) {
                     val targetLabel = pendingSelectedSubtitleLabel
@@ -1151,12 +1316,27 @@ class PlayerEngine(
                     try {
                         val recentArray = org.json.JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
                         val currentId = lastScrapedItem?.optString("id")
+                        val currentImdb = lastScrapedItem?.optString("imdb")
                         for (i in 0 until recentArray.length()) {
                             val entry = recentArray.getJSONObject(i)
                             val itm = entry.optJSONObject("item")
                             val itmId = itm?.optString("id")
-                            if (entry.optString("display_title") == title || (itmId != null && currentId != null && itmId == currentId)) {
+                            val itmImdb = itm?.optString("imdb")
+                            val sameId = (itmId != null && currentId != null && itmId.isNotEmpty() && itmId == currentId) ||
+                                         (itmImdb != null && currentImdb != null && itmImdb.isNotEmpty() && itmImdb == currentImdb)
+                            val sameSeason = if (entry.has("season")) entry.optInt("season") == (lastScrapedSeason ?: -1) else lastScrapedSeason == null
+                            val sameEpisode = if (entry.has("episode")) entry.optInt("episode") == (lastScrapedEpisode ?: -1) else lastScrapedEpisode == null
+                            val sameTitle = entry.optString("display_title") == title
+
+                            if ((sameId && sameSeason && sameEpisode) || sameTitle) {
                                 entry.put("duration_ms", dur)
+                                val audioTracks = exoPlayer?.currentTracks?.let { getAudioTracks(it) } ?: emptyList()
+                                val selectedAudio = audioTracks.find { it.isSelected }
+                                if (selectedAudio != null) {
+                                    if (selectedAudio.language != null) entry.put("audio_language", selectedAudio.language) else entry.remove("audio_language")
+                                    if (selectedAudio.label != null) entry.put("audio_label", selectedAudio.label) else entry.remove("audio_label")
+                                    entry.put("audio_index", selectedAudio.overallIndex)
+                                }
                                 prefs.edit().putString("streams_recently_played", recentArray.toString()).commit()
                                 break
                             }
