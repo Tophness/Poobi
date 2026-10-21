@@ -36,127 +36,74 @@ import java.util.concurrent.ConcurrentHashMap
 
 open class WebAppView(context: Context) : WebView(context) {
 
-    var isLexicalActive: Boolean = false
-    private val lexicalTextBuffer = StringBuilder()
+    var isCustomInputBridgeActive: Boolean = false
+    private val inputBuffer = StringBuilder()
 
-    fun syncLexicalText(text: String) {
-        lexicalTextBuffer.setLength(0)
-        lexicalTextBuffer.append(text)
+    fun syncInputText(text: String) {
+        inputBuffer.setLength(0)
+        inputBuffer.append(text)
     }
 
     override fun onCheckIsTextEditor(): Boolean {
-        if (isLexicalActive) return true
+        if (isCustomInputBridgeActive) return true
         return super.onCheckIsTextEditor()
     }
 
     override fun onCreateInputConnection(outAttrs: android.view.inputmethod.EditorInfo?): android.view.inputmethod.InputConnection? {
         val superIc = super.onCreateInputConnection(outAttrs)
 
-        if (superIc != null && outAttrs != null && outAttrs.inputType != android.view.inputmethod.EditorInfo.TYPE_NULL && !isLexicalActive) {
+        if (superIc != null && outAttrs != null && outAttrs.inputType != android.view.inputmethod.EditorInfo.TYPE_NULL && !isCustomInputBridgeActive) {
             return superIc
         }
 
-        if (isLexicalActive) {
+        if (isCustomInputBridgeActive) {
             outAttrs?.let {
                 it.inputType = android.text.InputType.TYPE_CLASS_TEXT or 
                                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
                                android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
                 it.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
-                it.initialSelStart = lexicalTextBuffer.length
-                it.initialSelEnd = lexicalTextBuffer.length
+                it.initialSelStart = inputBuffer.length
+                it.initialSelEnd = inputBuffer.length
             }
 
             return object : android.view.inputmethod.BaseInputConnection(this, false) {
 
                 private var currentComposingText = ""
 
-                private fun insertTextViaLexical(str: String) {
+                private fun forwardInsert(str: String) {
                     if (str.isEmpty()) return
-                    lexicalTextBuffer.append(str)
+                    inputBuffer.append(str)
                     val quoted = org.json.JSONObject.quote(str)
-                    val script = """
-                        (function() {
-                            var ed = window.__activeLexicalEditor || document.querySelector('.xzsf02u[role="textbox"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
-                            if (!ed || !ed.__lexicalEditor) return;
-                            var editor = ed.__lexicalEditor;
-                            var targetCmd = null;
-                            editor._commands.forEach(function(val, key) {
-                                if (key && key.type === 'CONTROLLED_TEXT_INSERTION_COMMAND') {
-                                    targetCmd = key;
-                                }
-                            });
-                            if (targetCmd) {
-                                editor.dispatchCommand(targetCmd, $quoted);
-                            }
-                        })();
-                    """.trimIndent()
-                    post { evaluateJavascript(script, null) }
+                    post { evaluateJavascript("if (window.__poobiInputBridge) window.__poobiInputBridge.insert($quoted);", null) }
                 }
 
-                private fun deleteViaLexical() {
-                    if (lexicalTextBuffer.isNotEmpty()) {
-                        lexicalTextBuffer.deleteCharAt(lexicalTextBuffer.length - 1)
+                private fun forwardDelete() {
+                    if (inputBuffer.isNotEmpty()) {
+                        inputBuffer.deleteCharAt(inputBuffer.length - 1)
                     }
-                    val script = """
-                        (function() {
-                            var ed = window.__activeLexicalEditor || document.querySelector('.xzsf02u[role="textbox"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
-                            if (!ed) return;
-                            ed.dispatchEvent(new InputEvent("beforeinput", {
-                                bubbles: true,
-                                cancelable: true,
-                                inputType: "deleteContentBackward"
-                            }));
-                        })();
-                    """.trimIndent()
-                    post { evaluateJavascript(script, null) }
+                    post { evaluateJavascript("if (window.__poobiInputBridge) window.__poobiInputBridge.delete();", null) }
                 }
 
-                private fun enterViaLexical() {
+                private fun forwardEnter() {
                     currentComposingText = ""
-                    lexicalTextBuffer.append("\n")
-                    val script = """
-                        (function() {
-                            var ed = window.__activeLexicalEditor || document.querySelector('.xzsf02u[role="textbox"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
-                            if (!ed || !ed.__lexicalEditor) return;
-                            var editor = ed.__lexicalEditor;
-                            var enterCmd = null;
-                            editor._commands.forEach(function(val, key) {
-                                if (key && (key.type === 'KEY_ENTER_COMMAND' || key.type === 'INSERT_PARAGRAPH_COMMAND')) {
-                                    enterCmd = key;
-                                }
-                            });
-                            if (enterCmd) {
-                                editor.dispatchCommand(enterCmd, null);
-                            }
-                        })();
-                    """.trimIndent()
-                    post { evaluateJavascript(script, null) }
+                    inputBuffer.append("\n")
+                    post { evaluateJavascript("if (window.__poobiInputBridge) window.__poobiInputBridge.enter();", null) }
                 }
 
                 override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
                     val newStr = text?.toString() ?: ""
                     val oldStr = currentComposingText
 
-                    if (newStr == oldStr) {
-                        return true
-                    }
+                    if (newStr == oldStr) return true
 
                     if (newStr.startsWith(oldStr)) {
-                        // User typed more characters (e.g. "A" -> "Aa")
-                        val added = newStr.substring(oldStr.length)
-                        insertTextViaLexical(added)
+                        forwardInsert(newStr.substring(oldStr.length))
                     } else if (oldStr.startsWith(newStr)) {
-                        // User pressed Backspace during composing (e.g. "Aa" -> "A")
                         val deleteCount = oldStr.length - newStr.length
-                        for (i in 0 until deleteCount) {
-                            deleteViaLexical()
-                        }
+                        for (i in 0 until deleteCount) forwardDelete()
                     } else {
-                        // Full word replacement / prediction selection
-                        for (i in 0 until oldStr.length) {
-                            deleteViaLexical()
-                        }
-                        insertTextViaLexical(newStr)
+                        for (i in 0 until oldStr.length) forwardDelete()
+                        forwardInsert(newStr)
                     }
 
                     currentComposingText = newStr
@@ -173,19 +120,15 @@ open class WebAppView(context: Context) : WebView(context) {
                     val oldStr = currentComposingText
 
                     if (str == oldStr) {
-                        // Keyboard committed the current composition as-is
                         currentComposingText = ""
                         return true
                     }
 
                     if (str.startsWith(oldStr) && oldStr.isNotEmpty()) {
-                        val added = str.substring(oldStr.length)
-                        insertTextViaLexical(added)
+                        forwardInsert(str.substring(oldStr.length))
                     } else {
-                        for (i in 0 until oldStr.length) {
-                            deleteViaLexical()
-                        }
-                        insertTextViaLexical(str)
+                        for (i in 0 until oldStr.length) forwardDelete()
+                        forwardInsert(str)
                     }
 
                     currentComposingText = ""
@@ -195,9 +138,7 @@ open class WebAppView(context: Context) : WebView(context) {
                 override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
                     currentComposingText = ""
                     if (beforeLength > 0) {
-                        for (i in 0 until beforeLength) {
-                            deleteViaLexical()
-                        }
+                        for (i in 0 until beforeLength) forwardDelete()
                     }
                     return true
                 }
@@ -207,10 +148,10 @@ open class WebAppView(context: Context) : WebView(context) {
                 }
 
                 override fun getTextBeforeCursor(n: Int, flags: Int): CharSequence {
-                    val len = lexicalTextBuffer.length
+                    val len = inputBuffer.length
                     if (len == 0) return ""
                     val start = (len - n).coerceAtLeast(0)
-                    return lexicalTextBuffer.substring(start, len)
+                    return inputBuffer.substring(start, len)
                 }
 
                 override fun getTextAfterCursor(n: Int, flags: Int): CharSequence = ""
@@ -221,16 +162,16 @@ open class WebAppView(context: Context) : WebView(context) {
                     if (event != null && event.action == android.view.KeyEvent.ACTION_DOWN) {
                         if (event.keyCode == android.view.KeyEvent.KEYCODE_DEL) {
                             currentComposingText = ""
-                            deleteViaLexical()
+                            forwardDelete()
                             return true
                         } else if (event.keyCode == android.view.KeyEvent.KEYCODE_ENTER || event.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER) {
-                            enterViaLexical()
+                            forwardEnter()
                             return true
                         } else {
                             val unicode = event.getUnicodeChar(event.metaState)
                             if (unicode != 0 && !Character.isISOControl(unicode)) {
                                 currentComposingText = ""
-                                insertTextViaLexical(unicode.toChar().toString())
+                                forwardInsert(unicode.toChar().toString())
                                 return true
                             }
                         }
@@ -244,8 +185,8 @@ open class WebAppView(context: Context) : WebView(context) {
     }
 
     override fun clearFocus() {
-        isLexicalActive = false
-        lexicalTextBuffer.setLength(0)
+        isCustomInputBridgeActive = false
+        inputBuffer.setLength(0)
         super.clearFocus()
     }
 }
@@ -577,6 +518,167 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         refreshLists()
+        seedDefaultAutoplayProfiles()
+    }
+
+    private fun seedDefaultAutoplayProfiles() {
+        val seededVersion = prefs.getInt("seeded_autoplay_version", 0)
+        if (seededVersion < 2) {
+            val profilesJson = prefs.getString("autoplay_profiles", "[]") ?: "[]"
+            val array = JSONArray(profilesJson)
+
+            var hasFbProfile = false
+            var hasGenericAutoplay = false
+
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                val id = obj.optString("id")
+                if (id == "default_facebook_desktop_comments") hasFbProfile = true
+                if (id == "default_generic_video_autoplay") hasGenericAutoplay = true
+            }
+
+            if (!hasFbProfile) {
+                val fbProfileScript = """
+                    (function() {
+                        if (window.__poobiLexicalLoaded) return;
+                        window.__poobiLexicalLoaded = true;
+
+                        function findEditor(target) {
+                            var curr = target;
+                            while (curr && curr !== document.body) {
+                                if (curr.__lexicalEditor) return curr;
+                                curr = curr.parentElement;
+                            }
+                            if (target && target.parentElement) {
+                                var ed = target.parentElement.querySelector('[data-lexical-editor="true"], [role="textbox"][contenteditable="true"]');
+                                if (ed && ed.__lexicalEditor) return ed;
+                            }
+                            return null;
+                        }
+
+                        window.__poobiInputBridge = {
+                            insert: function(str) {
+                                var ed = window.__activeLexicalEditor || document.querySelector('.xzsf02u[role="textbox"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
+                                if (!ed || !ed.__lexicalEditor) return;
+                                var editor = ed.__lexicalEditor;
+                                var targetCmd = null;
+                                editor._commands.forEach(function(val, key) {
+                                    if (key && key.type === 'CONTROLLED_TEXT_INSERTION_COMMAND') targetCmd = key;
+                                });
+                                if (targetCmd) editor.dispatchCommand(targetCmd, str);
+                            },
+                            delete: function() {
+                                var ed = window.__activeLexicalEditor || document.querySelector('.xzsf02u[role="textbox"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
+                                if (!ed) return;
+                                ed.dispatchEvent(new InputEvent("beforeinput", {
+                                    bubbles: true,
+                                    cancelable: true,
+                                    inputType: "deleteContentBackward"
+                                }));
+                            },
+                            enter: function() {
+                                var ed = window.__activeLexicalEditor || document.querySelector('.xzsf02u[role="textbox"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
+                                if (!ed || !ed.__lexicalEditor) return;
+                                var editor = ed.__lexicalEditor;
+                                var enterCmd = null;
+                                editor._commands.forEach(function(val, key) {
+                                    if (key && (key.type === 'KEY_ENTER_COMMAND' || key.type === 'INSERT_PARAGRAPH_COMMAND')) enterCmd = key;
+                                });
+                                if (enterCmd) editor.dispatchCommand(enterCmd, null);
+                            }
+                        };
+
+                        document.addEventListener('selectionchange', function() {
+                            var active = document.activeElement;
+                            var ed = findEditor(active);
+                            if (ed) {
+                                var sel = window.getSelection();
+                                if (sel && sel.anchorNode === document.body) {
+                                    var p = ed.querySelector('p') || ed;
+                                    try { sel.setBaseAndExtent(p, 0, p, 0); } catch(e) {}
+                                }
+                            }
+                        }, true);
+
+                        document.addEventListener('click', function(e) {
+                            var ed = findEditor(e.target);
+                            if (ed && ed.__lexicalEditor) {
+                                window.__activeLexicalEditor = ed;
+                                try {
+                                    ed.__lexicalEditor.focus();
+                                    var text = (ed.innerText || "").replace(/\n$/, "");
+                                    if (window.AndroidAutoplay && window.AndroidAutoplay.setRichEditorActive) {
+                                        window.AndroidAutoplay.setRichEditorActive(true, text);
+                                    }
+                                } catch(err) {}
+                            }
+                        }, true);
+                    })();
+                """.trimIndent()
+
+                array.put(JSONObject().apply {
+                    put("id", "default_facebook_desktop_comments")
+                    put("name", "Facebook Desktop Comment Box Fix")
+                    put("enabled", true)
+                    put("urlPatterns", JSONArray().put("*facebook.com*"))
+                    put("script", fbProfileScript)
+                    put("use_script", true)
+                    put("selectors", JSONArray())
+                })
+            }
+
+            if (!hasGenericAutoplay) {
+                val genericScript = """
+                    (function() {
+                        if (window.autoPlayInjected) return;
+                        window.autoPlayInjected = true;
+                        const clickedElements = new Set();
+                        const clickPlayButtons = () => {
+                            const selectors = ['button', 'div', 'i', 'span', 'a', '[class*="play"]', '[id*="play"]', '[class*="Player"]', '[class*="control"]', '.ytp-large-play-button', '.vjs-big-play-button'];
+                            const elements = document.querySelectorAll(selectors.join(','));
+                            elements.forEach(el => {
+                                if (clickedElements.has(el)) return;
+                                const cls = (el.className || "").toString().toLowerCase();
+                                const id = (el.id || "").toLowerCase();
+                                const text = (el.innerText || "").toLowerCase();
+                                const isPlay = cls.includes('play') || id.includes('play') || text.trim() === 'play';
+                                const isAd = cls.includes('ad') || id.includes('ad') || id.includes('google') || cls.includes('banner');
+                                if (isPlay && !isAd) {
+                                    const rect = el.getBoundingClientRect();
+                                    if (rect.width > 5 && rect.height > 5) {
+                                        const style = window.getComputedStyle(el);
+                                        if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
+                                            clickedElements.add(el);
+                                            ['mousedown', 'mouseup', 'click'].forEach(name => {
+                                                el.dispatchEvent(new MouseEvent(name, {bubbles: true, cancelable: true, view: window, buttons: 1}));
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        };
+                        clickPlayButtons();
+                        const observer = new MutationObserver((mutations) => {
+                            for (const mutation of mutations) { if (mutation.addedNodes.length > 0) { clickPlayButtons(); break; } }
+                        });
+                        observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+                    })();
+                """.trimIndent()
+
+                array.put(JSONObject().apply {
+                    put("id", "default_generic_video_autoplay")
+                    put("name", "Generic Play Button Clicker")
+                    put("enabled", true)
+                    put("urlPatterns", JSONArray().put("*"))
+                    put("script", genericScript)
+                    put("use_script", true)
+                    put("selectors", JSONArray())
+                })
+            }
+
+            prefs.edit().putString("autoplay_profiles", array.toString()).putInt("seeded_autoplay_version", 2).apply()
+            refreshLists()
+        }
     }
 
     fun refreshLists() {
@@ -1316,9 +1418,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         headers["User-Agent"] = webViewUserAgents[view] ?: view.settings.userAgentString
                         if (url != null) {
                             interceptedMediaUrls[url] = headers
-                            if (extractVideoPref.value != 0 && _isBrowsing.value && view == currentWebView) {
-                                attemptVideoExtraction(null, null)
-                            }
                         }
                     }
                 }
@@ -1385,14 +1484,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                                 
                                 interceptedMediaUrls[localFileUrl] = headers
                                 
-                                if (videoTriggerPref.value == 0 && _isBrowsing.value && wasEmpty) {
-                                    view?.post { 
-                                        if (view == currentWebView) {
-                                            attemptVideoExtraction(null, null) 
-                                        }
-                                    }
-                                }
-                                
                                 return WebResourceResponse(
                                     "application/x-mpegURL",
                                     "UTF-8",
@@ -1405,15 +1496,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                                 return super.shouldInterceptRequest(view, request)
                             }
                         }
-
                         interceptedMediaUrls[requestedUrl] = headers
-                        if (videoTriggerPref.value == 0 && _isBrowsing.value && wasEmpty) {
-                            view?.post { 
-                                if (view == currentWebView) {
-                                    attemptVideoExtraction(null, null) 
-                                }
-                            }
-                        }
                     }
                     if (requestedUrl.contains(".srt") || requestedUrl.contains(".vtt") || requestedUrl.contains(".ass")) {
                         interceptedSubtitleUrls[requestedUrl] = request.requestHeaders
@@ -1495,22 +1578,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 wv.evaluateJavascript(scriptToRun, null)
             }
         }
-
-        if (!executedAny) {
-            wv.evaluateJavascript(DEFAULT_AUTOPLAY_SCRIPT, null)
-        }
-
-        val handler = Handler(Looper.getMainLooper())
-        var attempts = 0
-        val extractionTask = object : Runnable {
-            override fun run() {
-                if (videoTriggerPref.value != 0 || !_isBrowsing.value || attempts >= 8) return
-                attemptVideoExtraction(null, null)
-                attempts++
-                handler.postDelayed(this, 2000)
-            }
-        }
-        handler.post(extractionTask)
     }
 
     fun startRecordingAutoplay() {
@@ -1686,6 +1753,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun attemptVideoExtraction(view: View?, callback: WebChromeClient.CustomViewCallback?) {
+        if (extractVideoPref.value == 2) {
+            if (view != null) {
+                _customView.value = view
+            }
+            return
+        }
         if (isExtractionActive) return
         val wv = currentWebView ?: return
 
@@ -2283,6 +2356,20 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         fun onElementClicked(selector: String) {
             if (_isRecordingAutoplay.value) {
                 recordedSelectors.add(selector)
+            }
+        }
+
+        @JavascriptInterface
+        fun setRichEditorActive(active: Boolean, currentText: String) {
+            val wv = currentWebView as? WebAppView ?: return
+            wv.post {
+                wv.isCustomInputBridgeActive = active
+                if (active) {
+                    wv.syncInputText(currentText)
+                    val imm = appContext.getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                    imm?.restartInput(wv)
+                    imm?.showSoftInput(wv, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                }
             }
         }
     }
