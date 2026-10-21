@@ -238,30 +238,107 @@ class CursorManager(private val activity: ComponentActivity, private val viewMod
     }
 
     fun simulateClick() {
-        val downTime = SystemClock.uptimeMillis()
-        val eventTime = SystemClock.uptimeMillis()
-
-        val wv = viewModel.currentWebView
-        if (wv != null && !wv.hasFocus()) {
+        val wv = viewModel.currentWebView ?: return
+        if (!wv.hasFocus()) {
             wv.requestFocus()
         }
 
-        val properties = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_FINGER }
-        val coordinates = MotionEvent.PointerCoords().apply { x = _cursorX.value; y = _cursorY.value; pressure = 1.0f; size = 1.0f }
+        val density = activity.resources.displayMetrics.density
+        val location = IntArray(2)
+        wv.getLocationOnScreen(location)
+        val wvX = (_cursorX.value - location[0]).coerceAtLeast(0f)
+        val wvY = (_cursorY.value - location[1]).coerceAtLeast(0f)
+        val cssX = (wvX / density).toInt()
+        val cssY = (wvY / density).toInt()
 
-        val downEvent = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_DOWN, 1, arrayOf(properties), arrayOf(coordinates), 0, 0, 1.0f, 1.0f, 0, 0, 0, 0)
-        val upEvent = MotionEvent.obtain(downTime, eventTime + 100, MotionEvent.ACTION_UP, 1, arrayOf(properties), arrayOf(coordinates), 0, 0, 1.0f, 1.0f, 0, 0, 0, 0)
+        val probeScript = """
+            (function() {
+                var el = document.elementFromPoint($cssX, $cssY);
+                if (!el) return "";
 
-        if (wv != null) {
-            wv.dispatchTouchEvent(downEvent)
-            wv.dispatchTouchEvent(upEvent)
-        } else {
-            activity.window.superDispatchTouchEvent(downEvent)
-            activity.window.superDispatchTouchEvent(upEvent)
+                var ed = null;
+                var curr = el;
+                while (curr && curr !== document.body) {
+                    if (curr.__lexicalEditor) {
+                        ed = curr;
+                        break;
+                    }
+                    curr = curr.parentElement;
+                }
+
+                if (!ed && el.parentElement) {
+                    var candidate = el.parentElement.querySelector('[data-lexical-editor="true"], [role="textbox"][contenteditable="true"]');
+                    if (candidate && candidate.__lexicalEditor) {
+                        ed = candidate;
+                    }
+                }
+                if (!ed) {
+                    var p = el;
+                    for (var i = 0; i < 4 && p && p !== document.body; i++) {
+                        var candidate = p.querySelector('[data-lexical-editor="true"], [role="textbox"][contenteditable="true"]');
+                        if (candidate && candidate.__lexicalEditor) {
+                            ed = candidate;
+                            break;
+                        }
+                        p = p.parentElement;
+                    }
+                }
+
+                if (ed && ed.__lexicalEditor) {
+                    try {
+                        window.__activeLexicalEditor = ed;
+                        ed.__lexicalEditor.focus();
+                        var text = (ed.innerText || "").replace(/\n${'$'}/, "");
+                        return JSON.stringify({ isLexical: true, text: text });
+                    } catch(e) {}
+                }
+                return "";
+            })();
+        """.trimIndent()
+
+        wv.evaluateJavascript(probeScript) { result ->
+            var isLexical = false
+            var currentText = ""
+
+            if (!result.isNullOrEmpty() && result != "null" && result != "\"\"") {
+                try {
+                    val unescaped = if (result.startsWith("\"") && result.endsWith("\"")) {
+                        org.json.JSONTokener(result).nextValue().toString()
+                    } else result
+                    val json = org.json.JSONObject(unescaped)
+                    isLexical = json.optBoolean("isLexical", false)
+                    currentText = json.optString("text", "")
+                } catch (_: Exception) {}
+            }
+
+            val webAppView = wv as? WebAppView
+
+            if (isLexical && webAppView != null) {
+                webAppView.isLexicalActive = true
+                webAppView.syncLexicalText(currentText)
+                val imm = activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                imm?.restartInput(wv)
+                imm?.showSoftInput(wv, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+            } else {
+                if (webAppView != null) {
+                    webAppView.isLexicalActive = false
+                }
+                val downTime = SystemClock.uptimeMillis()
+                val eventTime = SystemClock.uptimeMillis()
+
+                val properties = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_FINGER }
+                val coordinates = MotionEvent.PointerCoords().apply { x = _cursorX.value; y = _cursorY.value; pressure = 1.0f; size = 1.0f }
+
+                val downEvent = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_DOWN, 1, arrayOf(properties), arrayOf(coordinates), 0, 0, 1.0f, 1.0f, 0, 0, 0, 0)
+                val upEvent = MotionEvent.obtain(downTime, eventTime + 100, MotionEvent.ACTION_UP, 1, arrayOf(properties), arrayOf(coordinates), 0, 0, 1.0f, 1.0f, 0, 0, 0, 0)
+
+                wv.dispatchTouchEvent(downEvent)
+                wv.dispatchTouchEvent(upEvent)
+
+                downEvent.recycle()
+                upEvent.recycle()
+            }
         }
-
-        downEvent.recycle()
-        upEvent.recycle()
     }
 
     private fun checkHover() {

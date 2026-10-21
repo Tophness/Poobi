@@ -392,17 +392,20 @@ fun MainApp(
                                                     val isCurrent = (index == activeIndex)
                                                     if (isBrowsing) {
                                                         wv.visibility = if (isCurrent) View.VISIBLE else View.INVISIBLE
-                                                        wv.isFocusable = isCurrent
-                                                        wv.isFocusableInTouchMode = isCurrent
+                                                        if (wv.isFocusable != isCurrent) wv.isFocusable = isCurrent
+                                                        if (wv.isFocusableInTouchMode != isCurrent) wv.isFocusableInTouchMode = isCurrent
                                                     } else {
                                                         wv.visibility = View.INVISIBLE
-                                                        wv.isFocusable = false
-                                                        wv.isFocusableInTouchMode = false
+                                                        if (wv.isFocusable) wv.isFocusable = false
+                                                        if (wv.isFocusableInTouchMode) wv.isFocusableInTouchMode = false
                                                     }
                                                 }
 
                                                 if (isBrowsing && activeIndex in webViews.indices) {
-                                                    webViews[activeIndex].requestFocus()
+                                                    val currentWv = webViews[activeIndex]
+                                                    if (!currentWv.hasFocus()) {
+                                                        currentWv.requestFocus()
+                                                    }
                                                 }
                                             }
                                         )

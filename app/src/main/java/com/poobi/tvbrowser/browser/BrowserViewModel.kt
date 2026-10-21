@@ -36,83 +36,216 @@ import java.util.concurrent.ConcurrentHashMap
 
 open class WebAppView(context: Context) : WebView(context) {
 
-    private var lastValidInputConnection: android.view.inputmethod.InputConnection? = null
-    private var lastEditorInfo: android.view.inputmethod.EditorInfo? = null
-    private var lastValidConnectionTime: Long = 0L
+    var isLexicalActive: Boolean = false
+    private val lexicalTextBuffer = StringBuilder()
 
-    override fun getWindowToken(): android.os.IBinder? {
-        val timeSinceValid = System.currentTimeMillis() - lastValidConnectionTime
-        if (timeSinceValid < 3000L && hasFocus()) {
-            val stack = Thread.currentThread().stackTrace
-            for (element in stack) {
-                if (element.className.contains("ImeAdapter", ignoreCase = true)) {
-                    return android.os.Binder()
-                }
-            }
-        }
-        return super.getWindowToken()
+    fun syncLexicalText(text: String) {
+        lexicalTextBuffer.setLength(0)
+        lexicalTextBuffer.append(text)
     }
 
     override fun onCheckIsTextEditor(): Boolean {
-        val timeSinceValid = System.currentTimeMillis() - lastValidConnectionTime
-        if (timeSinceValid < 3000L && hasFocus() && lastValidInputConnection != null) {
-            return true
-        }
+        if (isLexicalActive) return true
         return super.onCheckIsTextEditor()
     }
 
     override fun onCreateInputConnection(outAttrs: android.view.inputmethod.EditorInfo?): android.view.inputmethod.InputConnection? {
-        val timeSinceValid = System.currentTimeMillis() - lastValidConnectionTime
-        if (timeSinceValid < 3000L && hasFocus() && lastValidInputConnection != null && lastEditorInfo != null) {
+        val superIc = super.onCreateInputConnection(outAttrs)
+
+        if (superIc != null && outAttrs != null && outAttrs.inputType != android.view.inputmethod.EditorInfo.TYPE_NULL && !isLexicalActive) {
+            return superIc
+        }
+
+        if (isLexicalActive) {
             outAttrs?.let {
-                it.inputType = lastEditorInfo!!.inputType
-                it.imeOptions = lastEditorInfo!!.imeOptions
-                it.actionLabel = lastEditorInfo!!.actionLabel
-                it.initialSelStart = lastEditorInfo!!.initialSelStart
-                it.initialSelEnd = lastEditorInfo!!.initialSelEnd
-            }
-            return lastValidInputConnection
-        }
-
-        val ic = super.onCreateInputConnection(outAttrs)
-        if (ic != null && outAttrs != null && outAttrs.inputType != android.view.inputmethod.EditorInfo.TYPE_NULL) {
-            lastValidConnectionTime = System.currentTimeMillis()
-            lastEditorInfo = android.view.inputmethod.EditorInfo().apply {
-                inputType = outAttrs.inputType
-                imeOptions = outAttrs.imeOptions
-                actionLabel = outAttrs.actionLabel
-                initialSelStart = outAttrs.initialSelStart
-                initialSelEnd = outAttrs.initialSelEnd
+                it.inputType = android.text.InputType.TYPE_CLASS_TEXT or 
+                               android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                               android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                it.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+                it.initialSelStart = lexicalTextBuffer.length
+                it.initialSelEnd = lexicalTextBuffer.length
             }
 
-            val wrapped = object : android.view.inputmethod.InputConnectionWrapper(ic, true) {
-                override fun closeConnection() {
-                    val time = System.currentTimeMillis() - lastValidConnectionTime
-                    if (time < 1500L && hasFocus()) {
-                        return
+            return object : android.view.inputmethod.BaseInputConnection(this, false) {
+
+                private var currentComposingText = ""
+
+                private fun insertTextViaLexical(str: String) {
+                    if (str.isEmpty()) return
+                    lexicalTextBuffer.append(str)
+                    val quoted = org.json.JSONObject.quote(str)
+                    val script = """
+                        (function() {
+                            var ed = window.__activeLexicalEditor || document.querySelector('.xzsf02u[role="textbox"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
+                            if (!ed || !ed.__lexicalEditor) return;
+                            var editor = ed.__lexicalEditor;
+                            var targetCmd = null;
+                            editor._commands.forEach(function(val, key) {
+                                if (key && key.type === 'CONTROLLED_TEXT_INSERTION_COMMAND') {
+                                    targetCmd = key;
+                                }
+                            });
+                            if (targetCmd) {
+                                editor.dispatchCommand(targetCmd, $quoted);
+                            }
+                        })();
+                    """.trimIndent()
+                    post { evaluateJavascript(script, null) }
+                }
+
+                private fun deleteViaLexical() {
+                    if (lexicalTextBuffer.isNotEmpty()) {
+                        lexicalTextBuffer.deleteCharAt(lexicalTextBuffer.length - 1)
                     }
-                    super.closeConnection()
+                    val script = """
+                        (function() {
+                            var ed = window.__activeLexicalEditor || document.querySelector('.xzsf02u[role="textbox"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
+                            if (!ed) return;
+                            ed.dispatchEvent(new InputEvent("beforeinput", {
+                                bubbles: true,
+                                cancelable: true,
+                                inputType: "deleteContentBackward"
+                            }));
+                        })();
+                    """.trimIndent()
+                    post { evaluateJavascript(script, null) }
+                }
+
+                private fun enterViaLexical() {
+                    currentComposingText = ""
+                    lexicalTextBuffer.append("\n")
+                    val script = """
+                        (function() {
+                            var ed = window.__activeLexicalEditor || document.querySelector('.xzsf02u[role="textbox"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
+                            if (!ed || !ed.__lexicalEditor) return;
+                            var editor = ed.__lexicalEditor;
+                            var enterCmd = null;
+                            editor._commands.forEach(function(val, key) {
+                                if (key && (key.type === 'KEY_ENTER_COMMAND' || key.type === 'INSERT_PARAGRAPH_COMMAND')) {
+                                    enterCmd = key;
+                                }
+                            });
+                            if (enterCmd) {
+                                editor.dispatchCommand(enterCmd, null);
+                            }
+                        })();
+                    """.trimIndent()
+                    post { evaluateJavascript(script, null) }
+                }
+
+                override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
+                    val newStr = text?.toString() ?: ""
+                    val oldStr = currentComposingText
+
+                    if (newStr == oldStr) {
+                        return true
+                    }
+
+                    if (newStr.startsWith(oldStr)) {
+                        // User typed more characters (e.g. "A" -> "Aa")
+                        val added = newStr.substring(oldStr.length)
+                        insertTextViaLexical(added)
+                    } else if (oldStr.startsWith(newStr)) {
+                        // User pressed Backspace during composing (e.g. "Aa" -> "A")
+                        val deleteCount = oldStr.length - newStr.length
+                        for (i in 0 until deleteCount) {
+                            deleteViaLexical()
+                        }
+                    } else {
+                        // Full word replacement / prediction selection
+                        for (i in 0 until oldStr.length) {
+                            deleteViaLexical()
+                        }
+                        insertTextViaLexical(newStr)
+                    }
+
+                    currentComposingText = newStr
+                    return true
+                }
+
+                override fun finishComposingText(): Boolean {
+                    currentComposingText = ""
+                    return true
+                }
+
+                override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
+                    val str = text?.toString() ?: ""
+                    val oldStr = currentComposingText
+
+                    if (str == oldStr) {
+                        // Keyboard committed the current composition as-is
+                        currentComposingText = ""
+                        return true
+                    }
+
+                    if (str.startsWith(oldStr) && oldStr.isNotEmpty()) {
+                        val added = str.substring(oldStr.length)
+                        insertTextViaLexical(added)
+                    } else {
+                        for (i in 0 until oldStr.length) {
+                            deleteViaLexical()
+                        }
+                        insertTextViaLexical(str)
+                    }
+
+                    currentComposingText = ""
+                    return true
+                }
+
+                override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+                    currentComposingText = ""
+                    if (beforeLength > 0) {
+                        for (i in 0 until beforeLength) {
+                            deleteViaLexical()
+                        }
+                    }
+                    return true
+                }
+
+                override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean {
+                    return deleteSurroundingText(beforeLength, afterLength)
+                }
+
+                override fun getTextBeforeCursor(n: Int, flags: Int): CharSequence {
+                    val len = lexicalTextBuffer.length
+                    if (len == 0) return ""
+                    val start = (len - n).coerceAtLeast(0)
+                    return lexicalTextBuffer.substring(start, len)
+                }
+
+                override fun getTextAfterCursor(n: Int, flags: Int): CharSequence = ""
+
+                override fun getSelectedText(flags: Int): CharSequence = ""
+
+                override fun sendKeyEvent(event: android.view.KeyEvent?): Boolean {
+                    if (event != null && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                        if (event.keyCode == android.view.KeyEvent.KEYCODE_DEL) {
+                            currentComposingText = ""
+                            deleteViaLexical()
+                            return true
+                        } else if (event.keyCode == android.view.KeyEvent.KEYCODE_ENTER || event.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                            enterViaLexical()
+                            return true
+                        } else {
+                            val unicode = event.getUnicodeChar(event.metaState)
+                            if (unicode != 0 && !Character.isISOControl(unicode)) {
+                                currentComposingText = ""
+                                insertTextViaLexical(unicode.toChar().toString())
+                                return true
+                            }
+                        }
+                    }
+                    return super.sendKeyEvent(event)
                 }
             }
-            lastValidInputConnection = wrapped
-
-            postDelayed({
-                if (hasFocus() && lastValidInputConnection != null) {
-                    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
-                    imm?.showSoftInput(this@WebAppView, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-                }
-            }, 200)
-
-            return wrapped
         }
 
-        return ic
+        return superIc
     }
 
     override fun clearFocus() {
-        lastValidInputConnection = null
-        lastEditorInfo = null
-        lastValidConnectionTime = 0L
+        isLexicalActive = false
+        lexicalTextBuffer.setLength(0)
         super.clearFocus()
     }
 }
@@ -322,6 +455,51 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     companion object {
         const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+
+        const val LEXICAL_FIX_SCRIPT = """
+            (function() {
+                if (window.__lexicalFixInjected) return;
+                window.__lexicalFixInjected = true;
+
+                function getEditableRoot(node) {
+                    if (!node) return null;
+                    try {
+                        if (node.nodeType === 1 && (node.getAttribute('role') === 'textbox' || node.isContentEditable || node.hasAttribute('data-lexical-editor'))) {
+                            return node;
+                        }
+                        if (node.parentElement) {
+                            return node.parentElement.closest ? node.parentElement.closest('[role="textbox"], [contenteditable="true"], [data-lexical-editor="true"]') : null;
+                        }
+                    } catch(e) {}
+                    return null;
+                }
+
+                // Snap selection back into <p> atomically without clearing ranges
+                document.addEventListener('selectionchange', function() {
+                    var active = document.activeElement;
+                    var editor = getEditableRoot(active);
+                    if (editor) {
+                        var sel = window.getSelection();
+                        if (sel && sel.anchorNode === document.body) {
+                            var p = editor.querySelector('p') || editor;
+                            try {
+                                sel.setBaseAndExtent(p, 0, p, 0);
+                            } catch(e) {}
+                        }
+                    }
+                }, true);
+
+                // Arm Lexical focus on touch/pointer down
+                document.addEventListener('pointerdown', function(e) {
+                    var ed = getEditableRoot(e.target);
+                    if (ed && ed.__lexicalEditor) {
+                        try {
+                            ed.__lexicalEditor.focus();
+                        } catch(err) {}
+                    }
+                }, true);
+            })();
+        """
 
         const val DEFAULT_AUTOPLAY_SCRIPT = """
             (function() {
@@ -1100,6 +1278,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 super.onPageStarted(view, url, favicon)
                 interceptedMediaUrls.clear()
                 interceptedSubtitleUrls.clear()
+                view?.evaluateJavascript(LEXICAL_FIX_SCRIPT, null)
                 if (url != null && view != null) {
                     val host = Uri.parse(url).host ?: ""
                     webViewHosts[view] = host
@@ -1110,6 +1289,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 if (url == null || url == "about:blank" || view == null) return
+
+                view.evaluateJavascript(LEXICAL_FIX_SCRIPT, null)
 
                 if (view == currentWebView) {
                     currentHost = Uri.parse(url).host ?: ""
