@@ -1300,18 +1300,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 return true
             }
-            if (browserViewModel.currentAppTab.value == 1) {
-                if (streamsViewModel.scrapedSources.value != null || streamsViewModel.isScraping.value) {
-                    streamsViewModel.clearScrapedSources()
-                    return true
-                } else if (streamsViewModel.selectedItem.value != null) {
-                    streamsViewModel.clearSelectedMedia()
-                    return true
-                } else if (streamsViewModel.searchResults.value != null) {
-                    streamsViewModel.clearSearchResults()
-                    return true
-                }
-            }
         }
 
         return super.dispatchKeyEvent(event)

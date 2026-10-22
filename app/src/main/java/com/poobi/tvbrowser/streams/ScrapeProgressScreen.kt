@@ -1,5 +1,6 @@
 package com.poobi.tvbrowser.streams
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -104,6 +105,10 @@ fun ScrapeTab(
 
 @Composable
 fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequester: FocusRequester? = null) {
+    BackHandler {
+        viewModel.clearScrapedSources()
+    }
+
     val status by viewModel.scrapeStatusMsg.collectAsState()
     val progress by viewModel.scrapeProgress.collectAsState()
     val total by viewModel.scrapeTotal.collectAsState()

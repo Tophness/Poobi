@@ -1,6 +1,7 @@
 package com.poobi.tvbrowser.streams
 
 import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -11,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -27,9 +29,7 @@ import com.poobi.tvbrowser.browser.HoldToDeleteCloseButton
 import com.poobi.tvbrowser.browser.TvFocusableHoldToDeleteBox
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvSearchField
-import com.poobi.tvbrowser.shared.KeyTracker
 import com.poobi.tvbrowser.shared.mouseWheelHorizontalScroll
-import kotlinx.coroutines.delay
 import org.json.JSONArray
 
 @Composable
@@ -85,18 +85,6 @@ fun StreamsDashboardScreen(
 
     val isDeletable = activeCategoryIndex == 1 || activeCategoryIndex == 2
 
-    LaunchedEffect(searchResults) {
-        if (activeCategoryIndex == 0 && searchResults != null && searchResults!!.length() > 0) {
-            val startTime = System.currentTimeMillis()
-            try {
-                delay(200)
-                if (KeyTracker.lastKeyPressTime < startTime) {
-                    lastCardFocusRequester.requestFocus()
-                }
-            } catch (e: Exception) {}
-        }
-    }
-
     val hasCardsInCenter = when {
         activeCategoryIndex != 0 -> libraryItems != null && libraryItems!!.length() > 0
         searchResults != null -> searchResults!!.length() > 0
@@ -104,9 +92,50 @@ fun StreamsDashboardScreen(
         else -> false
     }
 
+    val searchDownTarget = when {
+        hasCardsInCenter -> lastCardFocusRequester
+        searchHistory.isNotEmpty() -> lastHistoryFocusRequester
+        else -> currentTabFocusTarget
+    }
+
+    val bottomUpTarget = when {
+        hasCardsInCenter -> lastCardFocusRequester
+        activeCategoryIndex == 0 && searchHistory.isNotEmpty() -> lastHistoryFocusRequester
+        activeCategoryIndex == 0 -> searchFieldFocusRequester
+        else -> topTabFocusRequester ?: FocusRequester.Default
+    }
+
+    BackHandler(enabled = searchResults != null) {
+        viewModel.clearSearchResults()
+        try {
+            searchFieldFocusRequester.requestFocus()
+        } catch (_: Exception) {}
+    }
+
+    val triggerSearch: () -> Unit = {
+        val queryToSearch = searchInput.trim()
+        if (queryToSearch.isNotEmpty()) {
+            viewModel.clearLiveSearch()
+            viewModel.performSearch(queryToSearch)
+            try {
+                lastCardFocusRequester.requestFocus()
+            } catch (_: Exception) {}
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
         if (activeCategoryIndex == 0) {
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                    .focusProperties {
+                        if (topTabFocusRequester != null) {
+                            up = topTabFocusRequester
+                        }
+                    },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 TvSearchField(
                     value = searchInput,
                     onValueChange = { 
@@ -122,25 +151,14 @@ fun StreamsDashboardScreen(
                             viewModel.updateLiveSearch(full)
                         }
                     },
-                    onSearch = { 
-                        val queryToSearch = searchInput
-                        viewModel.clearLiveSearch()
-                        viewModel.performSearch(queryToSearch) 
-                    },
+                    onSearch = triggerSearch,
                     focusRequester = searchFieldFocusRequester,
                     modifier = Modifier
                         .weight(1f)
                         .height(36.dp)
                         .focusProperties {
                             right = searchButtonFocusRequester
-                            if (topTabFocusRequester != null) {
-                                up = topTabFocusRequester
-                            }
-                            down = when {
-                                hasCardsInCenter -> lastCardFocusRequester
-                                searchHistory.isNotEmpty() -> lastHistoryFocusRequester
-                                else -> currentTabFocusTarget
-                            }
+                            down = searchDownTarget
                         }
                 )
                 TvFocusableBox(
@@ -150,20 +168,9 @@ fun StreamsDashboardScreen(
                         .focusRequester(searchButtonFocusRequester)
                         .focusProperties {
                             left = searchFieldFocusRequester
-                            if (topTabFocusRequester != null) {
-                                up = topTabFocusRequester
-                            }
-                            down = when {
-                                hasCardsInCenter -> lastCardFocusRequester
-                                searchHistory.isNotEmpty() -> lastHistoryFocusRequester
-                                else -> currentTabFocusTarget
-                            }
+                            down = searchDownTarget
                         },
-                    onClick = { 
-                        val queryToSearch = searchInput
-                        viewModel.clearLiveSearch()
-                        viewModel.performSearch(queryToSearch) 
-                    }
+                    onClick = triggerSearch
                 ) { isFocused ->
                     Icon(
                         painter = painterResource(id = R.drawable.ic_go), 
@@ -260,7 +267,12 @@ fun StreamsDashboardScreen(
             }
         }
 
-        Box(modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 10.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(top = 10.dp)
+        ) {
             if (isScraping) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     CircularProgressIndicator(color = Color(0xFF00BCD4))
@@ -424,12 +436,7 @@ fun StreamsDashboardScreen(
                         .height(42.dp)
                         .focusRequester(categoryTabFocusRequesters[index])
                         .focusProperties {
-                            up = when {
-                                hasCardsInCenter -> lastCardFocusRequester
-                                activeCategoryIndex == 0 && searchHistory.isNotEmpty() -> lastHistoryFocusRequester
-                                activeCategoryIndex == 0 -> searchFieldFocusRequester
-                                else -> topTabFocusRequester ?: FocusRequester.Default
-                            }
+                            up = bottomUpTarget
                         },
                     onClick = { 
                         if (activeCategoryIndex != index) {

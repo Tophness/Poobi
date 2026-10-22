@@ -4,6 +4,8 @@ import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
@@ -26,11 +28,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -117,9 +121,21 @@ fun TvInputField(
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
-    var isReadOnly by remember { mutableStateOf(true) }
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    var isEditing by remember { mutableStateOf(false) }
+    var isAcceptingRight by remember { mutableStateOf(false) }
+
+    val defaultOuterFocusRequester = remember { FocusRequester() }
+    val outerFocusRequester = focusRequester ?: defaultOuterFocusRequester
+    val innerFocusRequester = remember { FocusRequester() }
+
+    val outerInteractionSource = remember { MutableInteractionSource() }
+    val isOuterFocused by outerInteractionSource.collectIsFocusedAsState()
+
+    val innerInteractionSource = remember { MutableInteractionSource() }
+    val isInnerFocused by innerInteractionSource.collectIsFocusedAsState()
+
+    val isFocused = isOuterFocused || isInnerFocused
 
     var textFieldValue by remember {
         mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length)))
@@ -134,17 +150,28 @@ fun TvInputField(
         }
     }
 
-    var isAcceptingRight by remember { mutableStateOf(false) }
-
     val isImeVisible = WindowInsets.isImeVisible
     LaunchedEffect(isImeVisible) {
-        if (!isImeVisible) {
-            isReadOnly = true
+        if (!isImeVisible && isEditing) {
+            isEditing = false
         }
     }
 
-    LaunchedEffect(isReadOnly) {
-        InputFieldState.isEditing = !isReadOnly
+    LaunchedEffect(isEditing) {
+        InputFieldState.isEditing = isEditing
+        if (isEditing) {
+            try {
+                innerFocusRequester.requestFocus()
+            } catch (_: Exception) {}
+            keyboardController?.show()
+        } else {
+            keyboardController?.hide()
+            if (isInnerFocused) {
+                try {
+                    outerFocusRequester.requestFocus()
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     DisposableEffect(Unit) {
@@ -168,92 +195,179 @@ fun TvInputField(
     }
 
     val content = @Composable {
-        BasicTextField(
-            value = textFieldValue,
-            onValueChange = { newTfv ->
-                textFieldValue = newTfv
-                if (newTfv.text != value) {
-                    onValueChange(newTfv.text)
-                }
-            },
-            readOnly = isReadOnly,
-            textStyle = TextStyle(
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Normal,
-                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
-            ),
-            cursorBrush = SolidColor(Color(0xFF00BCD4)),
-            visualTransformation = visualTransformation,
-            keyboardOptions = KeyboardOptions(imeAction = imeAction),
-            keyboardActions = KeyboardActions(onAny = {
-                isReadOnly = true
-                keyboardController?.hide()
-                onAction()
-            }),
-            singleLine = true,
-            interactionSource = interactionSource,
+        Box(
             modifier = fieldModifier
-                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier.focusRequester(defaultOuterFocusRequester))
+                .clip(RoundedCornerShape(8.dp))
+                .background(containerColor)
+                .border(
+                    width = if (isFocused) 1.5.dp else 1.dp,
+                    color = if (isFocused) Color(0xFF00BCD4) else Color.Transparent,
+                    shape = RoundedCornerShape(8.dp)
+                )
                 .onFocusChanged { state ->
-                    if (!state.isFocused) {
-                        isReadOnly = true
+                    if (!state.isFocused && !state.hasFocus) {
+                        if (isEditing) {
+                            isEditing = false
+                        }
                     }
                 }
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
-                            val event = awaitPointerEvent()
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
                             if (event.type == PointerEventType.Press) {
-                                isReadOnly = false
+                                if (!isEditing) {
+                                    HardwareInputManager.notifyMouseUsed()
+                                    isEditing = true
+                                }
                             }
                         }
                     }
                 }
                 .onPreviewKeyEvent { keyEvent ->
+                    if (isEditing) return@onPreviewKeyEvent false
+
                     val nativeEvent = keyEvent.nativeKeyEvent
                     val keyCode = nativeEvent.keyCode
                     val isEnterKey = keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
                     val isDpadCenter = keyCode == KeyEvent.KEYCODE_DPAD_CENTER
-                    val isArrowKey = keyCode == KeyEvent.KEYCODE_DPAD_UP ||
-                                    keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
-                                    keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
-                                    keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
 
-                    if (keyCode == KeyEvent.KEYCODE_BACK && !isReadOnly) {
-                        isReadOnly = true
-                        isAcceptingRight = false
-                        keyboardController?.hide()
-                        return@onPreviewKeyEvent true
-                    }
-
-                    if (keyCode == KeyEvent.KEYCODE_TAB && predictedSuffix.isNotEmpty()) {
+                    if (isEnterKey || isDpadCenter) {
                         if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
                             return@onPreviewKeyEvent true
                         } else if (nativeEvent.action == KeyEvent.ACTION_UP) {
-                            onAcceptPrediction?.invoke()
+                            val isHwKeyboard = HardwareInputManager.isHardwareKeyboardActive(context)
+                            if (isEnterKey && isHwKeyboard && value.isNotBlank()) {
+                                onAction()
+                            } else {
+                                isEditing = true
+                            }
                             return@onPreviewKeyEvent true
                         }
                     }
 
-                    if (isArrowKey) {
-                        if (isReadOnly) {
-                            isAcceptingRight = false
-                            if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
-                                val direction = when (keyCode) {
-                                    KeyEvent.KEYCODE_DPAD_UP -> FocusDirection.Up
-                                    KeyEvent.KEYCODE_DPAD_DOWN -> FocusDirection.Down
-                                    KeyEvent.KEYCODE_DPAD_LEFT -> FocusDirection.Left
-                                    KeyEvent.KEYCODE_DPAD_RIGHT -> FocusDirection.Right
-                                    else -> null
-                                }
-                                if (direction != null && focusManager.moveFocus(direction)) {
-                                    return@onPreviewKeyEvent true
-                                }
+                    val unicodeChar = nativeEvent.getUnicodeChar(nativeEvent.metaState)
+                    val isPrintable = unicodeChar != 0 && !Character.isISOControl(unicodeChar)
+
+                    if (isPrintable) {
+                        if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
+                            val newText = value + unicodeChar.toChar()
+                            onValueChange(newText)
+                            textFieldValue = TextFieldValue(text = newText, selection = TextRange(newText.length))
+                            isEditing = true
+                        }
+                        return@onPreviewKeyEvent true
+                    }
+
+                    if (keyCode == KeyEvent.KEYCODE_DEL) {
+                        if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
+                            if (value.isNotEmpty()) {
+                                val newText = value.dropLast(1)
+                                onValueChange(newText)
+                                textFieldValue = TextFieldValue(text = newText, selection = TextRange(newText.length))
                             }
-                        } else {
-                            val isCursorAtEnd = textFieldValue.selection.collapsed && textFieldValue.selection.max >= textFieldValue.text.length
-                            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && isCursorAtEnd && predictedSuffix.isNotEmpty()) {
+                            isEditing = true
+                        }
+                        return@onPreviewKeyEvent true
+                    }
+
+                    false
+                }
+                .clickable(
+                    interactionSource = outerInteractionSource,
+                    indication = null,
+                    onClick = {
+                        isEditing = true
+                    }
+                )
+                .focusable(
+                    interactionSource = outerInteractionSource
+                )
+                .padding(horizontal = 12.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            BasicTextField(
+                value = textFieldValue,
+                onValueChange = { newTfv ->
+                    textFieldValue = newTfv
+                    if (newTfv.text != value) {
+                        onValueChange(newTfv.text)
+                    }
+                },
+                readOnly = !isEditing,
+                textStyle = TextStyle(
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Normal,
+                    platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+                ),
+                cursorBrush = if (isEditing) SolidColor(Color(0xFF00BCD4)) else SolidColor(Color.Transparent),
+                visualTransformation = visualTransformation,
+                keyboardOptions = KeyboardOptions(imeAction = imeAction),
+                keyboardActions = KeyboardActions(onAny = {
+                    isEditing = false
+                    keyboardController?.hide()
+                    try {
+                        outerFocusRequester.requestFocus()
+                    } catch (_: Exception) {}
+                    onAction()
+                }),
+                singleLine = true,
+                interactionSource = innerInteractionSource,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(innerFocusRequester)
+                    .focusProperties {
+                        canFocus = isEditing
+                    }
+                    .onPreviewKeyEvent { keyEvent ->
+                        if (!isEditing) return@onPreviewKeyEvent false
+
+                        val nativeEvent = keyEvent.nativeKeyEvent
+                        val keyCode = nativeEvent.keyCode
+                        val isEnterKey = keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+                        val isDpadCenter = keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+
+                        if (keyCode == KeyEvent.KEYCODE_BACK) {
+                            if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
+                                return@onPreviewKeyEvent true
+                            } else if (nativeEvent.action == KeyEvent.ACTION_UP) {
+                                isEditing = false
+                                keyboardController?.hide()
+                                try {
+                                    outerFocusRequester.requestFocus()
+                                } catch (_: Exception) {}
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+
+                        if (isEnterKey || isDpadCenter) {
+                            if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
+                                return@onPreviewKeyEvent true
+                            } else if (nativeEvent.action == KeyEvent.ACTION_UP) {
+                                isEditing = false
+                                keyboardController?.hide()
+                                try {
+                                    outerFocusRequester.requestFocus()
+                                } catch (_: Exception) {}
+                                onAction()
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+
+                        if (keyCode == KeyEvent.KEYCODE_TAB && predictedSuffix.isNotEmpty()) {
+                            if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
+                                return@onPreviewKeyEvent true
+                            } else if (nativeEvent.action == KeyEvent.ACTION_UP) {
+                                onAcceptPrediction?.invoke()
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+
+                        val isCursorAtEnd = textFieldValue.selection.collapsed && textFieldValue.selection.max >= textFieldValue.text.length
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && predictedSuffix.isNotEmpty()) {
+                            if (isCursorAtEnd) {
                                 if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
                                     isAcceptingRight = true
                                     return@onPreviewKeyEvent true
@@ -264,94 +378,47 @@ fun TvInputField(
                                         return@onPreviewKeyEvent true
                                     }
                                 }
-                            }
-
-                            if (nativeEvent.action == KeyEvent.ACTION_UP && isAcceptingRight) {
+                            } else if (nativeEvent.action == KeyEvent.ACTION_UP) {
                                 isAcceptingRight = false
-                                return@onPreviewKeyEvent true
-                            }
-
-                            if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                                if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
-                                    isReadOnly = true
-                                    keyboardController?.hide()
-                                    val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) FocusDirection.Up else FocusDirection.Down
-                                    if (focusManager.moveFocus(direction)) {
-                                        return@onPreviewKeyEvent true
-                                    }
-                                }
-                            }
-                            return@onPreviewKeyEvent false
-                        }
-                    }
-
-                    if (isReadOnly) {
-                        if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
-                            if (isEnterKey || isDpadCenter) {
-                                val isHwKeyboard = HardwareInputManager.isHardwareKeyboardActive(context)
-                                if (isEnterKey && isHwKeyboard && value.isNotBlank()) {
-                                    onAction()
-                                    return@onPreviewKeyEvent true
-                                }
-                                isReadOnly = false
-                                keyboardController?.show()
-                                return@onPreviewKeyEvent true
-                            } else {
-                                val unicodeChar = nativeEvent.getUnicodeChar(nativeEvent.metaState)
-                                if (unicodeChar != 0 && !Character.isISOControl(unicodeChar)) {
-                                    isReadOnly = false
-                                    keyboardController?.hide()
-                                    onValueChange(value + unicodeChar.toChar())
-                                    return@onPreviewKeyEvent true
-                                } else if (keyCode == KeyEvent.KEYCODE_DEL) {
-                                    isReadOnly = false
-                                    keyboardController?.hide()
-                                    if (value.isNotEmpty()) {
-                                        onValueChange(value.dropLast(1))
-                                    }
-                                    return@onPreviewKeyEvent true
-                                }
                             }
                         }
-                    } else {
-                        if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
-                            if (isEnterKey || isDpadCenter) {
-                                isReadOnly = true
+
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                            if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
+                                return@onPreviewKeyEvent true
+                            } else if (nativeEvent.action == KeyEvent.ACTION_UP) {
+                                isEditing = false
                                 keyboardController?.hide()
-                                onAction()
+                                try {
+                                    outerFocusRequester.requestFocus()
+                                } catch (_: Exception) {}
+                                val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) FocusDirection.Up else FocusDirection.Down
+                                focusManager.moveFocus(direction)
                                 return@onPreviewKeyEvent true
                             }
                         }
+
+                        false
+                    },
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (value.isEmpty()) {
+                            Text(
+                                text = placeholder,
+                                color = Color.Gray,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontSize = 14.sp
+                            )
+                        }
+                        innerTextField()
                     }
-                    false
-                },
-            decorationBox = { innerTextField ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(containerColor)
-                        .border(
-                            width = if (isFocused) 1.5.dp else 1.dp,
-                            color = if (isFocused) Color(0xFF00BCD4) else Color.Transparent,
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    if (value.isEmpty()) {
-                        Text(
-                            text = placeholder,
-                            color = Color.Gray,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            fontSize = 14.sp
-                        )
-                    }
-                    innerTextField()
                 }
-            }
-        )
+            )
+        }
     }
 
     if (label.isNotEmpty()) {

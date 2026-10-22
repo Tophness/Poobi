@@ -1,6 +1,7 @@
 package com.poobi.tvbrowser.streams
 
 import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -95,6 +96,10 @@ private val MovieIcon: ImageVector = ImageVector.Builder(
 
 @Composable
 fun MediaDetailsScreen(viewModel: StreamsViewModel) {
+    BackHandler {
+        viewModel.clearSelectedMedia()
+    }
+
     val item by viewModel.selectedItem.collectAsState()
     val details by viewModel.itemDetails.collectAsState()
     val seasons by viewModel.itemSeasons.collectAsState()
