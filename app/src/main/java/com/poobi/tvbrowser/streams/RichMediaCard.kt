@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.sp
 import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.browser.HoldToDeleteCloseButton
 import com.poobi.tvbrowser.shared.RemoteImage
-import com.poobi.tvbrowser.shared.TmdbGenres
 import com.poobi.tvbrowser.shared.TvMarqueeText
 import org.json.JSONObject
 
@@ -36,36 +35,34 @@ fun RichMediaCard(
     progress: Float = 0f,
     isDeletable: Boolean = false
 ) {
+    val model = remember(item, season, episode) { MediaItem.fromJson(item) }
+    RichMediaCard(
+        model = model,
+        viewModel = viewModel,
+        unwatchedCount = unwatchedCount,
+        newerCount = newerCount,
+        season = season,
+        episode = episode,
+        isFocused = isFocused,
+        progress = progress,
+        isDeletable = isDeletable
+    )
+}
+
+@Composable
+fun RichMediaCard(
+    model: MediaItem,
+    viewModel: StreamsViewModel,
+    unwatchedCount: Int = 0,
+    newerCount: Int = 0,
+    season: Int? = null,
+    episode: Int? = null,
+    isFocused: Boolean = false,
+    progress: Float = 0f,
+    isDeletable: Boolean = false
+) {
     val favorites by viewModel.favoritesSet.collectAsState()
-    val id = item.optString("id")
-    val imdb = item.optString("imdb")
-    val isFav = favorites.contains(id) || (imdb.isNotEmpty() && favorites.contains(imdb))
-
-    val title = (item.optString("title").takeIf { it.isNotEmpty() } ?: item.optString("name", ""))
-        .replace(Regex("\\s\\(\\d{4}\\)$"), "")
-
-    val releaseDate = item.optString("release_date").takeIf { !it.isNullOrEmpty() }
-        ?: item.optString("first_air_date").takeIf { !it.isNullOrEmpty() }
-        ?: "0000"
-    val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else "0000"
-
-    val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
-        ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
-
-    val rating = item.optDouble("vote_average", 0.0)
-
-    val imagePath = if (season != null && episode != null) {
-        val still = item.optString("still_path")
-        if (still.isNotBlank() && still != "null") still else item.optString("poster_path")
-    } else {
-        item.optString("poster_path")
-    }
-
-    val imageUrl = if (imagePath.isNotBlank() && imagePath != "null") "https://image.tmdb.org/t/p/w342$imagePath" else ""
-    val overview = item.optString("overview")
-
-    val genresArr = item.optJSONArray("genre_ids") ?: item.optJSONArray("genres")
-    val genresStr = remember(genresArr) { TmdbGenres.formatGenres(genresArr) }
+    val isFav = favorites.contains(model.id) || (model.imdb.isNotEmpty() && favorites.contains(model.imdb))
 
     Column(
         modifier = Modifier.width(160.dp).padding(6.dp)
@@ -77,9 +74,9 @@ fun RichMediaCard(
                 .clip(RoundedCornerShape(4.dp))
                 .background(Color(0xFF222222))
         ) {
-            RemoteImage(url = imageUrl, contentDescription = title, modifier = Modifier.fillMaxSize())
+            RemoteImage(url = model.imageUrl, contentDescription = model.title, modifier = Modifier.fillMaxSize())
 
-            if (rating > 0.0) {
+            if (model.rating > 0.0) {
                 Box(
                     modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(32.dp)
                         .background(Color(0xCC000000), shape = CircleShape),
@@ -87,7 +84,7 @@ fun RichMediaCard(
                 ) {
                     Text("⭐", fontSize = 16.sp, modifier = Modifier.offset(y = (-2).dp))
                     Text(
-                        text = "%.1f".format(rating),
+                        text = "%.1f".format(model.rating),
                         color = Color(0xFF40C4FF),
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
@@ -150,7 +147,7 @@ fun RichMediaCard(
             modifier = Modifier.fillMaxWidth().height(115.dp).padding(top = 6.dp)
         ) {
             Text(
-                text = title,
+                text = model.title,
                 color = if (isFocused) Color.Black else Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
@@ -169,9 +166,9 @@ fun RichMediaCard(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            if (overview.isNotEmpty()) {
+            if (model.overview.isNotEmpty()) {
                 TvMarqueeText(
-                    text = overview,
+                    text = model.overview,
                     color = if (isFocused) Color(0xFF222222) else Color.LightGray,
                     fontSize = 10.sp,
                     maxLines = 3,
@@ -180,9 +177,9 @@ fun RichMediaCard(
                 )
             }
 
-            if (genresStr.isNotEmpty()) {
+            if (model.genresStr.isNotEmpty()) {
                 TvMarqueeText(
-                    text = genresStr,
+                    text = model.genresStr,
                     color = if (isFocused) Color(0xFFBF360C) else Color(0xFFFFB74D),
                     fontSize = 11.sp,
                     maxLines = 1,
@@ -193,13 +190,13 @@ fun RichMediaCard(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = mediaType.uppercase(), 
+                    text = model.mediaType.uppercase(), 
                     color = if (isFocused) Color(0xFF1B5E20) else Color(0xFF4CAF50), 
                     fontSize = 11.sp, 
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = " • $year", 
+                    text = " • ${model.year}", 
                     color = if (isFocused) Color(0xFF37474F) else Color(0xFFB0BEC5), 
                     fontSize = 11.sp
                 )

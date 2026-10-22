@@ -755,10 +755,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         
         val oldWebView = currentWebView
         oldWebView?.visibility = View.INVISIBLE
+        oldWebView?.onPause()
+
         _currentTabIndex.value = index
         _isBrowsing.value = true
         val targetWebView = _webViews[index]
         targetWebView.visibility = View.VISIBLE
+        targetWebView.onResume()
         interceptedMediaUrls.clear()
         interceptedSubtitleUrls.clear()
 
@@ -793,6 +796,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         (wv.parent as? android.view.ViewGroup)?.removeView(wv)
 
         try {
+            wv.onPause()
             wv.stopLoading()
             wv.loadUrl("about:blank")
             wv.clearHistory()
@@ -944,6 +948,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun showHomeScreen() {
+        _webViews.forEach { wv ->
+            wv.visibility = View.INVISIBLE
+            wv.onPause()
+        }
         _isBrowsing.value = false
         _topBarVisible.value = false
         _currentUrl.value = ""
@@ -2311,19 +2319,25 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun saveSnapshot(url: String, title: String, wv: WebView) {
-        if (wv.width == 0 || wv.height == 0) return
+        if (wv.width <= 0 || wv.height <= 0) return
         try {
-            val bitmap = Bitmap.createBitmap(wv.width, wv.height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
+            val thumb = Bitmap.createBitmap(320, 180, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(thumb)
+            canvas.scale(320f / wv.width.toFloat(), 180f / wv.height.toFloat())
             wv.draw(canvas)
-            val thumb = Bitmap.createScaledBitmap(bitmap, 320, 180, true)
-            val filename = "${url.hashCode()}.png"
-            val file = File(appContext.filesDir, filename)
-            FileOutputStream(file).use { thumb.compress(Bitmap.CompressFormat.PNG, 80, it) }
-            bitmap.recycle()
             val isDesktop = (wv.tag as? TabMetadata)?.isDesktopMode ?: false
-            saveToList("history", url, title, filename, isDesktop = isDesktop)
-        } catch (e: Exception) {}
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val filename = "${url.hashCode()}.png"
+                    val file = File(appContext.filesDir, filename)
+                    FileOutputStream(file).use { thumb.compress(Bitmap.CompressFormat.PNG, 80, it) }
+                    thumb.recycle()
+                    saveToList("history", url, title, filename, isDesktop = isDesktop)
+                } catch (_: Exception) {}
+            }
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Error taking snapshot", e)
+        }
     }
 
     private fun saveToList(key: String, url: String, title: String, thumbFile: String, isDesktop: Boolean = false) {

@@ -616,16 +616,21 @@ class TorrentStreamServer private constructor(
 
         for (piece in startPiece..endPiece) {
             var iterations = 0
+            val maxIterations = 600 // 30 second timeout max
             while (true) {
                 try {
                     if (!handle.isValid) return
                     if (handle.havePiece(piece)) break
 
                     iterations++
+                    if (iterations > maxIterations) {
+                        throw java.io.IOException("Torrent piece $piece timed out waiting for swarm")
+                    }
+
                     if (iterations % 20 == 0) {
                         val status = handle.status()
                         val speed = (status?.downloadPayloadRate() ?: 0) / (1024f * 1024f)
-                        Log.d(TAG, "Waiting on piece $piece ($iterations iterations). Speed: %.2f MB/s, Seeds: ${status?.numSeeds() ?: 0}".format(speed))
+                        Log.d(TAG, "Waiting on piece $piece ($iterations/$maxIterations). Speed: %.2f MB/s, Seeds: ${status?.numSeeds() ?: 0}".format(speed))
                         
                         if (handle.isValid) {
                             handle.piecePriority(piece, Priority.SEVEN)

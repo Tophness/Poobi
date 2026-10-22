@@ -2,12 +2,18 @@
 
 import re
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from resources.lib.modules import client
 from resources.lib.modules import client_utils
 from resources.lib.modules import cleantitle
 from resources.lib.modules import log_utils
 
+_search_session = requests.Session()
+_adapter = HTTPAdapter(pool_connections=10, pool_maxsize=20, max_retries=Retry(total=2, backoff_factor=0.3))
+_search_session.mount("https://", _adapter)
+_search_session.mount("http://", _adapter)
 
 def bing(search_query, parse=False):
     try:
@@ -15,21 +21,17 @@ def bing(search_query, parse=False):
             return
         search_headers = {'User-Agent': client.UserAgent, 'Referer': 'https://www.bing.com'}
         search_url = 'https://www.bing.com/search?q=%s' % search_query
-        #log_utils.log('bing search_url: \n' + repr(search_url))
         search_html = client.scrapePage(search_url, headers=search_headers).text
-        #log_utils.log('bing search_html: \n' + repr(search_html))
         if parse:
             results = client_utils.parseDOM(search_html, 'li', attrs={'class': 'b_algo'})
             results = [(client_utils.parseDOM(i, 'cite'), client_utils.parseDOM(i, 'a')) for i in results]
             results = [(i[0][0], i[1][0]) for i in results if len(i[0]) > 0 and len(i[1]) > 0]
             results = [(client_utils.remove_codes(i[0]), i[1]) for i in results]
-            #log_utils.log('bing results: \n' + repr(results))
             return results
         return search_html
     except:
         log_utils.log('bing', 1)
         return
-
 
 def duckduckgo(search_query):
     try:
@@ -37,15 +39,12 @@ def duckduckgo(search_query):
             return
         search_data = {'q': search_query}
         search_headers = {'User-Agent': client.UserAgent, 'Referer': 'https://duckduckgo.com'}
-        #https://lite.duckduckgo.com/lite
         search_url = 'https://html.duckduckgo.com/html/'
-        search_html = requests.post(search_url, headers=search_headers, data=search_data, verify=False).content
-        #log_utils.log('duckduckgo search_html: \n' + repr(search_html))
+        search_html = _search_session.post(search_url, headers=search_headers, data=search_data, verify=False, timeout=10).content
         return search_html
     except:
         log_utils.log('duckduckgo', 1)
         return
-
 
 def google(search_query):
     try:
@@ -53,30 +52,23 @@ def google(search_query):
             return
         search_headers = {'User-Agent': client.UserAgent, 'Referer': 'https://www.google.com'}
         search_url = 'https://www.google.com/search?q=%s' % search_query
-        #log_utils.log('google search_url: \n' + repr(search_url))
         search_html = client.scrapePage(search_url, headers=search_headers).text
-        #log_utils.log('google search_html: \n' + repr(search_html))
         return search_html
     except:
         log_utils.log('google', 1)
         return
-
 
 def startpage(search_query):
     try:
         if not search_query:
             return
         search_headers = {'User-Agent': client.UserAgent, 'Referer': 'https://www.startpage.com'}
-        #https://www.startpage.com/sp/search
         search_url = 'https://www.startpage.com/do/search?q=%s' % search_query
-        #log_utils.log('startpage search_url: \n' + repr(search_url))
         search_html = client.scrapePage(search_url, headers=search_headers).text
-        #log_utils.log('startpage search_html: \n' + repr(search_html))
         return search_html
     except:
         log_utils.log('startpage', 1)
         return
-
 
 def swisscows(search_query):
     try:
@@ -84,14 +76,11 @@ def swisscows(search_query):
             return
         search_headers = {'User-Agent': client.UserAgent, 'Referer': 'https://swisscows.com'}
         search_url = 'https://swisscows.com/en/web?query=%s' % search_query
-        #log_utils.log('swisscows search_url: \n' + repr(search_url))
         search_html = client.scrapePage(search_url, headers=search_headers).text
-        #log_utils.log('swisscows search_html: \n' + repr(search_html))
         return search_html
     except:
         log_utils.log('swisscows', 1)
         return
-
 
 def yahoo(search_query):
     try:
@@ -99,14 +88,11 @@ def yahoo(search_query):
             return
         search_headers = {'User-Agent': client.UserAgent, 'Referer': 'https://search.yahoo.com'}
         search_url = 'https://search.yahoo.com/search?p=%s' % search_query
-        #log_utils.log('yahoo search_url: \n' + repr(search_url))
         search_html = client.scrapePage(search_url, headers=search_headers).text
-        #log_utils.log('yahoo search_html: \n' + repr(search_html))
         return search_html
     except:
         log_utils.log('yahoo', 1)
         return
-
 
 def make_search_query(domain, title, imdb=None, year=None, season=None, episode=None, domainprefix='&sites='):
     try:
@@ -127,5 +113,3 @@ def make_search_query(domain, title, imdb=None, year=None, season=None, episode=
     except:
         log_utils.log('make_search_query', 1)
         return
-
-

@@ -358,7 +358,8 @@ def load_config():
         "timeout_mode": "Both",
         "global_timeout": 30,
         "per_source_timeout": 15,
-        "use_only_whitelisted_hosts": True,
+        "scraper_max_workers": 3,
+        "use_only_whitelisted_hosts": False,
         "whitelisted_hosts": get_default_whitelist(),
         "subtitles_languages": "English",
         "subtitles_limit": 20,
@@ -423,7 +424,7 @@ class UniversalScraper:
         self._cached_display_sources = []
 
         cfg = GLOBAL_CONFIG
-        use_only = cfg.get("use_only_whitelisted_hosts", True)
+        use_only = cfg.get("use_only_whitelisted_hosts", False)
 
         if use_only:
             self.hostDict = cfg.get("whitelisted_hosts", [])
@@ -481,7 +482,8 @@ class UniversalScraper:
 
         aliases_str = "[]"
 
-        executor = ThreadPoolExecutor(max_workers=3)
+        max_workers = int(GLOBAL_CONFIG.get("scraper_max_workers", 3))
+        executor = ThreadPoolExecutor(max_workers=max(1, max_workers))
         futures = []
 
         for pack_name, name, provider in compatible_providers:

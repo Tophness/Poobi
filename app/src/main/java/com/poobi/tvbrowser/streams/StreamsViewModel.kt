@@ -2232,48 +2232,54 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _subStatusMsg.value = "Downloading subtitles: 0 / ${subs.size}"
 
         viewModelScope.launch(Dispatchers.IO) {
-            var count = 0
-            val newlyDownloadedSubs = mutableListOf<SubtitleData>()
+            val newlyDownloadedSubs = java.util.Collections.synchronizedList(mutableListOf<SubtitleData>())
+            val completedCount = java.util.concurrent.atomic.AtomicInteger(0)
             try {
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
-                for (sub in subs) {
-                    if (!_isDownloadingSubs.value) break
-                    val serviceName = sub.getString("service")
-                    val actionArgs = sub.getString("action_args")
-                    val filePath = scraper.callAttr("get_subtitle_file", serviceName, actionArgs).toString()
 
-                    if (filePath.isNotEmpty()) {
-                        val originalFile = java.io.File(filePath)
-                        if (originalFile.exists()) {
-                            val dir = originalFile.parentFile
-                            val ext = originalFile.extension
-                            val baseName = originalFile.nameWithoutExtension
-                            val uniqueFileName = "${baseName}_${java.util.UUID.randomUUID()}.$ext"
-                            val uniqueFile = java.io.File(dir, uniqueFileName)
-                            
+                coroutineScope {
+                    subs.map { sub ->
+                        async(Dispatchers.IO) {
+                            if (!_isDownloadingSubs.value) return@async
                             try {
-                                originalFile.copyTo(uniqueFile, overwrite = true)
-                                val subUri = android.net.Uri.fromFile(uniqueFile).toString()
-                                val source = sub.optString("service", "Unknown")
-                                val name = sub.optString("name", "Subtitle")
-                                val label = "[$source] $name"
-                                val lang = sub.optString("lang", "und")
+                                val serviceName = sub.getString("service")
+                                val actionArgs = sub.getString("action_args")
+                                val filePath = scraper.callAttr("get_subtitle_file", serviceName, actionArgs).toString()
 
-                                interceptedSubtitleUrls[subUri] = mapOf("label" to label, "lang" to lang)
-                                newlyDownloadedSubs.add(SubtitleData(subUri, label, lang))
-                                count++
+                                if (filePath.isNotEmpty()) {
+                                    val originalFile = java.io.File(filePath)
+                                    if (originalFile.exists()) {
+                                        val dir = originalFile.parentFile
+                                        val ext = originalFile.extension
+                                        val baseName = originalFile.nameWithoutExtension
+                                        val uniqueFileName = "${baseName}_${java.util.UUID.randomUUID()}.$ext"
+                                        val uniqueFile = java.io.File(dir, uniqueFileName)
 
-                                withContext(Dispatchers.Main) {
-                                    _subProgress.value = count.toFloat() / subs.size.toFloat()
-                                    _subStatusMsg.value = "Downloading subtitles: $count / ${subs.size}"
+                                        originalFile.copyTo(uniqueFile, overwrite = true)
+                                        val subUri = android.net.Uri.fromFile(uniqueFile).toString()
+                                        val source = sub.optString("service", "Unknown")
+                                        val name = sub.optString("name", "Subtitle")
+                                        val label = "[$source] $name"
+                                        val lang = sub.optString("lang", "und")
+
+                                        interceptedSubtitleUrls[subUri] = mapOf("label" to label, "lang" to lang)
+                                        newlyDownloadedSubs.add(SubtitleData(subUri, label, lang))
+                                    }
                                 }
                             } catch (e: Exception) {
-                                Log.e("TVBrowser", "Failed to copy subtitle to unique path: ${e.message}")
+                                Log.e("TVBrowser", "Failed downloading subtitle: ${e.message}")
+                            } finally {
+                                val current = completedCount.incrementAndGet()
+                                withContext(Dispatchers.Main) {
+                                    _subProgress.value = current.toFloat() / subs.size.toFloat()
+                                    _subStatusMsg.value = "Downloading subtitles: $current / ${subs.size}"
+                                }
                             }
                         }
-                    }
+                    }.awaitAll()
                 }
+
                 withContext(Dispatchers.Main) {
                     _subProgress.value = 1f
                     _isDownloadingSubs.value = false
@@ -2282,11 +2288,11 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         val item = _selectedItem.value
                         val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, lastScrapedSeason, lastScrapedEpisode)
                         if (itemKey.isNotEmpty()) {
-                            com.poobi.tvbrowser.shared.SubtitleCacheManager.saveSubtitles(context, itemKey, newlyDownloadedSubs)
+                            com.poobi.tvbrowser.shared.SubtitleCacheManager.saveSubtitles(context, itemKey, newlyDownloadedSubs.toList())
                         }
-                        _events.value = StreamsEvent.AddSubtitlesBatch(newlyDownloadedSubs)
+                        _events.value = StreamsEvent.AddSubtitlesBatch(newlyDownloadedSubs.toList())
                     }
-                    if (!silent) _events.value = StreamsEvent.ShowToast("Finished downloading $count subtitles")
+                    if (!silent) _events.value = StreamsEvent.ShowToast("Finished downloading ${newlyDownloadedSubs.size} subtitles")
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {

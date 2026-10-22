@@ -783,6 +783,14 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     override fun okDialog(message: String, heading: String): Boolean {
+                        if (Looper.myLooper() == Looper.getMainLooper()) {
+                            AlertDialog.Builder(this@MainActivity)
+                                .setTitle(heading.cleanKodiText().ifEmpty { "Notice" })
+                                .setMessage(message.cleanKodiText())
+                                .setPositiveButton("OK", null)
+                                .show()
+                            return true
+                        }
                         val taskId = UUID.randomUUID().toString()
                         val exchanger = PythonMessageBridge.postRequest(taskId)
                         runOnUiThread {
@@ -798,13 +806,16 @@ class MainActivity : AppCompatActivity() {
                                 .show()
                         }
                         return try {
-                            exchanger.exchange(true) as Boolean
+                            exchanger.exchange(true, 60, java.util.concurrent.TimeUnit.SECONDS) as Boolean
                         } catch (e: Exception) {
                             true
                         }
                     }
 
                     override fun yesnoDialog(message: String, heading: String, nolabel: String, yeslabel: String): Boolean {
+                        if (Looper.myLooper() == Looper.getMainLooper()) {
+                            return false
+                        }
                         val taskId = UUID.randomUUID().toString()
                         val exchanger = PythonMessageBridge.postRequest(taskId)
                         runOnUiThread {
@@ -823,7 +834,7 @@ class MainActivity : AppCompatActivity() {
                                 .show()
                         }
                         return try {
-                            exchanger.exchange(false) as Boolean
+                            exchanger.exchange(false, 60, java.util.concurrent.TimeUnit.SECONDS) as Boolean
                         } catch (e: Exception) {
                             false
                         }

@@ -123,6 +123,8 @@ class SettingsActivity : AppCompatActivity() {
     private var globalTimeoutStr by mutableStateOf("220")
     private var sourceTimeout by mutableStateOf(220)
     private var sourceTimeoutStr by mutableStateOf("220")
+    private var scraperMaxWorkers by mutableStateOf(3)
+    private var scraperMaxWorkersStr by mutableStateOf("3")
     private var enforceWhitelist by mutableStateOf(false)
     private val whitelistedHosts = mutableStateListOf<String>()
 
@@ -339,6 +341,8 @@ class SettingsActivity : AppCompatActivity() {
         globalTimeoutStr = globalTimeout.toString()
         sourceTimeout = prefs.getInt("per_source_timeout", 220)
         sourceTimeoutStr = sourceTimeout.toString()
+        scraperMaxWorkers = prefs.getInt("scraper_max_workers", 3)
+        scraperMaxWorkersStr = scraperMaxWorkers.toString()
         enforceWhitelist = prefs.getBoolean("use_only_whitelisted_hosts", false)
         
         whitelistedHosts.clear()
@@ -485,6 +489,7 @@ class SettingsActivity : AppCompatActivity() {
                 put("timeout_mode", prefs.getString("timeout_mode", "Per-Source"))
                 put("global_timeout", prefs.getInt("global_timeout", 220))
                 put("per_source_timeout", prefs.getInt("per_source_timeout", 220))
+                put("scraper_max_workers", prefs.getInt("scraper_max_workers", 3))
                 put("use_only_whitelisted_hosts", prefs.getBoolean("use_only_whitelisted_hosts", false))
                 put("whitelisted_hosts", JSONArray(prefs.getString("whitelisted_hosts", "[]")))
                 put("enabled_packs", JSONArray(prefs.getString("enabled_packs", "[]")))
@@ -993,6 +998,23 @@ class SettingsActivity : AppCompatActivity() {
                             )
                         }
                     }
+                }
+
+                item {
+                    TvInputField(
+                        value = scraperMaxWorkersStr,
+                        onValueChange = { newValue ->
+                            val filtered = newValue.filter { it.isDigit() }
+                            scraperMaxWorkersStr = filtered
+                            if (filtered.isNotEmpty()) {
+                                scraperMaxWorkers = filtered.toInt().coerceIn(1, 20)
+                            }
+                        },
+                        label = "Scraper Worker Threads (Default: 3)",
+                        placeholder = "3",
+                        containerColor = Color(0xFF222225),
+                        imeAction = ImeAction.Done
+                    )
                 }
 
                 if (providerPacksList.isNotEmpty()) {
@@ -2778,6 +2800,7 @@ class SettingsActivity : AppCompatActivity() {
                     putString("timeout_mode", timeoutMode)
                     putInt("global_timeout", globalTimeout)
                     putInt("per_source_timeout", sourceTimeout)
+                    putInt("scraper_max_workers", scraperMaxWorkers)
                     putBoolean("use_only_whitelisted_hosts", enforceWhitelist)
                     putString("enabled_packs", JSONArray(enabledPacksList).toString())
                     putString("whitelisted_hosts", JSONArray(whitelistedHosts).toString())
@@ -2813,6 +2836,7 @@ class SettingsActivity : AppCompatActivity() {
                     put("timeout_mode", timeoutMode)
                     put("global_timeout", globalTimeout)
                     put("per_source_timeout", sourceTimeout)
+                    put("scraper_max_workers", scraperMaxWorkers)
                     put("use_only_whitelisted_hosts", enforceWhitelist)
                     put("whitelisted_hosts", JSONArray(whitelistedHosts))
                     put("enabled_packs", JSONArray(enabledPacksList))

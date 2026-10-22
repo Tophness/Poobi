@@ -21,17 +21,19 @@ fun parseKodiUrl(rawUrl: String): Pair<String, Map<String, String>> {
         val headers = mutableMapOf<String, String>()
         val pairs = headerPart.split("&")
         for (pair in pairs) {
-            val kv = pair.split("=")
+            val kv = pair.split("=", limit = 2)
             if (kv.size == 2) {
-                try {
-                    val key = URLDecoder.decode(kv[0], "UTF-8")
-                    val value = URLDecoder.decode(kv[1], "UTF-8")
-                    headers[key] = value
-                } catch (e: Exception) {
-                    val key = Uri.decode(kv[0])
-                    val value = Uri.decode(kv[1])
-                    headers[key] = value
+                val key = try {
+                    URLDecoder.decode(kv[0], "UTF-8")
+                } catch (_: Exception) {
+                    Uri.decode(kv[0]) ?: kv[0]
                 }
+                val value = try {
+                    URLDecoder.decode(kv[1], "UTF-8")
+                } catch (_: Exception) {
+                    Uri.decode(kv[1]) ?: kv[1]
+                }
+                headers[key] = value
             }
         }
         return Pair(url, headers)

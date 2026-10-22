@@ -26,17 +26,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -155,47 +151,41 @@ fun RemoteImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop
 ) {
-    val context = LocalContext.current
-    var imageBitmap by remember(url) { 
-        mutableStateOf<ImageBitmap?>(
-            AppCacheManager.getImageBitmap(context, url)?.asImageBitmap()
-        ) 
-    }
-
-    LaunchedEffect(url) {
-        if (imageBitmap == null && url.isNotBlank() && url != "https://image.tmdb.org/t/p/w185" && !url.endsWith("null")) {
-            withContext(Dispatchers.IO) {
-                val diskCached = AppCacheManager.getImageBitmap(context, url)
-                if (diskCached != null) {
-                    withContext(Dispatchers.Main) {
-                        imageBitmap = diskCached.asImageBitmap()
-                    }
-                    return@withContext
-                }
-
-                try {
-                    val connection = URL(url).openConnection() as HttpURLConnection
-                    connection.connectTimeout = 6000
-                    connection.readTimeout = 6000
-                    val bytes = connection.inputStream.use { it.readBytes() }
-                    val bitmap = AppCacheManager.saveImageBytes(context, url, bytes)
-                    if (bitmap != null) {
-                        withContext(Dispatchers.Main) {
-                            imageBitmap = bitmap.asImageBitmap()
-                        }
-                    }
-                } catch (_: Exception) {}
-            }
-        }
-    }
-
-    val bitmap = imageBitmap
-    if (bitmap != null) {
-        Image(
-            bitmap = bitmap,
+    if (url.isNotBlank() && url != "https://image.tmdb.org/t/p/w185" && !url.endsWith("null")) {
+        SubcomposeAsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(url)
+                .crossfade(true)
+                .build(),
             contentDescription = contentDescription,
             modifier = modifier,
-            contentScale = contentScale
+            contentScale = contentScale,
+            loading = {
+                Box(
+                    modifier = Modifier.background(Color(0xFF2E2E38)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            },
+            error = {
+                Box(
+                    modifier = Modifier.background(Color(0xFF2E2E38)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
         )
     } else {
         Box(

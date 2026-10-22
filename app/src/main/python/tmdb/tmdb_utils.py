@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from requests.compat import json, str
 from modules import control
 
@@ -14,6 +16,11 @@ READ_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1NWQ0ZWEwYWNiMDRhMTAwNTNjMmJlNjM3Z
 
 API_URL = 'https://api.themoviedb.org/3'
 
+_session = requests.Session()
+_adapter = HTTPAdapter(pool_connections=15, pool_maxsize=30, max_retries=Retry(total=2, backoff_factor=0.3))
+_session.mount("https://", _adapter)
+_session.mount("http://", _adapter)
+
 def get_headers():
     return {
         "Authorization": f"Bearer {READ_TOKEN}",
@@ -22,19 +29,19 @@ def get_headers():
 
 def get_movies_in_cinemas(page=1):
     url = f"{API_URL}/movie/now_playing?page={page}"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_trending(media_type='all', time_window='day', page=1):
     url = f"{API_URL}/trending/{media_type}/{time_window}?page={page}"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_popular(media_type='movie', page=1):
     url = f"{API_URL}/{media_type}/popular?page={page}"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_details(tmdb_id, media_type='movie'):
     url = f"{API_URL}/{media_type}/{tmdb_id}?append_to_response=credits,videos,images,external_ids,recommendations,release_dates,content_ratings"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_tv_next_episode(tmdb_id):
     details = get_details(tmdb_id, 'tv')
@@ -42,35 +49,35 @@ def get_tv_next_episode(tmdb_id):
 
 def search(query, media_type='multi', page=1):
     url = f"{API_URL}/search/{media_type}?query={query}&page={page}"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_genres(media_type='movie'):
     url = f"{API_URL}/genre/{media_type}/list"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_top_rated(media_type='movie', page=1):
     url = f"{API_URL}/{media_type}/top_rated?page={page}"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_upcoming_movies(page=1):
     url = f"{API_URL}/movie/upcoming?page={page}"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_person_details(person_id):
     url = f"{API_URL}/person/{person_id}?append_to_response=combined_credits,images"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_popular_people(page=1):
     url = f"{API_URL}/person/popular?page={page}"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_external_ids(tmdb_id, media_type):
     url = f"{API_URL}/{media_type}/{tmdb_id}/external_ids"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_tv_episodes(tv_id, season_number):
     url = f"{API_URL}/tv/{tv_id}/season/{season_number}"
-    return requests.get(url, headers=get_headers()).json()
+    return _session.get(url, headers=get_headers()).json()
 
 def get_landscape_image(tmdb_id, media_type='movie', season=None, episode=None):
     try:
@@ -84,7 +91,7 @@ def get_landscape_image(tmdb_id, media_type='movie', season=None, episode=None):
                     if still:
                         return json.dumps({"image_path": still, "type": "still", "season_episodes": eps})
             url = f"{API_URL}/tv/{tmdb_id}/season/{season}/episode/{episode}/images"
-            stills = requests.get(url, headers=get_headers()).json().get('stills', [])
+            stills = _session.get(url, headers=get_headers()).json().get('stills', [])
             if stills:
                 return json.dumps({"image_path": stills[0].get('file_path'), "type": "still"})
 
@@ -102,8 +109,8 @@ def get_landscape_image(tmdb_id, media_type='movie', season=None, episode=None):
 def parse_genres(genres, line=True):
     new_genres = []
     try:
-        movie_genres = requests.get(f"{API_URL}/genre/movie/list", headers=get_headers()).json().get('genres', [])
-        tv_genres = requests.get(f"{API_URL}/genre/tv/list", headers=get_headers()).json().get('genres', [])
+        movie_genres = _session.get(f"{API_URL}/genre/movie/list", headers=get_headers()).json().get('genres', [])
+        tv_genres = _session.get(f"{API_URL}/genre/tv/list", headers=get_headers()).json().get('genres', [])
         all_genres = {str(g['id']): g['name'] for g in movie_genres + tv_genres}
         for genre_id in genres:
             name = all_genres.get(str(genre_id))
@@ -117,7 +124,6 @@ def getTMDbCredentialsInfo():
     if (USERNAME == '' or PASSWORD == '' or SESSION_ID == '' or ACCOUNT_ID == ''):
         return False
     return True
-
 
 def authTMDb():
     global SESSION_ID, USERNAME, PASSWORD
@@ -162,7 +168,7 @@ def authTMDb():
 def create_request_token():
     try:
         url = f"{API_URL}/authentication/token/new?api_key={API_KEY}"
-        result = requests.get(url).json()
+        result = _session.get(url).json()
         if not result.get('success') is True:
             return None
         return result['request_token']
@@ -173,7 +179,7 @@ def create_session_with_login(request_token):
     try:
         url = f"{API_URL}/authentication/token/validate_with_login?api_key={API_KEY}"
         post = {"username": f"{str(USERNAME)}", "password": f"{str(PASSWORD)}", "request_token": f"{str(request_token)}"}
-        result = requests.post(url, data=json.dumps(post), headers=get_headers()).json()
+        result = _session.post(url, data=json.dumps(post), headers=get_headers()).json()
         if not result.get('success') is True:
             return None
         return result['request_token']
@@ -184,7 +190,7 @@ def create_session(request_token):
     try:
         url = f"{API_URL}/authentication/session/new?api_key={API_KEY}"
         post = {"request_token": f"{str(request_token)}"}
-        result = requests.post(url, data=json.dumps(post), headers=get_headers()).json()
+        result = _session.post(url, data=json.dumps(post), headers=get_headers()).json()
         if not result.get('success') is True:
             return None
         return result['session_id']
@@ -199,7 +205,7 @@ def delete_session():
             return
         url = f"{API_URL}/authentication/session?api_key={API_KEY}"
         post = {"session_id": f"{str(current_session)}"}
-        requests.delete(url, data=json.dumps(post), headers=get_headers())
+        _session.delete(url, data=json.dumps(post), headers=get_headers())
     except:
         pass
     finally:
@@ -210,7 +216,7 @@ def delete_session():
 def get_account_details(session_id, show_dialog=True):
     try:
         url = f"{API_URL}/account?session_id={session_id}"
-        result = requests.get(url, headers=get_headers()).json()
+        result = _session.get(url, headers=get_headers()).json()
         control.setSetting(id='tmdb.id', value=str(result['id']))
         if show_dialog:
             message = (f"username: {str(result['username'])}[CR]name: {str(result['name'])}[CR]id: {str(result['id'])}")
@@ -222,25 +228,25 @@ def get_account_details(session_id, show_dialog=True):
 def get_movie_trailers(tmdb):
     try:
         url = f"{API_URL}/movie/{tmdb}/videos"
-        return requests.get(url, headers=get_headers()).json().get('results', [])
+        return _session.get(url, headers=get_headers()).json().get('results', [])
     except: return []
 
 def get_tvshow_trailers(tmdb):
     try:
         url = f"{API_URL}/tv/{tmdb}/videos"
-        return requests.get(url, headers=get_headers()).json().get('results', [])
+        return _session.get(url, headers=get_headers()).json().get('results', [])
     except: return []
 
 def get_season_trailers(tmdb, season):
     try:
         url = f"{API_URL}/tv/{tmdb}/season/{season}/videos"
-        return requests.get(url, headers=get_headers()).json().get('results', [])
+        return _session.get(url, headers=get_headers()).json().get('results', [])
     except: return []
 
 def get_episode_trailers(tmdb, season, episode):
     try:
         url = f"{API_URL}/tv/{tmdb}/season/{season}/episode/{episode}/videos"
-        return requests.get(url, headers=get_headers()).json().get('results', [])
+        return _session.get(url, headers=get_headers()).json().get('results', [])
     except: return []
 
 def get_tmdb_artwork(tmdb, content, season=None, episode=None):
@@ -254,7 +260,7 @@ def get_tmdb_artwork(tmdb, content, season=None, episode=None):
         else:
             ending = f"/{media_type}/{tmdb}/images"
         url = API_URL + ending
-        result = requests.get(url, headers=get_headers()).json()
+        result = _session.get(url, headers=get_headers()).json()
         poster = fanart = banner = '0'
         
         posters = result.get('posters', [])

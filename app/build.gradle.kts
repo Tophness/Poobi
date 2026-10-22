@@ -240,6 +240,7 @@ dependencies {
     implementation(libs.androidx.tv.foundation)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
     debugImplementation(libs.androidx.ui.tooling)
 
