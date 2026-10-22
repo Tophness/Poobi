@@ -986,7 +986,7 @@ class sources:
         multi = True if len(multi) > 1 else False
 
         if multi is True:
-            self.sources = [i for i in self.sources if not i['language'] == 'en'] + [i for i in self.sources if i['language'] == 'en'
+            self.sources = [i for i in self.sources if not i['language'] == 'en'] + [i for i in self.sources if i['language'] == 'en']
 
         #self.sources = self.sources[:int(control.setting('returned.sources'))]
         self.sources = self.sources[:4000]

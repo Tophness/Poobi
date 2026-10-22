@@ -31,6 +31,7 @@ import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvSearchField
 import com.poobi.tvbrowser.shared.mouseWheelHorizontalScroll
 import org.json.JSONArray
+import org.json.JSONObject
 
 @Composable
 fun StreamsDashboardScreen(
@@ -68,14 +69,31 @@ fun StreamsDashboardScreen(
         "Top Rated" to { viewModel.loadLibraryCategory("Top Rated Movies", "get_top_rated", "movie") }
     )
 
+    val isFavorites = activeCategoryIndex == 1
+    val isRecentlyWatched = activeCategoryIndex == 2
+
+    val defaultSort = when (activeCategoryIndex) {
+        1 -> "Last Added"
+        2 -> "Last Accessed"
+        else -> "Default"
+    }
+
+    val sortPrefKey = "streams_card_sort_cat_$activeCategoryIndex"
+    var currentSort by remember(activeCategoryIndex) {
+        mutableStateOf(viewModel.prefs.getString(sortPrefKey, defaultSort) ?: defaultSort)
+    }
+
+    var showSortDialog by remember { mutableStateOf(false) }
+
     val searchFieldFocusRequester = searchBarFocusRequester ?: remember { FocusRequester() }
     val searchButtonFocusRequester = remember { FocusRequester() }
 
     var lastFocusedHistoryIndex by remember { mutableStateOf(0) }
     val lastHistoryFocusRequester = remember { FocusRequester() }
 
-    var lastFocusedCardIndex by remember(activeCategoryIndex, searchResults) { mutableStateOf(0) }
+    var lastFocusedCardIndex by remember(activeCategoryIndex, searchResults, currentSort) { mutableStateOf(0) }
     val lastCardFocusRequester = cardFocusRequester ?: remember { FocusRequester() }
+    val sortButtonFocusRequester = remember { FocusRequester() }
 
     val categoryTabFocusRequesters = remember(categories.size) { List(categories.size) { FocusRequester() } }
 
@@ -321,95 +339,221 @@ fun StreamsDashboardScreen(
             } else {
                 val itemsToShow = if (activeCategoryIndex == 0) searchResults else libraryItems
                 if (itemsToShow != null) {
-                    val isFavorites = activeCategoryIndex == 1
-                    val objList = if (isFavorites) {
+                    val baseList = if (isFavorites) {
                         (itemsToShow.length() - 1 downTo 0).map { itemsToShow.getJSONObject(it) }
                     } else {
                         (0 until itemsToShow.length()).map { itemsToShow.getJSONObject(it) }
                     }
 
-                    val targetCardIndex = lastFocusedCardIndex.coerceIn(0, (objList.size - 1).coerceAtLeast(0))
-                    val mainCardsListState = key(activeCategoryIndex) { rememberLazyListState() }
-                    LazyRow(
-                        state = mainCardsListState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .mouseWheelHorizontalScroll(mainCardsListState), 
-                        horizontalArrangement = Arrangement.spacedBy(10.dp), 
-                        verticalAlignment = Alignment.CenterVertically,
-                        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
-                    ) {
-                        itemsIndexed(
-                            items = objList,
-                            key = { idx, wrapper ->
-                                val itm = if (wrapper.has("item")) wrapper.getJSONObject("item") else wrapper
-                                val id = itm.optString("id").ifEmpty { itm.optString("imdb", idx.toString()) }
-                                val s = wrapper.optInt("season", -1)
-                                val e = wrapper.optInt("episode", -1)
-                                "${activeCategoryIndex}_${id}_${s}_${e}"
+                    val recentPlayedJson = remember(activeCategoryIndex, currentSort) {
+                        viewModel.prefs.getString("streams_recently_played", "[]") ?: "[]"
+                    }
+
+                    val recentRankMap = remember(recentPlayedJson) {
+                        val map = mutableMapOf<String, Int>()
+                        try {
+                            val arr = JSONArray(recentPlayedJson)
+                            for (i in 0 until arr.length()) {
+                                val entry = arr.optJSONObject(i) ?: continue
+                                val itm = entry.optJSONObject("item") ?: entry
+                                val id = itm.optString("id")
+                                val imdb = itm.optString("imdb")
+                                if (id.isNotEmpty() && !map.containsKey(id)) map[id] = i
+                                if (imdb.isNotEmpty() && !map.containsKey(imdb)) map[imdb] = i
                             }
-                        ) { index, wrapper ->
-                            val item = if (wrapper.has("item")) wrapper.getJSONObject("item") else wrapper
-                            val sNum = if (wrapper.has("season")) wrapper.getInt("season") else null
-                            val eNum = if (wrapper.has("episode")) wrapper.getInt("episode") else null
-                            
-                            val showId = item.optString("id")
-                            val counts = progressCounts[showId] ?: Pair(0, 0)
-                            val unwatchedCount = counts.first
-                            val newerCount = counts.second
+                        } catch (_: Exception) {}
+                        map
+                    }
 
-                            val isTarget = (index == targetCardIndex)
-                            val itemFocusModifier = Modifier
-                                .then(if (isTarget) Modifier.focusRequester(lastCardFocusRequester) else Modifier)
-                                .focusProperties {
-                                    up = if (activeCategoryIndex == 0) searchFieldFocusRequester else (topTabFocusRequester ?: FocusRequester.Default)
-                                    down = currentTabFocusTarget
-                                }
+                    val accessTimeMap = remember(activeCategoryIndex, currentSort) {
+                        val map = mutableMapOf<String, Long>()
+                        try {
+                            val json = viewModel.prefs.getString("media_last_accessed_map", "{}") ?: "{}"
+                            val obj = JSONObject(json)
+                            obj.keys().forEach { k -> map[k] = obj.optLong(k, 0L) }
+                        } catch (_: Exception) {}
+                        map
+                    }
 
-                            if (isDeletable) {
-                                TvFocusableHoldToDeleteBox(
-                                    modifier = Modifier.wrapContentSize().then(itemFocusModifier),
-                                    onFocus = { lastFocusedCardIndex = index },
-                                    onTriggerDelete = {
-                                        if (activeCategoryIndex == 1) {
-                                            viewModel.toggleFavorite(item, isCurrentlyViewingFavorites = true)
-                                        } else if (activeCategoryIndex == 2) {
-                                            viewModel.removeFromRecentlyPlayed(wrapper)
-                                        }
-                                    },
-                                    onClick = { 
-                                        if (activeCategoryIndex == 2) viewModel.selectRecentlyPlayedItem(wrapper)
-                                        else viewModel.selectMediaItem(item) 
-                                    }
-                                ) { isFocused, progress ->
-                                    RichMediaCard(
-                                        item = item,
-                                        viewModel = viewModel,
-                                        unwatchedCount = unwatchedCount,
-                                        newerCount = newerCount,
-                                        season = sNum,
-                                        episode = eNum,
-                                        isFocused = isFocused,
-                                        progress = progress,
-                                        isDeletable = true
-                                    )
-                                }
+                    val getItemTitle = { wrapper: JSONObject ->
+                        val itm = if (wrapper.has("item")) wrapper.optJSONObject("item") ?: wrapper else wrapper
+                        val raw = itm.optString("title").ifEmpty {
+                            itm.optString("name", "")
+                        }.ifEmpty {
+                            wrapper.optString("display_title", "")
+                        }
+                        raw.replace(Regex("\\s\\(\\d{4}\\)$"), "").trim()
+                    }
+
+                    val getAccessScore = { wrapper: JSONObject ->
+                        val itm = if (wrapper.has("item")) wrapper.optJSONObject("item") ?: wrapper else wrapper
+                        val id = itm.optString("id")
+                        val imdb = itm.optString("imdb")
+
+                        val t1 = accessTimeMap[id] ?: 0L
+                        val t2 = if (imdb.isNotEmpty()) accessTimeMap[imdb] ?: 0L else 0L
+                        val directTimestamp = maxOf(t1, t2)
+                        if (directTimestamp > 0L) {
+                            directTimestamp
+                        } else {
+                            val r1 = recentRankMap[id]
+                            val r2 = if (imdb.isNotEmpty()) recentRankMap[imdb] else null
+                            val rank = when {
+                                r1 != null && r2 != null -> minOf(r1, r2)
+                                r1 != null -> r1
+                                r2 != null -> r2
+                                else -> null
+                            }
+                            if (rank != null) {
+                                1_000_000L - rank
                             } else {
-                                TvFocusableBox(
-                                    modifier = Modifier.wrapContentSize().then(itemFocusModifier),
-                                    onFocus = { lastFocusedCardIndex = index },
-                                    onClick = { viewModel.selectMediaItem(item) }
-                                ) { isFocused ->
-                                    RichMediaCard(
-                                        item = item,
-                                        viewModel = viewModel,
-                                        unwatchedCount = unwatchedCount,
-                                        newerCount = newerCount,
-                                        season = sNum,
-                                        episode = eNum,
-                                        isFocused = isFocused,
-                                        progress = 0f,
-                                        isDeletable = false
+                                0L
+                            }
+                        }
+                    }
+
+                    val objList = remember(baseList, currentSort, recentRankMap, accessTimeMap) {
+                        when (currentSort) {
+                            "A-Z" -> baseList.sortedBy { getItemTitle(it).lowercase() }
+                            "Last Accessed" -> {
+                                if (isRecentlyWatched) {
+                                    baseList
+                                } else {
+                                    baseList.sortedWith { a, b ->
+                                        val sA = getAccessScore(a)
+                                        val sB = getAccessScore(b)
+                                        if (sA != sB) sB.compareTo(sA) else 0
+                                    }
+                                }
+                            }
+                            "Last Added" -> {
+                                if (isFavorites) {
+                                    baseList
+                                } else {
+                                    (itemsToShow.length() - 1 downTo 0).map { itemsToShow.getJSONObject(it) }
+                                }
+                            }
+                            else -> baseList
+                        }
+                    }
+
+                    val targetCardIndex = lastFocusedCardIndex.coerceIn(0, (objList.size - 1).coerceAtLeast(0))
+                    val mainCardsListState = key(activeCategoryIndex, currentSort) { rememberLazyListState() }
+
+                    if (objList.isEmpty()) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Text("No items found", color = Color.Gray, fontSize = 16.sp)
+                        }
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            LazyRow(
+                                state = mainCardsListState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .mouseWheelHorizontalScroll(mainCardsListState), 
+                                horizontalArrangement = Arrangement.spacedBy(10.dp), 
+                                verticalAlignment = Alignment.CenterVertically,
+                                contentPadding = PaddingValues(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
+                            ) {
+                                itemsIndexed(
+                                    items = objList,
+                                    key = { idx, wrapper ->
+                                        val itm = if (wrapper.has("item")) wrapper.getJSONObject("item") else wrapper
+                                        val id = itm.optString("id").ifEmpty { itm.optString("imdb", idx.toString()) }
+                                        val s = wrapper.optInt("season", -1)
+                                        val e = wrapper.optInt("episode", -1)
+                                        "${activeCategoryIndex}_${id}_${s}_${e}_$currentSort"
+                                    }
+                                ) { index, wrapper ->
+                                    val item = if (wrapper.has("item")) wrapper.getJSONObject("item") else wrapper
+                                    val sNum = if (wrapper.has("season")) wrapper.getInt("season") else null
+                                    val eNum = if (wrapper.has("episode")) wrapper.getInt("episode") else null
+                                    
+                                    val showId = item.optString("id")
+                                    val counts = progressCounts[showId] ?: Pair(0, 0)
+                                    val unwatchedCount = counts.first
+                                    val newerCount = counts.second
+
+                                    val isTarget = (index == targetCardIndex)
+                                    val itemFocusModifier = Modifier
+                                        .then(if (isTarget) Modifier.focusRequester(lastCardFocusRequester) else Modifier)
+                                        .focusProperties {
+                                            up = if (activeCategoryIndex == 0) searchFieldFocusRequester else (topTabFocusRequester ?: FocusRequester.Default)
+                                            down = currentTabFocusTarget
+                                            if (index == 0) {
+                                                left = sortButtonFocusRequester
+                                            }
+                                        }
+
+                                    if (isDeletable) {
+                                        TvFocusableHoldToDeleteBox(
+                                            modifier = Modifier.wrapContentSize().then(itemFocusModifier),
+                                            onFocus = { lastFocusedCardIndex = index },
+                                            onTriggerDelete = {
+                                                if (activeCategoryIndex == 1) {
+                                                    viewModel.toggleFavorite(item, isCurrentlyViewingFavorites = true)
+                                                } else if (activeCategoryIndex == 2) {
+                                                    viewModel.removeFromRecentlyPlayed(wrapper)
+                                                }
+                                            },
+                                            onClick = { 
+                                                if (activeCategoryIndex == 2) viewModel.selectRecentlyPlayedItem(wrapper)
+                                                else viewModel.selectMediaItem(item) 
+                                            }
+                                        ) { isFocused, progress ->
+                                            RichMediaCard(
+                                                item = item,
+                                                viewModel = viewModel,
+                                                unwatchedCount = unwatchedCount,
+                                                newerCount = newerCount,
+                                                season = sNum,
+                                                episode = eNum,
+                                                isFocused = isFocused,
+                                                progress = progress,
+                                                isDeletable = true
+                                            )
+                                        }
+                                    } else {
+                                        TvFocusableBox(
+                                            modifier = Modifier.wrapContentSize().then(itemFocusModifier),
+                                            onFocus = { lastFocusedCardIndex = index },
+                                            onClick = { viewModel.selectMediaItem(item) }
+                                        ) { isFocused ->
+                                            RichMediaCard(
+                                                item = item,
+                                                viewModel = viewModel,
+                                                unwatchedCount = unwatchedCount,
+                                                newerCount = newerCount,
+                                                season = sNum,
+                                                episode = eNum,
+                                                isFocused = isFocused,
+                                                progress = 0f,
+                                                isDeletable = false
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            TvFocusableBox(
+                                modifier = Modifier
+                                    .align(Alignment.CenterStart)
+                                    .offset(x = (-32).dp)
+                                    .size(40.dp)
+                                    .focusRequester(sortButtonFocusRequester)
+                                    .focusProperties {
+                                        up = if (activeCategoryIndex == 0) searchFieldFocusRequester else (topTabFocusRequester ?: FocusRequester.Default)
+                                        down = currentTabFocusTarget
+                                        right = lastCardFocusRequester
+                                    },
+                                onClick = { showSortDialog = true }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_sort),
+                                        contentDescription = "Sort Options",
+                                        tint = if (isFocused) Color.Black else Color.White,
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
@@ -491,5 +635,67 @@ fun StreamsDashboardScreen(
                 }
             }
         }
+    }
+
+    if (showSortDialog) {
+        val sortOptions = when (activeCategoryIndex) {
+            1 -> listOf("Last Added", "Last Accessed", "A-Z")
+            2 -> listOf("Last Accessed", "A-Z")
+            else -> listOf("Default", "A-Z")
+        }
+
+        AlertDialog(
+            onDismissRequest = { showSortDialog = false },
+            title = { Text("Sort Options", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            containerColor = Color(0xFF222225),
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    sortOptions.forEach { option ->
+                        val isSelected = currentSort == option
+                        TvFocusableBox(
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            onClick = {
+                                viewModel.prefs.edit().putString(sortPrefKey, option).apply()
+                                currentSort = option
+                                showSortDialog = false
+                            }
+                        ) { isFocused ->
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = option,
+                                    color = if (isFocused) Color.Black else Color.White,
+                                    fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 15.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_watched),
+                                        contentDescription = "Selected",
+                                        tint = if (isFocused) Color.Black else Color(0xFF00BCD4),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TvFocusableBox(
+                    modifier = Modifier.height(40.dp).width(90.dp),
+                    defaultColor = Color(0xFF333338),
+                    shape = RoundedCornerShape(20.dp),
+                    onClick = { showSortDialog = false }
+                ) { isFocused ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Close", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        )
     }
 }

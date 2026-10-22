@@ -880,6 +880,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         durationMs: Long = 0L,
         sourceData: String? = null
     ) {
+        markItemAccessed(item)
         viewModelScope.launch(Dispatchers.IO) {
             val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
             val array = JSONArray(recentJson)
@@ -1080,6 +1081,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun selectRecentlyPlayedItem(entry: JSONObject) {
         val item = entry.optJSONObject("item") ?: entry
+        markItemAccessed(item)
         val season = if (entry.has("season")) entry.getInt("season") else null
         val episode = if (entry.has("episode")) entry.getInt("episode") else null
         val videoUrl = entry.optString("video_url")
@@ -1218,7 +1220,24 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         loadProgressCounts()
     }
 
+    fun markItemAccessed(item: JSONObject) {
+        val id = item.optString("id")
+        val imdb = item.optString("imdb")
+        if (id.isEmpty() && imdb.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val json = prefs.getString("media_last_accessed_map", "{}") ?: "{}"
+                val obj = JSONObject(json)
+                val now = System.currentTimeMillis()
+                if (id.isNotEmpty()) obj.put(id, now)
+                if (imdb.isNotEmpty()) obj.put(imdb, now)
+                prefs.edit().putString("media_last_accessed_map", obj.toString()).apply()
+            } catch (_: Exception) {}
+        }
+    }
+
     fun selectMediaItem(item: JSONObject, initialSeason: Int? = null) {
+        markItemAccessed(item)
         _selectedItem.value = item
         _itemDetails.value = null
         _itemEpisodes.value = null
