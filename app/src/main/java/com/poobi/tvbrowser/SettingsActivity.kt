@@ -97,7 +97,6 @@ class SettingsActivity : AppCompatActivity() {
 
     private var extractPref by mutableStateOf(0)
     private var fallbackPref by mutableStateOf(0)
-    private var embeddedSubs by mutableStateOf(true)
     private var upNextMode by mutableStateOf("Ask")
     private var upNextTime by mutableStateOf(20)
     private var upNextTimeStr by mutableStateOf("20")
@@ -314,7 +313,6 @@ class SettingsActivity : AppCompatActivity() {
 
         extractPref = prefs.getInt("extract_video_pref", 0)
         fallbackPref = prefs.getInt("exo_fallback_pref", 0)
-        embeddedSubs = prefs.getBoolean("embedded_subs_enabled", true)
         autoSkipIntros = prefs.getBoolean("auto_skip_intros", true)
         upNextMode = prefs.getString("up_next_popup_pref", "Ask") ?: "Ask"
         upNextTime = prefs.getInt("up_next_time_pref", 20)
@@ -744,7 +742,6 @@ class SettingsActivity : AppCompatActivity() {
                 item { PanelHeader("Native Player Preferences") }
                 item { DropdownSettingRow("Video Extraction Hijack", listOf("Ask to Play", "Always Play in Native Player", "Never Play (Use Site Browser)"), extractPref) { extractPref = it } }
                 item { DropdownSettingRow("Fallback on Playback Error", listOf("Ask user to switch", "Always fall back to Browser", "Never fall back"), fallbackPref) { fallbackPref = it } }
-                item { ToggleSettingRow("Embedded Player Subtitles", embeddedSubs) { embeddedSubs = it } }
 
                 item { Spacer(modifier = Modifier.height(8.dp)) }
                 item { PanelHeader("Binge Watching & Autoplay") }
@@ -2759,7 +2756,6 @@ class SettingsActivity : AppCompatActivity() {
 
                     putInt("extract_video_pref", extractPref)
                     putInt("exo_fallback_pref", fallbackPref)
-                    putBoolean("embedded_subs_enabled", embeddedSubs)
                     putBoolean("auto_skip_intros", autoSkipIntros)
                     putString("up_next_popup_pref", upNextMode)
                     putInt("up_next_time_pref", upNextTime)

@@ -246,6 +246,27 @@ class PlayerEngine(
         _showDiskSubtitlePicker.value = false
     }
 
+    fun getMatchingExternalSubUrl(format: Format): String? {
+        if (format.id != null && lastSubtitles.containsKey(format.id)) return format.id
+        return lastSubtitles.entries.find { it.value["label"] == format.label }?.key
+    }
+
+    fun isSelectedTrackExternal(): Boolean {
+        val player = exoPlayer ?: return false
+        val tracks = player.currentTracks
+        for (group in tracks.groups) {
+            if (group.type == C.TRACK_TYPE_TEXT && group.isSelected) {
+                for (i in 0 until group.length) {
+                    if (group.isTrackSelected(i)) {
+                        val format = group.getTrackFormat(i)
+                        return getMatchingExternalSubUrl(format) != null
+                    }
+                }
+            }
+        }
+        return false
+    }
+
     fun selectSubtitleTrack(trackGroup: TrackGroup, trackIndex: Int, format: Format) {
         val player = exoPlayer ?: return
         player.trackSelectionParameters = player.trackSelectionParameters
@@ -255,14 +276,18 @@ class PlayerEngine(
             .addOverride(TrackSelectionOverride(trackGroup, trackIndex))
             .build()
 
-        val label = format.label ?: ""
-        val matchedEntry = lastSubtitles.entries.find { it.value["label"] == label }
-            ?: lastSubtitles.entries.elementAtOrNull(trackIndex)
-        val matchedUrl = matchedEntry?.key
-        val matchedLang = matchedEntry?.value?.get("lang") ?: (format.language ?: "und")
+        val matchedUrl = getMatchingExternalSubUrl(format)
+        val label = format.label ?: format.language ?: "Embedded Subtitle"
+        val matchedLang = if (matchedUrl != null) {
+            lastSubtitles[matchedUrl]?.get("lang") ?: (format.language ?: "und")
+        } else {
+            format.language ?: "und"
+        }
 
         if (matchedUrl != null) {
             subtitleAlignmentManager.loadSubtitles(matchedUrl)
+        } else {
+            subtitleAlignmentManager.clearSubtitles()
         }
         updateNativeSubtitleViewVisibility()
 
@@ -381,13 +406,7 @@ class PlayerEngine(
     }
 
     private fun restoreSubtitleVisibility() {
-        val hasExternalSubs = lastSubtitles.isNotEmpty()
-        if (hasExternalSubs) {
-            disableNativeSubtitles(false)
-        } else {
-            val embeddedEnabled = prefs.getBoolean("embedded_subs_enabled", true)
-            disableNativeSubtitles(!embeddedEnabled)
-        }
+        disableNativeSubtitles(false)
     }
 
     fun updateNativeSubtitleViewVisibility() {
@@ -397,7 +416,7 @@ class PlayerEngine(
 
         val shouldShow = when {
             isSyncVisible -> false
-            renderingMode == 1 && hasExternalSubtitles -> false
+            renderingMode == 1 && isSelectedTrackExternal() -> false
             else -> true
         }
         view.subtitleView?.visibility = if (shouldShow) android.view.View.VISIBLE else android.view.View.INVISIBLE
@@ -968,6 +987,7 @@ class PlayerEngine(
             val selectionFlags = if (isDefault) C.SELECTION_FLAG_DEFAULT else 0
 
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
+                .setId(subUrl)
                 .setMimeType(mimeType)
                 .setLanguage(rawLang)
                 .setLabel(label)
@@ -1240,6 +1260,7 @@ class PlayerEngine(
             val label = sub.label.ifEmpty { getLanguageInfo(sub.url).second }
 
             val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.url))
+                .setId(sub.url)
                 .setMimeType(mimeType)
                 .setLanguage(rawLang)
                 .setLabel(label)

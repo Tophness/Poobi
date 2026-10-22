@@ -62,6 +62,7 @@ fun CustomSubtitleOverlay(
 
     if (isUIVisible) return
     if (!isTextTrackSelected) return
+    if (!playerEngine.isSelectedTrackExternal()) return
 
     activeCue?.let { cue ->
         Box(
