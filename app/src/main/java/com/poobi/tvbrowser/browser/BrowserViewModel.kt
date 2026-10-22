@@ -702,11 +702,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun dismissDialog() {
         _currentDialog.value = null
-        currentWebView?.apply {
-            isFocusable = true
-            isFocusableInTouchMode = true
-            requestFocus()
-        }
     }
 
     fun getWebViewsList(): List<WebView> = _webViews
@@ -1375,12 +1370,46 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
+        val scrollGuardScript = """
+            (function() {
+                if (window.__poobiScrollGuardInjected) return;
+                window.__poobiScrollGuardInjected = true;
+                const origScrollTo = window.scrollTo;
+                const origScroll = window.scroll;
+
+                function isTopScroll(args) {
+                    if (!args || args.length === 0) return false;
+                    if (typeof args[0] === 'object' && args[0] !== null) {
+                        return args[0].top === 0 && (args[0].left === undefined || args[0].left === 0);
+                    }
+                    return args[0] === 0 && (args[1] === undefined || args[1] === 0);
+                }
+
+                window.scrollTo = function() {
+                    const currentScroll = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+                    if (currentScroll > 100 && isTopScroll(arguments)) {
+                        return;
+                    }
+                    return origScrollTo.apply(this, arguments);
+                };
+
+                window.scroll = function() {
+                    const currentScroll = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+                    if (currentScroll > 100 && isTopScroll(arguments)) {
+                        return;
+                    }
+                    return origScroll.apply(this, arguments);
+                };
+            })();
+        """.trimIndent()
+
         wv.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 interceptedMediaUrls.clear()
                 interceptedSubtitleUrls.clear()
                 view?.evaluateJavascript(LEXICAL_FIX_SCRIPT, null)
+                view?.evaluateJavascript(scrollGuardScript, null)
                 if (url != null && view != null) {
                     val host = Uri.parse(url).host ?: ""
                     webViewHosts[view] = host
@@ -1393,6 +1422,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 if (url == null || url == "about:blank" || view == null) return
 
                 view.evaluateJavascript(LEXICAL_FIX_SCRIPT, null)
+                view.evaluateJavascript(scrollGuardScript, null)
 
                 if (view == currentWebView) {
                     currentHost = Uri.parse(url).host ?: ""
