@@ -523,6 +523,7 @@ class MainActivity : AppCompatActivity() {
                     cursorManager = cursorManager,
                     playerEngine = playerEngine
                 )
+                com.poobi.tvbrowser.browser.AdBlockSetupDialog()
             }
         }
         if (savedInstanceState == null) {

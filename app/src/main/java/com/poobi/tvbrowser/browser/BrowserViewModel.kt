@@ -734,6 +734,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _webViews.add(newWebView)
 
         if (url != null && !idle) {
+            AdBlockManager.checkAndPromptInitialSetup(context)
             newWebView.loadUrl(url)
         }
         saveTabs()
@@ -842,6 +843,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         episode: Int? = null,
         isDesktop: Boolean = false
     ) {
+        AdBlockManager.checkAndPromptInitialSetup(context)
         var url = inputUrl.trim()
         if (url.isNotEmpty()) {
             if (!url.startsWith("http://") && !url.startsWith("https://")) {
