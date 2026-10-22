@@ -92,8 +92,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _activeCategoryIndex = MutableStateFlow(0)
     val activeCategoryIndex: StateFlow<Int> = _activeCategoryIndex.asStateFlow()
 
-    val genreMap = mutableStateMapOf<Int, String>()
-
     private val _isScraping = MutableStateFlow(false)
     val isScraping: StateFlow<Boolean> = _isScraping.asStateFlow()
 
@@ -162,10 +160,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     val interceptedSubtitleUrls = ConcurrentHashMap<String, Map<String, String>>()
     
-    private val detailsCache = LruCache<String, JSONObject>(30)
-    private val episodesCache = LruCache<String, JSONArray>(50)
     private val searchCache = LruCache<String, JSONArray>(15)
-    private val libraryCache = LruCache<String, JSONArray>(15)
 
     private var scrapeJob: Job? = null
     private var scrapePollingJob: Job? = null
@@ -202,7 +197,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     init {
         loadSearchHistory()
         refreshFavoritesSet()
-        loadGenres()
         purgeOldSubtitles()
         loadProgressCounts()
         loadSavedNotifications()
@@ -441,9 +435,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 for (i in 0 until episodesArray.length()) {
                     val ep = episodesArray.getJSONObject(i)
                     if (ep.optInt("episode_number") == episodeNum) {
-                        val stillPath = ep.optString("still_path", "")
-                        if (stillPath.isNotEmpty() && stillPath != "null") {
-                            notification.put("still_path", stillPath)
+                        val posterPath = ep.optString("poster_path").ifEmpty { ep.optString("still_path", "") }
+                        if (posterPath.isNotEmpty() && posterPath != "null") {
+                            notification.put("poster_path", posterPath)
                         }
                         val overview = ep.optString("overview", "")
                         if (overview.isNotEmpty() && overview != "null") {
@@ -537,28 +531,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             control.callAttr("setting", "trakt.authed").toString() == "yes"
         } catch (e: Exception) {
             false
-        }
-    }
-
-    private fun loadGenres() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                delay(3000)
-                val py = getPythonInstance()
-                val tmdb = py.getModule("tmdb.tmdb_utils")
-                val movieGenres = JSONObject(tmdb.callAttr("get_genres", "movie").toString()).getJSONArray("genres")
-                val tvGenres = JSONObject(tmdb.callAttr("get_genres", "tv").toString()).getJSONArray("genres")
-                withContext(Dispatchers.Main) {
-                    for (i in 0 until movieGenres.length()) {
-                        val g = movieGenres.getJSONObject(i)
-                        genreMap[g.getInt("id")] = g.getString("name")
-                    }
-                    for (i in 0 until tvGenres.length()) {
-                        val g = tvGenres.getJSONObject(i)
-                        genreMap[g.getInt("id")] = g.getString("name")
-                    }
-                }
-            } catch (e: Exception) {}
         }
     }
 
@@ -726,7 +698,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun loadLibraryCategory(title: String, method: String, arg: String? = null) {
         val cacheKey = "${method}_${arg ?: ""}"
-        val cached = libraryCache.get(cacheKey)
+        val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, cacheKey)
         if (cached != null) {
             cancelLibraryJobs()
             _libraryItems.value = cached
@@ -748,7 +720,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
                 val results = JSONObject(resultJson).optJSONArray("results")
                 if (results != null) {
-                    libraryCache.put(cacheKey, results)
+                    com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, cacheKey, results)
                     withContext(Dispatchers.Main) { 
                         _libraryItems.value = results 
                     }
@@ -935,31 +907,32 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
             val savedItem = JSONObject(item.toString())
             if (season != null && episode != null) {
-                var epFound = false
+                var stillFound = savedItem.optString("still_path").takeIf { it.isNotBlank() && it != "null" }
 
-                val episodes = _itemEpisodes.value
-                if (episodes != null) {
-                    for (i in 0 until episodes.length()) {
-                        val ep = episodes.optJSONObject(i) ?: continue
-                        if (ep.optInt("episode_number") == episode) {
-                            val epOverview = ep.optString("overview")
-                            if (epOverview.isNotEmpty() && epOverview != "null") {
-                                savedItem.put("overview", epOverview)
+                if (stillFound == null) {
+                    val episodes = _itemEpisodes.value
+                    if (episodes != null) {
+                        for (i in 0 until episodes.length()) {
+                            val ep = episodes.optJSONObject(i) ?: continue
+                            if (ep.optInt("episode_number") == episode) {
+                                val epOverview = ep.optString("overview")
+                                if (epOverview.isNotEmpty() && epOverview != "null") {
+                                    savedItem.put("overview", epOverview)
+                                }
+                                val stillPath = ep.optString("still_path")
+                                if (stillPath.isNotEmpty() && stillPath != "null") {
+                                    stillFound = stillPath
+                                    savedItem.put("still_path", stillPath)
+                                }
+                                break
                             }
-                            val stillPath = ep.optString("still_path")
-                            if (stillPath.isNotEmpty() && stillPath != "null") {
-                                savedItem.put("poster_path", stillPath)
-                            }
-                            epFound = true
-                            break
                         }
                     }
                 }
 
-                if (!epFound) {
-                    val itemId = item.optInt("id")
-                    val cacheKey = "${itemId}_$season"
-                    val cachedEpisodes = episodesCache.get(cacheKey)
+                if (stillFound == null) {
+                    val itemId = item.optString("id").ifEmpty { item.optString("imdb") }
+                    val cachedEpisodes = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, itemId, season)
                     if (cachedEpisodes != null) {
                         for (i in 0 until cachedEpisodes.length()) {
                             val ep = cachedEpisodes.optJSONObject(i) ?: continue
@@ -970,7 +943,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                                 }
                                 val stillPath = ep.optString("still_path")
                                 if (stillPath.isNotEmpty() && stillPath != "null") {
-                                    savedItem.put("poster_path", stillPath)
+                                    savedItem.put("still_path", stillPath)
                                 }
                                 break
                             }
@@ -984,6 +957,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 put("item", savedItem)
                 if (season != null) put("season", season)
                 if (episode != null) put("episode", episode)
+                val still = savedItem.optString("still_path")
+                if (still.isNotBlank() && still != "null") put("still_path", still)
                 val finalDuration = if (durationMs > 0L) durationMs else existing?.optLong("duration_ms", 0L) ?: 0L
                 if (finalDuration > 0L) put("duration_ms", finalDuration)
 
@@ -1141,8 +1116,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
             var nextEp: JSONObject? = null
             if (season != null && episode != null) {
-                val cacheKey = "${item.optInt("id")}_$season"
-                val episodes = episodesCache.get(cacheKey)
+                val episodes = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, item.optInt("id").toString(), season)
                 if (episodes != null) {
                     for (i in 0 until episodes.length()) {
                         val ep = episodes.getJSONObject(i)
@@ -1264,8 +1238,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             checkMovieWatchedStatus(item)
         }
 
-        val cacheKey = "${mediaType}_$id"
-        val cached = detailsCache.get(cacheKey)
+        val cached = com.poobi.tvbrowser.shared.AppCacheManager.getDetails(context, mediaType, id.toString())
         if (cached != null) {
             _itemDetails.value = cached
             _itemRecommendations.value = cached.optJSONObject("recommendations")?.optJSONArray("results")
@@ -1302,7 +1275,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     val seasons = details.optJSONArray("seasons")
                     if (seasons != null) details.put("seasons", sortSeasons(seasons))
                 }
-                detailsCache.put(cacheKey, details)
+                com.poobi.tvbrowser.shared.AppCacheManager.saveDetails(context, mediaType, id.toString(), details)
 
                 withContext(Dispatchers.Main) {
                     _itemDetails.value = details
@@ -1458,8 +1431,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private fun toggleEpisodeWatchedLocalState(season: Int, episode: Int, newWatchedState: Boolean) {
         val id = _selectedItem.value?.optInt("id") ?: return
 
-        val cacheKey = "${id}_$season"
-        val cachedArray = episodesCache.get(cacheKey)
+        val cachedArray = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, id.toString(), season)
         if (cachedArray != null) {
             for (i in 0 until cachedArray.length()) {
                 val ep = cachedArray.getJSONObject(i)
@@ -1468,6 +1440,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     break
                 }
             }
+            com.poobi.tvbrowser.shared.AppCacheManager.saveEpisodes(context, id.toString(), season, cachedArray)
         }
 
         val currentEpisodes = _itemEpisodes.value
@@ -1554,8 +1527,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             _lastWatchedEpisode.value = null
         }
 
-        val cacheKey = "${id}_$seasonNumber"
-        val cached = episodesCache.get(cacheKey)
+        val cached = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, id.toString(), seasonNumber)
         if (cached != null) {
             _itemEpisodes.value = cached
             return
@@ -1567,7 +1539,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val scraper = py.getModule("main")
                 val episodesJson = scraper.callAttr("get_tv_episodes", id, seasonNumber).toString()
                 val episodes = JSONArray(episodesJson)
-                episodesCache.put(cacheKey, episodes)
+                com.poobi.tvbrowser.shared.AppCacheManager.saveEpisodes(context, id.toString(), seasonNumber, episodes)
                 try {
                     val statusJson = py.getModule("trakt.episode_check").callAttr("get_watched_status", id, seasonNumber, episodes.toString()).toString()
                     val watchedStatus = JSONArray(statusJson)
@@ -1946,8 +1918,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             val currentEp = lastScrapedEpisode!!
             val item = _selectedItem.value
             if (item != null) {
-                val cacheKey = "${item.optInt("id")}_$lastScrapedSeason"
-                val episodes = episodesCache.get(cacheKey)
+                val episodes = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, item.optInt("id").toString(), lastScrapedSeason!!)
                 if (episodes != null) {
                     for (i in 0 until episodes.length()) {
                         val ep = episodes.getJSONObject(i)
@@ -3050,8 +3021,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 			} catch (e: Exception) {}
 		}
 
-        val cacheKey = "${id}_$season"
-        val cachedArray = episodesCache.get(cacheKey)
+        val cachedArray = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, id.toString(), season)
         if (cachedArray != null) {
             for (i in 0 until cachedArray.length()) {
                 val ep = cachedArray.getJSONObject(i)
@@ -3060,6 +3030,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     break
                 }
             }
+            com.poobi.tvbrowser.shared.AppCacheManager.saveEpisodes(context, id.toString(), season, cachedArray)
         }
 
         val currentEpisodes = _itemEpisodes.value

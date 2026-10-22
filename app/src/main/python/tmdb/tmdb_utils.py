@@ -72,6 +72,33 @@ def get_tv_episodes(tv_id, season_number):
     url = f"{API_URL}/tv/{tv_id}/season/{season_number}"
     return requests.get(url, headers=get_headers()).json()
 
+def get_landscape_image(tmdb_id, media_type='movie', season=None, episode=None):
+    try:
+        tmdb_id = str(tmdb_id)
+        if media_type in ['tv', 'tvshow'] and season is not None and episode is not None:
+            eps_data = get_tv_episodes(tmdb_id, int(season))
+            eps = eps_data.get('episodes', []) if isinstance(eps_data, dict) else []
+            for ep in eps:
+                if ep.get('episode_number') == int(episode):
+                    still = ep.get('still_path')
+                    if still:
+                        return json.dumps({"image_path": still, "type": "still", "season_episodes": eps})
+            url = f"{API_URL}/tv/{tmdb_id}/season/{season}/episode/{episode}/images"
+            stills = requests.get(url, headers=get_headers()).json().get('stills', [])
+            if stills:
+                return json.dumps({"image_path": stills[0].get('file_path'), "type": "still"})
+
+        details = get_details(tmdb_id, 'tv' if media_type in ['tv', 'tvshow'] else 'movie')
+        backdrop = details.get('backdrop_path')
+        if backdrop:
+            return json.dumps({"image_path": backdrop, "type": "backdrop"})
+        poster = details.get('poster_path')
+        if poster:
+            return json.dumps({"image_path": poster, "type": "poster"})
+        return json.dumps({})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
 def parse_genres(genres, line=True):
     new_genres = []
     try:

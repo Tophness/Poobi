@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.browser.HoldToDeleteCloseButton
 import com.poobi.tvbrowser.shared.RemoteImage
+import com.poobi.tvbrowser.shared.TmdbGenres
 import com.poobi.tvbrowser.shared.TvMarqueeText
 import org.json.JSONObject
 
@@ -52,24 +53,19 @@ fun RichMediaCard(
         ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
 
     val rating = item.optDouble("vote_average", 0.0)
-    val posterPath = item.optString("poster_path")
-    val posterUrl = "https://image.tmdb.org/t/p/w342$posterPath"
+
+    val imagePath = if (season != null && episode != null) {
+        val still = item.optString("still_path")
+        if (still.isNotBlank() && still != "null") still else item.optString("poster_path")
+    } else {
+        item.optString("poster_path")
+    }
+
+    val imageUrl = if (imagePath.isNotBlank() && imagePath != "null") "https://image.tmdb.org/t/p/w342$imagePath" else ""
     val overview = item.optString("overview")
 
-    var genresStr = ""
     val genresArr = item.optJSONArray("genre_ids") ?: item.optJSONArray("genres")
-    if (genresArr != null && genresArr.length() > 0) {
-        val genreNames = mutableListOf<String>()
-        for (i in 0 until genresArr.length()) {
-            val obj = genresArr.get(i)
-            if (obj is JSONObject) {
-                genreNames.add(obj.optString("name"))
-            } else if (obj is Int) {
-                viewModel.genreMap[obj]?.let { genreNames.add(it) }
-            }
-        }
-        if (genreNames.isNotEmpty()) genresStr = genreNames.joinToString(" • ")
-    }
+    val genresStr = remember(genresArr) { TmdbGenres.formatGenres(genresArr) }
 
     Column(
         modifier = Modifier.width(160.dp).padding(6.dp)
@@ -81,7 +77,7 @@ fun RichMediaCard(
                 .clip(RoundedCornerShape(4.dp))
                 .background(Color(0xFF222222))
         ) {
-            RemoteImage(url = posterUrl, contentDescription = title, modifier = Modifier.fillMaxSize())
+            RemoteImage(url = imageUrl, contentDescription = title, modifier = Modifier.fillMaxSize())
 
             if (rating > 0.0) {
                 Box(

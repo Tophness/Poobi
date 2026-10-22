@@ -76,10 +76,10 @@ fun NewEpisodeNotificationOverlay(
                 ?: itemObj?.optString("overview")
                 ?: "No description available."
 
-            val stillPath = notificationData.optString("still_path", "")
-            val posterPath = itemObj?.optString("poster_path", "") ?: ""
+            val stillPath = notificationData.optString("still_path")
             val backdropPath = itemObj?.optString("backdrop_path", "") ?: ""
-            
+            val posterPath = itemObj?.optString("poster_path", "") ?: ""
+
             val imageUrl = when {
                 stillPath.isNotEmpty() -> "https://image.tmdb.org/t/p/w300$stillPath"
                 backdropPath.isNotEmpty() -> "https://image.tmdb.org/t/p/w780$backdropPath"

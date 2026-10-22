@@ -1,21 +1,16 @@
 package com.poobi.tvbrowser.shared
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.util.LruCache
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.ui.composed
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.size
@@ -29,8 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -38,6 +31,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -71,17 +65,9 @@ fun Modifier.mouseWheelHorizontalScroll(
 }
 
 object ImageCache {
-    private val cacheSize = (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt().coerceAtLeast(1024 * 4)
-
-    private val memoryCache = object : LruCache<String, Bitmap>(cacheSize) {
-        override fun sizeOf(key: String, bitmap: Bitmap): Int {
-            return bitmap.byteCount / 1024
-        }
-    }
-
-    fun get(url: String): Bitmap? = memoryCache.get(url)
+    fun get(url: String): Bitmap? = AppCacheManager.memoryBitmapCache.get(url)
     fun put(url: String, bitmap: Bitmap) {
-        memoryCache.put(url, bitmap)
+        AppCacheManager.memoryBitmapCache.put(url, bitmap)
     }
 }
 
@@ -169,29 +155,36 @@ fun RemoteImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop
 ) {
+    val context = LocalContext.current
     var imageBitmap by remember(url) { 
         mutableStateOf<ImageBitmap?>(
-            ImageCache.get(url)?.asImageBitmap()
+            AppCacheManager.getImageBitmap(context, url)?.asImageBitmap()
         ) 
     }
 
     LaunchedEffect(url) {
-        if (imageBitmap == null && url.isNotEmpty() && url != "https://image.tmdb.org/t/p/w185" && !url.endsWith("null")) {
+        if (imageBitmap == null && url.isNotBlank() && url != "https://image.tmdb.org/t/p/w185" && !url.endsWith("null")) {
             withContext(Dispatchers.IO) {
+                val diskCached = AppCacheManager.getImageBitmap(context, url)
+                if (diskCached != null) {
+                    withContext(Dispatchers.Main) {
+                        imageBitmap = diskCached.asImageBitmap()
+                    }
+                    return@withContext
+                }
+
                 try {
                     val connection = URL(url).openConnection() as HttpURLConnection
-                    connection.connectTimeout = 5000
-                    connection.readTimeout = 5000
-                    connection.inputStream.use { stream ->
-                        val bitmap = BitmapFactory.decodeStream(stream)
-                        if (bitmap != null) {
-                            ImageCache.put(url, bitmap)
-                            withContext(Dispatchers.Main) {
-                                imageBitmap = bitmap.asImageBitmap()
-                            }
+                    connection.connectTimeout = 6000
+                    connection.readTimeout = 6000
+                    val bytes = connection.inputStream.use { it.readBytes() }
+                    val bitmap = AppCacheManager.saveImageBytes(context, url, bytes)
+                    if (bitmap != null) {
+                        withContext(Dispatchers.Main) {
+                            imageBitmap = bitmap.asImageBitmap()
                         }
                     }
-                } catch (e: Exception) { }
+                } catch (_: Exception) {}
             }
         }
     }

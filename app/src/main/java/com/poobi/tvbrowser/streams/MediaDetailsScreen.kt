@@ -21,9 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -41,6 +39,7 @@ import kotlinx.coroutines.delay
 import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.RemoteImage
 import com.poobi.tvbrowser.shared.StreamResumeManager
+import com.poobi.tvbrowser.shared.TmdbGenres
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvMarqueeText
 import com.poobi.tvbrowser.shared.isFutureDate
@@ -136,20 +135,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else "0000"
     val rating = details?.optDouble("vote_average", item?.optDouble("vote_average", 0.0) ?: 0.0) ?: 0.0
     val mediaType = item?.optString("media_type")?.takeIf { it.isNotEmpty() && it != "null" } ?: if (item?.has("name") == true) "tv" else "movie"
-    var genresStr = ""
+
     val genresArr = item?.optJSONArray("genre_ids") ?: details?.optJSONArray("genres")
-    if (genresArr != null && genresArr.length() > 0) {
-        val genreNames = mutableListOf<String>()
-        for (i in 0 until genresArr.length()) {
-            val obj = genresArr.get(i)
-            if (obj is JSONObject) {
-                genreNames.add(obj.optString("name"))
-            } else if (obj is Int) {
-                viewModel.genreMap[obj]?.let { genreNames.add(it) }
-            }
-        }
-        if (genreNames.isNotEmpty()) genresStr = genreNames.joinToString(" • ")
-    }
+    val genresStr = remember(genresArr) { TmdbGenres.formatGenres(genresArr) }
+
     var selectedSeasonIndex by remember(seasons) { mutableStateOf(0) }
     var spinnerExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(localEpisodes, seasons) {
@@ -186,10 +175,8 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                 return@remember lastWatchedEpisode
             }
 
-            val focusMode = viewModel.prefs.getInt("episode_focus_mode", 0) // 0 = Next after latest watched, 1 = First unwatched
-            val isWatched = { ep: JSONObject ->
-                ep.optBoolean("is_watched", false)
-            }
+            val focusMode = viewModel.prefs.getInt("episode_focus_mode", 0)
+            val isWatched = { ep: JSONObject -> ep.optBoolean("is_watched", false) }
             val isEpisodeAired = { ep: JSONObject ->
                 val airDate = ep.optString("air_date", "")
                 airDate.isNotEmpty() && !isFutureDate(airDate)
@@ -200,9 +187,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     val ep = localEpisodes.getJSONObject(i)
                     val num = ep.optInt("episode_number")
                     if (isWatched(ep)) {
-                        if (num > maxWatchedEp) {
-                            maxWatchedEp = num
-                        }
+                        if (num > maxWatchedEp) maxWatchedEp = num
                     }
                 }
                 if (maxWatchedEp != -1) {
@@ -211,9 +196,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     for (i in 0 until localEpisodes.length()) {
                         val ep = localEpisodes.getJSONObject(i)
                         if (ep.optInt("episode_number") == nextEp) {
-                            if (isEpisodeAired(ep)) {
-                                nextExistsAndAired = true
-                            }
+                            if (isEpisodeAired(ep)) nextExistsAndAired = true
                             break
                         }
                     }
@@ -236,9 +219,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     var lastWatched = 1
                     for (i in 0 until localEpisodes.length()) {
                         val ep = localEpisodes.getJSONObject(i)
-                        if (isWatched(ep)) {
-                            lastWatched = ep.optInt("episode_number", 1)
-                        }
+                        if (isWatched(ep)) lastWatched = ep.optInt("episode_number", 1)
                     }
                     targetEp = lastWatched
                 }
@@ -250,7 +231,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     LaunchedEffect(item) {
         autoFocusCancelled = false
         val startTime = System.currentTimeMillis()
-        kotlinx.coroutines.delay(500)
+        delay(500)
         if (KeyTracker.lastKeyPressTime < startTime) {
             if (mediaType == "movie") {
                 try { playButtonFocusRequester.requestFocus() } catch (e: Exception) {}
@@ -590,6 +571,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                 val isWatchedActive = if (isMouseActive) false else isWatchedFocused
 
                                 val airDate = ep.optString("air_date", "")
+                                val stillPath = ep.optString("still_path")
                                 
                                 val scale by androidx.compose.animation.core.animateFloatAsState(
                                     targetValue = if (isHighlighted) 1.02f else 1.0f,
@@ -648,7 +630,13 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                             .clickable(
                                                 interactionSource = playInteractionSource,
                                                 indication = null,
-                                                onClick = { viewModel.performScrape(item!!, seasons!!.getJSONObject(selectedSeasonIndex).optInt("season_number"), num) }
+                                                onClick = {
+                                                    val epStill = ep.optString("still_path")
+                                                    if (epStill.isNotBlank() && epStill != "null") {
+                                                        item?.put("still_path", epStill)
+                                                    }
+                                                    viewModel.performScrape(item!!, seasons!!.getJSONObject(selectedSeasonIndex).optInt("season_number"), num)
+                                                }
                                             )
                                             .focusable(interactionSource = playInteractionSource)
                                     ) {
@@ -657,7 +645,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             RemoteImage(
-                                                url = "https://image.tmdb.org/t/p/w300${ep.optString("still_path")}",
+                                                url = if (stillPath.isNotBlank() && stillPath != "null") "https://image.tmdb.org/t/p/w300$stillPath" else "",
                                                 contentDescription = null,
                                                 modifier = Modifier.size(160.dp, 90.dp).clip(RoundedCornerShape(4.dp))
                                             )

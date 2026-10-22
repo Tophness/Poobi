@@ -757,6 +757,13 @@ def get_tv_episodes(tv_id, season_number):
     except:
         return json.dumps([])
 
+def get_landscape_image(tmdb_id, media_type='movie', season=None, episode=None):
+    try:
+        import tmdb.tmdb_utils as tmdb_utils
+        return tmdb_utils.get_landscape_image(tmdb_id, media_type, season, episode)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
 def search_subtitles(item_json, season=None, episode=None):
     try:
         import subtitles.manager as sub_manager

@@ -342,9 +342,9 @@ fun UpNextOverlay(
                                     .padding(8.dp),
                                 verticalAlignment = Alignment.Top
                             ) {
-                                val thumbPath = nextEpisodeJson.optString("still_path") ?: ""
+                                val stillPath = nextEpisodeJson.optString("still_path")
                                 RemoteImage(
-                                    url = "https://image.tmdb.org/t/p/w300$thumbPath",
+                                    url = if (stillPath.isNotBlank() && stillPath != "null") "https://image.tmdb.org/t/p/w300$stillPath" else "",
                                     contentDescription = "Next Episode Thumbnail",
                                     modifier = Modifier
                                         .size(110.dp, 72.dp)
