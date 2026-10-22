@@ -725,18 +725,58 @@ class SettingsActivity : AppCompatActivity() {
 
     @Composable
     fun WebPanel() {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            PanelHeader("Web & AdBlocker Settings")
-            ToggleSettingRow("Block Popups Silently", silentBlock) { silentBlock = it }
-            ToggleSettingRow("Prevent Clickjacking", clickjack) { clickjack = it }
-            TvInputField(
-                value = adblockUrl, 
-                onValueChange = { adblockUrl = it }, 
-                label = "Custom AdBlock Rules URL (EasyList Format)", 
-                placeholder = "https://...",
-                containerColor = Color(0xFF222225),
-                imeAction = ImeAction.Done
-            )
+        val ruleCount by AdBlockManager.ruleCount.collectAsState()
+        val isUpdating by AdBlockManager.isUpdating.collectAsState()
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+            item { PanelHeader("Web & AdBlocker Settings") }
+            item { ToggleSettingRow("Block Popups Silently", silentBlock) { silentBlock = it } }
+            item { ToggleSettingRow("Prevent Clickjacking", clickjack) { clickjack = it } }
+
+            item {
+                TvInputField(
+                    value = adblockUrl,
+                    onValueChange = { adblockUrl = it },
+                    label = "Custom AdBlock Rules URL (EasyList Format)",
+                    placeholder = "https://easylist.to/easylist/easylist.txt",
+                    containerColor = Color(0xFF222225),
+                    imeAction = ImeAction.Done
+                )
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isUpdating) "Updating filter lists..." else "Active Filter Rules: ~$ruleCount loaded",
+                        color = Color(0xFF00BCD4),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    TvFocusableBox(
+                        modifier = Modifier.height(36.dp),
+                        defaultColor = Color(0xFF333338),
+                        shape = RoundedCornerShape(18.dp),
+                        onClick = {
+                            AdBlockManager.updateAllRules(this@SettingsActivity, adblockUrl.ifEmpty { "https://easylist.to/easylist/easylist.txt" }) { success ->
+                                Toast.makeText(this@SettingsActivity, if (success) "Filter lists updated!" else "Update failed", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                            Text(if (isUpdating) "Updating..." else "Update Rules Now", color = if (isFocused) Color.Black else Color.White, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
         }
     }
 

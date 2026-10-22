@@ -1422,6 +1422,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     val host = Uri.parse(url).host ?: ""
                     webViewHosts[view] = host
                     if (view == currentWebView) currentHost = host
+                    view.evaluateJavascript(AdBlockManager.getSurrogateScript(), null)
+                    AdBlockManager.injectCosmeticCss(view, host)
                 }
             }
 
@@ -1439,6 +1441,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
                 injectClickjackPrevention(view)
                 applyBlockedElements(view)
+                val pageHost = Uri.parse(url).host ?: ""
+                AdBlockManager.injectCosmeticCss(view, pageHost)
                 saveTabs()
 
                 if (videoTriggerPref.value == 0 && _isBrowsing.value && view == currentWebView) {
@@ -1541,9 +1545,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     }
 
                     val filterOption = AdBlockUtils.mapRequestToFilterOption(request)
-                    val host = (if (view != null) webViewHosts[view] else null) ?: currentHost
+                    val host = getEffectiveHost(view, request)
                     if (AdBlockManager.shouldBlock(requestedUrl, filterOption, host)) {
-                        return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream("".toByteArray()))
+                        return AdBlockManager.createBlockedResponse(filterOption)
                     }
                 }
                 return super.shouldInterceptRequest(view, request)
@@ -1552,6 +1556,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
                 if (url.startsWith("intent://") || url.startsWith("market://")) return true
+
+                val sourceHost = getEffectiveHost(view, request)
+                if (AdBlockManager.shouldBlock(url, com.brave.adblock.AdBlockClient.FilterOption.DOCUMENT, sourceHost)) {
+                    Log.d("AdBlock", "Blocked navigation to ad URL: $url")
+                    return true
+                }
+
                 view?.loadUrl(url)
                 return true
             }
@@ -2393,6 +2404,31 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
         prefs.edit().putString("saved_tabs", array.toString()).apply()
         refreshLists()
+    }
+
+    private fun getEffectiveHost(view: WebView?, request: WebResourceRequest?): String {
+        request?.requestHeaders?.let { headers ->
+            val referer = headers.entries.find { it.key.equals("referer", ignoreCase = true) }?.value
+            if (!referer.isNullOrEmpty()) {
+                val refHost = Uri.parse(referer).host
+                if (!refHost.isNullOrBlank()) return refHost
+            }
+            val origin = headers.entries.find { it.key.equals("origin", ignoreCase = true) }?.value
+            if (!origin.isNullOrEmpty()) {
+                val origHost = Uri.parse(origin).host
+                if (!origHost.isNullOrBlank()) return origHost
+            }
+        }
+        val cached = if (view != null) webViewHosts[view] else null
+        if (!cached.isNullOrBlank()) return cached
+
+        val currentUrlVal = _currentUrl.value
+        if (currentUrlVal.isNotBlank()) {
+            val h = Uri.parse(currentUrlVal).host
+            if (!h.isNullOrBlank()) return h
+        }
+
+        return currentHost.ifEmpty { request?.url?.host ?: "" }
     }
 
     inner class WebAppInterface {
