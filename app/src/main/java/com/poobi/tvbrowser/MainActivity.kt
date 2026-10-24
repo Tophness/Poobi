@@ -298,7 +298,8 @@ class MainActivity : AppCompatActivity() {
                     val season = streamsViewModel.lastScrapedSeason
                     val episode = streamsViewModel.lastScrapedEpisode
                     if (season != null && episode != null) {
-                        streamsViewModel.handleNextEpisodeAutoPlay(item, season, episode)
+                        val nextData = playerEngine.nextEpisodeData.value
+                        streamsViewModel.handleNextEpisodeAutoPlay(item, season, episode, nextData)
                     }
                 }
             },

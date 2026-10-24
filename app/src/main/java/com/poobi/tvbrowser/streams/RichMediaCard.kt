@@ -35,7 +35,7 @@ fun RichMediaCard(
     progress: Float = 0f,
     isDeletable: Boolean = false
 ) {
-    val model = remember(item, season, episode) { MediaItem.fromJson(item) }
+    val model = remember(item, season, episode) { MediaItem.fromJson(item, season, episode) }
     RichMediaCard(
         model = model,
         viewModel = viewModel,

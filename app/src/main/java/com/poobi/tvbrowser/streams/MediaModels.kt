@@ -28,7 +28,7 @@ data class MediaItem(
         }
 
     companion object {
-        fun fromJson(json: JSONObject): MediaItem {
+        fun fromJson(json: JSONObject, season: Int? = null, episode: Int? = null): MediaItem {
             val itm = if (json.has("item")) json.optJSONObject("item") ?: json else json
             val id = itm.optString("id").ifEmpty { itm.optString("imdb", "") }
             val imdb = itm.optString("imdb", "")
@@ -44,7 +44,15 @@ data class MediaItem(
             val rating = itm.optDouble("vote_average", 0.0)
             val posterPath = itm.optString("poster_path").takeIf { it.isNotBlank() && it != "null" }
             val backdropPath = itm.optString("backdrop_path").takeIf { it.isNotBlank() && it != "null" }
-            val stillPath = itm.optString("still_path").takeIf { it.isNotBlank() && it != "null" }
+
+            val isEpisode = (season != null && episode != null) ||
+                    (json.has("season") && json.has("episode")) ||
+                    (itm.has("season") && itm.has("episode"))
+            val stillPath = if (isEpisode) {
+                itm.optString("still_path").takeIf { it.isNotBlank() && it != "null" }
+                    ?: json.optString("still_path").takeIf { it.isNotBlank() && it != "null" }
+            } else null
+
             val overview = itm.optString("overview", "")
             val genresArr = itm.optJSONArray("genre_ids") ?: itm.optJSONArray("genres")
             val genresStr = TmdbGenres.formatGenres(genresArr)

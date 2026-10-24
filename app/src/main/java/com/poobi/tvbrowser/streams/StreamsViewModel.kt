@@ -870,6 +870,48 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private suspend fun resolveEpisodeMetadata(
+        showId: String,
+        season: Int,
+        episode: Int
+    ): Pair<String?, String?> = withContext(Dispatchers.IO) {
+        if (showId.isEmpty()) return@withContext Pair(null, null)
+
+        fun findInArray(arr: JSONArray?, matchSeason: Boolean = false): Pair<String?, String?>? {
+            if (arr == null) return null
+            for (i in 0 until arr.length()) {
+                val ep = arr.optJSONObject(i) ?: continue
+                val numMatches = ep.optInt("episode_number") == episode
+                val seasonMatches = !matchSeason || ep.optInt("season_number", season) == season
+                if (numMatches && seasonMatches) {
+                    val still = ep.optString("still_path").takeIf { it.isNotBlank() && it != "null" }
+                    val overview = ep.optString("overview").takeIf { it.isNotBlank() && it != "null" }
+                    return Pair(still, overview)
+                }
+            }
+            return null
+        }
+
+        findInArray(_itemEpisodes.value, matchSeason = true)?.let { return@withContext it }
+
+        findInArray(com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, showId, season))?.let { return@withContext it }
+
+        try {
+            val py = getPythonInstance()
+            val scraper = py.getModule("main")
+            val episodesJson = scraper.callAttr("get_tv_episodes", showId, season).toString()
+            val remoteEpisodes = JSONArray(episodesJson)
+            if (remoteEpisodes.length() > 0) {
+                com.poobi.tvbrowser.shared.AppCacheManager.saveEpisodes(context, showId, season, remoteEpisodes)
+                findInArray(remoteEpisodes)?.let { return@withContext it }
+            }
+        } catch (e: Exception) {
+            Log.e("StreamsViewModel", "Failed resolving episode metadata: ${e.message}")
+        }
+
+        Pair(null, null)
+    }
+
     private fun addToRecentlyPlayed(
         displayTitle: String, 
         item: JSONObject, 
@@ -908,48 +950,18 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
             val savedItem = JSONObject(item.toString())
             if (season != null && episode != null) {
-                var stillFound = savedItem.optString("still_path").takeIf { it.isNotBlank() && it != "null" }
+                val itemId = item.optString("id").ifEmpty { item.optString("imdb") }
+                val (stillFound, overviewFound) = resolveEpisodeMetadata(itemId, season, episode)
+                val finalStill = stillFound ?: savedItem.optString("still_path").takeIf { it.isNotBlank() && it != "null" }
 
-                if (stillFound == null) {
-                    val episodes = _itemEpisodes.value
-                    if (episodes != null) {
-                        for (i in 0 until episodes.length()) {
-                            val ep = episodes.optJSONObject(i) ?: continue
-                            if (ep.optInt("episode_number") == episode) {
-                                val epOverview = ep.optString("overview")
-                                if (epOverview.isNotEmpty() && epOverview != "null") {
-                                    savedItem.put("overview", epOverview)
-                                }
-                                val stillPath = ep.optString("still_path")
-                                if (stillPath.isNotEmpty() && stillPath != "null") {
-                                    stillFound = stillPath
-                                    savedItem.put("still_path", stillPath)
-                                }
-                                break
-                            }
-                        }
-                    }
+                if (finalStill != null) {
+                    savedItem.put("still_path", finalStill)
+                } else {
+                    savedItem.remove("still_path")
                 }
 
-                if (stillFound == null) {
-                    val itemId = item.optString("id").ifEmpty { item.optString("imdb") }
-                    val cachedEpisodes = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, itemId, season)
-                    if (cachedEpisodes != null) {
-                        for (i in 0 until cachedEpisodes.length()) {
-                            val ep = cachedEpisodes.optJSONObject(i) ?: continue
-                            if (ep.optInt("episode_number") == episode) {
-                                val epOverview = ep.optString("overview")
-                                if (epOverview.isNotEmpty() && epOverview != "null") {
-                                    savedItem.put("overview", epOverview)
-                                }
-                                val stillPath = ep.optString("still_path")
-                                if (stillPath.isNotEmpty() && stillPath != "null") {
-                                    savedItem.put("still_path", stillPath)
-                                }
-                                break
-                            }
-                        }
-                    }
+                if (overviewFound != null) {
+                    savedItem.put("overview", overviewFound)
                 }
             }
 
@@ -1238,7 +1250,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun selectMediaItem(item: JSONObject, initialSeason: Int? = null) {
         markItemAccessed(item)
-        _selectedItem.value = item
+        val showCopy = JSONObject(item.toString())
+        showCopy.remove("still_path")
+        _selectedItem.value = showCopy
         _itemDetails.value = null
         _itemEpisodes.value = null
         _itemSeasons.value = null
@@ -2706,17 +2720,32 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun handleNextEpisodeAutoPlay(item: JSONObject, season: Int, episode: Int) {
+    fun handleNextEpisodeAutoPlay(
+        item: JSONObject, 
+        season: Int, 
+        episode: Int, 
+        nextEpisodeJson: JSONObject? = null
+    ) {
         isAutoplayStarting = true
         isPlayingFromSavedLink = false
-        val nextEp = episode + 1
+
+        val targetSeason = nextEpisodeJson?.optInt("season_number")?.takeIf { it > 0 }
+            ?: nextEpisodeJson?.optInt("season")?.takeIf { it > 0 }
+            ?: season
+        val targetEpisode = nextEpisodeJson?.optInt("episode_number")?.takeIf { it > 0 }
+            ?: nextEpisodeJson?.optInt("number")?.takeIf { it > 0 }
+            ?: (episode + 1)
+
+        item.remove("still_path")
+        _selectedItem.value?.remove("still_path")
+
         interceptedSubtitleUrls.clear()
         lastSubtitledItemKey = null
         _subStatusMsg.value = ""
         _isDownloadingSubs.value = false
         _showSubProgressBar.value = false
-        lastScrapedSeason = season
-        lastScrapedEpisode = nextEp
+        lastScrapedSeason = targetSeason
+        lastScrapedEpisode = targetEpisode
 
         stopScrape(triggerSubtitles = true)
 
@@ -2727,16 +2756,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 if (autoplayMode == "Ask") {
                     withContext(Dispatchers.Main) {
                         isAutoplayStarting = false
-                        performScrape(item, season, nextEp)
+                        performScrape(item, targetSeason, targetEpisode)
                     }
                     return@launch
                 }
 
-                performAutoPlayScrape(item, season, nextEp, autoplayMode)
+                performAutoPlayScrape(item, targetSeason, targetEpisode, autoplayMode)
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     isAutoplayStarting = false
-                    performScrape(item, season, nextEp)
+                    performScrape(item, targetSeason, targetEpisode)
                 }
             }
         }
