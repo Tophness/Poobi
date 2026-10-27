@@ -170,6 +170,7 @@ class MainActivity : AppCompatActivity() {
                         streamsViewModel.clearSelectedMedia()
                         streamsViewModel.clearScrapedSources()
                         streamsViewModel.setActiveCategoryIndex(1)
+                        streamsViewModel.selectForYouPill("Favourites")
                         streamsViewModel.loadFavorites()
                     }
                     "recent" -> {
@@ -179,7 +180,8 @@ class MainActivity : AppCompatActivity() {
                         browserViewModel.currentAppTab.value = 1
                         streamsViewModel.clearSelectedMedia()
                         streamsViewModel.clearScrapedSources()
-                        streamsViewModel.setActiveCategoryIndex(2)
+                        streamsViewModel.setActiveCategoryIndex(1)
+                        streamsViewModel.selectForYouPill("Recently Watched")
                         streamsViewModel.loadRecentlyPlayed()
                     }
                     "new_episodes" -> {
@@ -190,6 +192,7 @@ class MainActivity : AppCompatActivity() {
                         streamsViewModel.clearSelectedMedia()
                         streamsViewModel.clearScrapedSources()
                         streamsViewModel.setActiveCategoryIndex(1)
+                        streamsViewModel.selectForYouPill("Favourites")
                         streamsViewModel.loadFavorites()
                     }
                     "search" -> {

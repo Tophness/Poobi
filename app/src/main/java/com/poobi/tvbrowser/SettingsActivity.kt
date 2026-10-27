@@ -149,7 +149,7 @@ class SettingsActivity : AppCompatActivity() {
     private var autoUpdateCheck by mutableStateOf(true)
 
     enum class Category {
-        General, Web, Player, Interface, Streaming, Autoplay, Subtitles, Sorting, Blocked, Trakt, TMDb, Torrents, Sync
+        General, Web, Player, Interface, Feeds, Streaming, Autoplay, Subtitles, Sorting, Blocked, Trakt, TMDb, Torrents, Sync
     }
 
     private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -256,6 +256,7 @@ class SettingsActivity : AppCompatActivity() {
                         Category.Web -> WebPanel()
                         Category.Player -> PlayerPanel()
                         Category.Interface -> InterfacePanel()
+                        Category.Feeds -> FeedsPanel()
                         Category.Streaming -> StreamingPanel()
                         Category.Autoplay -> AutoplayPanel()
                         Category.Subtitles -> SubtitlesPanel()
@@ -995,6 +996,207 @@ class SettingsActivity : AppCompatActivity() {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    @Composable
+    fun FeedsPanel() {
+        var cardThumbnailStyle by remember { mutableStateOf(prefs.getInt("card_thumbnail_aspect_ratio", 0)) }
+
+        val movieGenresList = remember {
+            listOf(
+                "Action" to 28, "Adventure" to 12, "Animation" to 16, "Comedy" to 35,
+                "Crime" to 80, "Documentary" to 99, "Drama" to 18, "Family" to 10751,
+                "Fantasy" to 14, "History" to 36, "Horror" to 27, "Music" to 10402,
+                "Mystery" to 9648, "Romance" to 10749, "Sci-Fi" to 878, "Thriller" to 53,
+                "War" to 10752, "Western" to 37
+            )
+        }
+
+        val tvGenresList = remember {
+            listOf(
+                "Action & Adventure" to 10759, "Animation" to 16, "Comedy" to 35, "Crime" to 80,
+                "Documentary" to 99, "Drama" to 18, "Kids" to 10762, "Mystery" to 9648,
+                "News" to 10763, "Reality TV" to 10764, "Sci-Fi & Fantasy" to 10765,
+                "Soap" to 10766, "Talk Shows" to 10767, "War & Politics" to 10768
+            )
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+            item { PanelHeader("Feeds & Dashboard Curation") }
+
+            item {
+                DropdownSettingRow(
+                    label = "Card Thumbnail Style",
+                    options = listOf("Portrait (2:3) [Default]", "Landscape (16:9)"),
+                    selectedIndex = cardThumbnailStyle
+                ) {
+                    cardThumbnailStyle = it
+                    prefs.edit().putInt("card_thumbnail_aspect_ratio", it).apply()
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("For You Feeds", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_favorites", true)) }
+                ToggleSettingRow("Favourites", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_favorites", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_recents", true)) }
+                ToggleSettingRow("Recently Watched", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_recents", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_unfinished", true)) }
+                ToggleSettingRow("Unfinished Shows", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_unfinished", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_because", true)) }
+                ToggleSettingRow("Because You Watched...", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_because", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_spotlight", true)) }
+                ToggleSettingRow("Cast in the Spotlight", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_spotlight", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_trakt", true)) }
+                ToggleSettingRow("Trakt Community & Sync Feeds", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_trakt", it).apply() }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("Movie Feeds", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_trending_today", true)) }
+                ToggleSettingRow("Trending Today", checked) { checked = it; prefs.edit().putBoolean("feed_movies_trending_today", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_trending_week", true)) }
+                ToggleSettingRow("Trending This Week", checked) { checked = it; prefs.edit().putBoolean("feed_movies_trending_week", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_in_cinemas", true)) }
+                ToggleSettingRow("In Cinemas", checked) { checked = it; prefs.edit().putBoolean("feed_movies_in_cinemas", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_upcoming", true)) }
+                ToggleSettingRow("Upcoming", checked) { checked = it; prefs.edit().putBoolean("feed_movies_upcoming", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_popular", true)) }
+                ToggleSettingRow("Popular Movies", checked) { checked = it; prefs.edit().putBoolean("feed_movies_popular", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_top_rated", true)) }
+                ToggleSettingRow("Top Rated Movies", checked) { checked = it; prefs.edit().putBoolean("feed_movies_top_rated", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_hidden_gems", true)) }
+                ToggleSettingRow("Hidden Gems", checked) { checked = it; prefs.edit().putBoolean("feed_movies_hidden_gems", it).apply() }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Movie Genres", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            items(movieGenresList) { (name, id) ->
+                var isChecked by remember { mutableStateOf(prefs.getBoolean("genre_movie_$id", true)) }
+                ToggleSettingRow("  $name", isChecked) {
+                    isChecked = it
+                    prefs.edit().putBoolean("genre_movie_$id", it).apply()
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("TV Show Feeds", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_tv_popular", true)) }
+                ToggleSettingRow("Popular TV", checked) { checked = it; prefs.edit().putBoolean("feed_tv_popular", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_tv_trending_week", true)) }
+                ToggleSettingRow("Trending This Week", checked) { checked = it; prefs.edit().putBoolean("feed_tv_trending_week", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_tv_airing_today", true)) }
+                ToggleSettingRow("Airing Today", checked) { checked = it; prefs.edit().putBoolean("feed_tv_airing_today", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_tv_airing_week", true)) }
+                ToggleSettingRow("Airing This Week", checked) { checked = it; prefs.edit().putBoolean("feed_tv_airing_week", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_tv_top_rated", true)) }
+                ToggleSettingRow("Top Rated TV", checked) { checked = it; prefs.edit().putBoolean("feed_tv_top_rated", it).apply() }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("TV Genres", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            items(tvGenresList) { (name, id) ->
+                var isChecked by remember { mutableStateOf(prefs.getBoolean("genre_tv_$id", true)) }
+                ToggleSettingRow("  $name", isChecked) {
+                    isChecked = it
+                    prefs.edit().putBoolean("genre_tv_$id", it).apply()
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("Discover: Streaming Networks & Eras", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            val platformList = listOf("Netflix" to 8, "Disney+" to 337, "Amazon Prime" to 9, "Apple TV+" to 350, "Max" to 1899)
+            items(platformList) { (pName, pId) ->
+                var isChecked by remember { mutableStateOf(prefs.getBoolean("feed_platform_$pId", true)) }
+                ToggleSettingRow("  $pName", isChecked) {
+                    isChecked = it
+                    prefs.edit().putBoolean("feed_platform_$pId", it).apply()
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Discover: Eras & Decades", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            val eraList = listOf("2000s Hits" to 2000, "90s Nostalgia" to 1990, "80s Classics" to 1980, "70s Cinema" to 1970)
+            items(eraList) { (eName, eYear) ->
+                var isChecked by remember { mutableStateOf(prefs.getBoolean("feed_era_$eYear", true)) }
+                ToggleSettingRow("  $eName", isChecked) {
+                    isChecked = it
+                    prefs.edit().putBoolean("feed_era_$eYear", it).apply()
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Discover: World Cinema & Niches", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_world_anime", true)) }
+                ToggleSettingRow("  Anime", checked) { checked = it; prefs.edit().putBoolean("feed_world_anime", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_world_kdrama", true)) }
+                ToggleSettingRow("  K-Dramas", checked) { checked = it; prefs.edit().putBoolean("feed_world_kdrama", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_world_british", true)) }
+                ToggleSettingRow("  British Mysteries", checked) { checked = it; prefs.edit().putBoolean("feed_world_british", it).apply() }
+            }
+            item {
+                var checked by remember { mutableStateOf(prefs.getBoolean("feed_curated_cult", true)) }
+                ToggleSettingRow("  Cult Classics", checked) { checked = it; prefs.edit().putBoolean("feed_curated_cult", it).apply() }
             }
         }
     }

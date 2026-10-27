@@ -81,8 +81,7 @@ try:
 except ImportError:
     resolveurl = None
 
-DEFAULT_WHITELIST = [
-]
+DEFAULT_WHITELIST = []
 
 def localize_hls_stream(stream_url_with_headers):
     if not stream_url_with_headers or stream_url_with_headers.startswith("file://") or "bypass_localize=true" in stream_url_with_headers:
@@ -307,7 +306,6 @@ def get_trailer(content, tmdb, season=None, episode=None):
         return json.dumps({"error": "Failed to compile adaptive XML trailer manifest."})
             
     except Exception as e:
-        import traceback
         traceback.print_exc()
         return json.dumps({"error": str(e)})
 
@@ -766,6 +764,95 @@ def get_landscape_image(tmdb_id, media_type='movie', season=None, episode=None):
     except Exception as e:
         return json.dumps({"error": str(e)})
 
+def get_trakt_feed(feed_type):
+    try:
+        from modules import control
+        import tmdb.tmdb_utils as tu
+
+        client_id = 'ef0b7f6f8b8806a5df10e37bae8d5487b9cbec20e424a6527c1f3020cfa363a7'
+        base_url = 'https://api.trakt.tv'
+        token = control.setting('trakt.token')
+        headers = {
+            'Content-Type': 'application/json',
+            'trakt-api-version': '2',
+            'trakt-api-key': client_id
+        }
+        if token and token != '0' and control.setting('trakt.authed') == 'yes':
+            headers['Authorization'] = f'Bearer {token}'
+
+        url_map = {
+            'anticipated': f"{base_url}/movies/anticipated?limit=20",
+            'anticipated_shows': f"{base_url}/shows/anticipated?limit=20",
+            'watched': f"{base_url}/movies/watched/weekly?limit=20",
+            'watched_shows': f"{base_url}/shows/watched/weekly?limit=20",
+            'collected': f"{base_url}/movies/collected/weekly?limit=20",
+            'collected_shows': f"{base_url}/shows/collected/weekly?limit=20",
+            'watchlist': f"{base_url}/sync/watchlist?limit=25",
+            'recommendations': f"{base_url}/recommendations/movies?limit=20"
+        }
+
+        url = url_map.get(feed_type)
+        if not url:
+            return json.dumps([])
+
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return json.dumps([])
+
+        trakt_items = resp.json()
+        ids_to_fetch = []
+
+        for item in trakt_items:
+            m_obj = item.get('movie') or item.get('show') or item
+            m_type = 'movie' if 'movie' in item or item.get('type') == 'movie' else 'tv'
+            ids = m_obj.get('ids', {})
+            tmdb_id = ids.get('tmdb')
+            imdb_id = ids.get('imdb') or ''
+            if tmdb_id:
+                ids_to_fetch.append((tmdb_id, m_type, imdb_id))
+
+        def fetch_tmdb_details(info):
+            tid, mtype, imdb = info
+            try:
+                res = tu.get_details(tid, mtype)
+                if res and 'id' in res:
+                    title = res.get('title') or res.get('name')
+                    rel_date = res.get('release_date') or res.get('first_air_date') or '0000'
+                    return {
+                        "id": str(res['id']),
+                        "imdb": imdb or res.get('external_ids', {}).get('imdb_id', ''),
+                        "title": f"{title} ({rel_date[:4]})" if rel_date != '0000' else title,
+                        "orig_title": title,
+                        "name": title,
+                        "media_type": mtype,
+                        "release_date": rel_date,
+                        "overview": res.get('overview', ''),
+                        "poster_path": res.get('poster_path'),
+                        "backdrop_path": res.get('backdrop_path'),
+                        "vote_average": res.get('vote_average', 0.0),
+                        "genres": res.get('genres', []),
+                        "genre_ids": [g['id'] for g in res.get('genres', []) if 'id' in g],
+                        "year": rel_date[:4],
+                        "is_trakt": True,
+                        "trakt_badge": "Trakt"
+                    }
+            except Exception:
+                pass
+            return None
+
+        enriched = []
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = [pool.submit(fetch_tmdb_details, info) for info in ids_to_fetch]
+            for f in futures:
+                r = f.result()
+                if r:
+                    enriched.append(r)
+
+        return json.dumps(enriched)
+    except Exception as e:
+        print(f"[DEBUG] get_trakt_feed error: {e}")
+        return json.dumps([])
+
 def search_subtitles(item_json, season=None, episode=None):
     try:
         import subtitles.manager as sub_manager
@@ -984,7 +1071,7 @@ def scrape(item_json, season=None, episode=None):
                                 is_video = True
                             elif s.get('source') and resolveurl.relevant_resolvers(s.get('source')):
                                 is_video = True
-                            elif s.get('provider_key') in getattr(s_inst, 'provider_instances', {}) and hasattr(s_inst.provider_instances[s.get('provider_key')], 'resolve'):
+                            elif s.get('provider_key') in getattr(active_scraper, 'provider_instances', {}) and hasattr(active_scraper.provider_instances[s.get('provider_key')], 'resolve'):
                                 is_video = True
                         except: pass
                 s['is_video'] = is_video
@@ -1040,6 +1127,5 @@ def resolve(source_data_json):
         })
         
     except Exception as e:
-        import traceback
         traceback.print_exc()
         return json.dumps({"error": str(e)})

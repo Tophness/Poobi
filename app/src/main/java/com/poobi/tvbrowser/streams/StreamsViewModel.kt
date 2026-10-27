@@ -92,6 +92,15 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _activeCategoryIndex = MutableStateFlow(0)
     val activeCategoryIndex: StateFlow<Int> = _activeCategoryIndex.asStateFlow()
 
+    val forYouPillTitle = MutableStateFlow("Favourites")
+    val moviesPillTitle = MutableStateFlow("Trending Today")
+    val tvShowsPillTitle = MutableStateFlow("Popular TV")
+    val discoverPillTitle = MutableStateFlow("Netflix")
+
+    fun selectForYouPill(title: String) {
+        forYouPillTitle.value = title
+    }
+
     private val _isScraping = MutableStateFlow(false)
     val isScraping: StateFlow<Boolean> = _isScraping.asStateFlow()
 
@@ -691,6 +700,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    val isLandscapeCard: Boolean
+        get() = prefs.getInt("card_thumbnail_aspect_ratio", 0) == 1
+
     private fun cancelLibraryJobs() {
         libraryLoadJob?.cancel()
         _libraryItems.value = null
@@ -708,7 +720,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         cancelLibraryJobs()
         libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                delay(150)
+                delay(100)
                 if (!isActive) return@launch
 
                 val py = Python.getInstance()
@@ -727,6 +739,231 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+            }
+        }
+    }
+
+    fun loadDiscoverCategory(cacheKey: String, isMovie: Boolean, params: JSONObject) {
+        val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, cacheKey)
+        if (cached != null) {
+            cancelLibraryJobs()
+            _libraryItems.value = cached
+            return
+        }
+
+        cancelLibraryJobs()
+        libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                delay(100)
+                if (!isActive) return@launch
+
+                val py = Python.getInstance()
+                val tmdb = py.getModule("tmdb.tmdb_utils")
+                val method = if (isMovie) "discover_movies" else "discover_tv"
+                val resultJson = tmdb.callAttr(method, params.toString()).toString()
+                val results = JSONObject(resultJson).optJSONArray("results")
+                if (results != null) {
+                    com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, cacheKey, results)
+                    withContext(Dispatchers.Main) { 
+                        _libraryItems.value = results 
+                    }
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+        }
+    }
+
+    fun loadTraktFeed(cacheKey: String, feedType: String) {
+        val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, cacheKey)
+        if (cached != null) {
+            cancelLibraryJobs()
+            _libraryItems.value = cached
+            return
+        }
+
+        cancelLibraryJobs()
+        libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                delay(100)
+                if (!isActive) return@launch
+
+                val py = Python.getInstance()
+                val main = py.getModule("main")
+                val resultJson = main.callAttr("get_trakt_feed", feedType).toString()
+                val results = JSONArray(resultJson)
+                if (results.length() > 0) {
+                    com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, cacheKey, results)
+                    withContext(Dispatchers.Main) { 
+                        _libraryItems.value = results 
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        _libraryItems.value = JSONArray()
+                    }
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                withContext(Dispatchers.Main) {
+                    _libraryItems.value = JSONArray()
+                }
+            }
+        }
+    }
+
+    fun loadUnfinishedShows() {
+        cancelLibraryJobs()
+        viewModelScope.launch(Dispatchers.IO) {
+            val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
+            val recentsJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+            val favArray = JSONArray(favsJson)
+            val recentArray = JSONArray(recentsJson)
+            
+            val candidates = mutableMapOf<String, JSONObject>()
+            for (i in 0 until recentArray.length()) {
+                val entry = recentArray.optJSONObject(i) ?: continue
+                val item = entry.optJSONObject("item") ?: continue
+                val isTv = item.optString("media_type") == "tv" || item.has("name")
+                val id = item.optString("id").ifEmpty { item.optString("imdb") }
+                if (isTv && id.isNotEmpty()) {
+                    candidates[id] = item
+                }
+            }
+            for (i in 0 until favArray.length()) {
+                val item = favArray.optJSONObject(i) ?: continue
+                val isTv = item.optString("media_type") == "tv" || item.has("name")
+                val id = item.optString("id").ifEmpty { item.optString("imdb") }
+                if (isTv && id.isNotEmpty() && !candidates.containsKey(id)) {
+                    candidates[id] = item
+                }
+            }
+
+            val counts = _showProgressCounts.value
+            val result = JSONArray()
+            candidates.forEach { (id, item) ->
+                val unwatched = counts[id]?.first ?: 0
+                if (unwatched > 0) {
+                    result.put(item)
+                }
+            }
+
+            if (result.length() == 0 && candidates.isNotEmpty()) {
+                candidates.values.take(15).forEach { result.put(it) }
+            }
+
+            withContext(Dispatchers.Main) {
+                _libraryItems.value = result
+            }
+        }
+    }
+
+    fun loadBecauseYouWatched() {
+        cancelLibraryJobs()
+        viewModelScope.launch(Dispatchers.IO) {
+            val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+            val recentArray = JSONArray(recentJson)
+            var seedItem: JSONObject? = null
+            for (i in 0 until recentArray.length()) {
+                val entry = recentArray.optJSONObject(i) ?: continue
+                val item = entry.optJSONObject("item") ?: continue
+                seedItem = item
+                break
+            }
+
+            if (seedItem == null) {
+                withContext(Dispatchers.Main) {
+                    _libraryItems.value = JSONArray()
+                }
+                return@launch
+            }
+
+            val id = seedItem.optString("id")
+            val mediaType = seedItem.optString("media_type").ifEmpty { if (seedItem.has("name")) "tv" else "movie" }
+            val cacheKey = "rec_${mediaType}_$id"
+
+            val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, cacheKey)
+            if (cached != null) {
+                withContext(Dispatchers.Main) { _libraryItems.value = cached }
+                return@launch
+            }
+
+            try {
+                val py = Python.getInstance()
+                val tmdb = py.getModule("tmdb.tmdb_utils")
+                val resJson = tmdb.callAttr("get_recommendations", id, mediaType).toString()
+                val results = JSONObject(resJson).optJSONArray("results") ?: JSONArray()
+                com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, cacheKey, results)
+                withContext(Dispatchers.Main) {
+                    _libraryItems.value = results
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _libraryItems.value = JSONArray()
+                }
+            }
+        }
+    }
+
+    fun loadCastInSpotlight() {
+        cancelLibraryJobs()
+        viewModelScope.launch(Dispatchers.IO) {
+            val recentJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
+            val recentArray = JSONArray(recentJson)
+            var personId = 0
+            var personName = ""
+
+            for (i in 0 until recentArray.length()) {
+                val entry = recentArray.optJSONObject(i) ?: continue
+                val item = entry.optJSONObject("item") ?: continue
+                val id = item.optString("id")
+                val mediaType = item.optString("media_type").ifEmpty { if (item.has("name")) "tv" else "movie" }
+                val details = com.poobi.tvbrowser.shared.AppCacheManager.getDetails(context, mediaType, id)
+                val cast = details?.optJSONObject("credits")?.optJSONArray("cast")
+                if (cast != null && cast.length() > 0) {
+                    val actor = cast.getJSONObject(0)
+                    personId = actor.optInt("id")
+                    personName = actor.optString("name")
+                    break
+                }
+            }
+
+            if (personId <= 0) {
+                withContext(Dispatchers.Main) {
+                    _libraryItems.value = JSONArray()
+                }
+                return@launch
+            }
+
+            val cacheKey = "spotlight_person_$personId"
+            val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, cacheKey)
+            if (cached != null) {
+                withContext(Dispatchers.Main) { _libraryItems.value = cached }
+                return@launch
+            }
+
+            try {
+                val py = Python.getInstance()
+                val tmdb = py.getModule("tmdb.tmdb_utils")
+                val detailsJson = tmdb.callAttr("get_person_details", personId).toString()
+                val combinedCredits = JSONObject(detailsJson).optJSONObject("combined_credits")
+                val castArr = combinedCredits?.optJSONArray("cast") ?: JSONArray()
+
+                val formatted = JSONArray()
+                for (i in 0 until castArr.length().coerceAtMost(25)) {
+                    val itm = castArr.getJSONObject(i)
+                    val mType = itm.optString("media_type")
+                    if (mType == "movie" || mType == "tv") {
+                        formatted.put(itm)
+                    }
+                }
+                com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, cacheKey, formatted)
+                withContext(Dispatchers.Main) {
+                    _libraryItems.value = formatted
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _libraryItems.value = JSONArray()
+                }
             }
         }
     }

@@ -17,15 +17,25 @@ data class MediaItem(
     val stillPath: String? = null,
     val overview: String = "",
     val genresStr: String = "",
+    val isTrakt: Boolean = false,
+    val traktBadge: String = "",
     val rawJson: JSONObject = JSONObject()
 ) {
-    val imageUrl: String
-        get() {
-            val path = stillPath ?: posterPath ?: backdropPath
-            return if (!path.isNullOrBlank() && path != "null") {
-                if (path.startsWith("http")) path else "https://image.tmdb.org/t/p/w342$path"
-            } else ""
+    fun getImageUrl(isLandscape: Boolean = false): String {
+        val path = if (isLandscape) {
+            stillPath ?: backdropPath ?: posterPath
+        } else {
+            stillPath ?: posterPath ?: backdropPath
         }
+        return if (!path.isNullOrBlank() && path != "null") {
+            if (path.startsWith("http")) path 
+            else if (isLandscape) "https://image.tmdb.org/t/p/w780$path"
+            else "https://image.tmdb.org/t/p/w342$path"
+        } else ""
+    }
+
+    val imageUrl: String
+        get() = getImageUrl(isLandscape = false)
 
     companion object {
         fun fromJson(json: JSONObject, season: Int? = null, episode: Int? = null): MediaItem {
@@ -57,6 +67,9 @@ data class MediaItem(
             val genresArr = itm.optJSONArray("genre_ids") ?: itm.optJSONArray("genres")
             val genresStr = TmdbGenres.formatGenres(genresArr)
 
+            val isTrakt = itm.optBoolean("is_trakt", false) || json.optBoolean("is_trakt", false)
+            val traktBadge = itm.optString("trakt_badge").ifEmpty { json.optString("trakt_badge", "") }
+
             return MediaItem(
                 id = id,
                 imdb = imdb,
@@ -69,6 +82,8 @@ data class MediaItem(
                 stillPath = stillPath,
                 overview = overview,
                 genresStr = genresStr,
+                isTrakt = isTrakt,
+                traktBadge = traktBadge,
                 rawJson = itm
             )
         }

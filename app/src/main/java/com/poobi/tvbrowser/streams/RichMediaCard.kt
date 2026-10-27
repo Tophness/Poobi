@@ -33,7 +33,8 @@ fun RichMediaCard(
     episode: Int? = null,
     isFocused: Boolean = false,
     progress: Float = 0f,
-    isDeletable: Boolean = false
+    isDeletable: Boolean = false,
+    isLandscape: Boolean = true
 ) {
     val model = remember(item, season, episode) { MediaItem.fromJson(item, season, episode) }
     RichMediaCard(
@@ -45,7 +46,8 @@ fun RichMediaCard(
         episode = episode,
         isFocused = isFocused,
         progress = progress,
-        isDeletable = isDeletable
+        isDeletable = isDeletable,
+        isLandscape = isLandscape
     )
 }
 
@@ -59,22 +61,27 @@ fun RichMediaCard(
     episode: Int? = null,
     isFocused: Boolean = false,
     progress: Float = 0f,
-    isDeletable: Boolean = false
+    isDeletable: Boolean = false,
+    isLandscape: Boolean = true
 ) {
     val favorites by viewModel.favoritesSet.collectAsState()
     val isFav = favorites.contains(model.id) || (model.imdb.isNotEmpty() && favorites.contains(model.imdb))
 
+    val cardWidth = if (isLandscape) 240.dp else 160.dp
+    val imageHeight = if (isLandscape) 135.dp else 200.dp
+    val imageUrl = model.getImageUrl(isLandscape)
+
     Column(
-        modifier = Modifier.width(160.dp).padding(6.dp)
+        modifier = Modifier.width(cardWidth).padding(6.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(200.dp)
-                .clip(RoundedCornerShape(4.dp))
+                .height(imageHeight)
+                .clip(RoundedCornerShape(6.dp))
                 .background(Color(0xFF222222))
         ) {
-            RemoteImage(url = model.imageUrl, contentDescription = model.title, modifier = Modifier.fillMaxSize())
+            RemoteImage(url = imageUrl, contentDescription = model.title, modifier = Modifier.fillMaxSize())
 
             if (model.rating > 0.0) {
                 Box(

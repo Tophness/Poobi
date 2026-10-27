@@ -201,6 +201,7 @@ fun MainApp(
     val homeSearchBarFocusRequester = remember { FocusRequester() }
     val streamsSearchBarFocusRequester = remember { FocusRequester() }
     val streamsCardFocusRequester = remember { FocusRequester() }
+    val streamsSubTabFocusRequester = remember { FocusRequester() }
 
     val isBufferingTorrent by streamsViewModel.isBufferingTorrent.collectAsState()
     val torrentBufferStatus by streamsViewModel.torrentBufferStatus.collectAsState()
@@ -286,8 +287,8 @@ fun MainApp(
                                 } else if (selectedMedia == null) {
                                     if (isSearchCategory) {
                                         down = streamsSearchBarFocusRequester
-                                    } else if (hasCardsInCenter) {
-                                        down = streamsCardFocusRequester
+                                    } else {
+                                        down = streamsSubTabFocusRequester
                                     }
                                 }
                             }
@@ -304,6 +305,11 @@ fun MainApp(
                                 .clip(CircleShape)
                                 .background(if (isSettingsFocused) Color(0xFF00BCD4) else Color.Transparent)
                                 .then(if (isSettingsFocused) Modifier.border(2.dp, Color.White, CircleShape) else Modifier)
+                                .focusProperties {
+                                    if (currentTab == AppTab.Streams && !isScrapeScreenActive && selectedMedia == null) {
+                                        down = if (isSearchCategory) streamsSearchBarFocusRequester else streamsSubTabFocusRequester
+                                    }
+                                }
                                 .clickable(
                                     interactionSource = settingsInteractionSource,
                                     indication = null,
@@ -434,7 +440,8 @@ fun MainApp(
                                         viewModel = streamsViewModel,
                                         searchBarFocusRequester = streamsSearchBarFocusRequester,
                                         topTabFocusRequester = streamsTabFocusRequester,
-                                        cardFocusRequester = streamsCardFocusRequester
+                                        cardFocusRequester = streamsCardFocusRequester,
+                                        subTabFocusRequester = streamsSubTabFocusRequester
                                     )
                                 }
                             }
