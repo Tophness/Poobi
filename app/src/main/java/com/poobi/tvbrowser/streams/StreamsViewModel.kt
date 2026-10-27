@@ -743,8 +743,17 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private val globalMediaToActorMap = java.util.concurrent.ConcurrentHashMap<String, Pair<String, String>>()
+
     fun loadDiscoverCategory(cacheKey: String, isMovie: Boolean, params: JSONObject) {
-        val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, cacheKey)
+        val prioritizeFavCast = prefs.getBoolean("genres_prioritize_fav_cast", true)
+        val allActors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(context)
+        val selectedActors = if (prioritizeFavCast && params.has("with_genres")) {
+            allActors.filter { it.isEnabled }
+        } else emptyList()
+
+        val fullCacheKey = if (selectedActors.isNotEmpty()) "${cacheKey}_favcast_${selectedActors.hashCode()}" else cacheKey
+        val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, fullCacheKey)
         if (cached != null) {
             cancelLibraryJobs()
             _libraryItems.value = cached
@@ -754,18 +763,89 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         cancelLibraryJobs()
         libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                delay(100)
+                delay(80)
                 if (!isActive) return@launch
 
                 val py = Python.getInstance()
                 val tmdb = py.getModule("tmdb.tmdb_utils")
                 val method = if (isMovie) "discover_movies" else "discover_tv"
+
+                val finalResults = JSONArray()
+                val seenIds = mutableSetOf<String>()
+
+                if (selectedActors.isNotEmpty()) {
+                    try {
+                        // 1. Build/ensure in-memory actor credit mapping without synchronous per-movie calls
+                        for (act in selectedActors) {
+                            val actorCreditsCacheKey = "spotlight_actor_credits_${act.id}"
+                            var cachedCredits = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, actorCreditsCacheKey)
+                            if (cachedCredits == null) {
+                                try {
+                                    val detailsJson = tmdb.callAttr("get_person_details", act.id).toString()
+                                    val combinedCredits = JSONObject(detailsJson).optJSONObject("combined_credits")
+                                    val castArr = combinedCredits?.optJSONArray("cast") ?: JSONArray()
+                                    com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, actorCreditsCacheKey, castArr)
+                                    cachedCredits = castArr
+                                } catch (_: Exception) {}
+                            }
+                            if (cachedCredits != null) {
+                                for (j in 0 until cachedCredits.length()) {
+                                    val cId = cachedCredits.getJSONObject(j).optString("id")
+                                    if (cId.isNotEmpty() && !globalMediaToActorMap.containsKey(cId)) {
+                                        globalMediaToActorMap[cId] = Pair(act.name, act.profilePath)
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2. Discover titles starring the user's favourite actors in this genre
+                        val selectedActorIds = selectedActors.map { it.id }
+                        val castParams = JSONObject(params.toString()).apply {
+                            put("with_cast", selectedActorIds.take(15).joinToString("|"))
+                        }
+                        val castJson = tmdb.callAttr(method, castParams.toString()).toString()
+                        val castResults = JSONObject(castJson).optJSONArray("results")
+
+                        if (castResults != null) {
+                            for (i in 0 until castResults.length()) {
+                                val itm = castResults.getJSONObject(i)
+                                val id = itm.optString("id")
+                                if (id.isNotEmpty() && !seenIds.contains(id)) {
+                                    seenIds.add(id)
+
+                                    val actorInfo = globalMediaToActorMap[id]
+                                    if (actorInfo != null) {
+                                        itm.put("spotlight_actor_name", actorInfo.first)
+                                        if (actorInfo.second.isNotEmpty()) {
+                                            itm.put("spotlight_actor_profile", actorInfo.second)
+                                        }
+                                    }
+
+                                    finalResults.put(itm)
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                // 3. Discover general top titles for this genre
                 val resultJson = tmdb.callAttr(method, params.toString()).toString()
                 val results = JSONObject(resultJson).optJSONArray("results")
                 if (results != null) {
-                    com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, cacheKey, results)
+                    for (i in 0 until results.length()) {
+                        val itm = results.getJSONObject(i)
+                        val id = itm.optString("id")
+                        if (id.isNotEmpty() && !seenIds.contains(id)) {
+                            seenIds.add(id)
+                            finalResults.put(itm)
+                        }
+                    }
+                }
+
+                if (finalResults.length() > 0) {
+                    com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, fullCacheKey, finalResults)
                     withContext(Dispatchers.Main) { 
-                        _libraryItems.value = results 
+                        _libraryItems.value = finalResults 
                     }
                 }
             } catch (e: Exception) {
@@ -1032,10 +1112,18 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
 
-            spotlightRankedActors = actorMap.values.sortedWith(
+            val selectedActorIds = com.poobi.tvbrowser.shared.FavoriteActorsManager.getSelectedActorIds(context).toSet()
+
+            val allRanked = actorMap.values.sortedWith(
                 compareByDescending<SpotlightActorData> { it.frequency }
                     .thenBy { it.name }
             )
+
+            spotlightRankedActors = if (selectedActorIds.isNotEmpty()) {
+                allRanked.filter { selectedActorIds.contains(it.id) }
+            } else {
+                allRanked
+            }
 
             if (spotlightRankedActors.isEmpty()) {
                 withContext(Dispatchers.Main) { _libraryItems.value = JSONArray() }
@@ -1616,6 +1704,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             prefs.edit().putString("streams_favorites", array.toString()).apply()
             TvHomeSyncManager.syncFavoritesChannel(context)
             refreshFavoritesSet()
+
+            viewModelScope.launch(Dispatchers.IO) {
+                com.poobi.tvbrowser.shared.FavoriteActorsManager.syncWithFavorites(context)
+            }
 
             if (isCurrentlyViewingFavorites) {
                 withContext(Dispatchers.Main) {

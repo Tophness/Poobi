@@ -1003,6 +1003,18 @@ class SettingsActivity : AppCompatActivity() {
     @Composable
     fun FeedsPanel() {
         var cardThumbnailStyle by remember { mutableStateOf(prefs.getInt("card_thumbnail_aspect_ratio", 0)) }
+        var genresPrioritizeFavCast by remember { mutableStateOf(prefs.getBoolean("genres_prioritize_fav_cast", true)) }
+        var favoriteActors by remember { mutableStateOf(com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(this@SettingsActivity)) }
+
+        LaunchedEffect(Unit) {
+            withContext(Dispatchers.IO) {
+                com.poobi.tvbrowser.shared.FavoriteActorsManager.syncWithFavorites(this@SettingsActivity)
+                val updated = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(this@SettingsActivity)
+                withContext(Dispatchers.Main) {
+                    favoriteActors = updated
+                }
+            }
+        }
 
         val movieGenresList = remember {
             listOf(
@@ -1038,6 +1050,16 @@ class SettingsActivity : AppCompatActivity() {
                 ) {
                     cardThumbnailStyle = it
                     prefs.edit().putInt("card_thumbnail_aspect_ratio", it).apply()
+                }
+            }
+
+            item {
+                ToggleSettingRow(
+                    label = "Prioritise Favourite Cast in Genres",
+                    checked = genresPrioritizeFavCast
+                ) {
+                    genresPrioritizeFavCast = it
+                    prefs.edit().putBoolean("genres_prioritize_fav_cast", it).apply()
                 }
             }
 
@@ -1197,6 +1219,109 @@ class SettingsActivity : AppCompatActivity() {
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_curated_cult", true)) }
                 ToggleSettingRow("  Cult Classics", checked) { checked = it; prefs.edit().putBoolean("feed_curated_cult", it).apply() }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Favourite Cast Members", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("Select actors from your favourite shows to spotlight and prioritise in genres.", color = Color.Gray, fontSize = 12.sp)
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TvFocusableBox(
+                            modifier = Modifier.height(32.dp),
+                            defaultColor = Color(0xFF333338),
+                            shape = RoundedCornerShape(16.dp),
+                            onClick = {
+                                com.poobi.tvbrowser.shared.FavoriteActorsManager.setAllActors(this@SettingsActivity, true)
+                                favoriteActors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(this@SettingsActivity)
+                            }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+                                Text("Select All", color = if (isFocused) Color.Black else Color.White, fontSize = 11.sp)
+                            }
+                        }
+
+                        TvFocusableBox(
+                            modifier = Modifier.height(32.dp),
+                            defaultColor = Color(0xFF333338),
+                            shape = RoundedCornerShape(16.dp),
+                            onClick = {
+                                com.poobi.tvbrowser.shared.FavoriteActorsManager.setAllActors(this@SettingsActivity, false)
+                                favoriteActors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(this@SettingsActivity)
+                            }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+                                Text("Deselect All", color = if (isFocused) Color.Black else Color.White, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (favoriteActors.isEmpty()) {
+                item {
+                    Text("No actors discovered yet. Add shows or movies to your Favourites first.", color = Color.Gray, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
+                }
+            } else {
+                items(favoriteActors) { actor ->
+                    var isChecked by remember(actor.isEnabled) { mutableStateOf(actor.isEnabled) }
+
+                    TvFocusableBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        onClick = {
+                            isChecked = !isChecked
+                            com.poobi.tvbrowser.shared.FavoriteActorsManager.toggleActor(this@SettingsActivity, actor.id, isChecked)
+                        }
+                    ) { isFocused ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (actor.profilePath.isNotEmpty()) {
+                                androidx.compose.foundation.Image(
+                                    painter = coil.compose.rememberAsyncImagePainter("https://image.tmdb.org/t/p/w185${actor.profilePath}"),
+                                    contentDescription = actor.name,
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                            }
+
+                            Text(
+                                text = actor.name,
+                                color = if (isFocused) Color.Black else Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            Checkbox(
+                                checked = isChecked,
+                                onCheckedChange = { checked ->
+                                    isChecked = checked
+                                    com.poobi.tvbrowser.shared.FavoriteActorsManager.toggleActor(this@SettingsActivity, actor.id, checked)
+                                },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = if (isFocused) Color.Black else Color(0xFF00BCD4),
+                                    checkmarkColor = if (isFocused) Color.White else Color.Black
+                                )
+                            )
+                        }
+                    }
+                }
             }
         }
     }
