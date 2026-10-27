@@ -19,6 +19,8 @@ data class MediaItem(
     val genresStr: String = "",
     val isTrakt: Boolean = false,
     val traktBadge: String = "",
+    val spotlightActorProfile: String? = null,
+    val spotlightActorName: String? = null,
     val rawJson: JSONObject = JSONObject()
 ) {
     fun getImageUrl(isLandscape: Boolean = false): String {
@@ -70,6 +72,11 @@ data class MediaItem(
             val isTrakt = itm.optBoolean("is_trakt", false) || json.optBoolean("is_trakt", false)
             val traktBadge = itm.optString("trakt_badge").ifEmpty { json.optString("trakt_badge", "") }
 
+            val spotlightActorProfile = itm.optString("spotlight_actor_profile").takeIf { it.isNotBlank() && it != "null" }
+                ?: json.optString("spotlight_actor_profile").takeIf { it.isNotBlank() && it != "null" }
+            val spotlightActorName = itm.optString("spotlight_actor_name").takeIf { it.isNotBlank() && it != "null" }
+                ?: json.optString("spotlight_actor_name").takeIf { it.isNotBlank() && it != "null" }
+
             return MediaItem(
                 id = id,
                 imdb = imdb,
@@ -84,6 +91,8 @@ data class MediaItem(
                 genresStr = genresStr,
                 isTrakt = isTrakt,
                 traktBadge = traktBadge,
+                spotlightActorProfile = spotlightActorProfile,
+                spotlightActorName = spotlightActorName,
                 rawJson = itm
             )
         }

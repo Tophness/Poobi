@@ -278,7 +278,7 @@ fun StreamsDashboardScreen(
     }
 
     val sortPrefKey = "streams_card_sort_cat_${activeCategoryIndex}_$currentActivePillIndex"
-    var currentSort by remember(activeCategoryIndex) {
+    var currentSort by remember(activeCategoryIndex, currentActivePillIndex) {
         mutableStateOf(viewModel.prefs.getString(sortPrefKey, defaultSort) ?: defaultSort)
     }
 
@@ -735,6 +735,12 @@ fun StreamsDashboardScreen(
                                         "${activeCategoryIndex}_${currentActivePillIndex}_${id}_${s}_${e}_$currentSort"
                                     }
                                 ) { index, wrapper ->
+                                    if (activeCategoryIndex == 1 && activePillTitle == "Cast in Spotlight") {
+                                        if (index >= objList.size - 4) {
+                                            viewModel.loadMoreSpotlight()
+                                        }
+                                    }
+
                                     val item = if (wrapper.has("item")) wrapper.getJSONObject("item") else wrapper
                                     val sNum = if (wrapper.has("season")) wrapper.getInt("season") else null
                                     val eNum = if (wrapper.has("episode")) wrapper.getInt("episode") else null

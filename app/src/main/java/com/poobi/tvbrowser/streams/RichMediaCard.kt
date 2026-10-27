@@ -34,7 +34,7 @@ fun RichMediaCard(
     isFocused: Boolean = false,
     progress: Float = 0f,
     isDeletable: Boolean = false,
-    isLandscape: Boolean = true
+    isLandscape: Boolean = false
 ) {
     val model = remember(item, season, episode) { MediaItem.fromJson(item, season, episode) }
     RichMediaCard(
@@ -62,7 +62,7 @@ fun RichMediaCard(
     isFocused: Boolean = false,
     progress: Float = 0f,
     isDeletable: Boolean = false,
-    isLandscape: Boolean = true
+    isLandscape: Boolean = false
 ) {
     val favorites by viewModel.favoritesSet.collectAsState()
     val isFav = favorites.contains(model.id) || (model.imdb.isNotEmpty() && favorites.contains(model.imdb))
@@ -96,6 +96,25 @@ fun RichMediaCard(
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.offset(y = 6.dp)
+                    )
+                }
+            }
+
+            if (!model.spotlightActorProfile.isNullOrEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(6.dp)
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xCC000000))
+                        .border(1.5.dp, Color(0xFF00BCD4), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    RemoteImage(
+                        url = "https://image.tmdb.org/t/p/w185${model.spotlightActorProfile}",
+                        contentDescription = model.spotlightActorName,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape)
                     )
                 }
             }
