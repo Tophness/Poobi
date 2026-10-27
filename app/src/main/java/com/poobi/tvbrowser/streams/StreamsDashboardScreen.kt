@@ -256,7 +256,8 @@ fun StreamsDashboardScreen(
         else -> 0
     }
 
-    val currentSubPillFocusRequester = subTabFocusRequester ?: remember { FocusRequester() }
+    val mainCategoryTargetRequester = subTabFocusRequester ?: remember { FocusRequester() }
+    val bottomSubPillFocusRequester = remember { FocusRequester() }
 
     val categories = listOf(
         "Search" to { viewModel.loadSearchHistory() },
@@ -314,14 +315,6 @@ fun StreamsDashboardScreen(
         else -> currentTabFocusTarget
     }
 
-    val bottomUpTarget = when {
-        hasCardsInCenter -> lastCardFocusRequester
-        activeCategoryIndex != 0 -> currentSubPillFocusRequester
-        activeCategoryIndex == 0 && searchHistory.isNotEmpty() -> lastHistoryFocusRequester
-        activeCategoryIndex == 0 -> searchFieldFocusRequester
-        else -> topTabFocusRequester ?: FocusRequester.Default
-    }
-
     BackHandler(enabled = searchResults != null) {
         viewModel.clearSearchResults()
         try {
@@ -340,16 +333,92 @@ fun StreamsDashboardScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 6.dp)) {
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp)
+        ) {
+            itemsIndexed(categories) { index, pair ->
+                val isActive = activeCategoryIndex == index
+                val tabFocusRequester = categoryTabFocusRequesters[index]
+
+                TvFocusableBox(
+                    modifier = Modifier
+                        .height(38.dp)
+                        .focusRequester(tabFocusRequester)
+                        .then(if (isActive) Modifier.focusRequester(mainCategoryTargetRequester) else Modifier)
+                        .focusProperties {
+                            up = topTabFocusRequester ?: FocusRequester.Default
+                            down = if (activeCategoryIndex == 0) searchFieldFocusRequester else (if (hasCardsInCenter) lastCardFocusRequester else bottomSubPillFocusRequester)
+                        },
+                    onClick = { 
+                        if (activeCategoryIndex != index) {
+                            viewModel.setActiveCategoryIndex(index)
+                            searchInput = ""
+                            viewModel.clearLiveSearch()
+                            if (index > 0) pair.second() else viewModel.loadSearchHistory() 
+                        }
+                    },
+                    onFocus = { 
+                        if (activeCategoryIndex != index) {
+                            viewModel.setActiveCategoryIndex(index)
+                            searchInput = ""
+                            viewModel.clearLiveSearch()
+                            if (index > 0) pair.second() else viewModel.loadSearchHistory() 
+                        }
+                    }
+                ) { isFocused ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                when {
+                                    isFocused -> Color.Transparent
+                                    isActive -> Color(0xFF2E2E35)
+                                    else -> Color(0xFF1F1F23)
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = pair.first,
+                            color = when {
+                                isFocused -> Color.Black
+                                isActive -> Color(0xFFFFB74D)
+                                else -> Color.LightGray
+                            },
+                            fontSize = 14.sp,
+                            fontWeight = if (isActive || isFocused) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp)
+                        )
+                        if (isActive && !isFocused) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth(0.6f)
+                                    .height(3.dp)
+                                    .background(Color(0xFFFFB74D), shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF333338)))
+
         if (activeCategoryIndex == 0) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp)
+                    .padding(top = 10.dp)
                     .focusProperties {
-                        if (topTabFocusRequester != null) {
-                            up = topTabFocusRequester
-                        }
+                        up = categoryTabFocusRequesters.getOrNull(0) ?: FocusRequester.Default
                     },
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -374,6 +443,7 @@ fun StreamsDashboardScreen(
                         .weight(1f)
                         .height(36.dp)
                         .focusProperties {
+                            up = categoryTabFocusRequesters.getOrNull(0) ?: FocusRequester.Default
                             right = searchButtonFocusRequester
                             down = searchDownTarget
                         }
@@ -384,6 +454,7 @@ fun StreamsDashboardScreen(
                         .size(36.dp)
                         .focusRequester(searchButtonFocusRequester)
                         .focusProperties {
+                            up = categoryTabFocusRequesters.getOrNull(0) ?: FocusRequester.Default
                             left = searchFieldFocusRequester
                             down = searchDownTarget
                         },
@@ -399,7 +470,7 @@ fun StreamsDashboardScreen(
             }
 
             if (searchResults == null && liveSuggestions.isEmpty() && searchHistory.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Recent Searches", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     
@@ -427,7 +498,7 @@ fun StreamsDashboardScreen(
                     state = searchHistoryListState,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp)
+                        .padding(top = 6.dp)
                         .mouseWheelHorizontalScroll(searchHistoryListState), 
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp)
@@ -440,7 +511,7 @@ fun StreamsDashboardScreen(
                                 .then(if (isTargetHistory) Modifier.focusRequester(lastHistoryFocusRequester) else Modifier)
                                 .focusProperties {
                                     up = searchFieldFocusRequester
-                                    down = currentTabFocusTarget
+                                    down = lastCardFocusRequester
                                 },
                             onFocus = { lastFocusedHistoryIndex = index },
                             onTriggerDelete = {
@@ -478,99 +549,6 @@ fun StreamsDashboardScreen(
                                     HoldToDeleteCloseButton(progress = progress)
                                 }
                             }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (activeCategoryIndex != 0 && currentPills.isNotEmpty()) {
-            val pillListState = rememberLazyListState()
-
-            LaunchedEffect(currentActivePillIndex, activeCategoryIndex) {
-                if (currentPills.isNotEmpty() && currentActivePillIndex in currentPills.indices) {
-                    try {
-                        pillListState.animateScrollToItem(currentActivePillIndex)
-                    } catch (_: Exception) {}
-                }
-            }
-
-            LazyRow(
-                state = pillListState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(38.dp)
-                    .padding(bottom = 6.dp)
-                    .mouseWheelHorizontalScroll(pillListState),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                itemsIndexed(currentPills) { pIdx, pill ->
-                    val isSelected = pIdx == currentActivePillIndex
-                    TvFocusableBox(
-                        modifier = Modifier
-                            .height(32.dp)
-                            .then(if (isSelected) Modifier.focusRequester(currentSubPillFocusRequester) else Modifier)
-                            .onPreviewKeyEvent { keyEvent ->
-                                val nativeEvent = keyEvent.nativeKeyEvent
-                                if (nativeEvent.action == android.view.KeyEvent.ACTION_DOWN &&
-                                    nativeEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
-                                    try {
-                                        lastCardFocusRequester.requestFocus()
-                                        return@onPreviewKeyEvent true
-                                    } catch (_: Exception) {}
-                                }
-                                false
-                            }
-                            .focusProperties {
-                                up = topTabFocusRequester ?: FocusRequester.Default
-                                down = lastCardFocusRequester
-                            },
-                        defaultColor = if (isSelected) Color(0xFF00BCD4).copy(alpha = 0.25f) else Color(0xFF222225),
-                        onClick = {
-                            if (currentActivePillIndex != pIdx) {
-                                when (activeCategoryIndex) {
-                                    1 -> viewModel.forYouPillTitle.value = pill.first
-                                    2 -> viewModel.moviesPillTitle.value = pill.first
-                                    3 -> viewModel.tvShowsPillTitle.value = pill.first
-                                    4 -> viewModel.discoverPillTitle.value = pill.first
-                                }
-                            }
-                            pill.third()
-                        },
-                        onFocus = {
-                            if (currentActivePillIndex != pIdx) {
-                                when (activeCategoryIndex) {
-                                    1 -> viewModel.forYouPillTitle.value = pill.first
-                                    2 -> viewModel.moviesPillTitle.value = pill.first
-                                    3 -> viewModel.tvShowsPillTitle.value = pill.first
-                                    4 -> viewModel.discoverPillTitle.value = pill.first
-                                }
-                                pill.third()
-                            }
-                        }
-                    ) { isFocused ->
-                        Row(
-                            modifier = Modifier.fillMaxHeight().padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (pill.second) {
-                                androidx.compose.foundation.Image(
-                                    painter = painterResource(id = R.drawable.trakt),
-                                    contentDescription = "Trakt",
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                                    modifier = Modifier
-                                        .height(14.dp)
-                                        .aspectRatio(434f / 147f)
-                                        .padding(end = 6.dp)
-                                )
-                            }
-                            Text(
-                                text = pill.first,
-                                color = if (isFocused) Color.Black else if (isSelected) Color(0xFF00BCD4) else Color.LightGray,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal
-                            )
                         }
                     }
                 }
@@ -770,8 +748,8 @@ fun StreamsDashboardScreen(
                                     val itemFocusModifier = Modifier
                                         .then(if (isTarget) Modifier.focusRequester(lastCardFocusRequester) else Modifier)
                                         .focusProperties {
-                                            up = if (activeCategoryIndex == 0) searchFieldFocusRequester else currentSubPillFocusRequester
-                                            down = currentTabFocusTarget
+                                            up = if (activeCategoryIndex == 0) searchFieldFocusRequester else currentTabFocusTarget
+                                            down = if (activeCategoryIndex != 0 && currentPills.isNotEmpty()) bottomSubPillFocusRequester else FocusRequester.Cancel
                                             if (index == 0) {
                                                 left = sortButtonFocusRequester
                                             }
@@ -836,8 +814,8 @@ fun StreamsDashboardScreen(
                                     .size(40.dp)
                                     .focusRequester(sortButtonFocusRequester)
                                     .focusProperties {
-                                        up = if (activeCategoryIndex == 0) searchFieldFocusRequester else currentSubPillFocusRequester
-                                        down = currentTabFocusTarget
+                                        up = if (activeCategoryIndex == 0) searchFieldFocusRequester else currentTabFocusTarget
+                                        down = if (activeCategoryIndex != 0 && currentPills.isNotEmpty()) bottomSubPillFocusRequester else FocusRequester.Cancel
                                         right = lastCardFocusRequester
                                     },
                                 onClick = { showSortDialog = true }
@@ -857,72 +835,95 @@ fun StreamsDashboardScreen(
             }
         }
 
-        Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color(0xFF00BCD4)).padding(top = 10.dp))
+        if (activeCategoryIndex != 0 && currentPills.isNotEmpty()) {
+            val pillListState = rememberLazyListState()
 
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
-        ) {
-            itemsIndexed(categories) { index, pair ->
-                val isActive = activeCategoryIndex == index
-                TvFocusableBox(
-                    modifier = Modifier
-                        .height(42.dp)
-                        .focusRequester(categoryTabFocusRequesters[index])
-                        .focusProperties {
-                            up = bottomUpTarget
-                        },
-                    onClick = { 
-                        if (activeCategoryIndex != index) {
-                            viewModel.setActiveCategoryIndex(index)
-                            searchInput = ""
-                            viewModel.clearLiveSearch()
-                            if (index > 0) pair.second() else viewModel.loadSearchHistory() 
-                        }
-                    },
-                    onFocus = { 
-                        if (activeCategoryIndex != index) {
-                            viewModel.setActiveCategoryIndex(index)
-                            searchInput = ""
-                            viewModel.clearLiveSearch()
-                            if (index > 0) pair.second() else viewModel.loadSearchHistory() 
-                        }
-                    }
-                ) { isFocused ->
-                    Box(
+            LaunchedEffect(currentActivePillIndex, activeCategoryIndex) {
+                if (currentPills.isNotEmpty() && currentActivePillIndex in currentPills.indices) {
+                    try {
+                        pillListState.animateScrollToItem(currentActivePillIndex)
+                    } catch (_: Exception) {}
+                }
+            }
+
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF333338)))
+
+            LazyRow(
+                state = pillListState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .padding(vertical = 4.dp)
+                    .mouseWheelHorizontalScroll(pillListState),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                itemsIndexed(currentPills) { pIdx, pill ->
+                    val isSelected = pIdx == currentActivePillIndex
+
+                    TvFocusableBox(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                when {
-                                    isFocused -> Color.Transparent
-                                    isActive -> Color(0xFF2E2E35)
-                                    else -> Color(0xFF1F1F23)
+                            .height(34.dp)
+                            .then(if (isSelected) Modifier.focusRequester(bottomSubPillFocusRequester) else Modifier)
+                            .onPreviewKeyEvent { keyEvent ->
+                                val nativeEvent = keyEvent.nativeKeyEvent
+                                if (nativeEvent.action == android.view.KeyEvent.ACTION_DOWN &&
+                                    nativeEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
+                                    try {
+                                        lastCardFocusRequester.requestFocus()
+                                        return@onPreviewKeyEvent true
+                                    } catch (_: Exception) {}
                                 }
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = pair.first,
-                            color = when {
-                                isFocused -> Color.Black
-                                isActive -> Color(0xFFFFB74D)
-                                else -> Color.LightGray
+                                false
+                            }
+                            .focusProperties {
+                                up = if (hasCardsInCenter) lastCardFocusRequester else currentTabFocusTarget
+                                down = FocusRequester.Cancel
                             },
-                            fontSize = 14.sp,
-                            fontWeight = if (isActive || isFocused) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp)
-                        )
-                        if (isActive && !isFocused) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth(0.5f)
-                                    .height(3.dp)
-                                    .background(Color(0xFFFFB74D), shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
+                        defaultColor = if (isSelected) Color(0xFF00BCD4).copy(alpha = 0.25f) else Color(0xFF222225),
+                        onClick = {
+                            if (currentActivePillIndex != pIdx) {
+                                when (activeCategoryIndex) {
+                                    1 -> viewModel.forYouPillTitle.value = pill.first
+                                    2 -> viewModel.moviesPillTitle.value = pill.first
+                                    3 -> viewModel.tvShowsPillTitle.value = pill.first
+                                    4 -> viewModel.discoverPillTitle.value = pill.first
+                                }
+                            }
+                            pill.third()
+                        },
+                        onFocus = {
+                            if (currentActivePillIndex != pIdx) {
+                                when (activeCategoryIndex) {
+                                    1 -> viewModel.forYouPillTitle.value = pill.first
+                                    2 -> viewModel.moviesPillTitle.value = pill.first
+                                    3 -> viewModel.tvShowsPillTitle.value = pill.first
+                                    4 -> viewModel.discoverPillTitle.value = pill.first
+                                }
+                                pill.third()
+                            }
+                        }
+                    ) { isFocused ->
+                        Row(
+                            modifier = Modifier.fillMaxHeight().padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (pill.second) {
+                                androidx.compose.foundation.Image(
+                                    painter = painterResource(id = R.drawable.trakt),
+                                    contentDescription = "Trakt",
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                    modifier = Modifier
+                                        .height(14.dp)
+                                        .aspectRatio(434f / 147f)
+                                        .padding(end = 6.dp)
+                                )
+                            }
+                            Text(
+                                text = pill.first,
+                                color = if (isFocused) Color.Black else if (isSelected) Color(0xFF00BCD4) else Color.LightGray,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal
                             )
                         }
                     }

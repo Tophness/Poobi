@@ -285,11 +285,7 @@ fun MainApp(
                                 if (isScrapeScreenActive) {
                                     down = streamsContentTabFocusRequester
                                 } else if (selectedMedia == null) {
-                                    if (isSearchCategory) {
-                                        down = streamsSearchBarFocusRequester
-                                    } else {
-                                        down = streamsSubTabFocusRequester
-                                    }
+                                    down = streamsSubTabFocusRequester
                                 }
                             }
                         )
@@ -307,7 +303,7 @@ fun MainApp(
                                 .then(if (isSettingsFocused) Modifier.border(2.dp, Color.White, CircleShape) else Modifier)
                                 .focusProperties {
                                     if (currentTab == AppTab.Streams && !isScrapeScreenActive && selectedMedia == null) {
-                                        down = if (isSearchCategory) streamsSearchBarFocusRequester else streamsSubTabFocusRequester
+                                        down = streamsSubTabFocusRequester
                                     }
                                 }
                                 .clickable(
@@ -333,7 +329,19 @@ fun MainApp(
                     enter = fadeIn(),
                     exit = fadeOut()
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color(0xFF00BCD4)))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1E1E24))
+                            .padding(horizontal = 40.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(Color(0xFF333338))
+                        )
+                    }
                 }
 
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
