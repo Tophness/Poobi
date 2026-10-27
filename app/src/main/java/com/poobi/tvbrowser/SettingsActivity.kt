@@ -102,7 +102,10 @@ class SettingsActivity : AppCompatActivity() {
     private var upNextTimeStr by mutableStateOf("20")
     private var autoplayNext by mutableStateOf("Closest Source")
     private var episodeFocusMode by mutableStateOf(0)
-    private var autoSkipIntros by mutableStateOf(true)
+    private var skipIntroPref by mutableStateOf("Skip")
+    private var skipRecapPref by mutableStateOf("Skip")
+    private var skipEarlyCreditsPref by mutableStateOf("Skip")
+    private var skipEndCreditsPref by mutableStateOf("Skip")
 
     private var scrollTopbar by mutableStateOf(true)
     private var navMode by mutableStateOf(0)
@@ -315,7 +318,11 @@ class SettingsActivity : AppCompatActivity() {
 
         extractPref = prefs.getInt("extract_video_pref", 0)
         fallbackPref = prefs.getInt("exo_fallback_pref", 0)
-        autoSkipIntros = prefs.getBoolean("auto_skip_intros", true)
+        val legacyAutoSkip = prefs.getBoolean("auto_skip_intros", true)
+        skipIntroPref = prefs.getString("skip_intro_pref", if (legacyAutoSkip) "Skip" else "Ignore") ?: "Skip"
+        skipRecapPref = prefs.getString("skip_recap_pref", if (legacyAutoSkip) "Skip" else "Ignore") ?: "Skip"
+        skipEarlyCreditsPref = prefs.getString("skip_early_credits_pref", "Skip") ?: "Skip"
+        skipEndCreditsPref = prefs.getString("skip_end_credits_pref", "Skip") ?: "Skip"
         upNextMode = prefs.getString("up_next_popup_pref", "Ask") ?: "Ask"
         upNextTime = prefs.getInt("up_next_time_pref", 20)
         upNextTimeStr = upNextTime.toString()
@@ -791,6 +798,48 @@ class SettingsActivity : AppCompatActivity() {
                 item { Spacer(modifier = Modifier.height(8.dp)) }
                 item { PanelHeader("Binge Watching & Autoplay") }
 
+                val skipOptions = listOf("Skip", "Ask to Skip", "Ignore")
+
+                item {
+                    DropdownSettingRow(
+                        label = "Intro Skip Action",
+                        options = skipOptions,
+                        selectedIndex = skipOptions.indexOf(skipIntroPref).coerceAtLeast(0)
+                    ) { index ->
+                        skipIntroPref = skipOptions[index]
+                    }
+                }
+
+                item {
+                    DropdownSettingRow(
+                        label = "Recap Skip Action",
+                        options = skipOptions,
+                        selectedIndex = skipOptions.indexOf(skipRecapPref).coerceAtLeast(0)
+                    ) { index ->
+                        skipRecapPref = skipOptions[index]
+                    }
+                }
+
+                item {
+                    DropdownSettingRow(
+                        label = "Early Credits Skip Action",
+                        options = skipOptions,
+                        selectedIndex = skipOptions.indexOf(skipEarlyCreditsPref).coerceAtLeast(0)
+                    ) { index ->
+                        skipEarlyCreditsPref = skipOptions[index]
+                    }
+                }
+
+                item {
+                    DropdownSettingRow(
+                        label = "End Credits Skip Action",
+                        options = skipOptions,
+                        selectedIndex = skipOptions.indexOf(skipEndCreditsPref).coerceAtLeast(0)
+                    ) { index ->
+                        skipEndCreditsPref = skipOptions[index]
+                    }
+                }
+
                 item {
                     DropdownSettingRow(
                         label = "Up Next Overlay Mode",
@@ -801,7 +850,6 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
 
-                item { ToggleSettingRow("Auto-Skip Intros & Recaps", autoSkipIntros) { autoSkipIntros = it } }
                 item {
                     TvInputField(
                         value = upNextTimeStr,
@@ -2818,7 +2866,11 @@ class SettingsActivity : AppCompatActivity() {
 
                     putInt("extract_video_pref", extractPref)
                     putInt("exo_fallback_pref", fallbackPref)
-                    putBoolean("auto_skip_intros", autoSkipIntros)
+                    putString("skip_intro_pref", skipIntroPref)
+                    putString("skip_recap_pref", skipRecapPref)
+                    putString("skip_early_credits_pref", skipEarlyCreditsPref)
+                    putString("skip_end_credits_pref", skipEndCreditsPref)
+                    putBoolean("auto_skip_intros", skipIntroPref == "Skip" || skipRecapPref == "Skip" || skipEarlyCreditsPref == "Skip" || skipEndCreditsPref == "Skip")
                     putString("up_next_popup_pref", upNextMode)
                     putInt("up_next_time_pref", upNextTime)
                     putString("autoplay_next_pref", autoplayNext)

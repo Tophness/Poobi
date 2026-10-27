@@ -741,9 +741,22 @@ fun MainApp(
                         },
                         onDismissOverlay = {
                             playerEngine.dismissUpNext()
+                        }
+                    )
+                }
+
+                val showSkipPrompt by playerEngine.showSkipPrompt.collectAsState()
+                val skipPromptData by playerEngine.skipPromptData.collectAsState()
+                if (showSkipPrompt && skipPromptData != null) {
+                    com.poobi.tvbrowser.player.SkipSegmentOverlay(
+                        promptData = skipPromptData,
+                        isControllerVisible = isControllerVisible,
+                        playerEngine = playerEngine,
+                        onSkip = {
+                            playerEngine.triggerSkipAction()
                         },
-                        onSeek = { direction, repeatCount ->
-                            playerEngine.seekVideo(direction, repeatCount)
+                        onDismissOverlay = {
+                            playerEngine.dismissSkipPrompt()
                         }
                     )
                 }

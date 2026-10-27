@@ -3,7 +3,6 @@ package com.poobi.tvbrowser.player
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import android.widget.Toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -30,12 +29,13 @@ class IntroDbManager(private val context: Context, private val scope: CoroutineS
     var hasFetchedTimestamps = false
         private set
 
-    private val skippedSegments = mutableSetOf<String>()
-
     fun reset() {
         mediaTimestamps = null
         hasFetchedTimestamps = false
-        skippedSegments.clear()
+    }
+
+    fun markFetchedWithoutRequest() {
+        hasFetchedTimestamps = true
     }
 
     fun fetchMediaTimestamps(tmdbId: Int, isTv: Boolean, season: Int?, episode: Int?, durationMs: Long) {
@@ -68,9 +68,6 @@ class IntroDbManager(private val context: Context, private val scope: CoroutineS
                     val previewList = parseSegments(json.optJSONArray("preview"))
                     
                     mediaTimestamps = MediaTimestamps(introList, recapList, creditsList, previewList)
-                    Log.d("IntroDbManager", "Fetched timestamps successfully: $mediaTimestamps")
-                } else {
-                    Log.w("IntroDbManager", "Timestamps API returned code: ${conn.responseCode}")
                 }
             } catch (e: Exception) {
                 Log.e("IntroDbManager", "Failed to fetch media timestamps", e)
@@ -85,45 +82,22 @@ class IntroDbManager(private val context: Context, private val scope: CoroutineS
             val obj = array.getJSONObject(i)
             val start = if (obj.isNull("start_ms")) null else obj.optLong("start_ms")
             val end = if (obj.isNull("end_ms")) null else obj.optLong("end_ms")
+            if (start != null && end != null && start == 0L && end == 0L) {
+                continue
+            }
             list.add(TimestampSegment(start, end))
         }
         return list
     }
 
-    fun checkAndSkipSegments(pos: Long, player: androidx.media3.exoplayer.ExoPlayer): Boolean {
-        val ts = mediaTimestamps ?: return false
-        
-        for (seg in ts.intro) {
-            val start = seg.startMs ?: 0L
-            val end = seg.endMs
-            if (end != null && pos in start..end) {
-                val segId = "intro_${start}_$end"
-                if (!skippedSegments.contains(segId)) {
-                    skippedSegments.add(segId)
-                    player.seekTo(end)
-                    Toast.makeText(context, "Skipped Intro", Toast.LENGTH_SHORT).show()
-                    return true
-                }
+    fun getClosingCreditsStartMs(durationMs: Long): Long? {
+        val ts = mediaTimestamps ?: return null
+        for (seg in ts.credits) {
+            val start = seg.startMs ?: continue
+            if (durationMs > 0 && start >= durationMs * 0.6f) {
+                return start
             }
         }
-        
-        for (seg in ts.recap) {
-            val start = seg.startMs ?: 0L
-            val end = seg.endMs
-            if (end != null && pos in start..end) {
-                val segId = "recap_${start}_$end"
-                if (!skippedSegments.contains(segId)) {
-                    skippedSegments.add(segId)
-                    player.seekTo(end)
-                    Toast.makeText(context, "Skipped Recap", Toast.LENGTH_SHORT).show()
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
-    fun getCreditsStartMs(): Long? {
-        return mediaTimestamps?.credits?.firstOrNull { it.startMs != null }?.startMs
+        return null
     }
 }

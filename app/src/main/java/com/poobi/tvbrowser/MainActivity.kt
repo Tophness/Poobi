@@ -1049,13 +1049,17 @@ class MainActivity : AppCompatActivity() {
             }
 
             val pView = playerEngine.playerView
-            val isUpNextFocused = playerEngine.showUpNext.value && 
-                                  currentFocus?.javaClass?.name?.contains("Compose") == true
+            val isPromptActive = playerEngine.showUpNext.value || playerEngine.showSkipPrompt.value
+            val isPromptFocused = isPromptActive && currentFocus?.javaClass?.name?.contains("Compose") == true
 
             if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                 if (event.action == KeyEvent.ACTION_DOWN) {
-                    if (isUpNextFocused) {
-                        playerEngine.dismissUpNext()
+                    if (isPromptFocused) {
+                        if (playerEngine.showSkipPrompt.value) {
+                            playerEngine.dismissSkipPrompt()
+                        } else {
+                            playerEngine.dismissUpNext()
+                        }
                     } else if (pView != null && pView.isControllerFullyVisible()) {
                         pView.hideController()
                     } else {
@@ -1123,7 +1127,7 @@ class MainActivity : AppCompatActivity() {
                     null
                 }
 
-                val shouldSeek = !isUpNextFocused && (
+                val shouldSeek = !isPromptFocused && (
                     !isControllerVisible || 
                     focusedView == null || 
                     idName == "exo_play_pause" || 
@@ -1141,7 +1145,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            if (event.action == KeyEvent.ACTION_DOWN && playerEngine.showUpNext.value) {
+            if (event.action == KeyEvent.ACTION_DOWN && (playerEngine.showUpNext.value || playerEngine.showSkipPrompt.value)) {
                 val keyCode = event.keyCode
                 val nativeFocused = pView?.findFocus()
                 val idName = try { nativeFocused?.id?.let { pView.resources.getResourceEntryName(it) } } catch (e: Exception) { null }
@@ -1151,14 +1155,14 @@ class MainActivity : AppCompatActivity() {
                         if (idName == "exo_play_pause" || idName == "exo_play" || idName == "exo_pause" || 
                             idName == "exo_progress" || idName == "exo_timebar" || idName == "exo_time_bar") {
                             try {
-                                playerEngine.upNextFocusRequester?.requestFocus()
+                                playerEngine.promptFocusRequester?.requestFocus()
                                 return true
                             } catch (e: Exception) {}
                         }
                     } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                         if (idName == "exo_progress" || idName == "exo_timebar" || idName == "exo_time_bar") {
                             try {
-                                playerEngine.upNextFocusRequester?.requestFocus()
+                                playerEngine.promptFocusRequester?.requestFocus()
                                 return true
                             } catch (e: Exception) {}
                         }
@@ -1166,20 +1170,20 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            if (playerEngine.showUpNext.value) {
+            if (playerEngine.showUpNext.value || playerEngine.showSkipPrompt.value) {
                 if (super.dispatchKeyEvent(event)) {
                     return true
                 }
             }
 
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
-                if (pView != null && !isUpNextFocused) {
+                if (pView != null && !isPromptFocused) {
                     return pView.dispatchKeyEvent(event)
                 }
                 return true
             }
 
-            if (pView != null && !isUpNextFocused) {
+            if (pView != null && !isPromptFocused) {
                 return pView.dispatchKeyEvent(event)
             }
             return super.dispatchKeyEvent(event)

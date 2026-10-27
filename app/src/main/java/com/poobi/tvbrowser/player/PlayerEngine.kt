@@ -43,6 +43,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 
+enum class SkipSegmentType(val displayName: String, val toastMessage: String) {
+    INTRO("Intro", "Skipped Intro"),
+    RECAP("Recap", "Skipped Recap"),
+    EARLY_CREDITS("Opening Credits", "Skipped Opening Credits"),
+    END_CREDITS("Closing Credits", "Skipped End Credits")
+}
+
+data class SkipPromptData(
+    val type: SkipSegmentType,
+    val startMs: Long,
+    val endMs: Long,
+    val segId: String
+)
+
 sealed class QualityOption {
     abstract val name: String
     
@@ -146,6 +160,12 @@ class PlayerEngine(
     private val _nextEpisodeData = MutableStateFlow<JSONObject?>(null)
     val nextEpisodeData: StateFlow<JSONObject?> = _nextEpisodeData.asStateFlow()
 
+    private val _showSkipPrompt = MutableStateFlow(false)
+    val showSkipPrompt: StateFlow<Boolean> = _showSkipPrompt.asStateFlow()
+
+    private val _skipPromptData = MutableStateFlow<SkipPromptData?>(null)
+    val skipPromptData: StateFlow<SkipPromptData?> = _skipPromptData.asStateFlow()
+
     private val _showQualitySelector = MutableStateFlow(false)
     val showQualitySelector: StateFlow<Boolean> = _showQualitySelector.asStateFlow()
 
@@ -161,7 +181,10 @@ class PlayerEngine(
     private val _showDiskSubtitlePicker = MutableStateFlow(false)
     val showDiskSubtitlePicker: StateFlow<Boolean> = _showDiskSubtitlePicker.asStateFlow()
 
-    var upNextFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
+    var promptFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
+    var upNextFocusRequester: androidx.compose.ui.focus.FocusRequester?
+        get() = promptFocusRequester
+        set(value) { promptFocusRequester = value }
 
     private var lastVideoTitle: String? = null
     private var lastVideoUrl: String? = null
@@ -192,6 +215,8 @@ class PlayerEngine(
     private var seekIncrement = 5000L
     private val checkUpNextHandler = Handler(Looper.getMainLooper())
     var isUpNextDismissed = false
+    var isSkipPromptDismissed = false
+    private val handledSegmentIds = mutableSetOf<String>()
 
     private var pendingSelectedSubtitleLabel: String? = null
 
@@ -519,6 +544,99 @@ class PlayerEngine(
         }
     }
 
+    private fun checkIntroDbSegments(pos: Long, dur: Long, player: ExoPlayer) {
+        val ts = introDbManager.mediaTimestamps ?: return
+
+        val introMode = prefs.getString("skip_intro_pref", if (prefs.getBoolean("auto_skip_intros", true)) "Skip" else "Ignore") ?: "Skip"
+        val recapMode = prefs.getString("skip_recap_pref", if (prefs.getBoolean("auto_skip_intros", true)) "Skip" else "Ignore") ?: "Skip"
+        val earlyCreditsMode = prefs.getString("skip_early_credits_pref", "Skip") ?: "Skip"
+        val endCreditsMode = prefs.getString("skip_end_credits_pref", "Skip") ?: "Skip"
+
+        val segmentsToCheck = mutableListOf<Triple<SkipSegmentType, TimestampSegment, String>>()
+
+        if (introMode != "Ignore") {
+            for (seg in ts.intro) {
+                if (seg.startMs != null && seg.endMs != null && seg.endMs > seg.startMs) {
+                    segmentsToCheck.add(Triple(SkipSegmentType.INTRO, seg, introMode))
+                }
+            }
+        }
+
+        if (recapMode != "Ignore") {
+            for (seg in ts.recap) {
+                if (seg.startMs != null && seg.endMs != null && seg.endMs > seg.startMs) {
+                    segmentsToCheck.add(Triple(SkipSegmentType.RECAP, seg, recapMode))
+                }
+            }
+        }
+
+        if (dur > 0) {
+            for (seg in ts.credits) {
+                val start = seg.startMs ?: continue
+                val effectiveEnd = if (seg.endMs != null && seg.endMs > start) seg.endMs else dur
+                if (effectiveEnd <= start) continue
+
+                val validSeg = TimestampSegment(start, effectiveEnd)
+                val isEarly = start < dur * 0.6f
+
+                if (isEarly && earlyCreditsMode != "Ignore") {
+                    segmentsToCheck.add(Triple(SkipSegmentType.EARLY_CREDITS, validSeg, earlyCreditsMode))
+                } else if (!isEarly && endCreditsMode != "Ignore") {
+                    segmentsToCheck.add(Triple(SkipSegmentType.END_CREDITS, validSeg, endCreditsMode))
+                }
+            }
+        }
+
+        var activeSegmentFound = false
+        for ((type, seg, mode) in segmentsToCheck) {
+            val start = seg.startMs!!
+            val end = seg.endMs!!
+            val segId = "${type.name}_${start}_$end"
+
+            if (handledSegmentIds.contains(segId)) continue
+
+            if (pos in start..end) {
+                activeSegmentFound = true
+                when (mode) {
+                    "Skip" -> {
+                        handledSegmentIds.add(segId)
+                        player.seekTo(end)
+                        Toast.makeText(context, type.toastMessage, Toast.LENGTH_SHORT).show()
+                        dismissSkipPrompt()
+                    }
+                    "Ask to Skip" -> {
+                        if (!_showSkipPrompt.value && !isSkipPromptDismissed) {
+                            _skipPromptData.value = SkipPromptData(type, start, end, segId)
+                            _showSkipPrompt.value = true
+                        }
+                    }
+                }
+                break
+            }
+        }
+
+        if (!activeSegmentFound && _showSkipPrompt.value) {
+            val current = _skipPromptData.value
+            if (current != null && (pos > current.endMs || pos < current.startMs - 2000L)) {
+                _showSkipPrompt.value = false
+                _skipPromptData.value = null
+            }
+        }
+    }
+
+    fun triggerSkipAction() {
+        val data = _skipPromptData.value ?: return
+        handledSegmentIds.add(data.segId)
+        exoPlayer?.seekTo(data.endMs)
+        Toast.makeText(context, data.type.toastMessage, Toast.LENGTH_SHORT).show()
+        dismissSkipPrompt()
+    }
+
+    fun dismissSkipPrompt() {
+        _showSkipPrompt.value = false
+        isSkipPromptDismissed = true
+    }
+
     private val checkUpNextRunnable = object : Runnable {
         override fun run() {
             val player = exoPlayer ?: return
@@ -528,14 +646,11 @@ class PlayerEngine(
                 val pos = player.currentPosition
                 val dur = player.duration
 
-                val autoSkipEnabled = prefs.getBoolean("auto_skip_intros", true)
-                if (autoSkipEnabled) {
-                    introDbManager.checkAndSkipSegments(pos, player)
-                }
+                checkIntroDbSegments(pos, dur, player)
 
-                val creditsStart = introDbManager.getCreditsStartMs()
-                val isAtEndZone = if (creditsStart != null) {
-                    pos >= creditsStart
+                val closingCreditsStart = introDbManager.getClosingCreditsStartMs(dur)
+                val isAtEndZone = if (closingCreditsStart != null) {
+                    pos >= closingCreditsStart
                 } else {
                     val threshold = getUpNextThreshold()
                     val remaining = dur - pos
@@ -812,12 +927,16 @@ class PlayerEngine(
         lastAlternativeNames = alternativeNames
         lastIsTrailer = isTrailer
         isUpNextDismissed = false
+        isSkipPromptDismissed = false
+        handledSegmentIds.clear()
         hasReachedReady = false
         hasTriggeredPlaybackStarted = false
         hasInitialQualitySelected = false
         hasRestoredAudioTrack = false
         lastAudioTrackKey = null
         _showUpNext.value = false
+        _showSkipPrompt.value = false
+        _skipPromptData.value = null
         _showQualitySelector.value = false
         _showDiskSubtitlePicker.value = false
         _qualityOptions.value = emptyList()
@@ -881,16 +1000,26 @@ class PlayerEngine(
                     if (!introDbManager.hasFetchedTimestamps) {
                         val tmdbId = lastScrapedItem?.optInt("id") ?: 0
                         if (tmdbId > 0 && !lastIsTrailer) {
-                            val mediaType = lastScrapedItem?.optString("media_type")
-                                ?: if (lastScrapedItem?.has("name") == true) "tv" else "movie"
-                            val isTv = mediaType == "tv" || mediaType == "tvshow"
-                            introDbManager.fetchMediaTimestamps(
-                                tmdbId, 
-                                isTv, 
-                                lastScrapedSeason, 
-                                lastScrapedEpisode, 
-                                exoPlayer?.duration ?: 0L
-                            )
+                            val skipIntro = prefs.getString("skip_intro_pref", if (prefs.getBoolean("auto_skip_intros", true)) "Skip" else "Ignore") ?: "Skip"
+                            val skipRecap = prefs.getString("skip_recap_pref", if (prefs.getBoolean("auto_skip_intros", true)) "Skip" else "Ignore") ?: "Skip"
+                            val skipEarlyCredits = prefs.getString("skip_early_credits_pref", "Skip") ?: "Skip"
+                            val skipEndCredits = prefs.getString("skip_end_credits_pref", "Skip") ?: "Skip"
+                            val allIgnored = skipIntro == "Ignore" && skipRecap == "Ignore" && skipEarlyCredits == "Ignore" && skipEndCredits == "Ignore"
+
+                            if (!allIgnored) {
+                                val mediaType = lastScrapedItem?.optString("media_type")
+                                    ?: if (lastScrapedItem?.has("name") == true) "tv" else "movie"
+                                val isTv = mediaType == "tv" || mediaType == "tvshow"
+                                introDbManager.fetchMediaTimestamps(
+                                    tmdbId, 
+                                    isTv, 
+                                    lastScrapedSeason, 
+                                    lastScrapedEpisode, 
+                                    exoPlayer?.duration ?: 0L
+                                )
+                            } else {
+                                introDbManager.markFetchedWithoutRequest()
+                            }
                         }
                     }
                     
@@ -1311,6 +1440,8 @@ class PlayerEngine(
         (context as? android.app.Activity)?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         _isPlayerActive.value = false
         _isControllerVisible.value = false
+        _showSkipPrompt.value = false
+        _skipPromptData.value = null
         onPlayerReleased()
         isReleasing = false
     }
@@ -1323,7 +1454,7 @@ class PlayerEngine(
                 val pos = player.currentPosition
                 val dur = player.duration
 
-                val creditsStart = introDbManager.getCreditsStartMs()
+                val creditsStart = introDbManager.getClosingCreditsStartMs(dur)
                 val isCompleted = if (creditsStart != null) {
                     pos >= creditsStart
                 } else {
