@@ -290,9 +290,21 @@ fun StreamsDashboardScreen(
     var lastFocusedHistoryIndex by remember { mutableStateOf(0) }
     val lastHistoryFocusRequester = remember { FocusRequester() }
 
-    var lastFocusedCardIndex by remember(activeCategoryIndex, currentActivePillIndex, searchResults, currentSort) { mutableStateOf(0) }
+    var lastFocusedCardIndex by remember(activeCategoryIndex, currentActivePillIndex, searchResults, currentSort) { 
+        mutableStateOf(if (viewModel.isReturningFromDetails) viewModel.lastViewedCardIndex else 0) 
+    }
     val lastCardFocusRequester = cardFocusRequester ?: remember { FocusRequester() }
     val sortButtonFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        if (viewModel.isReturningFromDetails) {
+            kotlinx.coroutines.delay(120)
+            try {
+                lastCardFocusRequester.requestFocus()
+            } catch (_: Exception) {}
+            viewModel.isReturningFromDetails = false
+        }
+    }
 
     val categoryTabFocusRequesters = remember(categories.size) { List(categories.size) { FocusRequester() } }
 
@@ -708,7 +720,10 @@ fun StreamsDashboardScreen(
                     }
 
                     val targetCardIndex = lastFocusedCardIndex.coerceIn(0, (objList.size - 1).coerceAtLeast(0))
-                    val mainCardsListState = key(activeCategoryIndex, currentActivePillIndex, currentSort) { rememberLazyListState() }
+                    val initialScrollIdx = if (viewModel.isReturningFromDetails) (viewModel.lastViewedCardIndex - 1).coerceAtLeast(0) else 0
+                    val mainCardsListState = key(activeCategoryIndex, currentActivePillIndex, currentSort) { 
+                        rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIdx) 
+                    }
 
                     if (objList.isEmpty()) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -735,10 +750,8 @@ fun StreamsDashboardScreen(
                                         "${activeCategoryIndex}_${currentActivePillIndex}_${id}_${s}_${e}_$currentSort"
                                     }
                                 ) { index, wrapper ->
-                                    if (activeCategoryIndex == 1 && activePillTitle == "Cast in Spotlight") {
-                                        if (index >= objList.size - 4) {
-                                            viewModel.loadMoreSpotlight()
-                                        }
+                                    if (index >= objList.size - 4 && !isFavorites && !isRecentlyWatched) {
+                                        viewModel.loadMoreFeedItems()
                                     }
 
                                     val item = if (wrapper.has("item")) wrapper.getJSONObject("item") else wrapper
@@ -773,6 +786,8 @@ fun StreamsDashboardScreen(
                                                 }
                                             },
                                             onClick = { 
+                                                viewModel.lastViewedCardIndex = index
+                                                viewModel.isReturningFromDetails = true
                                                 if (isRecentlyWatched) viewModel.selectRecentlyPlayedItem(wrapper)
                                                 else viewModel.selectMediaItem(item) 
                                             }
@@ -794,7 +809,11 @@ fun StreamsDashboardScreen(
                                         TvFocusableBox(
                                             modifier = Modifier.wrapContentSize().then(itemFocusModifier),
                                             onFocus = { lastFocusedCardIndex = index },
-                                            onClick = { viewModel.selectMediaItem(item) }
+                                            onClick = { 
+                                                viewModel.lastViewedCardIndex = index
+                                                viewModel.isReturningFromDetails = true
+                                                viewModel.selectMediaItem(item) 
+                                            }
                                         ) { isFocused ->
                                             RichMediaCard(
                                                 item = item,

@@ -44,6 +44,50 @@ def get_popular(media_type='movie', page=1):
     url = f"{API_URL}/{media_type}/popular?page={page}"
     return _session.get(url, headers=get_headers()).json()
 
+def get_top_rated(media_type='movie', page=1):
+    url = f"{API_URL}/{media_type}/top_rated?page={page}"
+    return _session.get(url, headers=get_headers()).json()
+
+def get_top_rated_tv(page=1):
+    url = f"{API_URL}/tv/top_rated?page={page}"
+    return _session.get(url, headers=get_headers()).json()
+
+def get_upcoming_movies(page=1):
+    url = f"{API_URL}/movie/upcoming?page={page}"
+    return _session.get(url, headers=get_headers()).json()
+
+def get_airing_today(page=1):
+    url = f"{API_URL}/tv/airing_today?page={page}"
+    return _session.get(url, headers=get_headers()).json()
+
+def get_on_the_air(page=1):
+    url = f"{API_URL}/tv/on_the_air?page={page}"
+    return _session.get(url, headers=get_headers()).json()
+
+def discover_movies(params_str="{}", page=1):
+    try:
+        params = json.loads(params_str) if isinstance(params_str, str) else params_str
+    except:
+        params = {}
+    params['page'] = page
+    query_str = urlencode(params)
+    url = f"{API_URL}/discover/movie?{query_str}"
+    return _session.get(url, headers=get_headers()).json()
+
+def discover_tv(params_str="{}", page=1):
+    try:
+        params = json.loads(params_str) if isinstance(params_str, str) else params_str
+    except:
+        params = {}
+    params['page'] = page
+    query_str = urlencode(params)
+    url = f"{API_URL}/discover/tv?{query_str}"
+    return _session.get(url, headers=get_headers()).json()
+
+def get_recommendations(tmdb_id, media_type='movie', page=1):
+    url = f"{API_URL}/{media_type}/{tmdb_id}/recommendations?page={page}"
+    return _session.get(url, headers=get_headers()).json()
+
 def get_details(tmdb_id, media_type='movie'):
     url = f"{API_URL}/{media_type}/{tmdb_id}?append_to_response=credits,videos,images,external_ids,recommendations,release_dates,content_ratings"
     return _session.get(url, headers=get_headers()).json()
@@ -60,26 +104,6 @@ def get_genres(media_type='movie'):
     url = f"{API_URL}/genre/{media_type}/list"
     return _session.get(url, headers=get_headers()).json()
 
-def get_top_rated(media_type='movie', page=1):
-    url = f"{API_URL}/{media_type}/top_rated?page={page}"
-    return _session.get(url, headers=get_headers()).json()
-
-def get_top_rated_tv(page=1):
-    url = f"{API_URL}/tv/top_rated?page={page}"
-    return _session.get(url, headers=get_headers()).json()
-
-def get_airing_today(page=1):
-    url = f"{API_URL}/tv/airing_today?page={page}"
-    return _session.get(url, headers=get_headers()).json()
-
-def get_on_the_air(page=1):
-    url = f"{API_URL}/tv/on_the_air?page={page}"
-    return _session.get(url, headers=get_headers()).json()
-
-def get_upcoming_movies(page=1):
-    url = f"{API_URL}/movie/upcoming?page={page}"
-    return _session.get(url, headers=get_headers()).json()
-
 def get_person_details(person_id):
     url = f"{API_URL}/person/{person_id}?append_to_response=combined_credits,images"
     return _session.get(url, headers=get_headers()).json()
@@ -94,28 +118,6 @@ def get_external_ids(tmdb_id, media_type):
 
 def get_tv_episodes(tv_id, season_number):
     url = f"{API_URL}/tv/{tv_id}/season/{season_number}"
-    return _session.get(url, headers=get_headers()).json()
-
-def get_recommendations(tmdb_id, media_type='movie', page=1):
-    url = f"{API_URL}/{media_type}/{tmdb_id}/recommendations?page={page}"
-    return _session.get(url, headers=get_headers()).json()
-
-def discover_movies(params_str="{}"):
-    try:
-        params = json.loads(params_str) if isinstance(params_str, str) else params_str
-    except Exception:
-        params = {}
-    query_str = urlencode(params)
-    url = f"{API_URL}/discover/movie?{query_str}"
-    return _session.get(url, headers=get_headers()).json()
-
-def discover_tv(params_str="{}"):
-    try:
-        params = json.loads(params_str) if isinstance(params_str, str) else params_str
-    except Exception:
-        params = {}
-    query_str = urlencode(params)
-    url = f"{API_URL}/discover/tv?{query_str}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_landscape_image(tmdb_id, media_type='movie', season=None, episode=None):
@@ -156,7 +158,7 @@ def parse_genres(genres, line=True):
             if name: 
                 new_genres.append(name)
         return ', '.join(new_genres) if line else new_genres
-    except Exception:
+    except:
         return new_genres
 
 def getTMDbCredentialsInfo():
@@ -211,7 +213,7 @@ def create_request_token():
         if not result.get('success') is True:
             return None
         return result['request_token']
-    except Exception:
+    except:
         return None
 
 def create_session_with_login(request_token):
@@ -222,7 +224,7 @@ def create_session_with_login(request_token):
         if not result.get('success') is True:
             return None
         return result['request_token']
-    except Exception:
+    except:
         return None
 
 def create_session(request_token):
@@ -233,7 +235,7 @@ def create_session(request_token):
         if not result.get('success') is True:
             return None
         return result['session_id']
-    except Exception:
+    except:
         return None
 
 def delete_session():
@@ -245,7 +247,7 @@ def delete_session():
         url = f"{API_URL}/authentication/session?api_key={API_KEY}"
         post = {"session_id": f"{str(current_session)}"}
         _session.delete(url, data=json.dumps(post), headers=get_headers())
-    except Exception:
+    except:
         pass
     finally:
         control.setSetting(id='tmdb.session', value='')
@@ -261,32 +263,32 @@ def get_account_details(session_id, show_dialog=True):
             message = (f"username: {str(result['username'])}[CR]name: {str(result['name'])}[CR]id: {str(result['id'])}")
             return control.okDialog(message, heading='TMDB Account Details')
         return True
-    except Exception:
+    except:
         return False
 
 def get_movie_trailers(tmdb):
     try:
         url = f"{API_URL}/movie/{tmdb}/videos"
         return _session.get(url, headers=get_headers()).json().get('results', [])
-    except Exception: return []
+    except: return []
 
 def get_tvshow_trailers(tmdb):
     try:
         url = f"{API_URL}/tv/{tmdb}/videos"
         return _session.get(url, headers=get_headers()).json().get('results', [])
-    except Exception: return []
+    except: return []
 
 def get_season_trailers(tmdb, season):
     try:
         url = f"{API_URL}/tv/{tmdb}/season/{season}/videos"
         return _session.get(url, headers=get_headers()).json().get('results', [])
-    except Exception: return []
+    except: return []
 
 def get_episode_trailers(tmdb, season, episode):
     try:
         url = f"{API_URL}/tv/{tmdb}/season/{season}/episode/{episode}/videos"
         return _session.get(url, headers=get_headers()).json().get('results', [])
-    except Exception: return []
+    except: return []
 
 def get_tmdb_artwork(tmdb, content, season=None, episode=None):
     try:
@@ -319,5 +321,5 @@ def get_tmdb_artwork(tmdb, content, season=None, episode=None):
             path = logos[0]['file_path']
             banner = 'https://image.tmdb.org/t/p/original' + path
         return poster, fanart, banner
-    except Exception:
+    except:
         return '0', '0', '0'

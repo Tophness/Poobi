@@ -1055,7 +1055,7 @@ class SettingsActivity : AppCompatActivity() {
 
             item {
                 ToggleSettingRow(
-                    label = "Prioritise Favourite Cast in Genres",
+                    label = "Prioritise Favourite Cast across Feeds",
                     checked = genresPrioritizeFavCast
                 ) {
                     genresPrioritizeFavCast = it
