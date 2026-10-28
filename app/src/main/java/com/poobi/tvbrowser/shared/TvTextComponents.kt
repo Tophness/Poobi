@@ -385,15 +385,15 @@ fun TvInputField(
 
                         if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                             if (nativeEvent.action == KeyEvent.ACTION_DOWN) {
-                                return@onPreviewKeyEvent true
-                            } else if (nativeEvent.action == KeyEvent.ACTION_UP) {
                                 isEditing = false
                                 keyboardController?.hide()
+                                val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) FocusDirection.Up else FocusDirection.Down
                                 try {
                                     outerFocusRequester.requestFocus()
                                 } catch (_: Exception) {}
-                                val direction = if (keyCode == KeyEvent.KEYCODE_DPAD_UP) FocusDirection.Up else FocusDirection.Down
                                 focusManager.moveFocus(direction)
+                                return@onPreviewKeyEvent true
+                            } else if (nativeEvent.action == KeyEvent.ACTION_UP) {
                                 return@onPreviewKeyEvent true
                             }
                         }

@@ -314,6 +314,25 @@ fun StreamsDashboardScreen(
 
     val isDeletable = isFavorites || isRecentlyWatched
 
+    val suggestionsListState = rememberLazyListState()
+
+    LaunchedEffect(searchInput) {
+        lastFocusedCardIndex = 0
+        if (activeCategoryIndex == 0) {
+            try {
+                suggestionsListState.scrollToItem(0)
+            } catch (_: Exception) {}
+        }
+    }
+
+    LaunchedEffect(liveSuggestions) {
+        if (liveSuggestions.isNotEmpty() && activeCategoryIndex == 0) {
+            try {
+                suggestionsListState.scrollToItem(0)
+            } catch (_: Exception) {}
+        }
+    }
+
     val hasCardsInCenter = when {
         activeCategoryIndex != 0 -> libraryItems != null && libraryItems!!.length() > 0
         searchResults != null -> searchResults!!.length() > 0
@@ -454,6 +473,18 @@ fun StreamsDashboardScreen(
                     modifier = Modifier
                         .weight(1f)
                         .height(36.dp)
+                        .onPreviewKeyEvent { keyEvent ->
+                            val native = keyEvent.nativeKeyEvent
+                            if (native.action == KeyEvent.ACTION_DOWN && native.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                                keyboardController?.hide()
+                                com.poobi.tvbrowser.shared.InputFieldState.isEditing = false
+                                try {
+                                    searchDownTarget.requestFocus()
+                                    return@onPreviewKeyEvent true
+                                } catch (_: Exception) {}
+                            }
+                            false
+                        }
                         .focusProperties {
                             up = categoryTabFocusRequesters.getOrNull(0) ?: FocusRequester.Default
                             right = searchButtonFocusRequester
@@ -578,7 +609,6 @@ fun StreamsDashboardScreen(
                     CircularProgressIndicator(color = Color(0xFF00BCD4))
                 }
             } else if (activeCategoryIndex == 0 && searchResults == null && liveSuggestions.isNotEmpty()) {
-                val suggestionsListState = rememberLazyListState()
                 val targetSuggestionIndex = lastFocusedCardIndex.coerceIn(0, (liveSuggestions.size - 1).coerceAtLeast(0))
                 LazyRow(
                     state = suggestionsListState,
