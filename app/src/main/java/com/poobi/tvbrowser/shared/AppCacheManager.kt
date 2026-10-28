@@ -115,20 +115,24 @@ object AppCacheManager {
         } catch (_: Exception) {}
     }
 
-    // --- EPISODES JSON CACHE (DISK + RAM) ---
 
     fun getEpisodes(context: Context, showId: String, season: Int): JSONArray? {
         val key = "${showId}_$season"
         val mem = episodesMemCache.get(key)
-        if (mem != null) return mem
+        if (mem != null && mem.length() > 0) return mem
 
         val file = File(getJsonDir(context), "episodes_$key.json")
         if (file.exists()) {
             return try {
                 file.setLastModified(System.currentTimeMillis())
                 val arr = JSONArray(file.readText(Charsets.UTF_8))
-                episodesMemCache.put(key, arr)
-                arr
+                if (arr.length() == 0) {
+                    file.delete()
+                    null
+                } else {
+                    episodesMemCache.put(key, arr)
+                    arr
+                }
             } catch (e: Exception) {
                 file.delete()
                 null
@@ -138,6 +142,7 @@ object AppCacheManager {
     }
 
     fun saveEpisodes(context: Context, showId: String, season: Int, array: JSONArray) {
+        if (array.length() == 0) return
         val key = "${showId}_$season"
         episodesMemCache.put(key, array)
         try {
@@ -147,7 +152,6 @@ object AppCacheManager {
         } catch (_: Exception) {}
     }
 
-    // --- ACTOR CREDITS CACHE (DISK + RAM) ---
 
     fun getActorCredits(context: Context, actorId: Int): JSONArray? {
         val key = "actor_credits_$actorId"

@@ -328,10 +328,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         break
                     }
                 }
-                if (nextSeasonObj != null) {
+
+                val nextEpCount = nextSeasonObj?.optInt("episode_count", 0) ?: 0
+                val nextAirDate = nextSeasonObj?.optString("air_date", "") ?: ""
+                val hasNextAired = nextAirDate.isNotEmpty() && !com.poobi.tvbrowser.shared.isFutureDate(nextAirDate)
+
+                if (nextSeasonObj != null && nextEpCount > 0 && (hasNextAired || nextAirDate.isEmpty())) {
                     adjustedSeason = targetSeason + 1
                     adjustedEpisode = 1
                 } else {
+                    adjustedSeason = targetSeason
                     adjustedEpisode = epCount
                 }
             }
@@ -2352,7 +2358,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val tmdb = py.getModule("tmdb.tmdb_utils")
                 val detailsJson = tmdb.callAttr("get_details", id, mediaType).toString()
                 val details = JSONObject(detailsJson)
@@ -2691,18 +2697,44 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
 
         val cached = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, id.toString(), seasonNumber)
-        if (cached != null) {
+        if (cached != null && cached.length() > 0) {
             _itemEpisodes.value = cached
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val py = getPythonInstance()
+                    val statusJson = py.getModule("trakt.episode_check").callAttr("get_watched_status", id, seasonNumber, cached.toString()).toString()
+                    val watchedStatus = JSONArray(statusJson)
+                    var changed = false
+                    val updated = JSONArray(cached.toString())
+                    for (i in 0 until updated.length()) {
+                        val isW = if (i < watchedStatus.length()) watchedStatus.getBoolean(i) else false
+                        if (updated.getJSONObject(i).optBoolean("is_watched", false) != isW) {
+                            updated.getJSONObject(i).put("is_watched", isW)
+                            changed = true
+                        }
+                    }
+                    if (changed) {
+                        com.poobi.tvbrowser.shared.AppCacheManager.saveEpisodes(context, id.toString(), seasonNumber, updated)
+                        withContext(Dispatchers.Main) {
+                            if (isActive && _selectedItem.value?.optInt("id") == id) {
+                                _itemEpisodes.value = updated
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
             return
         }
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val scraper = py.getModule("main")
                 val episodesJson = scraper.callAttr("get_tv_episodes", id, seasonNumber).toString()
                 val episodes = JSONArray(episodesJson)
-                com.poobi.tvbrowser.shared.AppCacheManager.saveEpisodes(context, id.toString(), seasonNumber, episodes)
+                if (episodes.length() > 0) {
+                    com.poobi.tvbrowser.shared.AppCacheManager.saveEpisodes(context, id.toString(), seasonNumber, episodes)
+                }
                 try {
                     val statusJson = py.getModule("trakt.episode_check").callAttr("get_watched_status", id, seasonNumber, episodes.toString()).toString()
                     val watchedStatus = JSONArray(statusJson)
