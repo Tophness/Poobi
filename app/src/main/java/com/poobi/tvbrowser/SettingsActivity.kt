@@ -16,8 +16,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,8 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -55,6 +59,8 @@ import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvInputField
 import com.poobi.tvbrowser.shared.update.UpdateManager
 import com.poobi.tvbrowser.shared.update.UpdateDialog
+import com.poobi.tvbrowser.browser.TvFocusableHoldToDeleteBox
+import com.poobi.tvbrowser.browser.HoldToDeleteCloseButton
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -1004,7 +1010,16 @@ class SettingsActivity : AppCompatActivity() {
     fun FeedsPanel() {
         var cardThumbnailStyle by remember { mutableStateOf(prefs.getInt("card_thumbnail_aspect_ratio", 0)) }
         var genresPrioritizeFavCast by remember { mutableStateOf(prefs.getBoolean("genres_prioritize_fav_cast", true)) }
+        var autoSyncFavCast by remember { mutableStateOf(prefs.getBoolean("auto_sync_favorite_cast", true)) }
         var favoriteActors by remember { mutableStateOf(com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(this@SettingsActivity)) }
+
+        var actorSearchQuery by remember { mutableStateOf("") }
+        var isSearchingActor by remember { mutableStateOf(false) }
+        var liveActorSuggestions by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+        var actorSearchJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+        val actorSearchFieldFocusRequester = remember { FocusRequester() }
+        val firstSearchCardFocusRequester = remember { FocusRequester() }
+        val actorFocusRequesters = remember { mutableMapOf<Int, FocusRequester>() }
 
         LaunchedEffect(Unit) {
             withContext(Dispatchers.IO) {
@@ -1223,15 +1238,181 @@ class SettingsActivity : AppCompatActivity() {
 
             item {
                 Spacer(modifier = Modifier.height(10.dp))
+                Text("Favourite Cast Management", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Manage actors from your favourite shows or search to add any actor manually.", color = Color.Gray, fontSize = 12.sp)
+            }
+
+            item {
+                ToggleSettingRow(
+                    label = "Auto-Sync Cast from Favourite Shows",
+                    checked = autoSyncFavCast
+                ) {
+                    autoSyncFavCast = it
+                    prefs.edit().putBoolean("auto_sync_favorite_cast", it).apply()
+                }
+            }
+
+            item {
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    val addedActorIds = remember(favoriteActors) { favoriteActors.map { it.id }.toSet() }
+
+                    TvInputField(
+                        value = actorSearchQuery,
+                        onValueChange = { query ->
+                            actorSearchQuery = query
+                            actorSearchJob?.cancel()
+                            val clean = query.trim()
+                            if (clean.length >= 2) {
+                                isSearchingActor = true
+                                actorSearchJob = lifecycleScope.launch(Dispatchers.IO) {
+                                    delay(250)
+                                    try {
+                                        val py = Python.getInstance()
+                                        val tmdb = py.getModule("tmdb.tmdb_utils")
+                                        val resStr = tmdb.callAttr("search", clean, "person").toString()
+                                        val results = JSONObject(resStr).optJSONArray("results")
+                                        val list = mutableListOf<JSONObject>()
+                                        if (results != null) {
+                                            for (i in 0 until results.length().coerceAtMost(10)) {
+                                                val p = results.getJSONObject(i)
+                                                if (!addedActorIds.contains(p.optInt("id"))) {
+                                                    list.add(p)
+                                                }
+                                            }
+                                        }
+                                        withContext(Dispatchers.Main) {
+                                            liveActorSuggestions = list
+                                            isSearchingActor = false
+                                        }
+                                    } catch (_: Exception) {
+                                        withContext(Dispatchers.Main) {
+                                            liveActorSuggestions = emptyList()
+                                            isSearchingActor = false
+                                        }
+                                    }
+                                }
+                            } else {
+                                liveActorSuggestions = emptyList()
+                                isSearchingActor = false
+                            }
+                        },
+                        placeholder = "Search actor to add (e.g. Cillian Murphy)...",
+                        containerColor = Color(0xFF222225),
+                        imeAction = ImeAction.Search,
+                        focusRequester = actorSearchFieldFocusRequester,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                            .focusProperties {
+                                if (liveActorSuggestions.isNotEmpty()) {
+                                    down = firstSearchCardFocusRequester
+                                }
+                            }
+                    )
+
+                    if (isSearchingActor) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(60.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = Color(0xFF00BCD4), modifier = Modifier.size(24.dp))
+                        }
+                    } else if (liveActorSuggestions.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("Live Results (Select to Add):", color = Color(0xFF00BCD4), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(vertical = 4.dp)
+                        ) {
+                            this@LazyRow.itemsIndexed(liveActorSuggestions) { cardIdx, person ->
+                                val pId = person.optInt("id")
+                                val pName = person.optString("name")
+                                val pProfile = person.optString("profile_path", "")
+                                val knownForArr = person.optJSONArray("known_for")
+                                val knownTitles = if (knownForArr != null) {
+                                    (0 until knownForArr.length()).mapNotNull {
+                                        val k = knownForArr.getJSONObject(it)
+                                        k.optString("title").ifEmpty { k.optString("name") }.takeIf { t -> t.isNotEmpty() }
+                                    }.joinToString(", ")
+                                } else ""
+
+                                TvFocusableBox(
+                                    modifier = Modifier
+                                        .width(200.dp)
+                                        .height(68.dp)
+                                        .then(if (cardIdx == 0) Modifier.focusRequester(firstSearchCardFocusRequester) else Modifier)
+                                        .focusProperties {
+                                            up = actorSearchFieldFocusRequester
+                                        },
+                                    defaultColor = Color(0xFF222225),
+                                    onClick = {
+                                        val isNew = com.poobi.tvbrowser.shared.FavoriteActorsManager.addActor(
+                                            this@SettingsActivity,
+                                            com.poobi.tvbrowser.shared.FavoriteActor(
+                                                id = pId,
+                                                name = pName,
+                                                profilePath = pProfile,
+                                                isEnabled = true,
+                                                sourceTitles = listOf("Added via search")
+                                            )
+                                        )
+                                        favoriteActors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(this@SettingsActivity)
+                                        val msg = if (isNew) "Added $pName" else "$pName selected"
+                                        Toast.makeText(this@SettingsActivity, msg, Toast.LENGTH_SHORT).show()
+
+                                        val remaining = liveActorSuggestions.filterNot { it.optInt("id") == pId }
+                                        liveActorSuggestions = remaining
+                                        if (remaining.isEmpty()) {
+                                            try {
+                                                actorSearchFieldFocusRequester.requestFocus()
+                                            } catch (_: Exception) {}
+                                        }
+                                    }
+                                ) { isFocused ->
+                                    Row(
+                                        modifier = Modifier.fillMaxSize().padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (pProfile.isNotEmpty()) {
+                                            androidx.compose.foundation.Image(
+                                                painter = coil.compose.rememberAsyncImagePainter("https://image.tmdb.org/t/p/w185$pProfile"),
+                                                contentDescription = pName,
+                                                modifier = Modifier.size(44.dp).clip(CircleShape),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(pName, color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            if (knownTitles.isNotEmpty()) {
+                                                Text(knownTitles, color = if (isFocused) Color.DarkGray else Color.Gray, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            }
+                                            Text("+ Add", color = if (isFocused) Color.Black else Color(0xFF00BCD4), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Favourite Cast Members", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text("Select actors from your favourite shows to spotlight and prioritise in genres.", color = Color.Gray, fontSize = 12.sp)
-                    }
+                    Text(
+                        text = "Cast Pool (${favoriteActors.size})",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TvFocusableBox(
@@ -1267,21 +1448,47 @@ class SettingsActivity : AppCompatActivity() {
 
             if (favoriteActors.isEmpty()) {
                 item {
-                    Text("No actors discovered yet. Add shows or movies to your Favourites first.", color = Color.Gray, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
+                    Text("No actors discovered yet. Add shows or movies to your Favourites first, or search above to add any actor.", color = Color.Gray, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
                 }
             } else {
-                items(favoriteActors) { actor ->
-                    var isChecked by remember(actor.isEnabled) { mutableStateOf(actor.isEnabled) }
+                itemsIndexed(favoriteActors, key = { _, actor -> actor.id }) { actorIdx, actor ->
+                    val rowRequester = remember(actor.id) { FocusRequester() }
+                    actorFocusRequesters[actor.id] = rowRequester
 
-                    TvFocusableBox(
+                    TvFocusableHoldToDeleteBox(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp),
+                            .height(58.dp)
+                            .focusRequester(rowRequester),
+                        onTriggerDelete = {
+                            val nextActor = if (actorIdx < favoriteActors.size - 1) {
+                                favoriteActors[actorIdx + 1]
+                            } else if (actorIdx > 0) {
+                                favoriteActors[actorIdx - 1]
+                            } else null
+
+                            if (nextActor != null) {
+                                val nextRequester = actorFocusRequesters[nextActor.id]
+                                try {
+                                    nextRequester?.requestFocus()
+                                } catch (_: Exception) {}
+                            } else {
+                                try {
+                                    actorSearchFieldFocusRequester.requestFocus()
+                                } catch (_: Exception) {}
+                            }
+
+                            actorFocusRequesters.remove(actor.id)
+                            com.poobi.tvbrowser.shared.FavoriteActorsManager.removeActor(this@SettingsActivity, actor.id)
+                            favoriteActors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(this@SettingsActivity)
+                            Toast.makeText(this@SettingsActivity, "Removed ${actor.name}", Toast.LENGTH_SHORT).show()
+                        },
                         onClick = {
-                            isChecked = !isChecked
-                            com.poobi.tvbrowser.shared.FavoriteActorsManager.toggleActor(this@SettingsActivity, actor.id, isChecked)
+                            val nextState = !actor.isEnabled
+                            com.poobi.tvbrowser.shared.FavoriteActorsManager.toggleActor(this@SettingsActivity, actor.id, nextState)
+                            favoriteActors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(this@SettingsActivity)
                         }
-                    ) { isFocused ->
+                    ) { isFocused, progress ->
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -1293,26 +1500,46 @@ class SettingsActivity : AppCompatActivity() {
                                     painter = coil.compose.rememberAsyncImagePainter("https://image.tmdb.org/t/p/w185${actor.profilePath}"),
                                     contentDescription = actor.name,
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(38.dp)
                                         .clip(androidx.compose.foundation.shape.CircleShape),
                                     contentScale = androidx.compose.ui.layout.ContentScale.Crop
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                             }
 
-                            Text(
-                                text = actor.name,
-                                color = if (isFocused) Color.Black else Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
-                                modifier = Modifier.weight(1f)
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = actor.name,
+                                    color = if (isFocused) Color.Black else Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Medium
+                                )
+
+                                val originText = if (actor.sourceTitles.isNotEmpty() && actor.sourceTitles[0] != "Added via search") {
+                                    "Added because you favorited: ${actor.sourceTitles.joinToString(", ")}"
+                                } else {
+                                    "Added via search"
+                                }
+
+                                Text(
+                                    text = originText,
+                                    color = if (isFocused) Color(0xFF1B5E20) else Color(0xFF00BCD4),
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            if (isFocused || progress > 0f) {
+                                HoldToDeleteCloseButton(progress = progress)
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
 
                             Checkbox(
-                                checked = isChecked,
+                                checked = actor.isEnabled,
                                 onCheckedChange = { checked ->
-                                    isChecked = checked
                                     com.poobi.tvbrowser.shared.FavoriteActorsManager.toggleActor(this@SettingsActivity, actor.id, checked)
+                                    favoriteActors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(this@SettingsActivity)
                                 },
                                 colors = CheckboxDefaults.colors(
                                     checkedColor = if (isFocused) Color.Black else Color(0xFF00BCD4),

@@ -11,7 +11,8 @@ data class FavoriteActor(
     val id: Int,
     val name: String,
     val profilePath: String,
-    var isEnabled: Boolean = true
+    var isEnabled: Boolean = true,
+    val sourceTitles: List<String> = emptyList()
 )
 
 object FavoriteActorsManager {
@@ -26,12 +27,18 @@ object FavoriteActorsManager {
             val arr = JSONArray(jsonStr)
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
+                val sourceArr = obj.optJSONArray("source_titles")
+                val sources = if (sourceArr != null) {
+                    (0 until sourceArr.length()).map { sourceArr.getString(it) }
+                } else emptyList()
+
                 list.add(
                     FavoriteActor(
                         id = obj.optInt("id"),
                         name = obj.optString("name"),
                         profilePath = obj.optString("profile_path", ""),
-                        isEnabled = obj.optBoolean("is_enabled", true)
+                        isEnabled = obj.optBoolean("is_enabled", true),
+                        sourceTitles = sources
                     )
                 )
             }
@@ -48,9 +55,37 @@ object FavoriteActorsManager {
                 put("name", actor.name)
                 put("profile_path", actor.profilePath)
                 put("is_enabled", actor.isEnabled)
+                put("source_titles", JSONArray(actor.sourceTitles))
             })
         }
         prefs.edit().putString(PREFS_KEY_ACTORS, arr.toString()).apply()
+    }
+
+    fun addActor(context: Context, actor: FavoriteActor): Boolean {
+        val actors = getActors(context).toMutableList()
+        val existingIndex = actors.indexOfFirst { it.id == actor.id }
+        return if (existingIndex != -1) {
+            val existing = actors[existingIndex]
+            val mergedTitles = existing.sourceTitles.toMutableList()
+            actor.sourceTitles.forEach { if (!mergedTitles.contains(it)) mergedTitles.add(it) }
+            actors[existingIndex] = existing.copy(isEnabled = true, sourceTitles = mergedTitles)
+            saveActors(context, actors)
+            false
+        } else {
+            actors.add(actor.copy(isEnabled = true))
+            saveActors(context, actors)
+            true
+        }
+    }
+
+    fun removeActor(context: Context, actorId: Int) {
+        val actors = getActors(context).filterNot { it.id == actorId }
+        saveActors(context, actors)
+    }
+
+    fun removeActors(context: Context, actorIds: Set<Int>) {
+        val actors = getActors(context).filterNot { actorIds.contains(it.id) }
+        saveActors(context, actors)
     }
 
     fun toggleActor(context: Context, actorId: Int, isEnabled: Boolean) {
@@ -73,6 +108,9 @@ object FavoriteActorsManager {
 
     suspend fun syncWithFavorites(context: Context) = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(SETTINGS_FILE, Context.MODE_PRIVATE)
+        val autoSync = prefs.getBoolean("auto_sync_favorite_cast", true)
+        if (!autoSync) return@withContext
+
         val favsRaw = prefs.getString("streams_favorites", "[]") ?: "[]"
         val favsArray = try { JSONArray(favsRaw) } catch (_: Exception) { JSONArray() }
         if (favsArray.length() == 0) return@withContext
@@ -85,6 +123,7 @@ object FavoriteActorsManager {
             val item = favsArray.optJSONObject(i) ?: continue
             val id = item.optString("id").ifEmpty { item.optString("imdb") }
             val mediaType = item.optString("media_type").ifEmpty { if (item.has("name")) "tv" else "movie" }
+            val sourceTitle = item.optString("title").ifEmpty { item.optString("name", "Unknown") }
 
             var details = AppCacheManager.getDetails(context, mediaType, id)
             if (details == null && id.isNotEmpty() && id != "0") {
@@ -105,10 +144,26 @@ object FavoriteActorsManager {
                     val actorName = actorObj.optString("name")
                     val profilePath = actorObj.optString("profile_path", "")
 
-                    if (actorId > 0 && actorName.isNotBlank() && !existingMap.containsKey(actorId)) {
-                        val newActor = FavoriteActor(actorId, actorName, profilePath, isEnabled = true)
-                        existingMap[actorId] = newActor
-                        hasNewActors = true
+                    if (actorId > 0 && actorName.isNotBlank()) {
+                        val existing = existingMap[actorId]
+                        if (existing != null) {
+                            if (!existing.sourceTitles.contains(sourceTitle)) {
+                                val updatedTitles = existing.sourceTitles.toMutableList()
+                                updatedTitles.add(sourceTitle)
+                                existingMap[actorId] = existing.copy(sourceTitles = updatedTitles)
+                                hasNewActors = true
+                            }
+                        } else {
+                            val newActor = FavoriteActor(
+                                id = actorId,
+                                name = actorName,
+                                profilePath = profilePath,
+                                isEnabled = true,
+                                sourceTitles = listOf(sourceTitle)
+                            )
+                            existingMap[actorId] = newActor
+                            hasNewActors = true
+                        }
                     }
                 }
             }
