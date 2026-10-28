@@ -552,7 +552,83 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _personCredits.value = emptyList()
         _personDisplayedCredits.value = emptyList()
     }
-    fun clearSearchResults() { _searchResults.value = null }
+    fun clearSearchResults() {
+        _searchResults.value = null
+        currentSearchQuery = ""
+        searchPage = 1
+        hasMoreSearchPages = true
+        isSearchLoadingMore = false
+    }
+
+    private var searchPage = 1
+    private var hasMoreSearchPages = true
+    private var isSearchLoadingMore = false
+    private var currentSearchQuery = ""
+
+    fun loadMoreSearchResults() {
+        if (isSearchLoadingMore || !hasMoreSearchPages || currentSearchQuery.isBlank()) return
+        isSearchLoadingMore = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val nextPage = searchPage + 1
+                val py = getPythonInstance()
+                val scraper = py.getModule("main")
+                val resultsJson = scraper.callAttr("search", currentSearchQuery, nextPage).toString()
+                val newResults = JSONArray(resultsJson)
+                if (newResults.length() > 0) {
+                    searchPage = nextPage
+                    val parsedNew = mutableListOf<JSONObject>()
+                    for (i in 0 until newResults.length()) {
+                        val it = newResults.getJSONObject(i)
+                        if (it.optString("media_type") in listOf("movie", "tv", "person")) {
+                            parsedNew.add(it)
+                        }
+                    }
+
+                    if (_searchResults.value == null && _liveSuggestions.value.isNotEmpty()) {
+                        val currentList = _liveSuggestions.value.toMutableList()
+                        val seenKeys = currentList.map { "${it.optString("media_type")}_${it.optString("id")}" }.toMutableSet()
+                        for (itm in parsedNew) {
+                            val key = "${itm.optString("media_type")}_${itm.optString("id")}"
+                            if (!seenKeys.contains(key)) {
+                                seenKeys.add(key)
+                                currentList.add(itm)
+                            }
+                        }
+                        withContext(Dispatchers.Main) {
+                            _liveSuggestions.value = currentList
+                        }
+                    }
+
+                    if (_searchResults.value != null) {
+                        val current = _searchResults.value ?: JSONArray()
+                        val combined = JSONArray(current.toString())
+                        val seenKeys = mutableSetOf<String>()
+                        for (i in 0 until combined.length()) {
+                            val itm = combined.optJSONObject(i) ?: continue
+                            seenKeys.add("${itm.optString("media_type")}_${itm.optString("id")}")
+                        }
+                        for (itm in parsedNew) {
+                            val key = "${itm.optString("media_type")}_${itm.optString("id")}"
+                            if (!seenKeys.contains(key)) {
+                                seenKeys.add(key)
+                                combined.put(itm)
+                            }
+                        }
+                        withContext(Dispatchers.Main) {
+                            _searchResults.value = combined
+                        }
+                    }
+                } else {
+                    hasMoreSearchPages = false
+                }
+            } catch (_: Exception) {
+                hasMoreSearchPages = false
+            } finally {
+                isSearchLoadingMore = false
+            }
+        }
+    }
     private suspend fun getPythonInstance(): Python {
         while (!Python.isStarted()) {
             delay(100)
@@ -620,13 +696,18 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             delay(250)
             if (!isActive) return@launch
             try {
+                currentSearchQuery = clean
+                searchPage = 1
+                hasMoreSearchPages = true
+                isSearchLoadingMore = false
+
                 val cached = searchCache.get(clean)
                 val resultsArray = if (cached != null) {
                     cached
                 } else {
                     val py = Python.getInstance()
                     val scraper = py.getModule("main")
-                    val resultsJson = scraper.callAttr("search", clean).toString()
+                    val resultsJson = scraper.callAttr("search", clean, 1).toString()
                     val arr = JSONArray(resultsJson)
                     if (arr.length() > 0) searchCache.put(clean, arr)
                     arr
@@ -635,7 +716,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 if (!isActive) return@launch
 
                 val itemsList = mutableListOf<JSONObject>()
-                for (i in 0 until resultsArray.length().coerceAtMost(12)) {
+                for (i in 0 until resultsArray.length()) {
                     val it = resultsArray.getJSONObject(i)
                     if (it.optString("media_type") in listOf("movie", "tv", "person")) {
                         itemsList.add(it)
@@ -684,17 +765,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         if (query.isBlank()) return
         addToSearchHistory(query)
         clearLiveSearch()
-        
+
+        currentSearchQuery = query
+        searchPage = 1
+        hasMoreSearchPages = true
+        isSearchLoadingMore = false
+
         val cached = searchCache.get(query)
-        if (cached != null) {
-            if (cached.length() > 0) {
-                _searchResults.value = cached
-                _isScraping.value = false
-            } else {
-                _searchResults.value = null
-                _isScraping.value = false
-                _events.value = StreamsEvent.ShowToast("No results found for \"$query\"")
-            }
+        if (cached != null && cached.length() > 0) {
+            _searchResults.value = cached
+            _isScraping.value = false
             return
         }
 
@@ -706,7 +786,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val py = Python.getInstance()
                 val scraper = py.getModule("main")
-                val resultsJson = scraper.callAttr("search", query).toString()
+                val resultsJson = scraper.callAttr("search", query, 1).toString()
                 val results = JSONArray(resultsJson)
                 withContext(Dispatchers.Main) {
                     _isScraping.value = false
@@ -715,6 +795,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         _searchResults.value = results
                     } else {
                         _searchResults.value = null
+                        hasMoreSearchPages = false
                         _events.value = StreamsEvent.ShowToast("No results found for \"$query\"")
                     }
                 }
@@ -723,6 +804,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     _events.value = StreamsEvent.ShowToast("Search error: ${e.message}")
                     _isScraping.value = false
                     _searchResults.value = null
+                    hasMoreSearchPages = false
                 }
             }
         }

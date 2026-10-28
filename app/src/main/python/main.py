@@ -976,10 +976,10 @@ def resume_scrape():
         return "Resumed"
     return "No active scraper"
 
-def search(query):
+def search(query, page=1):
     try:
         import tmdb.tmdb_utils as tmdb_utils
-        res = tmdb_utils.search(query).get('results', [])
+        res = tmdb_utils.search(query, page=page).get('results', [])
 
         filtered = []
         for item in res:

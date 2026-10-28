@@ -325,14 +325,6 @@ fun StreamsDashboardScreen(
         }
     }
 
-    LaunchedEffect(liveSuggestions) {
-        if (liveSuggestions.isNotEmpty() && activeCategoryIndex == 0) {
-            try {
-                suggestionsListState.scrollToItem(0)
-            } catch (_: Exception) {}
-        }
-    }
-
     val hasCardsInCenter = when {
         activeCategoryIndex != 0 -> libraryItems != null && libraryItems!!.length() > 0
         searchResults != null -> searchResults!!.length() > 0
@@ -621,8 +613,11 @@ fun StreamsDashboardScreen(
                 ) {
                     itemsIndexed(
                         items = liveSuggestions,
-                        key = { idx, item -> "sug_${item.optString("id", idx.toString())}" }
+                        key = { idx, item -> "sug_${item.optString("media_type")}_${item.optString("id", idx.toString())}" }
                     ) { index, item ->
+                        if (index >= liveSuggestions.size - 4) {
+                            viewModel.loadMoreSearchResults()
+                        }
                         val isTarget = (index == targetSuggestionIndex)
                         TvFocusableBox(
                             modifier = Modifier
@@ -781,7 +776,11 @@ fun StreamsDashboardScreen(
                                     }
                                 ) { index, wrapper ->
                                     if (index >= objList.size - 4 && !isFavorites && !isRecentlyWatched) {
-                                        viewModel.loadMoreFeedItems()
+                                        if (activeCategoryIndex == 0) {
+                                            viewModel.loadMoreSearchResults()
+                                        } else {
+                                            viewModel.loadMoreFeedItems()
+                                        }
                                     }
 
                                     val item = if (wrapper.has("item")) wrapper.getJSONObject("item") else wrapper
