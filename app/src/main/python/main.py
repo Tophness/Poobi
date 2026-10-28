@@ -234,40 +234,129 @@ def get_trailer(content, tmdb, season=None, episode=None):
             elif "webm" in mime_type:
                 video_reps_webm.append(rep_xml)
 
-        audio_reps_mp4 = []
-        audio_reps_webm = []
+        audio_groups = {}
+
         for af in audio_formats:
             init_r = af.get("initRange")
             index_r = af.get("indexRange")
             if not init_r or not index_r:
                 continue
-                
+
             mime_type = af.get("mimeType", "")
+            container = "audio/webm" if "webm" in mime_type else "audio/mp4"
+            codec_name = "Opus" if "opus" in mime_type else ("AAC" if "mp4a" in mime_type else "Audio")
+
+            audio_track = af.get("audioTrack") or {}
+            raw_display_name = audio_track.get("displayName", "")
+            track_id = audio_track.get("id", "")
+            audio_is_default = audio_track.get("audioIsDefault", False)
+            is_auto_dubbed = audio_track.get("isAutoDubbed", False)
+            is_dubbed = af.get("isDubbed", False) or is_auto_dubbed
+            is_original = af.get("isOriginal", False) or ("original" in raw_display_name.lower())
+
+            if track_id and '.' in track_id:
+                lang = track_id.split('.')[0]
+            elif track_id:
+                lang = track_id
+            elif "english" in raw_display_name.lower():
+                lang = "en-US"
+            elif "german" in raw_display_name.lower():
+                lang = "de-DE"
+            elif "spanish" in raw_display_name.lower():
+                lang = "es-US"
+            elif "french" in raw_display_name.lower():
+                lang = "fr-FR"
+            elif "hindi" in raw_display_name.lower():
+                lang = "hi"
+            elif "italian" in raw_display_name.lower():
+                lang = "it"
+            elif "portuguese" in raw_display_name.lower():
+                lang = "pt-BR"
+            elif "indonesian" in raw_display_name.lower():
+                lang = "id"
+            else:
+                lang = "en" if audio_is_default else "und"
+
+            clean_name = raw_display_name
+            for rem in [" original", " Original", " (original)", " (Original)"]:
+                clean_name = clean_name.replace(rem, "")
+            clean_name = clean_name.strip()
+            if not clean_name:
+                clean_name = lang.upper()
+
+            if is_original:
+                status_tag = "(Original)"
+            elif is_dubbed:
+                status_tag = "(Dubbed)"
+            else:
+                status_tag = ""
+
+            label = f"{clean_name} {status_tag} - {codec_name}".replace("  ", " ").strip()
+
+            group_key = (track_id or clean_name, container)
+            if group_key not in audio_groups:
+                audio_groups[group_key] = {
+                    "lang": lang,
+                    "label": label,
+                    "container": container,
+                    "is_default": audio_is_default,
+                    "is_original": is_original,
+                    "is_english": lang.lower().startswith("en"),
+                    "codec_name": codec_name,
+                    "max_bitrate": 0,
+                    "reps": []
+                }
+
+            group = audio_groups[group_key]
+            bitrate = af.get("bitrate", 0)
+            if bitrate > group["max_bitrate"]:
+                group["max_bitrate"] = bitrate
+
             codecs = ""
             if 'codecs="' in mime_type:
                 codecs = mime_type.split('codecs="')[1].split('"')[0]
-            
-            channels = af.get("audioChannels", 2)
+
             escaped_url = xml_escape(af['url'])
-            rep_xml = f"""      <Representation id="{af.get('itag')}" codecs="{codecs}" bandwidth="{af.get('bitrate', 0)}" sampleRate="{af.get('audioSampleRate', '44100')}">
+            channels = af.get("audioChannels", 2)
+            sample_rate = af.get("audioSampleRate", "44100")
+
+            rep_xml = f"""      <Representation id="{af.get('itag')}" codecs="{codecs}" bandwidth="{bitrate}" sampleRate="{sample_rate}">
         <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="{channels}"/>
         <BaseURL>{escaped_url}</BaseURL>
         <SegmentBase indexRange="{index_r['start']}-{index_r['end']}" timescale="1000">
           <Initialization range="{init_r['start']}-{init_r['end']}"/>
         </SegmentBase>
       </Representation>"""
+            group["reps"].append(rep_xml)
 
-            if "mp4" in mime_type:
-                audio_reps_mp4.append(rep_xml)
-            elif "webm" in mime_type:
-                audio_reps_webm.append(rep_xml)
+        sorted_groups = list(audio_groups.values())
+        sorted_groups.sort(key=lambda g: (
+            1 if g["is_english"] else 0,
+            1 if g["is_original"] else 0,
+            1 if g["is_default"] else 0,
+            1 if g["codec_name"] == "Opus" else 0,
+            g["max_bitrate"]
+        ), reverse=True)
 
-        if (video_reps_mp4 or video_reps_webm) and (audio_reps_mp4 or audio_reps_webm):
+        audio_adaptation_sets = []
+        is_first_audio = True
+
+        for g in sorted_groups:
+            reps_joined = "\n".join(g["reps"])
+            role_val = "main" if is_first_audio else ("dub" if not g["is_original"] else "alternate")
+            role_xml = f'\n      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="{role_val}"/>'
+            label_xml = f'\n      <Label>{xml_escape(g["label"])}</Label>'
+
+            aset_xml = f"""    <AdaptationSet mimeType="{g['container']}" lang="{g['lang']}" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">{role_xml}{label_xml}\n{reps_joined}\n    </AdaptationSet>"""
+            audio_adaptation_sets.append(aset_xml)
+            is_first_audio = False
+
+        audio_sets_joined = "\n".join(audio_adaptation_sets)
+
+        if (video_reps_mp4 or video_reps_webm) and audio_adaptation_sets:
             duration_seconds = res.get("videoDetails", {}).get("lengthSeconds", "180")
             video_reps_mp4_joined = "\n".join(video_reps_mp4)
             video_reps_webm_joined = "\n".join(video_reps_webm)
-            audio_reps_mp4_joined = "\n".join(audio_reps_mp4)
-            audio_reps_webm_joined = "\n".join(audio_reps_webm)
 
             xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -280,16 +369,12 @@ def get_trailer(content, tmdb, season=None, episode=None):
   <Period>"""
 
             if video_reps_mp4:
-                xml_content += f"""\n    <AdaptationSet mimeType="video/mp4" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{video_reps_mp4_joined}\n    </AdaptationSet>"""
+                xml_content += f"""\n    <AdaptationSet mimeType="video/mp4" contentType="video" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{video_reps_mp4_joined}\n    </AdaptationSet>"""
                 
             if video_reps_webm:
-                xml_content += f"""\n    <AdaptationSet mimeType="video/webm" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{video_reps_webm_joined}\n    </AdaptationSet>"""
+                xml_content += f"""\n    <AdaptationSet mimeType="video/webm" contentType="video" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{video_reps_webm_joined}\n    </AdaptationSet>"""
                 
-            if audio_reps_mp4:
-                xml_content += f"""\n    <AdaptationSet mimeType="audio/mp4" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{audio_reps_mp4_joined}\n    </AdaptationSet>"""
-                
-            if audio_reps_webm:
-                xml_content += f"""\n    <AdaptationSet mimeType="audio/webm" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{audio_reps_webm_joined}\n    </AdaptationSet>"""
+            xml_content += f"""\n{audio_sets_joined}"""
 
             xml_content += "\n  </Period>\n</MPD>"
             mpd_path = os.path.realpath(os.path.join(FILES_DIR, "trailer.mpd"))

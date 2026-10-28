@@ -719,6 +719,77 @@ class PlayerEngine(
         return list
     }
 
+    private fun isEnglishAudioTrack(track: AudioTrackInfo): Boolean {
+        val lang = track.language?.lowercase()?.trim() ?: ""
+        if (lang == "en" || lang == "eng" || lang.startsWith("en-") || lang.startsWith("en_")) {
+            return true
+        }
+
+        val pattern = Regex("(?i)(?:^|[^a-zA-Z])(en|eng|english)(?:[^a-zA-Z]|$)")
+
+        val label = track.label ?: ""
+        if (label.isNotEmpty() && pattern.containsMatchIn(label)) {
+            return true
+        }
+
+        val id = track.id ?: ""
+        if (id.isNotEmpty() && pattern.containsMatchIn(id)) {
+            return true
+        }
+
+        return false
+    }
+
+    private fun getEnglishAudioScore(track: AudioTrackInfo): Int {
+        if (!isEnglishAudioTrack(track)) return -1
+
+        var score = 1000
+
+        val label = (track.label ?: "").lowercase()
+        val id = (track.id ?: "").lowercase()
+
+        // Deprioritize commentary or audio descriptions
+        if (label.contains("commentary") || id.contains("commentary") ||
+            label.contains("director") || id.contains("director")) {
+            score -= 500
+        }
+        if (label.contains("descriptive") || label.contains("description") || label.contains("audio desc") ||
+            id.contains("descriptive") || id.contains("description")) {
+            score -= 300
+        }
+
+        // Prioritize original audio
+        if (label.contains("original") || id.contains("original")) {
+            score += 100
+        }
+
+        // Prioritize higher channel counts (surround sound over stereo)
+        try {
+            val format = track.group.getTrackFormat(track.trackIndexInGroup)
+            val channels = format.channelCount
+            if (channels > 0) {
+                score += channels * 10
+            }
+            val bitrate = format.bitrate
+            if (bitrate > 0) {
+                score += (bitrate / 10000).coerceAtMost(50)
+            }
+        } catch (_: Exception) {}
+
+        return score
+    }
+
+    private fun selectAudioTrack(track: AudioTrackInfo) {
+        exoPlayer?.let { player ->
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                .addOverride(TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndexInGroup))
+                .build()
+        }
+    }
+
     private fun getAudioTrackKey(track: AudioTrackInfo?): String {
         if (track == null) return "none"
         return "${track.overallIndex}_${track.language}_${track.label}_${track.id}"
@@ -818,18 +889,25 @@ class PlayerEngine(
                     hasRestoredAudioTrack = true
                     lastAudioTrackKey = getAudioTrackKey(match)
                     if (!match.isSelected) {
-                        exoPlayer?.let { player ->
-                            player.trackSelectionParameters = player.trackSelectionParameters
-                                .buildUpon()
-                                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
-                                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                                .addOverride(TrackSelectionOverride(match.group.mediaTrackGroup, match.trackIndexInGroup))
-                                .build()
-                        }
+                        selectAudioTrack(match)
                     }
                     return
                 }
             }
+
+            val bestEnglishTrack = audioTracks
+                .filter { isEnglishAudioTrack(it) }
+                .maxByOrNull { getEnglishAudioScore(it) }
+
+            if (bestEnglishTrack != null) {
+                hasRestoredAudioTrack = true
+                lastAudioTrackKey = getAudioTrackKey(bestEnglishTrack)
+                if (!bestEnglishTrack.isSelected) {
+                    selectAudioTrack(bestEnglishTrack)
+                }
+                return
+            }
+
             hasRestoredAudioTrack = true
             lastAudioTrackKey = getAudioTrackKey(selectedTrack)
             return
@@ -968,6 +1046,9 @@ class PlayerEngine(
             .build()
 
         val trackSelector = DefaultTrackSelector(context)
+        trackSelector.parameters = trackSelector.parameters.buildUpon()
+            .setPreferredAudioLanguages("en", "eng")
+            .build()
         val renderersFactory = object : androidx.media3.exoplayer.DefaultRenderersFactory(context) {
             override fun buildAudioSink(
                 context: Context,
