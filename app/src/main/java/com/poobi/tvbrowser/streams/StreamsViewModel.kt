@@ -530,6 +530,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setActiveCategoryIndex(index: Int) {
+        if (index != 0) clearPendingSearchQuery()
         _activeCategoryIndex.value = index
     }
 
@@ -674,6 +675,26 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private var _pendingSearchQuery: String? = null
+
+    fun setPendingSearchQuery(query: String?) {
+        if (!query.isNullOrBlank()) {
+            _pendingSearchQuery = query.trim()
+        }
+    }
+
+    fun clearPendingSearchQuery() {
+        _pendingSearchQuery = null
+    }
+
+    fun commitPendingSearchQuery() {
+        val q = _pendingSearchQuery
+        if (!q.isNullOrBlank()) {
+            addToSearchHistory(q)
+            _pendingSearchQuery = null
+        }
+    }
+
     fun clearSearchHistory() {
         viewModelScope.launch(Dispatchers.IO) {
             prefs.edit().putString("streams_search_history", "[]").apply()
@@ -763,6 +784,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun performSearch(query: String) {
         if (query.isBlank()) return
+        clearPendingSearchQuery()
         addToSearchHistory(query)
         clearLiveSearch()
 
@@ -1551,6 +1573,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         headers: Map<String, String>,
         subtitles: Map<String, Map<String, String>>
     ) {
+        commitPendingSearchQuery()
         val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, season, episode)
         if (subtitles.isNotEmpty()) {
             val copiedSubtitles = subtitles.toMap()
@@ -1909,6 +1932,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     _events.value = StreamsEvent.ShowToast("Removed $name from Favourite Cast")
                 }
             } else {
+                commitPendingSearchQuery()
                 com.poobi.tvbrowser.shared.FavoriteActorsManager.addActor(
                     context,
                     com.poobi.tvbrowser.shared.FavoriteActor(
@@ -1975,6 +1999,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
 
+                commitPendingSearchQuery()
                 array.put(item)
                 _events.value = StreamsEvent.ShowToast("Added to Favorites")
             }
@@ -2904,6 +2929,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun performScrape(item: JSONObject, season: Int? = null, episode: Int? = null) {
+        commitPendingSearchQuery()
         isPlayingFromSavedLink = false
         stopScrape()
         selectedScrapeTabIndex.value = 0
@@ -3969,6 +3995,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun playTrailer(item: JSONObject, season: Int? = null, episode: Int? = null) {
+        commitPendingSearchQuery()
         val id = item.optString("id")
         val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
             ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"

@@ -629,6 +629,8 @@ fun StreamsDashboardScreen(
                                 },
                             onFocus = { lastFocusedCardIndex = index },
                             onClick = { 
+                                val q = searchInput.trim().ifEmpty { item.optString("title").ifEmpty { item.optString("name") } }
+                                viewModel.setPendingSearchQuery(q)
                                 viewModel.clearLiveSearch()
                                 viewModel.selectMediaItem(item) 
                             }
@@ -815,6 +817,10 @@ fun StreamsDashboardScreen(
                                                 }
                                             },
                                             onClick = { 
+                                                if (activeCategoryIndex == 0) {
+                                                    val q = searchInput.trim().ifEmpty { item.optString("title").ifEmpty { item.optString("name") } }
+                                                    viewModel.setPendingSearchQuery(q)
+                                                }
                                                 viewModel.lastViewedCardIndex = index
                                                 viewModel.isReturningFromDetails = true
                                                 if (isRecentlyWatched) viewModel.selectRecentlyPlayedItem(wrapper)
@@ -839,6 +845,10 @@ fun StreamsDashboardScreen(
                                             modifier = Modifier.wrapContentSize().then(itemFocusModifier),
                                             onFocus = { lastFocusedCardIndex = index },
                                             onClick = { 
+                                                if (activeCategoryIndex == 0) {
+                                                    val q = searchInput.trim().ifEmpty { item.optString("title").ifEmpty { item.optString("name") } }
+                                                    viewModel.setPendingSearchQuery(q)
+                                                }
                                                 viewModel.lastViewedCardIndex = index
                                                 viewModel.isReturningFromDetails = true
                                                 viewModel.selectMediaItem(item) 
