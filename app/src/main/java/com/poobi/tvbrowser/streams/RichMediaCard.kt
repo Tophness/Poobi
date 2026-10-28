@@ -188,6 +188,15 @@ fun RichMediaCard(
                     fontSize = 11.sp, 
                     fontWeight = FontWeight.Bold
                 )
+            } else if (!model.character.isNullOrBlank()) {
+                Text(
+                    text = "as ${model.character}", 
+                    color = if (isFocused) Color(0xFF004D40) else Color(0xFF40C4FF), 
+                    fontSize = 11.sp, 
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -216,16 +225,18 @@ fun RichMediaCard(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = model.mediaType.uppercase(), 
+                    text = if (model.mediaType == "person") "ACTOR" else model.mediaType.uppercase(), 
                     color = if (isFocused) Color(0xFF1B5E20) else Color(0xFF4CAF50), 
                     fontSize = 11.sp, 
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    text = " • ${model.year}", 
-                    color = if (isFocused) Color(0xFF37474F) else Color(0xFFB0BEC5), 
-                    fontSize = 11.sp
-                )
+                if (model.year.isNotEmpty() && model.year != "0000") {
+                    Text(
+                        text = " • ${model.year}", 
+                        color = if (isFocused) Color(0xFF37474F) else Color(0xFFB0BEC5), 
+                        fontSize = 11.sp
+                    )
+                }
             }
         }
     }

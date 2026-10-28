@@ -7,7 +7,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import com.poobi.tvbrowser.shared.mouseWheelHorizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -59,6 +61,37 @@ private fun formatDateToDMY(dateStr: String?): String {
     }
 }
 
+private fun formatBirthAndAge(birthdayStr: String?, deathdayStr: String?): String {
+    if (birthdayStr.isNullOrEmpty() || birthdayStr == "null") return ""
+    try {
+        val parser = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        val birthDate = parser.parse(birthdayStr) ?: return ""
+        val birthCal = java.util.Calendar.getInstance().apply { time = birthDate }
+
+        val endCal = java.util.Calendar.getInstance()
+        val isDeceased = !deathdayStr.isNullOrEmpty() && deathdayStr != "null"
+        if (isDeceased) {
+            val deathDate = parser.parse(deathdayStr)
+            if (deathDate != null) endCal.time = deathDate
+        }
+
+        var age = endCal.get(java.util.Calendar.YEAR) - birthCal.get(java.util.Calendar.YEAR)
+        if (endCal.get(java.util.Calendar.DAY_OF_YEAR) < birthCal.get(java.util.Calendar.DAY_OF_YEAR)) {
+            age--
+        }
+
+        val formattedBirth = formatDateToDMY(birthdayStr)
+        return if (isDeceased) {
+            val formattedDeath = formatDateToDMY(deathdayStr)
+            "Died: $formattedDeath (Age $age) • Born: $formattedBirth"
+        } else {
+            "Age $age • Born: $formattedBirth"
+        }
+    } catch (_: Exception) {
+        return "Born: ${formatDateToDMY(birthdayStr)}"
+    }
+}
+
 private val MovieIcon: ImageVector = ImageVector.Builder(
     name = "Movie",
     defaultWidth = 24.dp,
@@ -96,10 +129,18 @@ private val MovieIcon: ImageVector = ImageVector.Builder(
 @Composable
 fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     BackHandler {
-        viewModel.clearSelectedMedia()
+        viewModel.navigateBackFromMediaDetails()
     }
 
     val item by viewModel.selectedItem.collectAsState()
+    val mediaType = item?.optString("media_type")?.takeIf { it.isNotEmpty() && it != "null" } 
+        ?: if (item?.has("name") == true) "tv" else "movie"
+
+    if (mediaType == "person" && item != null) {
+        ActorDetailsContent(viewModel = viewModel, item = item!!)
+        return
+    }
+
     val details by viewModel.itemDetails.collectAsState()
     val seasons by viewModel.itemSeasons.collectAsState()
     val episodes by viewModel.itemEpisodes.collectAsState()
@@ -134,7 +175,6 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     val releaseDate = item?.optString("release_date").takeIf { !it.isNullOrEmpty() } ?: item?.optString("first_air_date") ?: "0000"
     val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else "0000"
     val rating = details?.optDouble("vote_average", item?.optDouble("vote_average", 0.0) ?: 0.0) ?: 0.0
-    val mediaType = item?.optString("media_type")?.takeIf { it.isNotEmpty() && it != "null" } ?: if (item?.has("name") == true) "tv" else "movie"
 
     val genresArr = item?.optJSONArray("genre_ids") ?: details?.optJSONArray("genres")
     val genresStr = remember(genresArr) { TmdbGenres.formatGenres(genresArr) }
@@ -276,7 +316,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     .verticalScroll(leftColumnScrollState)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TvFocusableBox(modifier = Modifier.size(40.dp), onClick = { viewModel.clearSelectedMedia() }) {
+                    TvFocusableBox(modifier = Modifier.size(40.dp), onClick = { viewModel.navigateBackFromMediaDetails() }) {
                         Icon(painter = painterResource(id = R.drawable.ic_back), contentDescription = "Back", tint = Color.White, modifier = Modifier.fillMaxSize().padding(8.dp))
                     }
                     Spacer(modifier = Modifier.width(10.dp))
@@ -778,18 +818,27 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                         Text("Top Cast", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp, 20.dp, 0.dp, 10.dp))
                         if (cast != null) {
                             if (cast!!.length() > 0) {
+                                var visibleCastCount by remember(cast) { mutableStateOf(15) }
+                                val totalCast = cast!!.length()
+                                val currentCount = totalCast.coerceAtMost(visibleCastCount)
+
                                 LazyRow(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
                                 ) {
-                                    items(cast!!.length().coerceAtMost(15)) { idx ->
+                                    items(currentCount) { idx ->
+                                        if (idx >= currentCount - 4 && currentCount < totalCast) {
+                                            visibleCastCount = (visibleCastCount + 15).coerceAtMost(totalCast)
+                                        }
                                         val c = cast!!.getJSONObject(idx)
                                         val cPath = c.optString("profile_path")
+                                        val cName = c.optString("name")
+                                        val cId = c.optInt("id")
                                         TvFocusableBox(
                                             modifier = Modifier
                                                 .width(120.dp)
                                                 .let { if (idx == 0) it.focusRequester(firstCastFocusRequester) else it },
-                                            onClick = { viewModel.selectCastMember(c.optInt("id"), c.optString("name")) }
+                                            onClick = { viewModel.selectCastMember(cId, cName, cPath) }
                                         ) { isFocused ->
                                             Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
                                                 RemoteImage(
@@ -797,7 +846,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                                     contentDescription = null, 
                                                     modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(4.dp))
                                                 )
-                                                Text(c.optString("name"), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+                                                Text(cName, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
                                                 Text(c.optString("character"), color = Color.Gray, fontSize = 11.sp, maxLines = 1)
                                             }
                                         }
@@ -830,7 +879,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
                                 ) {
-                                    items(recs!!.length().coerceAtMost(15)) { idx ->
+                                    items(recs!!.length()) { idx ->
+                                        if (idx >= recs!!.length() - 4) {
+                                            viewModel.loadMoreRecommendations()
+                                        }
                                         val rItem = recs!!.getJSONObject(idx)
                                         TvFocusableBox(
                                             modifier = Modifier.wrapContentSize(),
@@ -1028,5 +1080,219 @@ private fun RecommendationPlaceholderItem() {
                 .clip(RoundedCornerShape(2.dp))
                 .background(Color(0xFF222225))
         )
+    }
+}
+
+@Composable
+fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
+    val personDetails by viewModel.personDetails.collectAsState()
+    val displayedCredits by viewModel.personDisplayedCredits.collectAsState()
+    val allCredits by viewModel.personCredits.collectAsState()
+    val favoriteActors by viewModel.favoriteActorsSet.collectAsState()
+    val filterMode by viewModel.personFilterMode.collectAsState()
+
+    val actorName = personDetails?.optString("name")
+        ?: item.optString("title").ifEmpty { item.optString("name", "Unknown") }
+    val personId = item.optInt("id")
+    val profilePath = personDetails?.optString("profile_path")
+        ?.takeIf { it.isNotBlank() && it != "null" }
+        ?: item.optString("poster_path").takeIf { it.isNotBlank() && it != "null" }
+        ?: item.optString("profile_path").takeIf { it.isNotBlank() && it != "null" }
+        ?: ""
+    val imageUrl = "https://image.tmdb.org/t/p/w780$profilePath"
+
+    val birthday = personDetails?.optString("birthday")
+    val deathday = personDetails?.optString("deathday")
+    val birthAndAge = remember(birthday, deathday) { formatBirthAndAge(birthday, deathday) }
+    val placeOfBirth = personDetails?.optString("place_of_birth", "") ?: ""
+    val knownFor = personDetails?.optString("known_for_department", "Acting") ?: "Acting"
+    val biography = personDetails?.optString("biography")?.takeIf { it.isNotBlank() } ?: "No biography available."
+
+    val isFavActor = favoriteActors.contains(personId)
+    val leftColumnScrollState = rememberScrollState()
+    val firstCardFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(personDetails) {
+        if (personDetails != null) {
+            delay(300)
+            try {
+                firstCardFocusRequester.requestFocus()
+            } catch (_: Exception) {}
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 10.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(0.25f)
+                    .widthIn(min = 220.dp, max = 320.dp)
+                    .fillMaxHeight()
+                    .verticalScroll(leftColumnScrollState)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TvFocusableBox(modifier = Modifier.size(40.dp), onClick = { viewModel.navigateBackFromMediaDetails() }) {
+                        Icon(painter = painterResource(id = R.drawable.ic_back), contentDescription = "Back", tint = Color.White, modifier = Modifier.fillMaxSize().padding(8.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(actorName, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+
+                Row(modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = knownFor.uppercase(), color = Color(0xFF00BCD4), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    val pop = personDetails?.optDouble("popularity", 0.0) ?: 0.0
+                    if (pop > 0.0) {
+                        Text(text = " • ", color = Color.DarkGray, fontSize = 15.sp)
+                        Text(text = "⭐ %.1f".format(pop), color = Color(0xFFFFB74D), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (birthAndAge.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = birthAndAge,
+                        color = Color(0xFFB0BEC5),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                if (placeOfBirth.isNotEmpty() && placeOfBirth != "null") {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Born in: $placeOfBirth",
+                        color = Color(0xFF90A4AE),
+                        fontSize = 13.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                RemoteImage(
+                    url = imageUrl,
+                    contentDescription = actorName,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+                )
+
+                Spacer(modifier = Modifier.height(15.dp))
+
+                TvMarqueeText(
+                    text = biography,
+                    color = Color.LightGray,
+                    fontSize = 14.sp,
+                    maxLines = 10,
+                    isFocused = false,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            Spacer(modifier = Modifier.width(30.dp))
+
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Filmography",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.width(20.dp))
+
+                    val filterOptions = listOf("All", "Movies", "TV Shows")
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        filterOptions.forEach { filter ->
+                            val isSelected = filterMode == filter
+                            TvFocusableBox(
+                                modifier = Modifier.height(38.dp),
+                                defaultColor = if (isSelected) Color(0xFF00BCD4).copy(alpha = 0.25f) else Color(0xFF222225),
+                                onClick = { viewModel.filterPersonCredits(filter) }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = filter,
+                                        color = if (isFocused) Color.Black else if (isSelected) Color(0xFF00BCD4) else Color.LightGray,
+                                        fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    TvFocusableBox(
+                        modifier = Modifier.size(50.dp),
+                        onClick = { viewModel.toggleFavoriteActor(personId, actorName, profilePath) }
+                    ) { isFocused ->
+                        Icon(
+                            painter = painterResource(id = if (isFavActor) R.drawable.ic_heart_filled else R.drawable.ic_heart_empty),
+                            contentDescription = "Favorite Cast",
+                            tint = if (isFavActor) Color(0xFFE91E63) else Color.White,
+                            modifier = Modifier.fillMaxSize().padding(10.dp)
+                        )
+                    }
+                }
+
+                if (personDetails == null && displayedCredits.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Color(0xFF00BCD4))
+                    }
+                } else if (displayedCredits.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("No titles found for this category.", color = Color.Gray, fontSize = 16.sp)
+                    }
+                } else {
+                    val filmographyListState = rememberLazyListState()
+                    LazyRow(
+                        state = filmographyListState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0x0DFFFFFF), shape = RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 8.dp)
+                            .mouseWheelHorizontalScroll(filmographyListState),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        itemsIndexed(
+                            items = displayedCredits,
+                            key = { idx: Int, itm: JSONObject -> "${itm.optString("media_type")}_${itm.optString("id", idx.toString())}" }
+                        ) { index: Int, creditItem: JSONObject ->
+                            val totalCredits = displayedCredits.size
+                            if (index >= totalCredits - 4) {
+                                viewModel.loadMorePersonCredits()
+                            }
+                            val isFirst = index == 0
+                            TvFocusableBox(
+                                modifier = Modifier
+                                    .wrapContentSize()
+                                    .then(if (isFirst) Modifier.focusRequester(firstCardFocusRequester) else Modifier),
+                                onClick = { viewModel.selectMediaItem(creditItem) }
+                            ) { isCardFocused ->
+                                RichMediaCard(
+                                    item = creditItem,
+                                    viewModel = viewModel,
+                                    isFocused = isCardFocused,
+                                    isLandscape = viewModel.isLandscapeCard
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

@@ -616,7 +616,7 @@ class TorrentStreamServer private constructor(
 
         for (piece in startPiece..endPiece) {
             var iterations = 0
-            val maxIterations = 600 // 30 second timeout max
+            val maxIterations = 600
             while (true) {
                 try {
                     if (!handle.isValid) return

@@ -89,6 +89,27 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _favoritesSet = MutableStateFlow<Set<String>>(emptySet())
     val favoritesSet: StateFlow<Set<String>> = _favoritesSet.asStateFlow()
 
+    private val _favoriteActorsSet = MutableStateFlow<Set<Int>>(emptySet())
+    val favoriteActorsSet: StateFlow<Set<Int>> = _favoriteActorsSet.asStateFlow()
+
+    private val mediaNavigationStack = mutableListOf<JSONObject>()
+
+    private val _personDetails = MutableStateFlow<JSONObject?>(null)
+    val personDetails: StateFlow<JSONObject?> = _personDetails.asStateFlow()
+
+    private val _personCredits = MutableStateFlow<List<JSONObject>>(emptyList())
+    val personCredits: StateFlow<List<JSONObject>> = _personCredits.asStateFlow()
+
+    private val _personDisplayedCredits = MutableStateFlow<List<JSONObject>>(emptyList())
+    val personDisplayedCredits: StateFlow<List<JSONObject>> = _personDisplayedCredits.asStateFlow()
+
+    val personFilterMode = MutableStateFlow("All")
+    private var fullPersonCreditsList = listOf<JSONObject>()
+
+    private var recsPage = 1
+    private var hasMoreRecs = true
+    private var isLoadingMoreRecs = false
+
     private val _activeCategoryIndex = MutableStateFlow(0)
     val activeCategoryIndex: StateFlow<Int> = _activeCategoryIndex.asStateFlow()
 
@@ -206,6 +227,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     init {
         loadSearchHistory()
         refreshFavoritesSet()
+        refreshFavoriteActorsSet()
         purgeOldSubtitles()
         loadProgressCounts()
         loadSavedNotifications()
@@ -523,7 +545,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         lastSelectedSourceKey = null
     }
 
-    fun clearSelectedMedia() { _selectedItem.value = null }
+    fun clearSelectedMedia() {
+        mediaNavigationStack.clear()
+        _selectedItem.value = null
+        _personDetails.value = null
+        _personCredits.value = emptyList()
+        _personDisplayedCredits.value = emptyList()
+    }
     fun clearSearchResults() { _searchResults.value = null }
     private suspend fun getPythonInstance(): Python {
         while (!Python.isStarted()) {
@@ -609,7 +637,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val itemsList = mutableListOf<JSONObject>()
                 for (i in 0 until resultsArray.length().coerceAtMost(12)) {
                     val it = resultsArray.getJSONObject(i)
-                    if (it.optString("media_type") in listOf("movie", "tv")) {
+                    if (it.optString("media_type") in listOf("movie", "tv", "person")) {
                         itemsList.add(it)
                     }
                 }
@@ -1775,6 +1803,57 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 _favoritesSet.value = set
             }
         }
+        refreshFavoriteActorsSet()
+    }
+
+    fun refreshFavoriteActorsSet() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val actors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(context)
+            val set = actors.filter { it.isEnabled }.map { it.id }.toSet()
+            withContext(Dispatchers.Main) {
+                _favoriteActorsSet.value = set
+            }
+        }
+    }
+
+    fun toggleFavoriteActor(personId: Int, name: String, profilePath: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentSet = _favoriteActorsSet.value
+            val isCurrentlyFav = currentSet.contains(personId)
+            if (isCurrentlyFav) {
+                com.poobi.tvbrowser.shared.FavoriteActorsManager.removeActor(context, personId)
+                withContext(Dispatchers.Main) {
+                    _favoriteActorsSet.value = currentSet - personId
+                    _events.value = StreamsEvent.ShowToast("Removed $name from Favourite Cast")
+                }
+            } else {
+                com.poobi.tvbrowser.shared.FavoriteActorsManager.addActor(
+                    context,
+                    com.poobi.tvbrowser.shared.FavoriteActor(
+                        id = personId,
+                        name = name,
+                        profilePath = profilePath,
+                        isEnabled = true,
+                        sourceTitles = listOf("Added from Cast")
+                    )
+                )
+                withContext(Dispatchers.Main) {
+                    _favoriteActorsSet.value = currentSet + personId
+                    _events.value = StreamsEvent.ShowToast("Added $name to Favourite Cast")
+                }
+            }
+        }
+    }
+
+    fun navigateBackFromMediaDetails(): Boolean {
+        if (mediaNavigationStack.isNotEmpty()) {
+            val previousItem = mediaNavigationStack.removeAt(mediaNavigationStack.size - 1)
+            selectMediaItemInternal(previousItem, pushToStack = false)
+            return true
+        } else {
+            clearSelectedMedia()
+            return false
+        }
     }
 
     fun toggleFavorite(item: JSONObject, isCurrentlyViewingFavorites: Boolean = false) {
@@ -1851,6 +1930,21 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun selectMediaItem(item: JSONObject, initialSeason: Int? = null) {
+        selectMediaItemInternal(item, initialSeason, pushToStack = true)
+    }
+
+    private fun selectMediaItemInternal(item: JSONObject, initialSeason: Int? = null, pushToStack: Boolean = true) {
+        if (pushToStack) {
+            val current = _selectedItem.value
+            if (current != null) {
+                val currId = current.optString("id")
+                val newId = item.optString("id")
+                if (currId != newId) {
+                    mediaNavigationStack.add(current)
+                }
+            }
+        }
+
         markItemAccessed(item)
         val showCopy = JSONObject(item.toString())
         showCopy.remove("still_path")
@@ -1860,6 +1954,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _itemSeasons.value = null
         _lastWatchedEpisode.value = null
         _isMovieWatched.value = false
+        recsPage = 1
+        hasMoreRecs = true
+        isLoadingMoreRecs = false
         if (initialSeason == null) {
             lastScrapedSeason = null
             lastScrapedEpisode = null
@@ -1868,6 +1965,11 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val id = item.optInt("id")
         val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
             ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
+
+        if (mediaType == "person") {
+            loadPersonDetails(id, item)
+            return
+        }
 
         if (mediaType == "movie") {
             checkMovieWatchedStatus(item)
@@ -2096,58 +2198,135 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun selectCastMember(personId: Int, personName: String) {
-        _scrapeStatusMsg.value = "Loading $personName's works..."
-        _isScraping.value = true
-        _searchResults.value = null
-        _selectedItem.value = null
-        _activeCategoryIndex.value = 0
+    fun selectCastMember(personId: Int, personName: String, profilePath: String = "") {
+        val personItem = JSONObject().apply {
+            put("id", personId)
+            put("name", personName)
+            put("title", personName)
+            put("media_type", "person")
+            if (profilePath.isNotEmpty()) {
+                put("poster_path", profilePath)
+                put("profile_path", profilePath)
+            }
+        }
+        selectMediaItem(personItem)
+    }
+
+    private fun loadPersonDetails(personId: Int, item: JSONObject) {
+        _personDetails.value = null
+        _personCredits.value = emptyList()
+        _personDisplayedCredits.value = emptyList()
+        personFilterMode.value = "All"
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val tmdb = py.getModule("tmdb.tmdb_utils")
                 val detailsJson = tmdb.callAttr("get_person_details", personId).toString()
                 val details = JSONObject(detailsJson)
+
                 val combinedCredits = details.optJSONObject("combined_credits")
                 val castArray = combinedCredits?.optJSONArray("cast") ?: JSONArray()
-                
-                val formattedResults = JSONArray()
+
+                val rawCreditsList = mutableListOf<JSONObject>()
+                val seenIds = mutableSetOf<String>()
+
                 for (i in 0 until castArray.length()) {
-                    val credit = castArray.getJSONObject(i)
-                    val mediaType = credit.optString("media_type")
-                    if (mediaType == "movie" || mediaType == "tv") {
-                        val title = credit.optString("title").takeIf { it.isNotEmpty() } ?: credit.optString("name", "")
-                        val releaseDate = credit.optString("release_date").takeIf { !it.isNullOrEmpty() } ?: credit.optString("first_air_date") ?: "0000"
-                        val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else "0000"
-                        
-                        val formatted = JSONObject().apply {
-                            put("title", "$title ($year)")
-                            put("id", credit.optInt("id"))
-                            put("media_type", mediaType)
-                            put("release_date", releaseDate)
-                            put("overview", credit.optString("overview"))
-                            put("poster_path", credit.optString("poster_path"))
-                            put("backdrop_path", credit.optString("backdrop_path"))
-                            put("vote_average", credit.optDouble("vote_average", 0.0))
-                            put("genre_ids", credit.optJSONArray("genre_ids") ?: JSONArray())
-                            put("orig_title", title)
-                            put("year", year)
+                    val c = castArray.getJSONObject(i)
+                    val mType = c.optString("media_type")
+                    if (mType == "movie" || mType == "tv") {
+                        val cId = c.optString("id")
+                        val key = "${mType}_$cId"
+                        if (!seenIds.contains(key)) {
+                            seenIds.add(key)
+                            rawCreditsList.add(c)
                         }
-                        formattedResults.put(formatted)
                     }
                 }
 
+                val favs = _favoritesSet.value
+                val sorted = rawCreditsList.sortedWith { a, b ->
+                    val aId = a.optString("id")
+                    val aImdb = a.optString("imdb")
+                    val bId = b.optString("id")
+                    val bImdb = b.optString("imdb")
+                    val aFav = favs.contains(aId) || (aImdb.isNotEmpty() && favs.contains(aImdb))
+                    val bFav = favs.contains(bId) || (bImdb.isNotEmpty() && favs.contains(bImdb))
+                    if (aFav != bFav) {
+                        if (aFav) -1 else 1
+                    } else {
+                        val popA = a.optDouble("popularity", 0.0)
+                        val popB = b.optDouble("popularity", 0.0)
+                        popB.compareTo(popA)
+                    }
+                }
+
+                fullPersonCreditsList = sorted
+
                 withContext(Dispatchers.Main) {
-                    _searchResults.value = formattedResults
-                    _isScraping.value = false
+                    _personDetails.value = details
+                    _personCredits.value = sorted
+                    _personDisplayedCredits.value = sorted.take(20)
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    _isScraping.value = false
-                    _searchResults.value = JSONArray()
-                    _events.value = StreamsEvent.ShowToast("Failed to load credits: ${e.message}")
+                Log.e("StreamsViewModel", "Failed to load person details: ${e.message}")
+            }
+        }
+    }
+
+    fun filterPersonCredits(filter: String) {
+        personFilterMode.value = filter
+        val filtered = when (filter) {
+            "Movies" -> fullPersonCreditsList.filter { it.optString("media_type") == "movie" }
+            "TV Shows" -> fullPersonCreditsList.filter { it.optString("media_type") == "tv" }
+            else -> fullPersonCreditsList
+        }
+        _personCredits.value = filtered
+        _personDisplayedCredits.value = filtered.take(20)
+    }
+
+    fun loadMorePersonCredits() {
+        val currentList = _personCredits.value
+        val currentDisplayed = _personDisplayedCredits.value
+        if (currentDisplayed.size < currentList.size) {
+            val nextCount = (currentDisplayed.size + 20).coerceAtMost(currentList.size)
+            _personDisplayedCredits.value = currentList.take(nextCount)
+        }
+    }
+
+    fun loadMoreRecommendations() {
+        if (isLoadingMoreRecs || !hasMoreRecs) return
+        val item = _selectedItem.value ?: return
+        val id = item.optString("id")
+        if (id.isEmpty() || id == "0") return
+        val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
+            ?: if (item.has("name")) "tv" else "movie"
+
+        isLoadingMoreRecs = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val nextPage = recsPage + 1
+                val py = getPythonInstance()
+                val tmdb = py.getModule("tmdb.tmdb_utils")
+                val resJson = tmdb.callAttr("get_recommendations", id, mediaType, nextPage).toString()
+                val results = JSONObject(resJson).optJSONArray("results")
+                if (results != null && results.length() > 0) {
+                    recsPage = nextPage
+                    val current = _itemRecommendations.value ?: JSONArray()
+                    val combined = JSONArray(current.toString())
+                    for (i in 0 until results.length()) {
+                        combined.put(results.getJSONObject(i))
+                    }
+                    withContext(Dispatchers.Main) {
+                        _itemRecommendations.value = combined
+                    }
+                } else {
+                    hasMoreRecs = false
                 }
+            } catch (_: Exception) {
+                hasMoreRecs = false
+            } finally {
+                isLoadingMoreRecs = false
             }
         }
     }
