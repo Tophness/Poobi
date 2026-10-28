@@ -298,10 +298,17 @@ fun StreamsDashboardScreen(
 
     LaunchedEffect(Unit) {
         if (viewModel.isReturningFromDetails) {
-            kotlinx.coroutines.delay(120)
-            try {
-                lastCardFocusRequester.requestFocus()
-            } catch (_: Exception) {}
+            var attempts = 0
+            while (attempts < 20) {
+                kotlinx.coroutines.delay(40)
+                try {
+                    lastCardFocusRequester.requestFocus()
+                    viewModel.isReturningFromDetails = false
+                    break
+                } catch (_: Exception) {
+                    attempts++
+                }
+            }
             viewModel.isReturningFromDetails = false
         }
     }
@@ -752,8 +759,22 @@ fun StreamsDashboardScreen(
                         }
                     }
 
-                    val targetCardIndex = lastFocusedCardIndex.coerceIn(0, (objList.size - 1).coerceAtLeast(0))
-                    val initialScrollIdx = if (viewModel.isReturningFromDetails) (viewModel.lastViewedCardIndex - 1).coerceAtLeast(0) else 0
+                    val initialTargetIdx = remember(objList, viewModel.lastViewedMediaId) {
+                        val targetId = viewModel.lastViewedMediaId
+                        if (viewModel.isReturningFromDetails && !targetId.isNullOrEmpty() && objList.isNotEmpty()) {
+                            val found = objList.indexOfFirst {
+                                val itm = if (it.has("item")) it.getJSONObject("item") else it
+                                val id = itm.optString("id").ifEmpty { itm.optString("imdb") }
+                                id == targetId
+                            }
+                            if (found != -1) found else viewModel.lastViewedCardIndex.coerceIn(0, objList.size - 1)
+                        } else {
+                            viewModel.lastViewedCardIndex.coerceIn(0, (objList.size - 1).coerceAtLeast(0))
+                        }
+                    }
+
+                    val targetCardIndex = if (viewModel.isReturningFromDetails) initialTargetIdx else lastFocusedCardIndex.coerceIn(0, (objList.size - 1).coerceAtLeast(0))
+                    val initialScrollIdx = if (viewModel.isReturningFromDetails) (targetCardIndex - 1).coerceAtLeast(0) else 0
                     val mainCardsListState = key(activeCategoryIndex, currentActivePillIndex, currentSort) { 
                         rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIdx) 
                     }
@@ -827,6 +848,8 @@ fun StreamsDashboardScreen(
                                                     val q = searchInput.trim().ifEmpty { item.optString("title").ifEmpty { item.optString("name") } }
                                                     viewModel.setPendingSearchQuery(q)
                                                 }
+                                                val cId = item.optString("id").ifEmpty { item.optString("imdb") }
+                                                viewModel.lastViewedMediaId = cId
                                                 viewModel.lastViewedCardIndex = index
                                                 viewModel.isReturningFromDetails = true
                                                 if (isRecentlyWatched) viewModel.selectRecentlyPlayedItem(wrapper)
@@ -855,6 +878,8 @@ fun StreamsDashboardScreen(
                                                     val q = searchInput.trim().ifEmpty { item.optString("title").ifEmpty { item.optString("name") } }
                                                     viewModel.setPendingSearchQuery(q)
                                                 }
+                                                val cId = item.optString("id").ifEmpty { item.optString("imdb") }
+                                                viewModel.lastViewedMediaId = cId
                                                 viewModel.lastViewedCardIndex = index
                                                 viewModel.isReturningFromDetails = true
                                                 viewModel.selectMediaItem(item) 
@@ -939,10 +964,17 @@ fun StreamsDashboardScreen(
                                 val nativeEvent = keyEvent.nativeKeyEvent
                                 if (nativeEvent.action == android.view.KeyEvent.ACTION_DOWN &&
                                     nativeEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
-                                    try {
-                                        lastCardFocusRequester.requestFocus()
-                                        return@onPreviewKeyEvent true
-                                    } catch (_: Exception) {}
+                                    if (hasCardsInCenter) {
+                                        try {
+                                            lastCardFocusRequester.requestFocus()
+                                            return@onPreviewKeyEvent true
+                                        } catch (_: Exception) {}
+                                    } else {
+                                        try {
+                                            currentTabFocusTarget.requestFocus()
+                                            return@onPreviewKeyEvent true
+                                        } catch (_: Exception) {}
+                                    }
                                 }
                                 false
                             }

@@ -5,6 +5,13 @@ import com.poobi.tvbrowser.shared.TmdbGenres
 import org.json.JSONObject
 
 @Immutable
+data class SpotlightActor(
+    val id: Int = 0,
+    val name: String = "",
+    val profilePath: String = ""
+)
+
+@Immutable
 data class MediaItem(
     val id: String,
     val imdb: String = "",
@@ -19,6 +26,7 @@ data class MediaItem(
     val genresStr: String = "",
     val isTrakt: Boolean = false,
     val traktBadge: String = "",
+    val spotlightActors: List<SpotlightActor> = emptyList(),
     val spotlightActorProfile: String? = null,
     val spotlightActorName: String? = null,
     val character: String? = null,
@@ -73,11 +81,31 @@ data class MediaItem(
             val isTrakt = itm.optBoolean("is_trakt", false) || json.optBoolean("is_trakt", false)
             val traktBadge = itm.optString("trakt_badge").ifEmpty { json.optString("trakt_badge", "") }
 
-            val spotlightActorProfile = itm.optString("spotlight_actor_profile").takeIf { it.isNotBlank() && it != "null" }
-                ?: json.optString("spotlight_actor_profile").takeIf { it.isNotBlank() && it != "null" }
-            val spotlightActorName = itm.optString("spotlight_actor_name").takeIf { it.isNotBlank() && it != "null" }
-                ?: json.optString("spotlight_actor_name").takeIf { it.isNotBlank() && it != "null" }
+            val actorsList = mutableListOf<SpotlightActor>()
+            val actorsArr = itm.optJSONArray("spotlight_actors") ?: json.optJSONArray("spotlight_actors")
+            if (actorsArr != null) {
+                for (i in 0 until actorsArr.length()) {
+                    val aObj = actorsArr.optJSONObject(i) ?: continue
+                    val aName = aObj.optString("name")
+                    val aProfile = aObj.optString("profile_path")
+                    val aId = aObj.optInt("id", 0)
+                    if (aName.isNotEmpty() || aProfile.isNotEmpty()) {
+                        actorsList.add(SpotlightActor(id = aId, name = aName, profilePath = aProfile))
+                    }
+                }
+            }
+            if (actorsList.isEmpty()) {
+                val singleProfile = itm.optString("spotlight_actor_profile").takeIf { it.isNotBlank() && it != "null" }
+                    ?: json.optString("spotlight_actor_profile").takeIf { it.isNotBlank() && it != "null" }
+                val singleName = itm.optString("spotlight_actor_name").takeIf { it.isNotBlank() && it != "null" }
+                    ?: json.optString("spotlight_actor_name").takeIf { it.isNotBlank() && it != "null" }
+                if (!singleName.isNullOrEmpty() || !singleProfile.isNullOrEmpty()) {
+                    actorsList.add(SpotlightActor(name = singleName ?: "", profilePath = singleProfile ?: ""))
+                }
+            }
 
+            val spotlightActorProfile = actorsList.firstOrNull()?.profilePath?.takeIf { it.isNotBlank() && it != "null" }
+            val spotlightActorName = actorsList.firstOrNull()?.name?.takeIf { it.isNotBlank() && it != "null" }
             val character = itm.optString("character").takeIf { it.isNotBlank() && it != "null" }
 
             return MediaItem(
@@ -94,6 +122,7 @@ data class MediaItem(
                 genresStr = genresStr,
                 isTrakt = isTrakt,
                 traktBadge = traktBadge,
+                spotlightActors = actorsList,
                 spotlightActorProfile = spotlightActorProfile,
                 spotlightActorName = spotlightActorName,
                 character = character,

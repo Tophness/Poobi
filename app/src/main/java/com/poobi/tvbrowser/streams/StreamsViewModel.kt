@@ -630,11 +630,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
-    private suspend fun getPythonInstance(): Python {
-        while (!Python.isStarted()) {
-            delay(100)
+    private suspend fun getPythonInstance(): Python = withContext(Dispatchers.IO) {
+        if (!Python.isStarted()) {
+            try {
+                Python.start(com.chaquo.python.android.AndroidPlatform(context))
+            } catch (_: Exception) {}
         }
-        return Python.getInstance()
+        while (!Python.isStarted()) {
+            delay(50)
+        }
+        Python.getInstance()
     }
 
     private fun isTraktAuthorized(): Boolean {
@@ -833,16 +838,27 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     var lastViewedCardIndex: Int = 0
+    var lastViewedMediaId: String? = null
     var isReturningFromDetails: Boolean = false
 
     val isLandscapeCard: Boolean
         get() = prefs.getInt("card_thumbnail_aspect_ratio", 0) == 1
 
-    private val globalMediaToActorMap = java.util.concurrent.ConcurrentHashMap<String, Pair<String, String>>()
+    data class SpotlightActorInfo(
+        val name: String,
+        val profilePath: String,
+        val id: Int
+    )
+
+    private val globalMediaToActorMap = java.util.concurrent.ConcurrentHashMap<String, MutableList<SpotlightActorInfo>>()
     private var currentFeedLoader: (suspend (page: Int) -> JSONArray?)? = null
     private var currentFeedPage = 1
     private var isFeedLoadingMore = false
     private var hasMoreFeedPages = true
+    private var discoverCastPage = 1
+    private var discoverCastTotalPages = 1
+    private var discoverRegularPage = 1
+    private var discoverSeenIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     private fun cancelLibraryJobs() {
         libraryLoadJob?.cancel()
@@ -853,38 +869,60 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         isFeedLoadingMore = false
     }
 
-    private fun ensureActorMapping(): List<com.poobi.tvbrowser.shared.FavoriteActor> {
+    private suspend fun ensureActorMapping(): List<com.poobi.tvbrowser.shared.FavoriteActor> = withContext(Dispatchers.IO) {
         val allActors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(context)
         val selectedActors = allActors.filter { it.isEnabled }
-        val py = com.chaquo.python.Python.getInstance()
+        if (selectedActors.isEmpty()) {
+            globalMediaToActorMap.clear()
+            return@withContext emptyList()
+        }
+
+        val py = getPythonInstance()
         val tmdb = py.getModule("tmdb.tmdb_utils")
 
+        globalMediaToActorMap.clear()
+
         for (act in selectedActors) {
-            val actorCreditsCacheKey = "spotlight_actor_credits_${act.id}"
-            var cachedCredits = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, actorCreditsCacheKey)
+            var cachedCredits = com.poobi.tvbrowser.shared.AppCacheManager.getActorCredits(context, act.id)
+            var detailsObj: JSONObject? = null
             if (cachedCredits == null) {
                 try {
                     val detailsJson = tmdb.callAttr("get_person_details", act.id).toString()
-                    val combinedCredits = JSONObject(detailsJson).optJSONObject("combined_credits")
+                    detailsObj = JSONObject(detailsJson)
+                    val combinedCredits = detailsObj.optJSONObject("combined_credits")
                     val castArr = combinedCredits?.optJSONArray("cast") ?: JSONArray()
-                    com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, actorCreditsCacheKey, castArr)
+                    com.poobi.tvbrowser.shared.AppCacheManager.saveActorCredits(context, act.id, castArr)
                     cachedCredits = castArr
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.e("StreamsViewModel", "Failed fetching credits for ${act.name}: ${e.message}")
+                }
             }
             if (cachedCredits != null) {
+                val pPath = if (act.profilePath.isNotBlank()) act.profilePath else detailsObj?.optString("profile_path", "") ?: ""
                 for (j in 0 until cachedCredits.length()) {
-                    val cId = cachedCredits.getJSONObject(j).optString("id")
-                    if (cId.isNotEmpty() && !globalMediaToActorMap.containsKey(cId)) {
-                        globalMediaToActorMap[cId] = Pair(act.name, act.profilePath)
+                    val cObj = cachedCredits.getJSONObject(j)
+                    val cId = cObj.optString("id")
+                    val mType = cObj.optString("media_type")
+                    if (cId.isNotEmpty()) {
+                        val keys = mutableListOf(cId)
+                        if (mType.isNotEmpty()) keys.add("${mType}_$cId")
+                        for (k in keys) {
+                            val list = globalMediaToActorMap.getOrPut(k) { java.util.Collections.synchronizedList(mutableListOf()) }
+                            synchronized(list) {
+                                if (list.none { it.id == act.id }) {
+                                    list.add(SpotlightActorInfo(act.name, pPath, act.id))
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-        return selectedActors
+        selectedActors
     }
 
     private fun processFeedItems(rawArray: JSONArray, prioritizeFavCast: Boolean): JSONArray {
-        val starringItems = mutableListOf<JSONObject>()
+        val starringItems = mutableListOf<Pair<JSONObject, Int>>()
         val regularItems = mutableListOf<JSONObject>()
         val seenIds = mutableSetOf<String>()
 
@@ -894,31 +932,77 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             if (id.isEmpty() || seenIds.contains(id)) continue
             seenIds.add(id)
 
-            val actorInfo = globalMediaToActorMap[id]
-            if (actorInfo != null) {
-                itm.put("spotlight_actor_name", actorInfo.first)
-                if (actorInfo.second.isNotEmpty()) {
-                    itm.put("spotlight_actor_profile", actorInfo.second)
+            val mType = itm.optString("media_type")
+            var actorList = (if (mType.isNotEmpty()) globalMediaToActorMap["${mType}_$id"] else null) ?: globalMediaToActorMap[id]
+
+            if (actorList.isNullOrEmpty() && itm.has("spotlight_actors")) {
+                val arr = itm.optJSONArray("spotlight_actors")
+                if (arr != null && arr.length() > 0) {
+                    val list = mutableListOf<SpotlightActorInfo>()
+                    for (k in 0 until arr.length()) {
+                        val a = arr.getJSONObject(k)
+                        list.add(SpotlightActorInfo(a.optString("name"), a.optString("profile_path"), a.optInt("id")))
+                    }
+                    actorList = list
                 }
-                if (prioritizeFavCast) starringItems.add(itm) else regularItems.add(itm)
+            }
+
+            if (!actorList.isNullOrEmpty()) {
+                val actorsArr = JSONArray()
+                synchronized(actorList) {
+                    actorList.forEach { actor ->
+                        actorsArr.put(JSONObject().apply {
+                            put("id", actor.id)
+                            put("name", actor.name)
+                            put("profile_path", actor.profilePath)
+                        })
+                    }
+                }
+                itm.put("spotlight_actors", actorsArr)
+                itm.put("spotlight_actor_name", actorList[0].name)
+                if (actorList[0].profilePath.isNotEmpty()) {
+                    itm.put("spotlight_actor_profile", actorList[0].profilePath)
+                }
+
+                if (prioritizeFavCast) {
+                    starringItems.add(Pair(itm, actorList.size))
+                } else {
+                    regularItems.add(itm)
+                }
             } else {
                 regularItems.add(itm)
             }
         }
 
+        if (prioritizeFavCast) {
+            starringItems.sortByDescending { it.second }
+        }
+
         val result = JSONArray()
-        starringItems.forEach { result.put(it) }
+        starringItems.forEach { result.put(it.first) }
         regularItems.forEach { result.put(it) }
         return result
     }
 
     fun loadLibraryCategory(title: String, method: String, arg: String? = null) {
+        val prioritizeFavCast = prefs.getBoolean("genres_prioritize_fav_cast", true)
         val cacheKey = "${method}_${arg ?: ""}"
         val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, cacheKey)
         if (cached != null) {
             cancelLibraryJobs()
-            _libraryItems.value = cached
-            setupLibraryFeedPagination(method, arg)
+            if (prioritizeFavCast) {
+                libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
+                    ensureActorMapping()
+                    val refreshed = processFeedItems(cached, prioritizeFavCast = true)
+                    withContext(Dispatchers.Main) {
+                        _libraryItems.value = refreshed
+                        setupLibraryFeedPagination(method, arg)
+                    }
+                }
+            } else {
+                _libraryItems.value = cached
+                setupLibraryFeedPagination(method, arg)
+            }
             return
         }
 
@@ -928,7 +1012,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 delay(80)
                 if (!isActive) return@launch
 
-                val prioritizeFavCast = prefs.getBoolean("genres_prioritize_fav_cast", true)
                 if (prioritizeFavCast) {
                     ensureActorMapping()
                 }
@@ -984,8 +1067,29 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, fullCacheKey)
         if (cached != null) {
             cancelLibraryJobs()
-            _libraryItems.value = cached
-            setupDiscoverFeedPagination(isMovie, params)
+            if (prioritizeFavCast) {
+                libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
+                    ensureActorMapping()
+                    val refreshed = processFeedItems(cached, prioritizeFavCast = true)
+                    discoverSeenIds.clear()
+                    for (i in 0 until refreshed.length()) {
+                        val cid = refreshed.getJSONObject(i).optString("id")
+                        if (cid.isNotEmpty()) discoverSeenIds.add(cid)
+                    }
+                    withContext(Dispatchers.Main) {
+                        _libraryItems.value = refreshed
+                        setupDiscoverFeedPagination(isMovie, params, prioritizeFavCast)
+                    }
+                }
+            } else {
+                discoverSeenIds.clear()
+                for (i in 0 until cached.length()) {
+                    val cid = cached.getJSONObject(i).optString("id")
+                    if (cid.isNotEmpty()) discoverSeenIds.add(cid)
+                }
+                _libraryItems.value = cached
+                setupDiscoverFeedPagination(isMovie, params, prioritizeFavCast)
+            }
             return
         }
 
@@ -1000,63 +1104,63 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val tmdb = py.getModule("tmdb.tmdb_utils")
                 val method = if (isMovie) "discover_movies" else "discover_tv"
 
-                val finalResults = JSONArray()
-                val seenIds = mutableSetOf<String>()
+                discoverSeenIds.clear()
+                discoverCastPage = 1
+                discoverCastTotalPages = 0
+                discoverRegularPage = 1
 
-                if (selectedActors.isNotEmpty()) {
+                val finalResults = JSONArray()
+
+                if (prioritizeFavCast && selectedActors.isNotEmpty()) {
                     try {
                         val selectedActorIds = selectedActors.map { it.id }
                         val castParams = JSONObject(params.toString()).apply {
-                            put("with_cast", selectedActorIds.take(15).joinToString("|"))
+                            put("with_cast", selectedActorIds.take(50).joinToString("|"))
                         }
-                        val castJson = tmdb.callAttr(method, castParams.toString(), 1).toString()
-                        val castResults = JSONObject(castJson).optJSONArray("results")
+                        val castResStr = tmdb.callAttr(method, castParams.toString(), 1).toString()
+                        val castObj = JSONObject(castResStr)
+                        discoverCastTotalPages = castObj.optInt("total_pages", 1)
+                        val castResults = castObj.optJSONArray("results")
 
-                        if (castResults != null) {
-                            for (i in 0 until castResults.length()) {
-                                val itm = castResults.getJSONObject(i)
+                        if (castResults != null && castResults.length() > 0) {
+                            val processedCast = processFeedItems(castResults, prioritizeFavCast = true)
+                            for (i in 0 until processedCast.length()) {
+                                val itm = processedCast.getJSONObject(i)
                                 val id = itm.optString("id")
-                                if (id.isNotEmpty() && !seenIds.contains(id)) {
-                                    seenIds.add(id)
-                                    val actorInfo = globalMediaToActorMap[id]
-                                    if (actorInfo != null) {
-                                        itm.put("spotlight_actor_name", actorInfo.first)
-                                        if (actorInfo.second.isNotEmpty()) {
-                                            itm.put("spotlight_actor_profile", actorInfo.second)
-                                        }
-                                    }
+                                if (id.isNotEmpty() && !discoverSeenIds.contains(id)) {
+                                    discoverSeenIds.add(id)
                                     finalResults.put(itm)
                                 }
                             }
                         }
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        Log.e("StreamsViewModel", "Failed fetching cast discover page 1: ${e.message}")
+                    }
                 }
 
-                val resultJson = tmdb.callAttr(method, params.toString(), 1).toString()
-                val results = JSONObject(resultJson).optJSONArray("results")
-                if (results != null) {
-                    for (i in 0 until results.length()) {
-                        val itm = results.getJSONObject(i)
-                        val id = itm.optString("id")
-                        if (id.isNotEmpty() && !seenIds.contains(id)) {
-                            seenIds.add(id)
-                            val actorInfo = globalMediaToActorMap[id]
-                            if (actorInfo != null) {
-                                itm.put("spotlight_actor_name", actorInfo.first)
-                                if (actorInfo.second.isNotEmpty()) {
-                                    itm.put("spotlight_actor_profile", actorInfo.second)
-                                }
+                if (finalResults.length() < 15) {
+                    val resultJson = tmdb.callAttr(method, params.toString(), 1).toString()
+                    val regObj = JSONObject(resultJson)
+                    val results = regObj.optJSONArray("results")
+                    if (results != null) {
+                        val processedReg = processFeedItems(results, prioritizeFavCast = false)
+                        for (i in 0 until processedReg.length()) {
+                            val itm = processedReg.getJSONObject(i)
+                            val id = itm.optString("id")
+                            if (id.isNotEmpty() && !discoverSeenIds.contains(id)) {
+                                discoverSeenIds.add(id)
+                                finalResults.put(itm)
                             }
-                            finalResults.put(itm)
                         }
                     }
+                    discoverRegularPage = 2
                 }
 
                 if (finalResults.length() > 0) {
                     com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, fullCacheKey, finalResults)
                     withContext(Dispatchers.Main) { 
                         _libraryItems.value = finalResults 
-                        setupDiscoverFeedPagination(isMovie, params)
+                        setupDiscoverFeedPagination(isMovie, params, prioritizeFavCast)
                     }
                 }
             } catch (e: Exception) {
@@ -1065,19 +1169,60 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun setupDiscoverFeedPagination(isMovie: Boolean, params: JSONObject) {
+    private fun setupDiscoverFeedPagination(isMovie: Boolean, params: JSONObject, prioritizeFavCast: Boolean) {
         currentFeedPage = 1
         hasMoreFeedPages = true
-        currentFeedLoader = { page ->
+        currentFeedLoader = { _ ->
             withContext(Dispatchers.IO) {
                 try {
-                    val prioritizeFavCast = prefs.getBoolean("genres_prioritize_fav_cast", true)
                     val py = com.chaquo.python.Python.getInstance()
                     val tmdb = py.getModule("tmdb.tmdb_utils")
                     val method = if (isMovie) "discover_movies" else "discover_tv"
-                    val resultJson = tmdb.callAttr(method, params.toString(), page).toString()
-                    val results = JSONObject(resultJson).optJSONArray("results")
-                    if (results != null) processFeedItems(results, prioritizeFavCast) else null
+
+                    val selectedActors = if (prioritizeFavCast) ensureActorMapping() else emptyList()
+                    val batchResults = JSONArray()
+
+                    if (prioritizeFavCast && selectedActors.isNotEmpty() && discoverCastPage < discoverCastTotalPages) {
+                        discoverCastPage++
+                        val selectedActorIds = selectedActors.map { it.id }
+                        val castParams = JSONObject(params.toString()).apply {
+                            put("with_cast", selectedActorIds.take(50).joinToString("|"))
+                        }
+                        val castResStr = tmdb.callAttr(method, castParams.toString(), discoverCastPage).toString()
+                        val castObj = JSONObject(castResStr)
+                        discoverCastTotalPages = castObj.optInt("total_pages", discoverCastTotalPages)
+                        val castResults = castObj.optJSONArray("results")
+                        if (castResults != null && castResults.length() > 0) {
+                            val processedCast = processFeedItems(castResults, prioritizeFavCast = true)
+                            for (i in 0 until processedCast.length()) {
+                                val itm = processedCast.getJSONObject(i)
+                                val id = itm.optString("id")
+                                if (id.isNotEmpty() && !discoverSeenIds.contains(id)) {
+                                    discoverSeenIds.add(id)
+                                    batchResults.put(itm)
+                                }
+                            }
+                        }
+                    }
+
+                    if (batchResults.length() == 0) {
+                        val resultJson = tmdb.callAttr(method, params.toString(), discoverRegularPage).toString()
+                        discoverRegularPage++
+                        val results = JSONObject(resultJson).optJSONArray("results")
+                        if (results != null && results.length() > 0) {
+                            val processed = processFeedItems(results, prioritizeFavCast)
+                            for (i in 0 until processed.length()) {
+                                val itm = processed.getJSONObject(i)
+                                val id = itm.optString("id")
+                                if (id.isNotEmpty() && !discoverSeenIds.contains(id)) {
+                                    discoverSeenIds.add(id)
+                                    batchResults.put(itm)
+                                }
+                            }
+                        }
+                    }
+
+                    if (batchResults.length() > 0) batchResults else null
                 } catch (_: Exception) {
                     null
                 }
@@ -1389,7 +1534,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             val initialActors = spotlightRankedActors.subList(0, initialBatchSize)
             spotlightActorIndexOffset = initialBatchSize
 
+            ensureActorMapping()
             val combinedResult = JSONArray()
+            val starredList = mutableListOf<Pair<JSONObject, Int>>()
+
             for (actor in initialActors) {
                 val credits = fetchActorCredits(actor)
                 var addedForActor = 0
@@ -1398,16 +1546,46 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     if (cid.isNotEmpty() && !spotlightSeenIds.contains(cid)) {
                         spotlightSeenIds.add(cid)
                         val creditCopy = JSONObject(credit.toString())
-                        creditCopy.put("spotlight_actor_name", actor.name)
-                        if (actor.profilePath.isNotBlank()) {
-                            creditCopy.put("spotlight_actor_profile", actor.profilePath)
+
+                        val mType = creditCopy.optString("media_type")
+                        val matchedActors = (if (mType.isNotEmpty()) globalMediaToActorMap["${mType}_$cid"] else null) 
+                            ?: globalMediaToActorMap[cid]
+
+                        val actorCount: Int
+                        if (!matchedActors.isNullOrEmpty()) {
+                            val arr = JSONArray()
+                            synchronized(matchedActors) {
+                                matchedActors.forEach { a ->
+                                    arr.put(JSONObject().apply {
+                                        put("id", a.id)
+                                        put("name", a.name)
+                                        put("profile_path", a.profilePath)
+                                    })
+                                }
+                            }
+                            creditCopy.put("spotlight_actors", arr)
+                            creditCopy.put("spotlight_actor_name", matchedActors[0].name)
+                            if (matchedActors[0].profilePath.isNotEmpty()) {
+                                creditCopy.put("spotlight_actor_profile", matchedActors[0].profilePath)
+                            }
+                            actorCount = matchedActors.size
+                        } else {
+                            creditCopy.put("spotlight_actor_name", actor.name)
+                            if (actor.profilePath.isNotBlank()) {
+                                creditCopy.put("spotlight_actor_profile", actor.profilePath)
+                            }
+                            actorCount = 1
                         }
-                        combinedResult.put(creditCopy)
+
+                        starredList.add(Pair(creditCopy, actorCount))
                         addedForActor++
                         if (addedForActor >= 3) break
                     }
                 }
             }
+
+            starredList.sortByDescending { it.second }
+            starredList.forEach { combinedResult.put(it.first) }
 
             withContext(Dispatchers.Main) {
                 _libraryItems.value = combinedResult
@@ -1438,6 +1616,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     spotlightActorIndexOffset += batchSize
                 }
 
+                val pageStarredList = mutableListOf<Pair<JSONObject, Int>>()
                 for (actor in actorsToProcess) {
                     val credits = fetchActorCredits(actor)
                     var addedForActor = 0
@@ -1446,16 +1625,45 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         if (cid.isNotEmpty() && !spotlightSeenIds.contains(cid)) {
                             spotlightSeenIds.add(cid)
                             val creditCopy = JSONObject(credit.toString())
-                            creditCopy.put("spotlight_actor_name", actor.name)
-                            if (actor.profilePath.isNotBlank()) {
-                                creditCopy.put("spotlight_actor_profile", actor.profilePath)
+
+                            val mType = creditCopy.optString("media_type")
+                            val matchedActors = (if (mType.isNotEmpty()) globalMediaToActorMap["${mType}_$cid"] else null) 
+                                ?: globalMediaToActorMap[cid]
+
+                            val actorCount: Int
+                            if (!matchedActors.isNullOrEmpty()) {
+                                val arr = JSONArray()
+                                synchronized(matchedActors) {
+                                    matchedActors.forEach { a ->
+                                        arr.put(JSONObject().apply {
+                                            put("id", a.id)
+                                            put("name", a.name)
+                                            put("profile_path", a.profilePath)
+                                        })
+                                    }
+                                }
+                                creditCopy.put("spotlight_actors", arr)
+                                creditCopy.put("spotlight_actor_name", matchedActors[0].name)
+                                if (matchedActors[0].profilePath.isNotEmpty()) {
+                                    creditCopy.put("spotlight_actor_profile", matchedActors[0].profilePath)
+                                }
+                                actorCount = matchedActors.size
+                            } else {
+                                creditCopy.put("spotlight_actor_name", actor.name)
+                                if (actor.profilePath.isNotBlank()) {
+                                    creditCopy.put("spotlight_actor_profile", actor.profilePath)
+                                }
+                                actorCount = 1
                             }
-                            nextBatch.put(creditCopy)
+
+                            pageStarredList.add(Pair(creditCopy, actorCount))
                             addedForActor++
                             if (addedForActor >= 3) break
                         }
                     }
                 }
+                pageStarredList.sortByDescending { it.second }
+                pageStarredList.forEach { nextBatch.put(it.first) }
                 if (nextBatch.length() > 0) nextBatch else null
             }
         }
@@ -1915,8 +2123,29 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             val actors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(context)
             val set = actors.filter { it.isEnabled }.map { it.id }.toSet()
+            val wasEmpty = _favoriteActorsSet.value.isEmpty()
+            val changed = _favoriteActorsSet.value != set
             withContext(Dispatchers.Main) {
                 _favoriteActorsSet.value = set
+            }
+            if (changed && !wasEmpty) {
+                refreshCurrentFeedWithActors()
+            }
+        }
+    }
+
+    fun refreshCurrentFeedWithActors() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val prioritizeFavCast = prefs.getBoolean("genres_prioritize_fav_cast", true)
+            if (prioritizeFavCast) {
+                ensureActorMapping()
+                val current = _libraryItems.value
+                if (current != null && current.length() > 0) {
+                    val refreshed = processFeedItems(current, prioritizeFavCast = true)
+                    withContext(Dispatchers.Main) {
+                        _libraryItems.value = refreshed
+                    }
+                }
             }
         }
     }
@@ -1948,6 +2177,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     _events.value = StreamsEvent.ShowToast("Added $name to Favourite Cast")
                 }
             }
+            refreshCurrentFeedWithActors()
         }
     }
 
@@ -2037,6 +2267,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun selectMediaItem(item: JSONObject, initialSeason: Int? = null) {
+        val id = item.optString("id").ifEmpty { item.optString("imdb") }
+        if (id.isNotEmpty()) {
+            lastViewedMediaId = id
+        }
         selectMediaItemInternal(item, initialSeason, pushToStack = true)
     }
 

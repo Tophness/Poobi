@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.RemoteImage
 import com.poobi.tvbrowser.shared.StreamResumeManager
@@ -148,12 +150,17 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     val recs by viewModel.itemRecommendations.collectAsState()
     val isFetchingTrailer by viewModel.isFetchingTrailer.collectAsState()
     val localEpisodes = episodes
+    val coroutineScope = rememberCoroutineScope()
     val lastWatchedEpisode by viewModel.lastWatchedEpisode.collectAsState()
     var autoFocusCancelled by remember(item) { mutableStateOf(false) }
     val targetEpisodeFocusRequester = remember { FocusRequester() }
+    val lastEpisodeFocusRequester = remember { FocusRequester() }
     val playButtonFocusRequester = remember { FocusRequester() }
     val seasonSelectorFocusRequester = remember { FocusRequester() }
     val firstCastFocusRequester = remember { FocusRequester() }
+    val castListState = rememberLazyListState()
+    var lastFocusedCastIndex by remember { mutableStateOf(0) }
+    val castItemFocusRequesters = remember { mutableMapOf<Int, FocusRequester>() }
     val titleRaw = details?.optString("title")?.takeIf { it.isNotBlank() } 
         ?: item?.optString("title")?.takeIf { it.isNotBlank() } 
         ?: details?.optString("name")?.takeIf { it.isNotBlank() } 
@@ -624,6 +631,33 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                 val textColor = if (isHighlighted) Color.Black else Color.White
                                 val descColor = if (isHighlighted) Color(0xFF333333) else Color(0xFFAAAAAA)
 
+                                val isLastEpisode = idx == localEpisodes.length() - 1
+                                val handleDownOnLastEpisode: () -> Boolean = {
+                                    if (isLastEpisode) {
+                                        coroutineScope.launch {
+                                            val castItemIdx = localEpisodes.length()
+                                            lazyListState.scrollToItem(castItemIdx)
+                                            val targetCastIdx = lastFocusedCastIndex.coerceAtLeast(0)
+                                            try {
+                                                castListState.scrollToItem((targetCastIdx - 1).coerceAtLeast(0))
+                                            } catch (_: Exception) {}
+                                            delay(30)
+                                            var attempts = 0
+                                            while (attempts < 15) {
+                                                try {
+                                                    val targetReq = castItemFocusRequesters[targetCastIdx] ?: firstCastFocusRequester
+                                                    targetReq.requestFocus()
+                                                    break
+                                                } catch (_: Exception) {
+                                                    attempts++
+                                                    delay(30)
+                                                }
+                                            }
+                                        }
+                                        true
+                                    } else false
+                                }
+
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -653,19 +687,14 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .let { if (isTarget) it.focusRequester(targetEpisodeFocusRequester) else it }
+                                            .then(if (isTarget) Modifier.focusRequester(targetEpisodeFocusRequester) else Modifier)
+                                            .then(if (isLastEpisode) Modifier.focusRequester(lastEpisodeFocusRequester) else Modifier)
                                             .onPreviewKeyEvent { keyEvent ->
                                                 val nativeEvent = keyEvent.nativeKeyEvent
-                                                if (idx == localEpisodes.length() - 1 && 
-                                                    nativeEvent.action == KeyEvent.ACTION_DOWN && 
-                                                    nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                                                    try {
-                                                        firstCastFocusRequester.requestFocus()
-                                                        true
-                                                    } catch (e: Exception) {
-                                                        false
-                                                    }
-                                                } else false
+                                                if (nativeEvent.action == KeyEvent.ACTION_DOWN && nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                                                    if (handleDownOnLastEpisode()) return@onPreviewKeyEvent true
+                                                }
+                                                false
                                             }
                                             .clickable(
                                                 interactionSource = playInteractionSource,
@@ -731,6 +760,13 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                                     else -> Color.Transparent
                                                 }
                                             )
+                                            .onPreviewKeyEvent { keyEvent ->
+                                                val nativeEvent = keyEvent.nativeKeyEvent
+                                                if (nativeEvent.action == KeyEvent.ACTION_DOWN && nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                                                    if (handleDownOnLastEpisode()) return@onPreviewKeyEvent true
+                                                }
+                                                false
+                                            }
                                             .clickable(
                                                 interactionSource = trailerInteractionSource,
                                                 indication = null,
@@ -770,6 +806,13 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                                     else -> Color.Transparent
                                                 }
                                             )
+                                            .onPreviewKeyEvent { keyEvent ->
+                                                val nativeEvent = keyEvent.nativeKeyEvent
+                                                if (nativeEvent.action == KeyEvent.ACTION_DOWN && nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                                                    if (handleDownOnLastEpisode()) return@onPreviewKeyEvent true
+                                                }
+                                                false
+                                            }
                                             .clickable(
                                                 interactionSource = watchedInteractionSource,
                                                 indication = null,
@@ -823,6 +866,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                 val currentCount = totalCast.coerceAtMost(visibleCastCount)
 
                                 LazyRow(
+                                    state = castListState,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
                                 ) {
@@ -834,10 +878,59 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                         val cPath = c.optString("profile_path")
                                         val cName = c.optString("name")
                                         val cId = c.optInt("id")
+                                        val isFirstCast = idx == 0
+                                        val isLastCast = idx == currentCount - 1 && currentCount >= totalCast
+
+                                        val castRequester = remember(idx) { FocusRequester() }
+                                        castItemFocusRequesters[idx] = castRequester
+
                                         TvFocusableBox(
                                             modifier = Modifier
                                                 .width(120.dp)
-                                                .let { if (idx == 0) it.focusRequester(firstCastFocusRequester) else it },
+                                                .focusRequester(castRequester)
+                                                .then(if (isFirstCast) Modifier.focusRequester(firstCastFocusRequester) else Modifier)
+                                                .onPreviewKeyEvent { keyEvent ->
+                                                    val nativeEvent = keyEvent.nativeKeyEvent
+                                                    if (nativeEvent.action == KeyEvent.ACTION_DOWN &&
+                                                        nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                                                        if (localEpisodes != null && localEpisodes.length() > 0) {
+                                                            coroutineScope.launch {
+                                                                val targetEpIdx = localEpisodes.length() - 1
+                                                                lazyListState.scrollToItem(targetEpIdx)
+                                                                delay(20)
+                                                                var attempts = 0
+                                                                while (attempts < 10) {
+                                                                    try {
+                                                                        lastEpisodeFocusRequester.requestFocus()
+                                                                        break
+                                                                    } catch (_: Exception) {
+                                                                        attempts++
+                                                                        delay(30)
+                                                                    }
+                                                                }
+                                                            }
+                                                            return@onPreviewKeyEvent true
+                                                        } else {
+                                                            try {
+                                                                if (mediaType == "movie") {
+                                                                    playButtonFocusRequester.requestFocus()
+                                                                } else {
+                                                                    seasonSelectorFocusRequester.requestFocus()
+                                                                }
+                                                                return@onPreviewKeyEvent true
+                                                            } catch (_: Exception) {}
+                                                        }
+                                                    }
+                                                    false
+                                                }
+                                                .focusProperties {
+                                                    if (isLastCast) {
+                                                        right = FocusRequester.Cancel
+                                                    }
+                                                },
+                                            onFocus = {
+                                                lastFocusedCastIndex = idx
+                                            },
                                             onClick = { viewModel.selectCastMember(cId, cName, cPath) }
                                         ) { isFocused ->
                                             Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
@@ -884,8 +977,15 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                             viewModel.loadMoreRecommendations()
                                         }
                                         val rItem = recs!!.getJSONObject(idx)
+                                        val isLastRec = idx == recs!!.length() - 1
                                         TvFocusableBox(
-                                            modifier = Modifier.wrapContentSize(),
+                                            modifier = Modifier
+                                                .wrapContentSize()
+                                                .focusProperties {
+                                                    if (isLastRec) {
+                                                        right = FocusRequester.Cancel
+                                                    }
+                                                },
                                             onClick = { viewModel.selectMediaItem(rItem) }
                                         ) { isFocused ->
                                             RichMediaCard(

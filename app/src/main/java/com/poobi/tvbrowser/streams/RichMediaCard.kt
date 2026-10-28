@@ -100,7 +100,58 @@ fun RichMediaCard(
                 }
             }
 
-            if (!model.spotlightActorProfile.isNullOrEmpty()) {
+            if (model.spotlightActors.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy((-10).dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    model.spotlightActors.take(4).forEach { actor ->
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xCC000000))
+                                .border(1.5.dp, Color(0xFF00BCD4), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (actor.profilePath.isNotEmpty()) {
+                                RemoteImage(
+                                    url = "https://image.tmdb.org/t/p/w185${actor.profilePath}",
+                                    contentDescription = actor.name,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape)
+                                )
+                            } else {
+                                Text(
+                                    text = actor.name.take(1).uppercase(),
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                    if (model.spotlightActors.size > 4) {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xCC000000))
+                                .border(1.5.dp, Color(0xFF00BCD4), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "+${model.spotlightActors.size - 4}",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            } else if (!model.spotlightActorProfile.isNullOrEmpty()) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)

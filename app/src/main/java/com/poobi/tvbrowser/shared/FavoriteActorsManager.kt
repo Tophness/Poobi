@@ -2,6 +2,7 @@ package com.poobi.tvbrowser.shared
 
 import android.content.Context
 import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -64,7 +65,7 @@ object FavoriteActorsManager {
     fun addActor(context: Context, actor: FavoriteActor): Boolean {
         val actors = getActors(context).toMutableList()
         val existingIndex = actors.indexOfFirst { it.id == actor.id }
-        return if (existingIndex != -1) {
+        val isNew = if (existingIndex != -1) {
             val existing = actors[existingIndex]
             val mergedTitles = existing.sourceTitles.toMutableList()
             actor.sourceTitles.forEach { if (!mergedTitles.contains(it)) mergedTitles.add(it) }
@@ -76,16 +77,20 @@ object FavoriteActorsManager {
             saveActors(context, actors)
             true
         }
+        AppCacheManager.clearFeedCaches(context)
+        return isNew
     }
 
     fun removeActor(context: Context, actorId: Int) {
         val actors = getActors(context).filterNot { it.id == actorId }
         saveActors(context, actors)
+        AppCacheManager.clearFeedCaches(context)
     }
 
     fun removeActors(context: Context, actorIds: Set<Int>) {
         val actors = getActors(context).filterNot { actorIds.contains(it.id) }
         saveActors(context, actors)
+        AppCacheManager.clearFeedCaches(context)
     }
 
     fun toggleActor(context: Context, actorId: Int, isEnabled: Boolean) {
@@ -94,12 +99,14 @@ object FavoriteActorsManager {
         if (index != -1) {
             actors[index] = actors[index].copy(isEnabled = isEnabled)
             saveActors(context, actors)
+            AppCacheManager.clearFeedCaches(context)
         }
     }
 
     fun setAllActors(context: Context, isEnabled: Boolean) {
         val actors = getActors(context).map { it.copy(isEnabled = isEnabled) }
         saveActors(context, actors)
+        AppCacheManager.clearFeedCaches(context)
     }
 
     fun getSelectedActorIds(context: Context): List<Int> {
@@ -128,6 +135,9 @@ object FavoriteActorsManager {
             var details = AppCacheManager.getDetails(context, mediaType, id)
             if (details == null && id.isNotEmpty() && id != "0") {
                 try {
+                    if (!Python.isStarted()) {
+                        Python.start(AndroidPlatform(context.applicationContext))
+                    }
                     val py = Python.getInstance()
                     val tmdb = py.getModule("tmdb.tmdb_utils")
                     val dStr = tmdb.callAttr("get_details", id, mediaType).toString()
@@ -171,6 +181,7 @@ object FavoriteActorsManager {
 
         if (hasNewActors) {
             saveActors(context, existingMap.values.toList())
+            AppCacheManager.clearFeedCaches(context)
         }
     }
 }

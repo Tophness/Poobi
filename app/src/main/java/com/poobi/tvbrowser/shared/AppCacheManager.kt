@@ -147,6 +147,40 @@ object AppCacheManager {
         } catch (_: Exception) {}
     }
 
+    // --- ACTOR CREDITS CACHE (DISK + RAM) ---
+
+    fun getActorCredits(context: Context, actorId: Int): JSONArray? {
+        val key = "actor_credits_$actorId"
+        val mem = libraryMemCache.get(key)
+        if (mem != null) return mem
+
+        val file = File(getJsonDir(context), "credits_$actorId.json")
+        if (file.exists()) {
+            val age = System.currentTimeMillis() - file.lastModified()
+            if (age < 7L * 24L * 60L * 60L * 1000L) { // 7 days TTL for actor filmographies
+                return try {
+                    val arr = JSONArray(file.readText(Charsets.UTF_8))
+                    libraryMemCache.put(key, arr)
+                    arr
+                } catch (e: Exception) {
+                    file.delete()
+                    null
+                }
+            }
+        }
+        return null
+    }
+
+    fun saveActorCredits(context: Context, actorId: Int, array: JSONArray) {
+        val key = "actor_credits_$actorId"
+        libraryMemCache.put(key, array)
+        try {
+            val file = File(getJsonDir(context), "credits_$actorId.json")
+            file.writeText(array.toString(), Charsets.UTF_8)
+            pruneCacheDir(getJsonDir(context), MAX_JSON_CACHE_BYTES)
+        } catch (_: Exception) {}
+    }
+
     // --- LIBRARY CATEGORY CACHE (DISK + RAM) ---
 
     fun getLibraryCategory(context: Context, key: String): JSONArray? {
@@ -176,6 +210,19 @@ object AppCacheManager {
             val file = File(getJsonDir(context), "lib_${md5(key)}.json")
             file.writeText(array.toString(), Charsets.UTF_8)
             pruneCacheDir(getJsonDir(context), MAX_JSON_CACHE_BYTES)
+        } catch (_: Exception) {}
+    }
+
+    fun clearFeedCaches(context: Context) {
+        libraryMemCache.evictAll()
+        try {
+            val dir = getJsonDir(context)
+            val files = dir.listFiles() ?: return
+            for (file in files) {
+                if (file.name.startsWith("lib_")) {
+                    file.delete()
+                }
+            }
         } catch (_: Exception) {}
     }
 
