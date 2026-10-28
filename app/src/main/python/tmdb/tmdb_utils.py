@@ -33,6 +33,9 @@ def get_movies_in_cinemas(page=1):
     return _session.get(url, headers=get_headers()).json()
 
 def get_trending(media_type='all', time_window='day', page=1):
+    if isinstance(time_window, int) or (isinstance(time_window, str) and time_window.isdigit()):
+        page = int(time_window)
+        time_window = 'day'
     url = f"{API_URL}/trending/{media_type}/{time_window}?page={page}"
     return _session.get(url, headers=get_headers()).json()
 

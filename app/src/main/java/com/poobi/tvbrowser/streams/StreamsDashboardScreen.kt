@@ -277,11 +277,7 @@ fun StreamsDashboardScreen(
         else -> "Default"
     }
 
-    val sortPrefKey = "streams_card_sort_cat_${activeCategoryIndex}_$currentActivePillIndex"
-    var currentSort by remember(activeCategoryIndex, currentActivePillIndex) {
-        mutableStateOf(viewModel.prefs.getString(sortPrefKey, defaultSort) ?: defaultSort)
-    }
-
+    var feedSortVersion by remember { mutableStateOf(0) }
     var showSortDialog by remember { mutableStateOf(false) }
 
     val searchFieldFocusRequester = searchBarFocusRequester ?: remember { FocusRequester() }
@@ -290,7 +286,7 @@ fun StreamsDashboardScreen(
     var lastFocusedHistoryIndex by remember { mutableStateOf(0) }
     val lastHistoryFocusRequester = remember { FocusRequester() }
 
-    var lastFocusedCardIndex by remember(activeCategoryIndex, currentActivePillIndex, searchResults, currentSort) { 
+    var lastFocusedCardIndex by remember(activeCategoryIndex, currentActivePillIndex, searchResults, feedSortVersion) { 
         mutableStateOf(if (viewModel.isReturningFromDetails) viewModel.lastViewedCardIndex else 0) 
     }
     val lastCardFocusRequester = cardFocusRequester ?: remember { FocusRequester() }
@@ -667,7 +663,7 @@ fun StreamsDashboardScreen(
                         (0 until itemsToShow.length()).map { itemsToShow.getJSONObject(it) }
                     }
 
-                    val recentPlayedJson = remember(activeCategoryIndex, currentSort) {
+                    val recentPlayedJson = remember(activeCategoryIndex, feedSortVersion) {
                         viewModel.prefs.getString("streams_recently_played", "[]") ?: "[]"
                     }
 
@@ -687,7 +683,7 @@ fun StreamsDashboardScreen(
                         map
                     }
 
-                    val accessTimeMap = remember(activeCategoryIndex, currentSort) {
+                    val accessTimeMap = remember(activeCategoryIndex, feedSortVersion) {
                         val map = mutableMapOf<String, Long>()
                         try {
                             val json = viewModel.prefs.getString("media_last_accessed_map", "{}") ?: "{}"
@@ -734,28 +730,70 @@ fun StreamsDashboardScreen(
                         }
                     }
 
-                    val objList = remember(baseList, currentSort, recentRankMap, accessTimeMap) {
-                        when (currentSort) {
-                            "A-Z" -> baseList.sortedBy { getItemTitle(it).lowercase() }
-                            "Last Accessed" -> {
-                                if (isRecentlyWatched) {
-                                    baseList
-                                } else {
-                                    baseList.sortedWith { a, b ->
-                                        val sA = getAccessScore(a)
-                                        val sB = getAccessScore(b)
-                                        if (sA != sB) sB.compareTo(sA) else 0
-                                    }
-                                }
+                    val getItemRating = { wrapper: JSONObject ->
+                        val itm = if (wrapper.has("item")) wrapper.optJSONObject("item") ?: wrapper else wrapper
+                        itm.optDouble("vote_average", 0.0)
+                    }
+
+                    val getItemAddedIndex = { wrapper: JSONObject ->
+                        baseList.indexOf(wrapper)
+                    }
+
+                    val feedPriorities = remember(feedSortVersion) {
+                        viewModel.prefs.getString("feed_sort_priorities", null)?.let {
+                            val arr = JSONArray(it)
+                            val list = (0 until arr.length()).map { i -> arr.getString(i) }.toMutableList()
+                            if (!list.contains("FAV_ACTORS")) {
+                                list.add(0, "FAV_ACTORS")
                             }
-                            "Last Added" -> {
-                                if (isFavorites) {
-                                    baseList
-                                } else {
-                                    (itemsToShow.length() - 1 downTo 0).map { itemsToShow.getJSONObject(it) }
-                                }
+                            list
+                        } ?: listOf("FAV_ACTORS", "RATING", "LAST_ACCESSED", "LAST_ADDED", "A_Z", "DEFAULT")
+                    }
+
+                    val compareByCriteria = { criteria: String, a: JSONObject, b: JSONObject ->
+                        when (criteria) {
+                            "FAV_ACTORS" -> {
+                                val cA = viewModel.getFavActorCount(a)
+                                val cB = viewModel.getFavActorCount(b)
+                                cB.compareTo(cA)
                             }
-                            else -> baseList
+                            "RATING" -> {
+                                val rA = getItemRating(a)
+                                val rB = getItemRating(b)
+                                rB.compareTo(rA)
+                            }
+                            "LAST_ACCESSED" -> {
+                                val sA = getAccessScore(a)
+                                val sB = getAccessScore(b)
+                                sB.compareTo(sA)
+                            }
+                            "LAST_ADDED" -> {
+                                val iA = getItemAddedIndex(a)
+                                val iB = getItemAddedIndex(b)
+                                if (isFavorites) iA.compareTo(iB) else iB.compareTo(iA)
+                            }
+                            "A_Z", "A-Z" -> {
+                                val tA = getItemTitle(a).lowercase()
+                                val tB = getItemTitle(b).lowercase()
+                                tA.compareTo(tB)
+                            }
+                            "DEFAULT" -> {
+                                val iA = getItemAddedIndex(a)
+                                val iB = getItemAddedIndex(b)
+                                iA.compareTo(iB)
+                            }
+                            else -> 0
+                        }
+                    }
+
+                    val objList = remember(baseList, feedPriorities, recentRankMap, accessTimeMap, feedSortVersion) {
+                        baseList.sortedWith { a, b ->
+                            var result = 0
+                            for (criteria in feedPriorities) {
+                                result = compareByCriteria(criteria, a, b)
+                                if (result != 0) break
+                            }
+                            result
                         }
                     }
 
@@ -775,7 +813,7 @@ fun StreamsDashboardScreen(
 
                     val targetCardIndex = if (viewModel.isReturningFromDetails) initialTargetIdx else lastFocusedCardIndex.coerceIn(0, (objList.size - 1).coerceAtLeast(0))
                     val initialScrollIdx = if (viewModel.isReturningFromDetails) (targetCardIndex - 1).coerceAtLeast(0) else 0
-                    val mainCardsListState = key(activeCategoryIndex, currentActivePillIndex, currentSort) { 
+                    val mainCardsListState = key(activeCategoryIndex, currentActivePillIndex, feedSortVersion) { 
                         rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIdx) 
                     }
 
@@ -801,7 +839,7 @@ fun StreamsDashboardScreen(
                                         val id = itm.optString("id").ifEmpty { itm.optString("imdb", idx.toString()) }
                                         val s = wrapper.optInt("season", -1)
                                         val e = wrapper.optInt("episode", -1)
-                                        "${activeCategoryIndex}_${currentActivePillIndex}_${id}_${s}_${e}_$currentSort"
+                                        "${activeCategoryIndex}_${currentActivePillIndex}_${id}_${s}_${e}_$feedSortVersion"
                                     }
                                 ) { index, wrapper ->
                                     if (index >= objList.size - 4 && !isFavorites && !isRecentlyWatched) {
@@ -1035,46 +1073,97 @@ fun StreamsDashboardScreen(
     }
 
     if (showSortDialog) {
-        val sortOptions = when (activeCategoryIndex) {
-            1 -> listOf("Last Added", "Last Accessed", "A-Z")
-            2 -> listOf("Last Accessed", "A-Z")
-            else -> listOf("Default", "A-Z")
+        val prefsKey = "feed_sort_priorities"
+        val defaultList = listOf("FAV_ACTORS", "RATING", "LAST_ACCESSED", "LAST_ADDED", "A_Z", "DEFAULT")
+
+        var prioritiesList by remember {
+            mutableStateOf(
+                viewModel.prefs.getString(prefsKey, null)?.let {
+                    val arr = JSONArray(it)
+                    val list = (0 until arr.length()).map { i -> arr.getString(i) }.toMutableList()
+                    if (!list.contains("FAV_ACTORS")) {
+                        list.add(0, "FAV_ACTORS")
+                    }
+                    list
+                } ?: defaultList
+            )
         }
 
         AlertDialog(
             onDismissRequest = { showSortDialog = false },
-            title = { Text("Sort Options", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            title = { Text("Feed Sorter Priorities", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
             containerColor = Color(0xFF222225),
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    sortOptions.forEach { option ->
-                        val isSelected = currentSort == option
-                        TvFocusableBox(
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                            onClick = {
-                                viewModel.prefs.edit().putString(sortPrefKey, option).apply()
-                                currentSort = option
-                                showSortDialog = false
-                            }
-                        ) { isFocused ->
+                    prioritiesList.forEachIndexed { index, criteria ->
+                        val displayName = when (criteria) {
+                            "FAV_ACTORS" -> "Favourite Actors"
+                            "RATING" -> "Rating"
+                            "LAST_ACCESSED" -> "Last Accessed"
+                            "LAST_ADDED" -> "Last Added"
+                            "A_Z", "A-Z" -> "A-Z"
+                            "DEFAULT" -> "Default Feed Order"
+                            else -> criteria
+                        }
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF333338))
+                        ) {
                             Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = option,
-                                    color = if (isFocused) Color.Black else Color.White,
-                                    fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 15.sp,
+                                    text = displayName,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 14.sp,
                                     modifier = Modifier.weight(1f)
                                 )
-                                if (isSelected) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_watched),
-                                        contentDescription = "Selected",
-                                        tint = if (isFocused) Color.Black else Color(0xFF00BCD4),
-                                        modifier = Modifier.size(20.dp)
-                                    )
+
+                                if (index > 0) {
+                                    TvFocusableBox(
+                                        modifier = Modifier.size(32.dp),
+                                        onClick = {
+                                            val list = prioritiesList.toMutableList()
+                                            val temp = list[index]
+                                            list[index] = list[index - 1]
+                                            list[index - 1] = temp
+                                            prioritiesList = list
+                                            viewModel.prefs.edit().putString(prefsKey, JSONArray(list).toString()).apply()
+                                            feedSortVersion++
+                                        }
+                                    ) { isFocused ->
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_arrow_up),
+                                            contentDescription = "Move Up",
+                                            tint = if (isFocused) Color.Black else Color.White,
+                                            modifier = Modifier.fillMaxSize().padding(6.dp)
+                                        )
+                                    }
+                                }
+                                if (index < prioritiesList.size - 1) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    TvFocusableBox(
+                                        modifier = Modifier.size(32.dp),
+                                        onClick = {
+                                            val list = prioritiesList.toMutableList()
+                                            val temp = list[index]
+                                            list[index] = list[index + 1]
+                                            list[index + 1] = temp
+                                            prioritiesList = list
+                                            viewModel.prefs.edit().putString(prefsKey, JSONArray(list).toString()).apply()
+                                            feedSortVersion++
+                                        }
+                                    ) { isFocused ->
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_arrow_down),
+                                            contentDescription = "Move Down",
+                                            tint = if (isFocused) Color.Black else Color.White,
+                                            modifier = Modifier.fillMaxSize().padding(6.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1084,12 +1173,12 @@ fun StreamsDashboardScreen(
             confirmButton = {
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp).width(90.dp),
-                    defaultColor = Color(0xFF333338),
+                    defaultColor = Color(0xFF4CAF50),
                     shape = RoundedCornerShape(20.dp),
                     onClick = { showSortDialog = false }
                 ) { isFocused ->
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Close", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        Text("Apply", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }

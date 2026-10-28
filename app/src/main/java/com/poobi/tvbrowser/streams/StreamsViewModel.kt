@@ -529,6 +529,14 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         resumeScrape()
     }
 
+    fun getFavActorCount(wrapper: JSONObject): Int {
+        val itm = if (wrapper.has("item")) wrapper.optJSONObject("item") ?: wrapper else wrapper
+        val id = itm.optString("id")
+        val mType = itm.optString("media_type")
+        val actorList = (if (mType.isNotEmpty()) globalMediaToActorMap["${mType}_$id"] else null) ?: globalMediaToActorMap[id]
+        return actorList?.size ?: (itm.optJSONArray("spotlight_actors")?.length() ?: 0)
+    }
+
     fun setActiveCategoryIndex(index: Int) {
         if (index != 0) clearPendingSearchQuery()
         _activeCategoryIndex.value = index

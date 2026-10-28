@@ -2312,187 +2312,300 @@ class SettingsActivity : AppCompatActivity() {
             )
         }
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            PanelHeader("Results Sorter Priorities")
-            
-            Spacer(modifier = Modifier.height(10.dp))
+        var feedPriorities by remember {
+            mutableStateOf(
+                prefs.getString("feed_sort_priorities", null)?.let {
+                    val arr = JSONArray(it)
+                    val list = (0 until arr.length()).map { i -> arr.getString(i) }.toMutableList()
+                    if (!list.contains("FAV_ACTORS")) {
+                        list.add(0, "FAV_ACTORS")
+                    }
+                    list
+                } ?: listOf("FAV_ACTORS", "RATING", "LAST_ACCESSED", "LAST_ADDED", "A_Z", "DEFAULT")
+            )
+        }
 
-            Row(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+            item {
+                PanelHeader("Results Sorter Priorities")
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    Text(
-                        text = "Regular Streams Sorter",
-                        color = Color(0xFF00BCD4),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Regular Streams Sorter",
+                            color = Color(0xFF00BCD4),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
 
-                    streamPriorities.forEachIndexed { index, criteria ->
-                        val displayName = when (criteria) {
-                            "NATIVE" -> "Native Player Compatibility"
-                            "DIRECT" -> "Direct Links"
-                            "RESOLUTION" -> "Resolution"
-                            "SOURCE" -> "Host / Source Name"
-                            else -> criteria
-                        }
+                        streamPriorities.forEachIndexed { index, criteria ->
+                            val displayName = when (criteria) {
+                                "NATIVE" -> "Native Player Compatibility"
+                                "DIRECT" -> "Direct Links"
+                                "RESOLUTION" -> "Resolution"
+                                "SOURCE" -> "Host / Source Name"
+                                else -> criteria
+                            }
 
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))
                             ) {
-                                Text(
-                                    text = displayName,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 14.sp,
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = displayName,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 14.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
 
-                                if (index > 0) {
-                                    TvFocusableBox(
-                                        modifier = Modifier.size(32.dp),
-                                        onClick = {
-                                            val list = streamPriorities.toMutableList()
-                                            val temp = list[index]
-                                            list[index] = list[index - 1]
-                                            list[index - 1] = temp
-                                            streamPriorities = list
-                                            val prioritiesStr = JSONArray(list).toString()
-                                            prefs.edit().putString("sort_priorities", prioritiesStr).apply()
+                                    if (index > 0) {
+                                        TvFocusableBox(
+                                            modifier = Modifier.size(32.dp),
+                                            onClick = {
+                                                val list = streamPriorities.toMutableList()
+                                                val temp = list[index]
+                                                list[index] = list[index - 1]
+                                                list[index - 1] = temp
+                                                streamPriorities = list
+                                                val prioritiesStr = JSONArray(list).toString()
+                                                prefs.edit().putString("sort_priorities", prioritiesStr).apply()
+                                            }
+                                        ) { isFocused ->
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.ic_arrow_up),
+                                                contentDescription = "Move Up",
+                                                tint = if (isFocused) Color.Black else Color.White,
+                                                modifier = Modifier.fillMaxSize().padding(6.dp)
+                                            )
                                         }
-                                    ) { isFocused ->
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_arrow_up),
-                                            contentDescription = "Move Up",
-                                            tint = if (isFocused) Color.Black else Color.White,
-                                            modifier = Modifier.fillMaxSize().padding(6.dp)
-                                        )
+                                    }
+                                    if (index < streamPriorities.size - 1) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        TvFocusableBox(
+                                            modifier = Modifier.size(32.dp),
+                                            onClick = {
+                                                val list = streamPriorities.toMutableList()
+                                                val temp = list[index]
+                                                list[index] = list[index + 1]
+                                                list[index + 1] = temp
+                                                streamPriorities = list
+                                                val prioritiesStr = JSONArray(list).toString()
+                                                prefs.edit().putString("sort_priorities", prioritiesStr).apply()
+                                            }
+                                        ) { isFocused ->
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.ic_arrow_down),
+                                                contentDescription = "Move Down",
+                                                tint = if (isFocused) Color.Black else Color.White,
+                                                modifier = Modifier.fillMaxSize().padding(6.dp)
+                                            )
+                                        }
                                     }
                                 }
-                                if (index < streamPriorities.size - 1) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    TvFocusableBox(
-                                        modifier = Modifier.size(32.dp),
-                                        onClick = {
-                                            val list = streamPriorities.toMutableList()
-                                            val temp = list[index]
-                                            list[index] = list[index + 1]
-                                            list[index + 1] = temp
-                                            streamPriorities = list
-                                            val prioritiesStr = JSONArray(list).toString()
-                                            prefs.edit().putString("sort_priorities", prioritiesStr).apply()
+                            }
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .height(240.dp)
+                            .width(1.dp)
+                            .background(Color(0xFF333338))
+                    )
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Torrents Sorter",
+                            color = Color(0xFF00BCD4),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+
+                        torrentPriorities.forEachIndexed { index, criteria ->
+                            val displayName = when (criteria) {
+                                "LANGUAGE" -> "Language"
+                                "SIZE" -> "File Size"
+                                "SEEDERS" -> "Seeders"
+                                "RESOLUTION" -> "Resolution"
+                                else -> criteria
+                            }
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = displayName,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 14.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    if (index > 0) {
+                                        TvFocusableBox(
+                                            modifier = Modifier.size(32.dp),
+                                            onClick = {
+                                                val list = torrentPriorities.toMutableList()
+                                                val temp = list[index]
+                                                list[index] = list[index - 1]
+                                                list[index - 1] = temp
+                                                torrentPriorities = list
+                                                val prioritiesStr = JSONArray(list).toString()
+                                                prefs.edit().putString("torrent_sort_priorities", prioritiesStr).apply()
+                                            }
+                                        ) { isFocused ->
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.ic_arrow_up),
+                                                contentDescription = "Move Up",
+                                                tint = if (isFocused) Color.Black else Color.White,
+                                                modifier = Modifier.fillMaxSize().padding(6.dp)
+                                            )
                                         }
-                                    ) { isFocused ->
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_arrow_down),
-                                            contentDescription = "Move Down",
-                                            tint = if (isFocused) Color.Black else Color.White,
-                                            modifier = Modifier.fillMaxSize().padding(6.dp)
-                                        )
+                                    }
+                                    if (index < torrentPriorities.size - 1) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        TvFocusableBox(
+                                            modifier = Modifier.size(32.dp),
+                                            onClick = {
+                                                val list = torrentPriorities.toMutableList()
+                                                val temp = list[index]
+                                                list[index] = list[index + 1]
+                                                list[index + 1] = temp
+                                                torrentPriorities = list
+                                                val prioritiesStr = JSONArray(list).toString()
+                                                prefs.edit().putString("torrent_sort_priorities", prioritiesStr).apply()
+                                            }
+                                        ) { isFocused ->
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.ic_arrow_down),
+                                                contentDescription = "Move Down",
+                                                tint = if (isFocused) Color.Black else Color.White,
+                                                modifier = Modifier.fillMaxSize().padding(6.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
 
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .width(1.dp)
+                        .fillMaxWidth()
+                        .height(1.dp)
                         .background(Color(0xFF333338))
                 )
+            }
 
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            item {
+                Text(
+                    text = "Feed",
+                    color = Color(0xFF00BCD4),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+            }
+
+            itemsIndexed(feedPriorities) { index, criteria ->
+                val displayName = when (criteria) {
+                    "FAV_ACTORS" -> "Favourite Actors"
+                    "RATING" -> "Rating"
+                    "LAST_ACCESSED" -> "Last Accessed"
+                    "LAST_ADDED" -> "Last Added"
+                    "A_Z", "A-Z" -> "A-Z (Alphabetical)"
+                    "DEFAULT" -> "Default Feed Order"
+                    else -> criteria
+                }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))
                 ) {
-                    Text(
-                        text = "Torrents Sorter",
-                        color = Color(0xFF00BCD4),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = displayName,
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 14.sp,
+                            modifier = Modifier.weight(1f)
+                        )
 
-                    torrentPriorities.forEachIndexed { index, criteria ->
-                        val displayName = when (criteria) {
-                            "LANGUAGE" -> "Language"
-                            "SIZE" -> "File Size"
-                            "SEEDERS" -> "Seeders"
-                            "RESOLUTION" -> "Resolution"
-                            else -> criteria
-                        }
-
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = displayName,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 14.sp,
-                                    modifier = Modifier.weight(1f)
+                        if (index > 0) {
+                            TvFocusableBox(
+                                modifier = Modifier.size(32.dp),
+                                onClick = {
+                                    val list = feedPriorities.toMutableList()
+                                    val temp = list[index]
+                                    list[index] = list[index - 1]
+                                    list[index - 1] = temp
+                                    feedPriorities = list
+                                    val prioritiesStr = JSONArray(list).toString()
+                                    prefs.edit().putString("feed_sort_priorities", prioritiesStr).apply()
+                                }
+                            ) { isFocused ->
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_arrow_up),
+                                    contentDescription = "Move Up",
+                                    tint = if (isFocused) Color.Black else Color.White,
+                                    modifier = Modifier.fillMaxSize().padding(6.dp)
                                 )
-
-                                if (index > 0) {
-                                    TvFocusableBox(
-                                        modifier = Modifier.size(32.dp),
-                                        onClick = {
-                                            val list = torrentPriorities.toMutableList()
-                                            val temp = list[index]
-                                            list[index] = list[index - 1]
-                                            list[index - 1] = temp
-                                            torrentPriorities = list
-                                            val prioritiesStr = JSONArray(list).toString()
-                                            prefs.edit().putString("torrent_sort_priorities", prioritiesStr).apply()
-                                        }
-                                    ) { isFocused ->
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_arrow_up),
-                                            contentDescription = "Move Up",
-                                            tint = if (isFocused) Color.Black else Color.White,
-                                            modifier = Modifier.fillMaxSize().padding(6.dp)
-                                        )
-                                    }
+                            }
+                        }
+                        if (index < feedPriorities.size - 1) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            TvFocusableBox(
+                                modifier = Modifier.size(32.dp),
+                                onClick = {
+                                    val list = feedPriorities.toMutableList()
+                                    val temp = list[index]
+                                    list[index] = list[index + 1]
+                                    list[index + 1] = temp
+                                    feedPriorities = list
+                                    val prioritiesStr = JSONArray(list).toString()
+                                    prefs.edit().putString("feed_sort_priorities", prioritiesStr).apply()
                                 }
-                                if (index < torrentPriorities.size - 1) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    TvFocusableBox(
-                                        modifier = Modifier.size(32.dp),
-                                        onClick = {
-                                            val list = torrentPriorities.toMutableList()
-                                            val temp = list[index]
-                                            list[index] = list[index + 1]
-                                            list[index + 1] = temp
-                                            torrentPriorities = list
-                                            val prioritiesStr = JSONArray(list).toString()
-                                            prefs.edit().putString("torrent_sort_priorities", prioritiesStr).apply()
-                                        }
-                                    ) { isFocused ->
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_arrow_down),
-                                            contentDescription = "Move Down",
-                                            tint = if (isFocused) Color.Black else Color.White,
-                                            modifier = Modifier.fillMaxSize().padding(6.dp)
-                                        )
-                                    }
-                                }
+                            ) { isFocused ->
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_arrow_down),
+                                    contentDescription = "Move Down",
+                                    tint = if (isFocused) Color.Black else Color.White,
+                                    modifier = Modifier.fillMaxSize().padding(6.dp)
+                                )
                             }
                         }
                     }
