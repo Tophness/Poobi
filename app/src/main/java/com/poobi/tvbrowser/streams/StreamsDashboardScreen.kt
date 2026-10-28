@@ -315,10 +315,16 @@ fun StreamsDashboardScreen(
     val isDeletable = isFavorites || isRecentlyWatched
 
     val suggestionsListState = rememberLazyListState()
+    var lastScrolledQuery by remember { mutableStateOf("") }
 
     LaunchedEffect(searchInput) {
         lastFocusedCardIndex = 0
-        if (activeCategoryIndex == 0) {
+    }
+
+    LaunchedEffect(liveSuggestions) {
+        if (liveSuggestions.isNotEmpty() && activeCategoryIndex == 0 && searchInput != lastScrolledQuery) {
+            lastScrolledQuery = searchInput
+            lastFocusedCardIndex = 0
             try {
                 suggestionsListState.scrollToItem(0)
             } catch (_: Exception) {}
