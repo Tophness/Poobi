@@ -150,10 +150,25 @@ class source:
             if not clean_urls:
                 return self.results
 
+            ordered_urls = list(clean_urls)
+            if len(ordered_urls) > 1:
+                better_mirror = ordered_urls.pop(1)
+                ordered_urls.insert(0, better_mirror)
+
             quality, quality_rank, audio, info_str = self._parse_metadata(file_name)
 
             header_query = urllib.parse.urlencode(STREAM_HEADERS)
-            primary_playable_url = f"{clean_urls[0]}|{header_query}"
+            primary_playable_url = f"{ordered_urls[0]}|{header_query}"
+
+            alt_urls = [f"{u}|{header_query}" for u in ordered_urls]
+            alt_names = []
+            for idx in range(len(ordered_urls)):
+                if idx == 0:
+                    alt_names.append("Mirror 1 (Primary)")
+                elif idx == 1:
+                    alt_names.append("Mirror 2 (Fallback)")
+                else:
+                    alt_names.append(f"Mirror {idx + 1}")
 
             self.results.append({
                 'title': 'MovieSeq',
@@ -167,7 +182,9 @@ class source:
                 'info': info_str,
                 'audio': audio,
                 'languages_display': audio,
-                'headers': STREAM_HEADERS
+                'headers': STREAM_HEADERS,
+                'alternative_urls': alt_urls,
+                'alternative_names': alt_names
             })
 
         except Exception:
