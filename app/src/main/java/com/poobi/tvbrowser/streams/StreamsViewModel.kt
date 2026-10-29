@@ -1279,8 +1279,18 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 currentFeedPage = nextPage
                 val current = _libraryItems.value ?: JSONArray()
                 val combined = JSONArray(current.toString())
+                val seenIds = mutableSetOf<String>()
+                for (i in 0 until combined.length()) {
+                    val itm = combined.optJSONObject(i)
+                    val id = itm?.optString("id") ?: ""
+                    if (id.isNotEmpty()) seenIds.add(id)
+                }
                 for (i in 0 until newItems.length()) {
-                    combined.put(newItems.getJSONObject(i))
+                    val itm = newItems.getJSONObject(i)
+                    val id = itm.optString("id")
+                    if (id.isEmpty() || seenIds.add(id)) {
+                        combined.put(itm)
+                    }
                 }
                 withContext(Dispatchers.Main) {
                     _libraryItems.value = combined

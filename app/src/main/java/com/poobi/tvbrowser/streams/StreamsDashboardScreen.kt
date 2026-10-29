@@ -240,6 +240,11 @@ fun StreamsDashboardScreen(
     val tvShowsPillTitle by viewModel.tvShowsPillTitle.collectAsState()
     val discoverPillTitle by viewModel.discoverPillTitle.collectAsState()
 
+    val forYouActiveIndex = forYouPills.indexOfFirst { it.first == forYouPillTitle }.coerceAtLeast(0)
+    val moviesActiveIndex = moviesPills.indexOfFirst { it.first == moviesPillTitle }.coerceAtLeast(0)
+    val tvShowsActiveIndex = tvShowsPills.indexOfFirst { it.first == tvShowsPillTitle }.coerceAtLeast(0)
+    val discoverActiveIndex = discoverPills.indexOfFirst { it.first == discoverPillTitle }.coerceAtLeast(0)
+
     val currentPills = when (activeCategoryIndex) {
         1 -> forYouPills
         2 -> moviesPills
@@ -249,10 +254,10 @@ fun StreamsDashboardScreen(
     }
 
     val currentActivePillIndex = when (activeCategoryIndex) {
-        1 -> forYouPills.indexOfFirst { it.first == forYouPillTitle }.let { if (it >= 0) it else 0 }
-        2 -> moviesPills.indexOfFirst { it.first == moviesPillTitle }.let { if (it >= 0) it else 0 }
-        3 -> tvShowsPills.indexOfFirst { it.first == tvShowsPillTitle }.let { if (it >= 0) it else 0 }
-        4 -> discoverPills.indexOfFirst { it.first == discoverPillTitle }.let { if (it >= 0) it else 0 }
+        1 -> forYouActiveIndex
+        2 -> moviesActiveIndex
+        3 -> tvShowsActiveIndex
+        4 -> discoverActiveIndex
         else -> 0
     }
 
@@ -261,10 +266,10 @@ fun StreamsDashboardScreen(
 
     val categories = listOf(
         "Search" to { viewModel.loadSearchHistory() },
-        "For You" to { forYouPills.getOrNull(currentActivePillIndex)?.third?.invoke() ?: viewModel.loadFavorites() },
-        "Movies" to { moviesPills.getOrNull(currentActivePillIndex)?.third?.invoke() ?: viewModel.loadLibraryCategory("Trending Today", "get_trending", "movie") },
-        "TV Shows" to { tvShowsPills.getOrNull(currentActivePillIndex)?.third?.invoke() ?: viewModel.loadLibraryCategory("Popular TV", "get_popular", "tv") },
-        "Discover" to { discoverPills.getOrNull(currentActivePillIndex)?.third?.invoke() }
+        "For You" to { forYouPills.getOrNull(forYouActiveIndex)?.third?.invoke() ?: viewModel.loadFavorites() },
+        "Movies" to { moviesPills.getOrNull(moviesActiveIndex)?.third?.invoke() ?: viewModel.loadLibraryCategory("Trending Today", "get_trending", "movie") },
+        "TV Shows" to { tvShowsPills.getOrNull(tvShowsActiveIndex)?.third?.invoke() ?: viewModel.loadLibraryCategory("Popular TV", "get_popular", "tv") },
+        "Discover" to { discoverPills.getOrNull(discoverActiveIndex)?.third?.invoke() }
     )
 
     val activePillTitle = currentPills.getOrNull(currentActivePillIndex)?.first ?: ""
@@ -657,10 +662,22 @@ fun StreamsDashboardScreen(
             } else {
                 val itemsToShow = if (activeCategoryIndex == 0) searchResults else libraryItems
                 if (itemsToShow != null) {
-                    val baseList = if (isFavorites) {
-                        (itemsToShow.length() - 1 downTo 0).map { itemsToShow.getJSONObject(it) }
-                    } else {
-                        (0 until itemsToShow.length()).map { itemsToShow.getJSONObject(it) }
+                    val baseList = remember(itemsToShow, isFavorites) {
+                        val list = mutableListOf<JSONObject>()
+                        val seen = mutableSetOf<String>()
+                        val range = if (isFavorites) (itemsToShow.length() - 1 downTo 0) else (0 until itemsToShow.length())
+                        for (i in range) {
+                            val wrapper = itemsToShow.optJSONObject(i) ?: continue
+                            val itm = if (wrapper.has("item")) wrapper.optJSONObject("item") ?: wrapper else wrapper
+                            val id = itm.optString("id").ifEmpty { itm.optString("imdb", "idx_$i") }
+                            val s = wrapper.optInt("season", -1)
+                            val e = wrapper.optInt("episode", -1)
+                            val dedupeKey = "${id}_${s}_${e}"
+                            if (seen.add(dedupeKey)) {
+                                list.add(wrapper)
+                            }
+                        }
+                        list
                     }
 
                     val recentPlayedJson = remember(activeCategoryIndex, feedSortVersion) {
