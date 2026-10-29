@@ -940,7 +940,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         isActorMappingBuilt = true
         lastActorMappingSignature = signature
 
-        // Fetch any uncached actors in parallel in the background without blocking feed display
         if (uncachedActors.isNotEmpty()) {
             viewModelScope.launch(Dispatchers.IO) {
                 try {
@@ -963,6 +962,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                                 }
                             }.awaitAll()
                         }
+                    }
+                    withContext(Dispatchers.Main) {
+                        refreshCurrentFeedWithActors()
                     }
                 } catch (_: Exception) {}
             }
@@ -988,12 +990,18 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             if (actorList.isNullOrEmpty() && itm.has("spotlight_actors")) {
                 val arr = itm.optJSONArray("spotlight_actors")
                 if (arr != null && arr.length() > 0) {
+                    val favSet = _favoriteActorsSet.value
                     val list = mutableListOf<SpotlightActorInfo>()
                     for (k in 0 until arr.length()) {
                         val a = arr.getJSONObject(k)
-                        list.add(SpotlightActorInfo(a.optString("name"), a.optString("profile_path"), a.optInt("id")))
+                        val aId = a.optInt("id")
+                        if (favSet.isEmpty() || favSet.contains(aId)) {
+                            list.add(SpotlightActorInfo(a.optString("name"), a.optString("profile_path"), aId))
+                        }
                     }
-                    actorList = list
+                    if (list.isNotEmpty()) {
+                        actorList = list
+                    }
                 }
             }
 
@@ -1020,6 +1028,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     regularItems.add(itm)
                 }
             } else {
+                itm.remove("spotlight_actors")
+                itm.remove("spotlight_actor_name")
+                itm.remove("spotlight_actor_profile")
                 regularItems.add(itm)
             }
         }
@@ -1040,7 +1051,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, cacheKey)
         if (cached != null) {
             cancelLibraryJobs(clearCurrentItems = false)
-            _libraryItems.value = cached
+            val processed = if (prioritizeFavCast && globalMediaToActorMap.isNotEmpty()) {
+                processFeedItems(cached, prioritizeFavCast = true)
+            } else {
+                cached
+            }
+            _libraryItems.value = processed
             setupLibraryFeedPagination(method, arg)
             return
         }
@@ -1108,7 +1124,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val cid = cached.getJSONObject(i).optString("id")
                 if (cid.isNotEmpty()) discoverSeenIds.add(cid)
             }
-            _libraryItems.value = cached
+            val processed = if (prioritizeFavCast && globalMediaToActorMap.isNotEmpty()) {
+                processFeedItems(cached, prioritizeFavCast = true)
+            } else {
+                cached
+            }
+            _libraryItems.value = processed
             setupDiscoverFeedPagination(isMovie, params, prioritizeFavCast)
             return
         }
@@ -2201,7 +2222,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     _events.value = StreamsEvent.ShowToast("Added $name to Favourite Cast")
                 }
             }
-            refreshCurrentFeedWithActors()
+            ensureActorMapping(forceRefresh = true)
+            withContext(Dispatchers.Main) {
+                refreshCurrentFeedWithActors()
+            }
         }
     }
 
