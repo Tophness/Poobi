@@ -739,15 +739,45 @@ fun StreamsDashboardScreen(
                         baseList.indexOf(wrapper)
                     }
 
+                    val defaultFavPriorities = listOf("DATE_ADDED", "DATE_ACCESSED", "A_Z", "RATING")
+                    val favoritesPriorities = remember(feedSortVersion) {
+                        viewModel.prefs.getString("favorites_sort_priorities", null)?.let {
+                            val arr = JSONArray(it)
+                            val list = (0 until arr.length()).map { i -> arr.getString(i) }.filter { item -> defaultFavPriorities.contains(item) }.toMutableList()
+                            defaultFavPriorities.forEach { item -> if (!list.contains(item)) list.add(item) }
+                            list
+                        } ?: defaultFavPriorities
+                    }
+
+                    val defaultRecentPriorities = listOf("DATE_ACCESSED", "A_Z", "RATING")
+                    val recentPriorities = remember(feedSortVersion) {
+                        viewModel.prefs.getString("recent_sort_priorities", null)?.let {
+                            val arr = JSONArray(it)
+                            val list = (0 until arr.length()).map { i -> arr.getString(i) }.filter { item -> defaultRecentPriorities.contains(item) }.toMutableList()
+                            defaultRecentPriorities.forEach { item -> if (!list.contains(item)) list.add(item) }
+                            list
+                        } ?: defaultRecentPriorities
+                    }
+
+                    val defaultFeedPriorities = listOf("FAV_ACTORS", "RATING", "DATE", "A_Z", "DEFAULT")
                     val feedPriorities = remember(feedSortVersion) {
                         viewModel.prefs.getString("feed_sort_priorities", null)?.let {
                             val arr = JSONArray(it)
-                            val list = (0 until arr.length()).map { i -> arr.getString(i) }.toMutableList()
-                            if (!list.contains("FAV_ACTORS")) {
-                                list.add(0, "FAV_ACTORS")
-                            }
+                            val list = (0 until arr.length()).map { i -> arr.getString(i) }.filter { item -> defaultFeedPriorities.contains(item) }.toMutableList()
+                            defaultFeedPriorities.forEach { item -> if (!list.contains(item)) list.add(item) }
                             list
-                        } ?: listOf("FAV_ACTORS", "RATING", "LAST_ACCESSED", "LAST_ADDED", "A_Z", "DEFAULT")
+                        } ?: defaultFeedPriorities
+                    }
+
+                    val activePriorities = when {
+                        isFavorites -> favoritesPriorities
+                        isRecentlyWatched -> recentPriorities
+                        else -> feedPriorities
+                    }
+
+                    val getItemDate = { wrapper: JSONObject ->
+                        val itm = if (wrapper.has("item")) wrapper.optJSONObject("item") ?: wrapper else wrapper
+                        itm.optString("release_date").ifEmpty { itm.optString("first_air_date", "") }
                     }
 
                     val compareByCriteria = { criteria: String, a: JSONObject, b: JSONObject ->
@@ -762,15 +792,23 @@ fun StreamsDashboardScreen(
                                 val rB = getItemRating(b)
                                 rB.compareTo(rA)
                             }
-                            "LAST_ACCESSED" -> {
+                            "DATE_ACCESSED", "LAST_ACCESSED" -> {
                                 val sA = getAccessScore(a)
                                 val sB = getAccessScore(b)
                                 sB.compareTo(sA)
                             }
-                            "LAST_ADDED" -> {
+                            "DATE_ADDED", "LAST_ADDED" -> {
                                 val iA = getItemAddedIndex(a)
                                 val iB = getItemAddedIndex(b)
-                                if (isFavorites) iA.compareTo(iB) else iB.compareTo(iA)
+                                iA.compareTo(iB)
+                            }
+                            "DATE" -> {
+                                val dA = getItemDate(a)
+                                val dB = getItemDate(b)
+                                if (dA.isEmpty() && dB.isEmpty()) 0
+                                else if (dA.isEmpty()) 1
+                                else if (dB.isEmpty()) -1
+                                else dB.compareTo(dA)
                             }
                             "A_Z", "A-Z" -> {
                                 val tA = getItemTitle(a).lowercase()
@@ -786,10 +824,10 @@ fun StreamsDashboardScreen(
                         }
                     }
 
-                    val objList = remember(baseList, feedPriorities, recentRankMap, accessTimeMap, feedSortVersion) {
+                    val objList = remember(baseList, activePriorities, recentRankMap, accessTimeMap, feedSortVersion) {
                         baseList.sortedWith { a, b ->
                             var result = 0
-                            for (criteria in feedPriorities) {
+                            for (criteria in activePriorities) {
                                 result = compareByCriteria(criteria, a, b)
                                 if (result != 0) break
                             }
@@ -1073,39 +1111,58 @@ fun StreamsDashboardScreen(
     }
 
     if (showSortDialog) {
-        val prefsKey = "feed_sort_priorities"
-        val defaultList = listOf("FAV_ACTORS", "RATING", "LAST_ACCESSED", "LAST_ADDED", "A_Z", "DEFAULT")
+        val (dialogTitle, prefsKey, defaultList) = when {
+            isFavorites -> Triple(
+                "Favourites Sorter Priorities",
+                "favorites_sort_priorities",
+                listOf("DATE_ADDED", "DATE_ACCESSED", "A_Z", "RATING")
+            )
+            isRecentlyWatched -> Triple(
+                "Recently Watched Sorter Priorities",
+                "recent_sort_priorities",
+                listOf("DATE_ACCESSED", "A_Z", "RATING")
+            )
+            else -> Triple(
+                "Feed Sorter Priorities",
+                "feed_sort_priorities",
+                listOf("FAV_ACTORS", "RATING", "DATE", "A_Z", "DEFAULT")
+            )
+        }
 
-        var prioritiesList by remember {
+        var prioritiesList by remember(prefsKey) {
             mutableStateOf(
                 viewModel.prefs.getString(prefsKey, null)?.let {
                     val arr = JSONArray(it)
-                    val list = (0 until arr.length()).map { i -> arr.getString(i) }.toMutableList()
-                    if (!list.contains("FAV_ACTORS")) {
-                        list.add(0, "FAV_ACTORS")
+                    val rawList = (0 until arr.length()).map { i -> arr.getString(i) }
+                    val filtered = rawList.filter { item -> defaultList.contains(item) }.toMutableList()
+                    defaultList.forEach { item ->
+                        if (!filtered.contains(item)) filtered.add(item)
                     }
-                    list
+                    filtered
                 } ?: defaultList
             )
         }
 
+        val getDisplayName = { criteria: String ->
+            when (criteria) {
+                "DATE_ADDED", "LAST_ADDED" -> "Date Added"
+                "DATE_ACCESSED", "LAST_ACCESSED" -> "Date Accessed"
+                "A_Z", "A-Z" -> "A-Z (Alphabetical)"
+                "RATING" -> "Rating"
+                "FAV_ACTORS" -> "Favourite Actors"
+                "DATE" -> "Release Date"
+                "DEFAULT" -> "Default Feed Order"
+                else -> criteria
+            }
+        }
+
         AlertDialog(
             onDismissRequest = { showSortDialog = false },
-            title = { Text("Feed Sorter Priorities", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            title = { Text(dialogTitle, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
             containerColor = Color(0xFF222225),
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     prioritiesList.forEachIndexed { index, criteria ->
-                        val displayName = when (criteria) {
-                            "FAV_ACTORS" -> "Favourite Actors"
-                            "RATING" -> "Rating"
-                            "LAST_ACCESSED" -> "Last Accessed"
-                            "LAST_ADDED" -> "Last Added"
-                            "A_Z", "A-Z" -> "A-Z"
-                            "DEFAULT" -> "Default Feed Order"
-                            else -> criteria
-                        }
-
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF333338))
@@ -1115,7 +1172,7 @@ fun StreamsDashboardScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = displayName,
+                                    text = getDisplayName(criteria),
                                     color = Color.White,
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 14.sp,

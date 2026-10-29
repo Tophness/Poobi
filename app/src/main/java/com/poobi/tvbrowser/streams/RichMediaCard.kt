@@ -281,9 +281,10 @@ fun RichMediaCard(
                     fontSize = 11.sp, 
                     fontWeight = FontWeight.Bold
                 )
-                if (model.year.isNotEmpty() && model.year != "0000") {
+                val displayDate = model.formattedDate.ifEmpty { model.year.takeIf { it != "0000" } ?: "" }
+                if (displayDate.isNotEmpty()) {
                     Text(
-                        text = " • ${model.year}", 
+                        text = " • $displayDate", 
                         color = if (isFocused) Color(0xFF37474F) else Color(0xFFB0BEC5), 
                         fontSize = 11.sp
                     )
