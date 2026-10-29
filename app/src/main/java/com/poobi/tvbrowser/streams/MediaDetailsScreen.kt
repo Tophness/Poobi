@@ -740,9 +740,9 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                                 if (airDate.isNotEmpty()) {
                                                     val isFuture = isFutureDate(airDate)
                                                     val formattedAirDate = remember(airDate) { formatDateToDMY(airDate) }
-                                                    val prefix = if (isFuture) androidx.compose.ui.res.stringResource(R.string.media_airing_prefix) else androidx.compose.ui.res.stringResource(R.string.media_aired_prefix)
+                                                    val prefix = if (isFuture) androidx.compose.ui.res.stringResource(R.string.media_airing_prefix).trim() else androidx.compose.ui.res.stringResource(R.string.media_aired_prefix).trim()
                                                     Text(
-                                                        text = "$prefix$formattedAirDate",
+                                                        text = "$prefix $formattedAirDate",
                                                         color = if (isHighlighted) Color(0xFF2E2E35) else Color(0xFF00BCD4),
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Bold,
