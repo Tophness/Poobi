@@ -269,7 +269,7 @@ fun BrowserTopBar(
             TvInputField(
                 value = urlInput,
                 onValueChange = { urlInput = it },
-                placeholder = "Type a URL...",
+                placeholder = androidx.compose.ui.res.stringResource(R.string.prompt_search_google_url),
                 imeAction = ImeAction.Go,
                 onAction = { viewModel.loadUrlAndBrowse(context, urlInput) },
                 modifier = Modifier
@@ -372,12 +372,12 @@ fun BrowserTopBar(
         val presets = listOf(50, 75, 90, 100, 110, 125, 150, 175, 200, 250, 300)
         AlertDialog(
             onDismissRequest = { showZoomDialog = false },
-            title = { Text("Page Zoom (${currentZoom}%)", color = Color.White) },
+            title = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_zoom_title, currentZoom), color = Color.White) },
             containerColor = Color(0xFF222225),
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "Adjust webpage text and magnification:",
+                        text = androidx.compose.ui.res.stringResource(R.string.dialog_zoom_msg),
                         color = Color.LightGray,
                         fontSize = 13.sp
                     )
@@ -392,7 +392,7 @@ fun BrowserTopBar(
                             onClick = { viewModel.zoomOut(context) }
                         ) { isFocused ->
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("- Zoom Out", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                Text(androidx.compose.ui.res.stringResource(R.string.btn_zoom_out), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -402,7 +402,7 @@ fun BrowserTopBar(
                             onClick = { viewModel.resetZoom(context) }
                         ) { isFocused ->
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("100% (Reset)", color = if (isFocused) Color.Black else Color(0xFF00BCD4), fontWeight = FontWeight.Bold)
+                                Text(androidx.compose.ui.res.stringResource(R.string.btn_zoom_reset), color = if (isFocused) Color.Black else Color(0xFF00BCD4), fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -411,7 +411,7 @@ fun BrowserTopBar(
                             onClick = { viewModel.zoomIn(context) }
                         ) { isFocused ->
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("+ Zoom In", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                Text(androidx.compose.ui.res.stringResource(R.string.btn_zoom_in), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -459,7 +459,7 @@ fun BrowserTopBar(
                     onClick = { showZoomDialog = false }
                 ) { isFocused ->
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Done", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_done), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }

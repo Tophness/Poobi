@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Poobi</string>
+
+    <!-- Top Navigation -->
+    <string name="tab_browser">Браузер</string>
+    <string name="tab_streams">Медиа</string>
+    <string name="title_settings">Настройки</string>
+
+    <!-- Common Actions & Buttons -->
+    <string name="btn_save_exit">Сохранить и выйти</string>
+    <string name="btn_save">Сохранить</string>
+    <string name="btn_cancel">Отмена</string>
+    <string name="btn_delete">Удалить</string>
+    <string name="btn_edit">Редактировать</string>
+    <string name="btn_close">Закрыть</string>
+    <string name="btn_done">Готово</string>
+    <string name="btn_select_all">Выбрать все</string>
+    <string name="btn_deselect_all">Снять выделение</string>
+    <string name="btn_clear_all">Очистить все</string>
+    <string name="btn_back">Назад</string>
+    <string name="btn_apply">Применить</string>
+    <string name="btn_play_now">Смотреть сейчас</string>
+    <string name="btn_skip_play">Пропустить и смотреть</string>
+    <string name="btn_download">Скачать</string>
+    <string name="btn_allow">Разрешить</string>
+    <string name="btn_block">Блокировать</string>
+    <string name="btn_play_native">В плеере</string>
+    <string name="btn_website_player">Веб-плеер</string>
+    <string name="btn_open_in_browser">Открыть в браузере</string>
+    <string name="btn_restore">Восстановить</string>
+    <string name="btn_restore_load">Восстановить и загрузить</string>
+    <string name="btn_new_session">Новая сессия</string>
+    <string name="btn_zoom_out">- Уменьшить</string>
+    <string name="btn_zoom_reset">100% (Сброс)</string>
+    <string name="btn_zoom_in">+ Увеличить</string>
+    <string name="btn_load_all_tabs">Загрузить все вкладки</string>
+    <string name="btn_restore_all_tabs">Восстановить все вкладки</string>
+    <string name="btn_clear_bookmarks">Очистить закладки</string>
+    <string name="btn_clear_history">Очистить историю</string>
+    <string name="btn_clear_downloads">Очистить загрузки</string>
+    <string name="btn_prev">Назад</string>
+    <string name="btn_next">Далее</string>
+
+    <!-- Settings Categories -->
+    <string name="category_general">Общие</string>
+    <string name="category_language">Язык</string>
+    <string name="category_web">Веб</string>
+    <string name="category_player">Плеер</string>
+    <string name="category_interface">Интерфейс</string>
+    <string name="category_feeds">Ленты</string>
+    <string name="category_streaming">Стриминг</string>
+    <string name="category_autoplay">Автовоспроизведение</string>
+    <string name="category_subtitles">Субтитры</string>
+    <string name="category_sorting">Сортировка</string>
+    <string name="category_blocked">Блокировка</string>
+    <string name="category_trakt">Trakt</string>
+    <string name="category_tmdb">TMDb</string>
+    <string name="category_torrents">Торренты</string>
+    <string name="category_sync">Синхронизация</string>
+
+    <!-- Settings Panels & Options -->
+    <string name="panel_general">Общие настройки</string>
+    <string name="panel_language">Язык и региональные стандарты</string>
+    <string name="setting_app_language">Язык интерфейса приложения</string>
+    <string name="setting_date_format">Формат даты</string>
+    <string name="setting_audio_language">Аудиодорожка по умолчанию</string>
+    <string name="setting_torrent_language">Предпочитаемый язык торрентов</string>
+    <string name="setting_sub_languages">Языки поиска субтитров</string>
+    <string name="setting_light_theme">Светлая тема</string>
+    <string name="setting_auto_update">Проверять обновления автоматически</string>
+    <string name="setting_restore_session">Восстановление сессии</string>
+    <string name="setting_history_limit">Лимит истории</string>
+    <string name="setting_history_icons">Стиль иконок истории</string>
+    <string name="setting_bookmark_icons">Стиль иконок закладок</string>
+
+    <!-- Streams Navigation Categories -->
+    <string name="feed_search">Поиск</string>
+    <string name="feed_for_you">Для вас</string>
+    <string name="feed_movies">Фильмы</string>
+    <string name="feed_tv_shows">Сериалы</string>
+    <string name="feed_discover">Обзор</string>
+
+    <!-- Dashboard Pills -->
+    <string name="pill_favourites">Избранное</string>
+    <string name="pill_recents">Недавно просмотренные</string>
+    <string name="pill_unfinished">Недосмотренные сериалы</string>
+    <string name="pill_because_watched">Потому что вы смотрели</string>
+    <string name="pill_cast_spotlight">Актёры в центре внимания</string>
+    <string name="pill_trakt_watched">Самые просматриваемые</string>
+    <string name="pill_trakt_anticipated">Самые ожидаемые</string>
+    <string name="pill_trakt_collected">Самые собираемые</string>
+    <string name="pill_trakt_watchlist">Список к просмотру</string>
+    <string name="pill_trakt_recommendations">Рекомендации для меня</string>
+    <string name="pill_trending_today">В тренде сегодня</string>
+    <string name="pill_trending_week">В тренде на этой неделе</string>
+    <string name="pill_in_cinemas">Сейчас в кино</string>
+    <string name="pill_upcoming">Скоро выйдут</string>
+    <string name="pill_popular">Популярные</string>
+    <string name="pill_top_rated">Высокий рейтинг</string>
+    <string name="pill_hidden_gems">Скрытые шедевры</string>
+    <string name="pill_popular_tv">Популярные сериалы</string>
+    <string name="pill_trending_tv_week">Трендовые сериалы</string>
+    <string name="pill_airing_today">В эфире сегодня</string>
+    <string name="pill_airing_week">В эфире на этой неделе</string>
+    <string name="pill_top_rated_tv">Сериалы с высоким рейтингом</string>
+    <string name="pill_era_2000s">Хиты 2000-х</string>
+    <string name="pill_era_90s">Ностальгия 90-х</string>
+    <string name="pill_era_80s">Классика 80-х</string>
+    <string name="pill_era_70s">Кинематограф 70-х</string>
+    <string name="pill_anime">Аниме</string>
+    <string name="pill_kdrama">Дорамы</string>
+    <string name="pill_british_mysteries">Британские детективы</string>
+    <string name="pill_cult_classics">Культовая классика</string>
+
+    <!-- Browser Home Tabs -->
+    <string name="browser_open_tabs">Открытые вкладки</string>
+    <string name="browser_bookmarks">Закладки</string>
+    <string name="browser_history">История</string>
+    <string name="browser_downloads">Загрузки</string>
+
+    <!-- Media Details Actions -->
+    <string name="media_play_movie">Смотреть фильм</string>
+    <string name="media_trailer">Трейлер</string>
+    <string name="media_season">Сезон</string>
+    <string name="media_top_cast">В главных ролях</string>
+    <string name="media_more_like_this">Похожее</string>
+    <string name="media_filmography">Фильмография</string>
+    <string name="media_released">Дата выхода</string>
+    <string name="media_select_season">Выберите сезон</string>
+    <string name="media_season_num">Сезон %1$d</string>
+    <string name="media_season_cast">Актёры: %1$s</string>
+    <string name="media_no_overview">Описание отсутствует.</string>
+    <string name="media_no_cast">Информация об актёрах отсутствует.</string>
+    <string name="media_no_recommendations">Рекомендации отсутствуют.</string>
+    <string name="media_loading_trailer">Загрузка трейлера...</string>
+    <string name="media_filter_all">Все</string>
+    <string name="media_filter_movies">Фильмы</string>
+    <string name="media_filter_tv">Сериалы</string>
+    <string name="media_no_titles_category">В этой категории ничего не найдено.</string>
+    <string name="media_born_in">Место рождения: %1$s</string>
+    <string name="media_no_biography">Биография отсутствует.</string>
+    <string name="media_role_as">в роли %1$s</string>
+    <string name="media_badge_actor">АКТЁР</string>
+    <string name="media_airing_prefix">Премьера: </string>
+    <string name="media_aired_prefix">Вышел: </string>
+    <string name="media_type_movie">Фильм</string>
+    <string name="media_type_tv">Сериал</string>
+    <string name="known_for_acting">Актерское искусство</string>
+
+    <!-- Sorter Dialog -->
+    <string name="sorter_favorites_title">Приоритеты сортировки избранного</string>
+    <string name="sorter_recent_title">Приоритеты сортировки недавних</string>
+    <string name="sorter_feed_title">Приоритеты сортировки ленты</string>
+    <string name="sorter_streams_title">Сортировка обычных потоков</string>
+    <string name="sorter_torrents_title">Сортировка торрентов</string>
+
+    <!-- Subtitle Alignment UI -->
+    <string name="sub_sync_title">Синхронизатор субтитров</string>
+    <string name="sub_sync_offset">Текущий сдвиг: %1$dмс</string>
+    <string name="sub_sync_btn_visual">Визуальное выравнивание на таймлайне</string>
+    <string name="sub_sync_btn_search">Поиск произнесённых слов</string>
+    <string name="sub_sync_btn_reset">Сбросить тайминг</string>
+    <string name="sub_sync_btn_exit">Выход</string>
+    <string name="sub_search_title">Поиск реплики</string>
+    <string name="sub_search_desc">Введите слова из фразы, чтобы перейти к этому моменту в аудио.</string>
+    <string name="sub_search_placeholder">напр., спрыгнул с</string>
+    <string name="sub_search_btn_align">Найти и выровнять</string>
+    <string name="sub_waveform_title">Таймлайн звуковой волны</string>
+    <string name="sub_waveform_silence">[ Тишина ]</string>
+    <string name="sub_waveform_offset">Сдвиг таймлайна: %1$dмс</string>
+    <string name="sub_waveform_hint_focused">◀ Нажимайте Влево / Вправо на пульте для сдвига субтитров ▶</string>
+    <string name="sub_waveform_hint_unfocused">Выберите для настройки субтитров</string>
+    <string name="sub_waveform_looping">Зацикливание фрагмента...</string>
+    <string name="sub_waveform_playback_running">Идёт воспроизведение...</string>
+    <string name="sub_waveform_stop_loop">Остановить повтор</string>
+    <string name="sub_waveform_loop_track">Зациклить сцену</string>
+
+    <!-- Player Overlays & Prompts -->
+    <string name="overlay_up_next">ДАЛЕЕ</string>
+    <string name="overlay_skip_intro">ПРОПУСТИТЬ ИНТРО</string>
+    <string name="overlay_skip_recap">ПРОПУСТИТЬ ПЕРЕСКАЗ</string>
+    <string name="overlay_skip_early_credits">ПРОПУСТИТЬ ТИТРЫ</string>
+    <string name="overlay_skip_end_credits">ПРОПУСТИТЬ ФИНАЛЬНЫЕ ТИТРЫ</string>
+    <string name="overlay_skip_remaining">Пропустить %1$s (осталось %2$d с)</string>
+    <string name="overlay_skip_press_select">Нажмите Выбрать, чтобы пропустить</string>
+    <string name="segment_intro">Интро</string>
+    <string name="segment_recap">Пересказ</string>
+    <string name="segment_opening_credits">Начальные титры</string>
+    <string name="segment_closing_credits">Финальные титры</string>
+    <string name="toast_skipped_intro">Интро пропущено</string>
+    <string name="toast_skipped_recap">Пересказ пропущен</string>
+    <string name="toast_skipped_early_credits">Начальные титры пропущены</string>
+    <string name="toast_skipped_end_credits">Финальные титры пропущены</string>
+    <string name="captions_add_disk">Субтитры с диска...</string>
+    <string name="captions_off">Выкл</string>
+    <string name="captions_embedded">Встроенные субтитры</string>
+    <string name="dialog_quality_title">Выберите качество видео</string>
+    <string name="dialog_sub_wait_title">Автозагрузка субтитров</string>
+    <string name="dialog_sub_wait_msg">Поиск и загрузка субтитров...</string>
+    <string name="dialog_torrent_prebuffer_title">Буферизация видеопотока</string>
+    <string name="disk_picker_select_media">Выберите файл</string>
+    <string name="disk_picker_select_subtitles">Выберите субтитры</string>
+    <string name="disk_picker_no_subs">Субтитры (.srt, .vtt, .ass) не найдены на диске.</string>
+
+    <!-- Browser & Web Dialogs -->
+    <string name="menu_cut">Вырезать</string>
+    <string name="menu_copy">Копировать</string>
+    <string name="menu_paste">Вставить</string>
+    <string name="menu_select_all">Выбрать все</string>
+    <string name="menu_open_new_tab">Открыть в новой вкладке</string>
+    <string name="menu_refresh">Обновить страницу</string>
+    <string name="menu_block_element">Заблокировать элемент</string>
+    <string name="dialog_video_detected_title">Обнаружено видео</string>
+    <string name="dialog_video_detected_msg">Видео перехвачено. Открыть его во встроенном плеере или продолжить на сайте?</string>
+    <string name="dialog_remember_decision">Запомнить мой выбор (больше не спрашивать)</string>
+    <string name="dialog_playback_error_title">Ошибка воспроизведения</string>
+    <string name="dialog_playback_error_msg">ExoPlayer не смог воспроизвести этот поток. Попробовать открыть в браузере?\n\nОшибка: %1$s</string>
+    <string name="dialog_download_title">Скачать файл?</string>
+    <string name="dialog_download_msg">Скачать %1$s?\nРазмер: %2$.2f МБ</string>
+    <string name="dialog_popup_blocked_title">Всплывающее окно заблокировано</string>
+    <string name="dialog_popup_blocked_msg">Разрешить всплывающее окно с этого сайта?</string>
+    <string name="dialog_silent_block_remember">Больше не спрашивать (тихая блокировка)</string>
+    <string name="dialog_restore_session_title">Восстановить сессию?</string>
+    <string name="dialog_restore_session_msg">Восстановить предыдущие вкладки?</string>
+    <string name="dialog_zoom_title">Масштаб страницы (%1$d%%)</string>
+    <string name="dialog_zoom_msg">Настройка масштаба и размера текста:</string>
+    <string name="prompt_search_google_url">Поиск в Google или адрес URL...</string>
+    <string name="status_missing">Отсутствует</string>
+
+    <!-- Scraper & Streams Screen -->
+    <string name="search_movie_tv_placeholder">Поиск фильма или сериала...</string>
+    <string name="dashboard_recent_searches">История поиска</string>
+    <string name="dashboard_no_items">Ничего не найдено</string>
+    <string name="scrape_stop_scanning">Остановить поиск</string>
+    <string name="scrape_try_all">Проверить все</string>
+    <string name="scrape_stop">Стоп</string>
+    <string name="scrape_sort">Сортировка</string>
+    <string name="scrape_no_sources">Источники не найдены.</string>
+    <string name="scrape_open_browser">Открыть в браузере</string>
+    <string name="scrape_play_native">Смотреть в плеере</string>
+    <string name="scrape_search_external_subs">🔍 Поиск внешних субтитров</string>
+
+    <!-- Sorter Criteria -->
+    <string name="sort_criteria_native">Совместимость с плеером</string>
+    <string name="sort_criteria_direct">Прямые ссылки</string>
+    <string name="sort_criteria_resolution">Разрешение</string>
+    <string name="sort_criteria_source">Хост / источник</string>
+    <string name="sort_criteria_language">Язык</string>
+    <string name="sort_criteria_size">Размер файла</string>
+    <string name="sort_criteria_seeders">Раздающие (Seeders)</string>
+    <string name="sort_criteria_date_added">Дата добавления</string>
+    <string name="sort_criteria_date_accessed">Дата просмотра</string>
+    <string name="sort_criteria_az">А-Я (По алфавиту)</string>
+    <string name="sort_criteria_rating">Рейтинг</string>
+    <string name="sort_criteria_fav_actors">Любимые актеры</string>
+    <string name="sort_criteria_date">Дата выхода</string>
+    <string name="sort_criteria_default">По умолчанию</string>
+
+    <!-- Settings Panels & Options Details -->
+    <string name="panel_web">Настройки браузера и блокировщика рекламы</string>
+    <string name="setting_silent_block">Блокировать всплывающие окна без уведомлений</string>
+    <string name="setting_clickjack">Защита от кликджекинга</string>
+    <string name="setting_custom_adblock_url">URL пользовательских правил AdBlock (EasyList)</string>
+    <string name="btn_update_rules_now">Обновить правила сейчас</string>
+    <string name="status_rules_loaded">Активные правила: загружено ~%1$d</string>
+    <string name="status_rules_updating">Обновление списков правил...</string>
+    <string name="toast_rules_updated">Filter lists updated!</string>
+    <string name="toast_rules_update_failed">Update failed</string>
+    <string name="status_checking_updates">Проверка обновлений...</string>
+    <string name="btn_check_updates">Проверить обновления (v%1$s)</string>
+    <string name="setting_current">Текущий</string>
+    <string name="label_profile_name">Имя профиля</string>
+    <string name="label_url_patterns">Шаблоны URL</string>
+    <string name="label_action_mode">Action Mode</string>
+    <string name="opt_custom_script">Custom Script</string>
+    <string name="opt_simple_selectors">Simple Element List</string>
+    <string name="label_js_action">JavaScript Action</string>
+    <string name="label_click_selectors">Селекторы для клика</string>
+    <string name="btn_add_selector">+ Добавить селектор</string>
+    <string name="dialog_edit_autoplay_title">Edit Autoplay Profile</string>
+    <string name="dialog_add_autoplay_title">Add New Autoplay Profile</string>
+    <string name="dialog_custom_sub_limit_title">Пользовательский лимит загрузки субтитров</string>
+    <string name="dialog_custom_sub_limit_msg">Введите числовой лимит:</string>
+    <string name="label_opensubtitles_username">OpenSubtitles Username</string>
+    <string name="label_opensubtitles_password">OpenSubtitles Password</string>
+    <string name="label_opensubtitles_org_username">OpenSubtitles.org Username</string>
+    <string name="label_opensubtitles_org_password">OpenSubtitles.org Password</string>
+    <string name="label_subdl_apikey">SubDL API Key</string>
+    <string name="label_subsource_apikey">SubSource API Key</string>
+    <string name="label_rule_name">Имя правила</string>
+    <string name="label_css_selectors">Селекторы CSS (по одному в строке)</string>
+    <string name="dialog_edit_block_rule">Изменить правило блокировки</string>
+    <string name="dialog_add_block_rule">Добавить правило блокировки</string>
+    <string name="dialog_auth_trakt_title">Авторизация Trakt.tv</string>
+    <string name="dialog_auth_trakt_step1">1. Откройте страницу подтверждения:</string>
+    <string name="dialog_auth_trakt_step2">2. Введите следующий код на устройстве:</string>
+    <string name="dialog_auth_trakt_waiting">Ожидание авторизации от Trakt...</string>
+    <string name="btn_open_link">Открыть ссылку</string>
+    <string name="label_username">Имя пользователя</string>
+    <string name="label_password">Пароль</string>
+    <string name="dialog_auto_clean_interval_title">Интервал автоочистки</string>
+    <string name="dialog_auto_clean_interval_msg">Введите количество дней между очистками кэша:</string>
+    <string name="status_signed_in_as">Вход выполнен как: %1$s</string>
+    <string name="status_not_signed_in">Вход не выполнен.</string>
+
+    <string name="panel_player">Настройки встроенного плеера</string>
+    <string name="setting_extract_video">Перехват видеопотоков</string>
+    <string name="setting_fallback_error">Действие при сбое воспроизведения</string>
+    <string name="header_binge_autoplay">Непрерывный просмотр и автовоспроизведение</string>
+    <string name="setting_intro_skip">Действие при обнаружении интро</string>
+    <string name="setting_recap_skip">Действие при обнаружении пересказа</string>
+    <string name="setting_early_credits_skip">Действие при начальных титрах</string>
+    <string name="setting_end_credits_skip">Действие при финальных титрах</string>
+    <string name="setting_up_next_mode">Окно перехода к следующей серии</string>
+    <string name="setting_up_next_time">Секунды до конца (при отсутствии тайминга титров)</string>
+    <string name="setting_source_selection_next">Выбор источника для следующей серии</string>
+    <string name="setting_episode_focus_style">Выбор серии при открытии сезона</string>
+
+    <string name="panel_interface">Настройки интерфейса и навигации</string>
+    <string name="setting_scroll_topbar">Прокрутка вверх для вызова панели</string>
+    <string name="setting_nav_mode">Режим указателя по умолчанию</string>
+    <string name="setting_scrape_tab_order">Порядок вкладок результатов поиска</string>
+    <string name="header_hardware_devices">Внешние устройства и клавиатура</string>
+    <string name="setting_hw_keyboard_mode">Режим физической клавиатуры</string>
+    <string name="setting_hw_mouse_mode">Режим физической мыши</string>
+    <string name="setting_menu_keybind">Сочетание клавиш для кнопки меню</string>
+    <string name="setting_menu_rebind">Переназначить</string>
+    <string name="setting_menu_reset">Сбросить</string>
+    <string name="setting_press_key_combo">Нажмите нужную комбинацию клавиш</string>
+    <string name="setting_listening_keys">Ожидание нажатия клавиш...</string>
+
+    <string name="panel_feeds">Ленты и персонализация главной</string>
+    <string name="setting_card_thumbnail_style">Формат постеров карточек</string>
+    <string name="setting_prioritize_fav_cast">Приоритет любимых актеров в лентах</string>
+    <string name="header_for_you_feeds">Ленты «Для вас»</string>
+    <string name="header_movie_feeds">Ленты фильмов</string>
+    <string name="header_movie_genres">Жанры фильмов</string>
+    <string name="header_tv_feeds">Ленты сериалов</string>
+    <string name="header_tv_genres">Жанры сериалов</string>
+    <string name="header_discover_networks">Обзор: Стриминговые платформы</string>
+    <string name="header_discover_eras">Обзор: Эпохи и десятилетия</string>
+    <string name="header_discover_world">Обзор: Мировое кино и ниши</string>
+    <string name="header_fav_cast_mgmt">Управление любимыми актерами</string>
+    <string name="desc_fav_cast_mgmt">Управляйте актерами из избранных шоу или добавляйте любых актеров через поиск.</string>
+    <string name="setting_auto_sync_fav_cast">Автоматически синхронизировать состав из избранного</string>
+    <string name="prompt_search_actor">Поиск актера для добавления (напр. Киллиан Мерфи)...</string>
+    <string name="label_live_results">Результаты поиска (Нажмите для добавления):</string>
+    <string name="label_cast_pool">Список актеров (%1$d)</string>
+    <string name="label_add_actor">+ Добавить</string>
+    <string name="desc_no_fav_actors">Актеры еще не добавлены. Добавьте шоу в избранное или найдите актеров выше.</string>
+    <string name="label_added_via_fav">Добавлен из избранного: %1$s</string>
+    <string name="label_added_via_search">Добавлен через поиск</string>
+
+    <string name="panel_streaming">Настройки потоков и скраперов</string>
+    <string name="setting_timeout_logic">Логика тайм-аута</string>
+    <string name="setting_enforce_whitelist">Использовать только разрешенные хосты</string>
+    <string name="setting_global_timeout">Глобальный тайм-аут движка (секунды)</string>
+    <string name="setting_source_timeout">Лимит тайм-аута на источник (секунды)</string>
+    <string name="setting_scraper_workers">Потоков поиска (по умолчанию: 3)</string>
+    <string name="header_provider_packages">Пакеты провайдеров</string>
+    <string name="header_host_whitelists">Белые списки хостов</string>
+    <string name="prompt_search_whitelists">Поиск по белому списку...</string>
+    <string name="label_provider_whitelist">Белый список провайдеров</string>
+    <string name="label_resolveurl_whitelist">Белый список ResolveURL</string>
+
+    <string name="panel_autoplay">Профили автовоспроизведения</string>
+    <string name="setting_autoplay_global">Глобально запускать видео</string>
+    <string name="btn_add_autoplay_profile">Добавить профиль</string>
+
+    <string name="panel_subtitles">Параметры поиска субтитров</string>
+    <string name="setting_sub_rendering_engine">Движок рендеринга субтитров</string>
+    <string name="setting_sub_auto_search">Автоматический поиск</string>
+    <string name="setting_subs_to_download">Количество субтитров для загрузки</string>
+    <string name="setting_sub_video_launches">При запуске видео</string>
+    <string name="setting_sub_retention">Срок хранения файлов субтитров</string>
+    <string name="setting_sub_limit">Лимит результатов поиска субтитров</string>
+    <string name="header_sub_accounts">Аккаунты и API-ключи субтитров</string>
+    <string name="header_sub_engines">Поисковые движки субтитров</string>
+
+    <string name="panel_sorting">Приоритеты сортировки выдачи и лент</string>
+    <string name="panel_blocked">Правила блокировки элементов веб-страниц</string>
+    <string name="btn_add_css_rule">Добавить правило CSS-блокировки</string>
+
+    <string name="panel_trakt">Интеграция с Trakt.tv</string>
+    <string name="status_trakt_authed">Подключенный аккаунт: %1$s</string>
+    <string name="btn_logout_trakt">Выйти из Trakt</string>
+    <string name="status_trakt_unlinked">Аккаунт Trakt не привязан.</string>
+    <string name="btn_auth_trakt">Авторизовать аккаунт Trakt</string>
+
+    <string name="panel_tmdb">Учетные данные TMDb</string>
+    <string name="status_tmdb_active">Сессия TMDb авторизована</string>
+    <string name="btn_login">Войти</string>
+    <string name="btn_logout">Выйти</string>
+
+    <string name="panel_torrents">Настройка торрент-стриминга</string>
+    <string name="setting_prebuffer_size">Размер предварительного буфера</string>
+    <string name="setting_torrent_cache_clean">Очистка кэша торрентов</string>
+    <string name="header_storage_cache_mgmt">Управление кэшем накопителя</string>
+    <string name="label_total_cached_p2p">Занято кэшем P2P</string>
+    <string name="label_cached_subfolders">Подкаталоги кэша</string>
+    <string name="label_clean_interval">Интервал автоочистки</string>
+    <string name="format_every_x_days">Каждые %1$d дн.</string>
+    <string name="label_disabled_set">Отключено / Нажмите для выбора</string>
+    <string name="btn_clear">Очистить</string>
+
+    <string name="panel_sync">Резервное копирование и восстановление</string>
+    <string name="desc_local_backup">Экспорт и импорт настроек и закладок в локальный файл JSON в папке «Загрузки» без входа в Google.</string>
+    <string name="btn_save_backup">Сохранить копию</string>
+    <string name="btn_restore_backup">Восстановить копию</string>
+    <string name="header_drive_sync">Синхронизация через Google Drive</string>
+    <string name="desc_drive_sync">Синхронизируйте историю, закладки и настройки между устройствами через защищенную папку Google Drive.</string>
+    <string name="status_sync">Статус: %1$s</string>
+    <string name="btn_sign_in_google">Войти через Google</string>
+    <string name="btn_force_sync">Синхронизировать сейчас</string>
+
+    <!-- Option values for Dropdowns -->
+    <string name="opt_restore_ask">Спрашивать перед восстановлением</string>
+    <string name="opt_restore_always_load">Всегда восстанавливать и загружать</string>
+    <string name="opt_restore_always">Всегда восстанавливать</string>
+    <string name="opt_restore_never">Никогда не восстанавливать</string>
+
+    <string name="opt_hist_10">10 записей</string>
+    <string name="opt_hist_20">20 записей</string>
+    <string name="opt_hist_50">50 записей</string>
+    <string name="opt_hist_unlimited">Без ограничений</string>
+
+    <string name="opt_icons_snapshots">Снимки страниц (Миниатюры)</string>
+    <string name="opt_icons_favicons">Фавиконки</string>
+
+    <string name="opt_extract_ask">Спрашивать перед запуском</string>
+    <string name="opt_extract_always">Всегда во встроенном плеере</string>
+    <string name="opt_extract_never">Никогда (смотреть на сайте)</string>
+
+    <string name="opt_fallback_ask">Предлагать переключение</string>
+    <string name="opt_fallback_always">Всегда переключаться на браузер</string>
+    <string name="opt_fallback_never">Никогда не переключаться</string>
+
+    <string name="opt_skip_skip">Пропускать</string>
+    <string name="opt_skip_ask">Спрашивать</string>
+    <string name="opt_skip_ignore">Игнорировать</string>
+
+    <string name="opt_up_next_ask">Спрашивать о переходе к следующей</string>
+    <string name="opt_up_next_always">Автоматически запускать следующую</string>
+    <string name="opt_up_next_never">Никогда не показывать окно</string>
+
+    <string name="opt_autoplay_closest">Ближайший источник (тот же хост)</string>
+    <string name="opt_autoplay_best">Источник наилучшего качества</string>
+    <string name="opt_autoplay_ask">Спрашивать (показывать список)</string>
+
+    <string name="opt_focus_next_watched">Следующая серия после просмотренной</string>
+    <string name="opt_focus_first_unwatched">Первая непросмотренная серия</string>
+
+    <string name="opt_nav_pointer">Виртуальный указатель (Мышь)</string>
+    <string name="opt_nav_dpad">Физическая навигация (Пульт D-pad)</string>
+
+    <string name="opt_scrape_web_torrents">Веб, Торренты</string>
+    <string name="opt_scrape_torrents_web">Торренты, Веб</string>
+
+    <string name="opt_hw_auto">Автоопределение (Рекомендуется)</string>
+    <string name="opt_hw_always">Всегда включено</string>
+    <string name="opt_hw_disabled">Выключено (Режим пульта ТВ)</string>
+
+    <string name="opt_thumb_portrait">Портретный (2:3) [По умолчанию]</string>
+    <string name="opt_thumb_landscape">Альбомный (16:9)</string>
+
+    <string name="opt_timeout_global">Только общий тайм-аут</string>
+    <string name="opt_timeout_source">Только тайм-аут по источнику</string>
+    <string name="opt_timeout_both">Оба тайм-аута активны</string>
+
+    <string name="opt_sub_engine_native">Нативный (Требует перезагрузки)</string>
+    <string name="opt_sub_engine_overlay">Свой оверлей (Мгновенное переключение)</string>
+
+    <string name="opt_sub_behavior_ask">Спрашивать перед поиском</string>
+    <string name="opt_sub_behavior_auto">Искать автоматически</string>
+    <string name="opt_sub_behavior_never">Никогда не искать</string>
+
+    <string name="opt_sub_count_other">Другое</string>
+    <string name="opt_sub_count_all">Все</string>
+
+    <string name="opt_sub_launch_stop">Сразу останавливать загрузку</string>
+    <string name="opt_sub_launch_ask">Спрашивать, подождать ли</string>
+    <string name="opt_sub_launch_background">Продолжать в фоновом режиме</string>
+
+    <string name="opt_retention_indefinite">Хранить бессрочно</string>
+    <string name="opt_retention_1d">1 день</string>
+    <string name="opt_retention_3d">3 дня</string>
+    <string name="opt_retention_7d">7 дней</string>
+    <string name="opt_retention_14d">14 дней</string>
+    <string name="opt_retention_30d">30 дней</string>
+
+    <string name="opt_prebuffer_1">1 кусок (Быстрый старт / По умолчанию)</string>
+    <string name="opt_prebuffer_2">2 куска</string>
+    <string name="opt_prebuffer_4">4 куска (Стандарт)</string>
+    <string name="opt_prebuffer_8">8 кусков (Макс. стабильность)</string>
+
+    <string name="opt_clean_manual">Только вручную</string>
+    <string name="opt_clean_new_torrent">При каждом новом торренте</string>
+    <string name="opt_clean_exit">При каждом закрытии видео</string>
+    <string name="opt_clean_days">Каждые X дней</string>
+
+    <!-- TMDb Genres -->
+    <string name="genre_action">Боевик</string>
+    <string name="genre_adventure">Приключения</string>
+    <string name="genre_animation">Мультфильм</string>
+    <string name="genre_comedy">Комедия</string>
+    <string name="genre_crime">Криминал</string>
+    <string name="genre_documentary">Документальный</string>
+    <string name="genre_drama">Драма</string>
+    <string name="genre_family">Семейный</string>
+    <string name="genre_fantasy">Фэнтези</string>
+    <string name="genre_history">История</string>
+    <string name="genre_horror">Ужасы</string>
+    <string name="genre_music">Музыка</string>
+    <string name="genre_mystery">Детектив</string>
+    <string name="genre_romance">Мелодрама</string>
+    <string name="genre_scifi">Фантастика</string>
+    <string name="genre_tv_movie">Телефильм</string>
+    <string name="genre_thriller">Триллер</string>
+    <string name="genre_war">Военный</string>
+    <string name="genre_western">Вестерн</string>
+    <string name="genre_action_adventure">Боевик и приключения</string>
+    <string name="genre_kids">Детский</string>
+    <string name="genre_news">Новости</string>
+    <string name="genre_reality">Реалити-шоу</string>
+    <string name="genre_scifi_fantasy">Фантастика и фэнтези</string>
+    <string name="genre_soap">Мыльная опера</string>
+    <string name="genre_talk">Ток-шоу</string>
+    <string name="genre_war_politics">Война и политика</string>
+
+    <string name="opt_system_default">Системный по умолчанию</string>
+    <string name="opt_follow_app_language">Как в приложении (По умолчанию)</string>
+    <string name="setting_action_mode">Режим действия</string>
+    <string name="opt_action_custom_script">Пользовательский скрипт</string>
+    <string name="opt_action_simple_elements">Простой список элементов</string>
+    <string name="label_javascript_action">Действие JavaScript</string>
+</resources>

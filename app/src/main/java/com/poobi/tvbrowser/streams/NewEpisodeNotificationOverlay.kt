@@ -88,31 +88,9 @@ fun NewEpisodeNotificationOverlay(
             }
 
             val airdateStr = notificationData.optString("airdate") ?: ""
+            val context = androidx.compose.ui.platform.LocalContext.current
             val formattedDate = remember(airdateStr) {
-                if (airdateStr.isNotEmpty()) {
-                    try {
-                        val parser = if (airdateStr.contains("T")) {
-                            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-                                timeZone = TimeZone.getTimeZone("UTC")
-                            }
-                        } else {
-                            SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                        }
-
-                        val cleanDateStr = airdateStr.replace("Z", "").split(".")[0]
-                        val date = parser.parse(cleanDateStr)
-                        if (date != null) {
-                            val localFormatter = SimpleDateFormat("d MMMM h:mm a", Locale.getDefault()).apply {
-                                timeZone = TimeZone.getDefault()
-                            }
-                            localFormatter.format(date)
-                        } else {
-                            airdateStr
-                        }
-                    } catch (e: Exception) {
-                        airdateStr
-                    }
-                } else ""
+                com.poobi.tvbrowser.shared.LanguageHelper.formatDateTime(context, airdateStr)
             }
 
             LaunchedEffect(isVisible) {

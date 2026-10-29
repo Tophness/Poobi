@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Poobi</string>
+
+    <!-- Top Navigation -->
+    <string name="tab_browser">المتصفح</string>
+    <string name="tab_streams">البث</string>
+    <string name="title_settings">الإعدادات</string>
+
+    <!-- Common Actions & Buttons -->
+    <string name="btn_save_exit">حفظ وخروج</string>
+    <string name="btn_save">حفظ</string>
+    <string name="btn_cancel">إلغاء</string>
+    <string name="btn_delete">حذف</string>
+    <string name="btn_edit">تعديل</string>
+    <string name="btn_close">إغلاق</string>
+    <string name="btn_done">تم</string>
+    <string name="btn_select_all">تحديد الكل</string>
+    <string name="btn_deselect_all">إلغاء تحديد الكل</string>
+    <string name="btn_clear_all">مسح الكل</string>
+    <string name="btn_back">رجوع</string>
+    <string name="btn_apply">تطبيق</string>
+    <string name="btn_play_now">تشغيل الآن</string>
+    <string name="btn_skip_play">تخطي وتشغيل</string>
+    <string name="btn_download">تنزيل</string>
+    <string name="btn_allow">سماح</string>
+    <string name="btn_block">حظر</string>
+    <string name="btn_play_native">مشغل مدمج</string>
+    <string name="btn_website_player">مشغل الموقع</string>
+    <string name="btn_open_in_browser">فتح في المتصفح</string>
+    <string name="btn_restore">استعادة</string>
+    <string name="btn_restore_load">استعادة وتحميل</string>
+    <string name="btn_new_session">جلسة جديدة</string>
+    <string name="btn_zoom_out">- تصغير</string>
+    <string name="btn_zoom_reset">100% (إعادة ضبط)</string>
+    <string name="btn_zoom_in">+ تكبير</string>
+    <string name="btn_load_all_tabs">تحميل جميع علامات التبويب</string>
+    <string name="btn_restore_all_tabs">استعادة جميع علامات التبويب</string>
+    <string name="btn_clear_bookmarks">مسح المفضلة</string>
+    <string name="btn_clear_history">مسح السجل</string>
+    <string name="btn_clear_downloads">مسح التنزيلات</string>
+    <string name="btn_prev">السابق</string>
+    <string name="btn_next">التالي</string>
+
+    <!-- Settings Categories -->
+    <string name="category_general">عام</string>
+    <string name="category_language">اللغة</string>
+    <string name="category_web">الويب</string>
+    <string name="category_player">المشغل</string>
+    <string name="category_interface">الواجهة</string>
+    <string name="category_feeds">الخلاصات</string>
+    <string name="category_streaming">البث</string>
+    <string name="category_autoplay">تشغيل تلقائي</string>
+    <string name="category_subtitles">الترجمات</string>
+    <string name="category_sorting">الترتيب</string>
+    <string name="category_blocked">المحظورات</string>
+    <string name="category_trakt">Trakt</string>
+    <string name="category_tmdb">TMDb</string>
+    <string name="category_torrents">التورنت</string>
+    <string name="category_sync">مزامنة</string>
+
+    <!-- Settings Panels & Options -->
+    <string name="panel_general">إعدادات عامة</string>
+    <string name="panel_language">إعدادات اللغة والمنطقة</string>
+    <string name="setting_app_language">لغة واجهة التطبيق</string>
+    <string name="setting_date_format">صيغة التاريخ</string>
+    <string name="setting_audio_language">المسار الصوتي الافتراضي</string>
+    <string name="setting_torrent_language">لغة التورنت المفضلة</string>
+    <string name="setting_sub_languages">لغات البحث عن الترجمات</string>
+    <string name="setting_light_theme">استخدام الوضع الفاتح</string>
+    <string name="setting_auto_update">التحقق من التحديثات تلقائيًا</string>
+    <string name="setting_restore_session">وضع استعادة الجلسة</string>
+    <string name="setting_history_limit">الحد الأقصى لسجل المشاهدة</string>
+    <string name="setting_history_icons">نمط أيقونات السجل</string>
+    <string name="setting_bookmark_icons">نمط أيقونات المفضلة</string>
+
+    <!-- Streams Navigation Categories -->
+    <string name="feed_search">بحث</string>
+    <string name="feed_for_you">لك</string>
+    <string name="feed_movies">أفلام</string>
+    <string name="feed_tv_shows">مسلسلات</string>
+    <string name="feed_discover">استكشاف</string>
+
+    <!-- Dashboard Pills -->
+    <string name="pill_favourites">المفضلة</string>
+    <string name="pill_recents">المشاهدة مؤخرًا</string>
+    <string name="pill_unfinished">مسلسلات غير مكتملة</string>
+    <string name="pill_because_watched">لأنك شاهدت</string>
+    <string name="pill_cast_spotlight">الممثلون في دائرة الضوء</string>
+    <string name="pill_trakt_watched">الأكثر مشاهدة</string>
+    <string name="pill_trakt_anticipated">الأكثر انتظارًا</string>
+    <string name="pill_trakt_collected">الأكثر جمعًا</string>
+    <string name="pill_trakt_watchlist">قائمة المشاهدة</string>
+    <string name="pill_trakt_recommendations">خصيصًا لي</string>
+    <string name="pill_trending_today">الرائج اليوم</string>
+    <string name="pill_trending_week">الرائج هذا الأسبوع</string>
+    <string name="pill_in_cinemas">في السينما</string>
+    <string name="pill_upcoming">قريبًا</string>
+    <string name="pill_popular">شائع</string>
+    <string name="pill_top_rated">الأعلى تقييمًا</string>
+    <string name="pill_hidden_gems">جواهر خفية</string>
+    <string name="pill_popular_tv">مسلسلات شائعة</string>
+    <string name="pill_trending_tv_week">مسلسلات رائجة</string>
+    <string name="pill_airing_today">تعرض اليوم</string>
+    <string name="pill_airing_week">تعرض هذا الأسبوع</string>
+    <string name="pill_top_rated_tv">أعلى المسلسلات تقييمًا</string>
+    <string name="pill_era_2000s">روائع العقد الأول 2000</string>
+    <string name="pill_era_90s">نوستالجيا التسعينات</string>
+    <string name="pill_era_80s">كلاسيكيات الثمانينات</string>
+    <string name="pill_era_70s">سينما السبعينات</string>
+    <string name="pill_anime">أنمي</string>
+    <string name="pill_kdrama">دراما كورية</string>
+    <string name="pill_british_mysteries">غموض بريطاني</string>
+    <string name="pill_cult_classics">كلاسيكيات خالدة</string>
+
+    <!-- Browser Home Tabs -->
+    <string name="browser_open_tabs">علامات التبويب المفتوحة</string>
+    <string name="browser_bookmarks">المفضلة</string>
+    <string name="browser_history">السجل</string>
+    <string name="browser_downloads">التنزيلات</string>
+
+    <!-- Media Details Actions -->
+    <string name="media_play_movie">تشغيل الفيلم</string>
+    <string name="media_trailer">الإعلان الترويجي</string>
+    <string name="media_season">الموسم</string>
+    <string name="media_top_cast">طاقم التمثيل الرئيسي</string>
+    <string name="media_more_like_this">أعمال مشابهة</string>
+    <string name="media_filmography">الأعمال السابقة</string>
+    <string name="media_released">تاريخ الإصدار</string>
+    <string name="media_select_season">اختر الموسم</string>
+    <string name="media_season_num">الموسم %1$d</string>
+    <string name="media_season_cast">طاقم %1$s</string>
+    <string name="media_no_overview">لا يوجد وصف متاح.</string>
+    <string name="media_no_cast">لا توجد معلومات عن طاقم التمثيل.</string>
+    <string name="media_no_recommendations">لا توجد ترشيحات متاحة.</string>
+    <string name="media_loading_trailer">جارٍ تحميل الإعلان الترويجي...</string>
+    <string name="media_filter_all">الكل</string>
+    <string name="media_filter_movies">أفلام</string>
+    <string name="media_filter_tv">مسلسلات</string>
+    <string name="media_no_titles_category">لم يتم العثور على عناوين في هذا التصنيف.</string>
+    <string name="media_born_in">مكان الميلاد: %1$s</string>
+    <string name="media_no_biography">لا توجد سيرة ذاتية متاحة.</string>
+    <string name="media_role_as">بدور %1$s</string>
+    <string name="media_badge_actor">ممثل</string>
+    <string name="media_airing_prefix">العرض: </string>
+    <string name="media_aired_prefix">عُرض: </string>
+    <string name="media_type_movie">فيلم</string>
+    <string name="media_type_tv">مسلسل تلفزيوني</string>
+    <string name="known_for_acting">تمثيل</string>
+
+    <!-- Sorter Dialog -->
+    <string name="sorter_favorites_title">أولويات ترتيب المفضلة</string>
+    <string name="sorter_recent_title">أولويات ترتيب المشاهدة مؤخرًا</string>
+    <string name="sorter_feed_title">أولويات ترتيب الخلاصات</string>
+    <string name="sorter_streams_title">ترتيب البث المباشر</string>
+    <string name="sorter_torrents_title">ترتيب التورنت</string>
+
+    <!-- Subtitle Alignment UI -->
+    <string name="sub_sync_title">مزامنة الترجمة</string>
+    <string name="sub_sync_offset">الفارق الزمني الحالي: %1$d ميلي ثانية</string>
+    <string name="sub_sync_btn_visual">المحاذاة المرئية على المخطط الزمني</string>
+    <string name="sub_sync_btn_search">البحث عن الكلمات المنطوقة</string>
+    <string name="sub_sync_btn_reset">إعادة ضبط التوقيت</string>
+    <string name="sub_sync_btn_exit">خروج</string>
+    <string name="sub_search_title">البحث عن جملة حوارية</string>
+    <string name="sub_search_desc">أدخل كلمات من الحوار للقفز إلى مقطع الصوت المناسب.</string>
+    <string name="sub_search_placeholder">مثل: قفز من فوق</string>
+    <string name="sub_search_btn_align">بحث ومحاذاة</string>
+    <string name="sub_waveform_title">المخطط الزمني للموجة الصوتية</string>
+    <string name="sub_waveform_silence">[ صمت ]</string>
+    <string name="sub_waveform_offset">إزاحة المخطط: %1$d ميلي ثانية</string>
+    <string name="sub_waveform_hint_focused">◀ اضغط يسار / يمين في لوحة الاتجاهات لتقديم أو تأخير الترجمة ▶</string>
+    <string name="sub_waveform_hint_unfocused">حدد لتعديل مواضع كتل الترجمة</string>
+    <string name="sub_waveform_looping">تكرار المقطع...</string>
+    <string name="sub_waveform_playback_running">التشغيل جارٍ...</string>
+    <string name="sub_waveform_stop_loop">إيقاف التكرار</string>
+    <string name="sub_waveform_loop_track">تكرار المشهد</string>
+
+    <!-- Player Overlays & Prompts -->
+    <string name="overlay_up_next">التالي</string>
+    <string name="overlay_skip_intro">تخطي المقدمة</string>
+    <string name="overlay_skip_recap">تخطي الملخص</string>
+    <string name="overlay_skip_early_credits">تخطي شارة البداية</string>
+    <string name="overlay_skip_end_credits">تخطي شارة النهاية</string>
+    <string name="overlay_skip_remaining">تخطي %1$s (متبقي %2$d ث)</string>
+    <string name="overlay_skip_press_select">اضغط على زر التحديد للتخطي</string>
+    <string name="segment_intro">المقدمة</string>
+    <string name="segment_recap">الملخص</string>
+    <string name="segment_opening_credits">شارات البداية</string>
+    <string name="segment_closing_credits">شارات النهاية</string>
+    <string name="toast_skipped_intro">تم تخطي المقدمة</string>
+    <string name="toast_skipped_recap">تم تخطي الملخص</string>
+    <string name="toast_skipped_early_credits">تم تخطي شارة البداية</string>
+    <string name="toast_skipped_end_credits">تم تخطي شارة النهاية</string>
+    <string name="captions_add_disk">إضافة ملف ترجمة من القرص...</string>
+    <string name="captions_off">إيقاف</string>
+    <string name="captions_embedded">ترجمة مدمجة</string>
+    <string name="dialog_quality_title">تحديد جودة الفيديو</string>
+    <string name="dialog_sub_wait_title">تنزيل الترجمات تلقائيًا</string>
+    <string name="dialog_sub_wait_msg">جارٍ البحث عن ملفات الترجمة وتنزيلها...</string>
+    <string name="dialog_torrent_prebuffer_title">جارٍ التحميل المسبق للبث</string>
+    <string name="disk_picker_select_media">اختر الوسائط</string>
+    <string name="disk_picker_select_subtitles">اختر الترجمة</string>
+    <string name="disk_picker_no_subs">لم يتم العثور على ملفات ترجمة (.srt, .vtt, .ass) في الجهاز.</string>
+
+    <!-- Browser & Web Dialogs -->
+    <string name="menu_cut">قص</string>
+    <string name="menu_copy">نسخ</string>
+    <string name="menu_paste">لصق</string>
+    <string name="menu_select_all">تحديد الكل</string>
+    <string name="menu_open_new_tab">فتح في علامة تبويب جديدة</string>
+    <string name="menu_refresh">تحديث الصفحة</string>
+    <string name="menu_block_element">حظر هذا العنصر</string>
+    <string name="dialog_video_detected_title">تم اكتشاف فيديو</string>
+    <string name="dialog_video_detected_msg">تم اعتراض ملف فيديو. هل ترغب في تشغيله بالمشغل المدمج أم الاستمرار بمشغل الويب؟</string>
+    <string name="dialog_remember_decision">تذكر خياري (عدم السؤال مجددًا)</string>
+    <string name="dialog_playback_error_title">خطأ في التشغيل</string>
+    <string name="dialog_playback_error_msg">تعذر تشغيل هذا الرابط عبر ExoPlayer. هل تريد محاولة فتحه في المتصفح؟\n\nالخطأ: %1$s</string>
+    <string name="dialog_download_title">تنزيل الملف؟</string>
+    <string name="dialog_download_msg">هل تريد تنزيل %1$s؟\nالحجم: %2$.2f ميغابايت</string>
+    <string name="dialog_popup_blocked_title">تم حظر نافذة منبثقة</string>
+    <string name="dialog_popup_blocked_msg">هل ترغب في السماح بالنوافذ المنبثقة من هذا الموقع؟</string>
+    <string name="dialog_silent_block_remember">عدم السؤال ثانية (حظر صامت)</string>
+    <string name="dialog_restore_session_title">استعادة الجلسة السابقة؟</string>
+    <string name="dialog_restore_session_msg">هل تريد استعادة علامات التبويب السابقة؟</string>
+    <string name="dialog_zoom_title">تكبير الصفحة (%1$d%%)</string>
+    <string name="dialog_zoom_msg">ضبط حجم الخط ومستوى التكبير:</string>
+    <string name="prompt_search_google_url">البحث في Google أو إدخال عنوان URL...</string>
+    <string name="status_missing">مفقود</string>
+
+    <!-- Scraper & Streams Screen -->
+    <string name="search_movie_tv_placeholder">ابحث عن فيلم أو مسلسل...</string>
+    <string name="dashboard_recent_searches">عمليات البحث الأخيرة</string>
+    <string name="dashboard_no_items">لا توجد عناصر</string>
+    <string name="scrape_stop_scanning">إيقاف المسح</string>
+    <string name="scrape_try_all">تجربة الكل</string>
+    <string name="scrape_stop">إيقاف</string>
+    <string name="scrape_sort">ترتيب</string>
+    <string name="scrape_no_sources">لم يتم العثور على مصادر صالحة.</string>
+    <string name="scrape_open_browser">فتح في المتصفح</string>
+    <string name="scrape_play_native">تشغيل عبر المشغل المدمج</string>
+    <string name="scrape_search_external_subs">🔍 البحث عن ترجمات خارجية</string>
+
+    <!-- Sorter Criteria -->
+    <string name="sort_criteria_native">التوافق مع المشغل المدمج</string>
+    <string name="sort_criteria_direct">الروابط المباشرة</string>
+    <string name="sort_criteria_resolution">الدقة</string>
+    <string name="sort_criteria_source">اسم المضيف / المصدر</string>
+    <string name="sort_criteria_language">اللغة</string>
+    <string name="sort_criteria_size">حجم الملف</string>
+    <string name="sort_criteria_seeders">الموزعون (Seeders)</string>
+    <string name="sort_criteria_date_added">تاريخ الإضافة</string>
+    <string name="sort_criteria_date_accessed">آخر استخدام</string>
+    <string name="sort_criteria_az">أبجديًا (أ - ي)</string>
+    <string name="sort_criteria_rating">التقييم</string>
+    <string name="sort_criteria_fav_actors">الممثلون المفضلون</string>
+    <string name="sort_criteria_date">تاريخ الإصدار</string>
+    <string name="sort_criteria_default">الترتيب الافتراضي</string>
+
+    <!-- Settings Panels & Options Details -->
+    <string name="panel_web">إعدادات الويب وحظر الإعلانات</string>
+    <string name="setting_silent_block">حظر النوافذ المنبثقة بهدوء</string>
+    <string name="setting_clickjack">منع اختطاف النقر (Clickjacking)</string>
+    <string name="setting_custom_adblock_url">رابط قواعد حظر مخصص (صيغة EasyList)</string>
+    <string name="btn_update_rules_now">تحديث القواعد الآن</string>
+    <string name="status_rules_loaded">قواعد التصفية النشطة: ~%1$d محملة</string>
+    <string name="status_rules_updating">جارٍ تحديث قوائم الحظر...</string>
+    <string name="toast_rules_updated">Filter lists updated!</string>
+    <string name="toast_rules_update_failed">Update failed</string>
+    <string name="status_checking_updates">جارٍ التحقق من التحديثات...</string>
+    <string name="btn_check_updates">التحقق من التحديثات (الإصدار %1$s)</string>
+    <string name="setting_current">الحالي</string>
+    <string name="label_profile_name">اسم ملف التعريف</string>
+    <string name="label_url_patterns">أنماط الروابط URL</string>
+    <string name="label_action_mode">Action Mode</string>
+    <string name="opt_custom_script">Custom Script</string>
+    <string name="opt_simple_selectors">Simple Element List</string>
+    <string name="label_js_action">JavaScript Action</string>
+    <string name="label_click_selectors">محددات النقر</string>
+    <string name="btn_add_selector">+ إضافة محدد</string>
+    <string name="dialog_edit_autoplay_title">Edit Autoplay Profile</string>
+    <string name="dialog_add_autoplay_title">Add New Autoplay Profile</string>
+    <string name="dialog_custom_sub_limit_title">حد مخصص لتنزيل الترجمات</string>
+    <string name="dialog_custom_sub_limit_msg">أدخل الحد العددي:</string>
+    <string name="label_opensubtitles_username">OpenSubtitles Username</string>
+    <string name="label_opensubtitles_password">OpenSubtitles Password</string>
+    <string name="label_opensubtitles_org_username">OpenSubtitles.org Username</string>
+    <string name="label_opensubtitles_org_password">OpenSubtitles.org Password</string>
+    <string name="label_subdl_apikey">SubDL API Key</string>
+    <string name="label_subsource_apikey">SubSource API Key</string>
+    <string name="label_rule_name">اسم القاعدة</string>
+    <string name="label_css_selectors">محددات CSS (محدد في كل سطر)</string>
+    <string name="dialog_edit_block_rule">تعديل قاعدة الحظر</string>
+    <string name="dialog_add_block_rule">إضافة قاعدة حظر</string>
+    <string name="dialog_auth_trakt_title">تفويض Trakt.tv</string>
+    <string name="dialog_auth_trakt_step1">1. تفضل بزيارة صفحة التحقق:</string>
+    <string name="dialog_auth_trakt_step2">2. أدخل الرمز التالي على جهازك:</string>
+    <string name="dialog_auth_trakt_waiting">في انتظار المصادقة من Trakt...</string>
+    <string name="btn_open_link">فتح الرابط</string>
+    <string name="label_username">اسم المستخدم</string>
+    <string name="label_password">كلمة المرور</string>
+    <string name="dialog_auto_clean_interval_title">الفاصل الزمني للتنظيف التلقائي</string>
+    <string name="dialog_auto_clean_interval_msg">أدخل عدد الأيام بين مرات تنظيف الذاكرة المؤقتة:</string>
+    <string name="status_signed_in_as">تم تسجيل الدخول باسم: %1$s</string>
+    <string name="status_not_signed_in">لم يتم تسجيل الدخول.</string>
+
+    <string name="panel_player">تفضيلات المشغل الأصلي</string>
+    <string name="setting_extract_video">اعتراض واستخراج الفيديو</string>
+    <string name="setting_fallback_error">الإجراء البديل عند خطأ التشغيل</string>
+    <string name="header_binge_autoplay">المشاهدة المتواصلة والتشغيل التلقائي</string>
+    <string name="setting_intro_skip">الإجراء عند اكتشاف المقدمة</string>
+    <string name="setting_recap_skip">الإجراء عند اكتشاف التلخيص</string>
+    <string name="setting_early_credits_skip">الإجراء مع شارة البداية</string>
+    <string name="setting_end_credits_skip">الإجراء مع شارة النهاية</string>
+    <string name="setting_up_next_mode">وضع شاشة الحلقة التالية</string>
+    <string name="setting_up_next_time">ثوانٍ قبل النهاية (في حال عدم اكتشاف الشارة)</string>
+    <string name="setting_source_selection_next">اختيار مصدر الحلقة التالية</string>
+    <string name="setting_episode_focus_style">طريقة التركيز التلقائي على الحلقة</string>
+
+    <string name="panel_interface">إعدادات الواجهة والتنقل</string>
+    <string name="setting_scroll_topbar">التمرير لأعلى لإظهار شريط التنقل</string>
+    <string name="setting_nav_mode">وضع المؤشر الافتراضي</string>
+    <string name="setting_scrape_tab_order">ترتيب علامات تبويب نتائج البحث</string>
+    <string name="header_hardware_devices">الأجهزة الخارجية ووحدات الإدخال</string>
+    <string name="setting_hw_keyboard_mode">وضع لوحة المفاتيح المادية</string>
+    <string name="setting_hw_mouse_mode">وضع الفأرة المادية</string>
+    <string name="setting_menu_keybind">اختصار زر القائمة</string>
+    <string name="setting_menu_rebind">إعادة التعيين</string>
+    <string name="setting_menu_reset">استعادة الافتراضي</string>
+    <string name="setting_press_key_combo">اضغط على الأزرار المطلوبة</string>
+    <string name="setting_listening_keys">في انتظار ضغط الأزرار...</string>
+
+    <string name="panel_feeds">الخلاصات وتخصيص الواجهة</string>
+    <string name="setting_card_thumbnail_style">نمط صور البطاقات المصغرة</string>
+    <string name="setting_prioritize_fav_cast">إعطاء الأولوية لطاقم التمثيل المفضل</string>
+    <string name="header_for_you_feeds">خلاصات مخصصة لك</string>
+    <string name="header_movie_feeds">خلاصات الأفلام</string>
+    <string name="header_movie_genres">تصنيفات الأفلام</string>
+    <string name="header_tv_feeds">خلاصات المسلسلات</string>
+    <string name="header_tv_genres">تصنيفات المسلسلات</string>
+    <string name="header_discover_networks">استكشاف: شبكات البث والمنصات</string>
+    <string name="header_discover_eras">استكشاف: الحقب والعقود الزمنية</string>
+    <string name="header_discover_world">استكشاف: السينما العالمية والمختارات</string>
+    <string name="header_fav_cast_mgmt">إدارة الممثلين المفضلين</string>
+    <string name="desc_fav_cast_mgmt">أدر الممثلين من أعمالك المفضلة أو ابحث لإضافة أي ممثل يدويًا.</string>
+    <string name="setting_auto_sync_fav_cast">مزامنة الممثلين تلقائيًا من الأعمال المفضلة</string>
+    <string name="prompt_search_actor">ابحث عن ممثل لإضافته (مثل: Cillian Murphy)...</string>
+    <string name="label_live_results">نتائج فورية (اضغط للإضافة):</string>
+    <string name="label_cast_pool">قائمة الممثلين (%1$d)</string>
+    <string name="label_add_actor">+ إضافة</string>
+    <string name="desc_no_fav_actors">لم تتم إضافة ممثلين بعد. أضف أعمالك إلى المفضلة أو ابحث أعلاه.</string>
+    <string name="label_added_via_fav">أضيف لأنك فضلت: %1$s</string>
+    <string name="label_added_via_search">أضيف عبر البحث</string>
+
+    <string name="panel_streaming">إعدادات البث ومحركات البحث</string>
+    <string name="setting_timeout_logic">طريقة مهلة الانتظار</string>
+    <string name="setting_enforce_whitelist">فرض القائمة البيضاء للمستضيفين</string>
+    <string name="setting_global_timeout">المهلة الإجمالية للمحرك (بالثواني)</string>
+    <string name="setting_source_timeout">مهلة كل مصدر على حدة (بالثواني)</string>
+    <string name="setting_scraper_workers">مسارات العمل المتوازية (الافتراضي: 3)</string>
+    <string name="header_provider_packages">حزم المزودين</string>
+    <string name="header_host_whitelists">القوائم البيضاء للمستضيفين</string>
+    <string name="prompt_search_whitelists">البحث في القوائم البيضاء...</string>
+    <string name="label_provider_whitelist">القائمة البيضاء لحزم المزودين</string>
+    <string name="label_resolveurl_whitelist">القائمة البيضاء لـ ResolveURL</string>
+
+    <string name="panel_autoplay">ملفات تعريف التشغيل التلقائي</string>
+    <string name="setting_autoplay_global">تشغيل الفيديو تلقائيًا بشكل عام</string>
+    <string name="btn_add_autoplay_profile">إضافة ملف تعريف جديد</string>
+
+    <string name="panel_subtitles">تفضيلات البحث عن الترجمات</string>
+    <string name="setting_sub_rendering_engine">محرك عرض ومعالجة الترجمات</string>
+    <string name="setting_sub_auto_search">سلوك البحث التلقائي</string>
+    <string name="setting_subs_to_download">عدد الترجمات المراد تنزيلها</string>
+    <string name="setting_sub_video_launches">عند بدء تشغيل الفيديو</string>
+    <string name="setting_sub_retention">فترة الاحتفاظ بملفات الترجمة</string>
+    <string name="setting_sub_limit">الحد الأقصى لنتائج البحث عن الترجمات</string>
+    <string name="header_sub_accounts">حسابات ومفاتيح API للترجمات</string>
+    <string name="header_sub_engines">محركات جلب الترجمات</string>
+
+    <string name="panel_sorting">أولويات الترتيب في الخلاصات والنتائج</string>
+    <string name="panel_blocked">قواعد حظر عناصر صفحات الويب</string>
+    <string name="btn_add_css_rule">إضافة قاعدة حظر CSS جديدة</string>
+
+    <string name="panel_trakt">المزامنة مع Trakt.tv</string>
+    <string name="status_trakt_authed">الحساب المرتبط: %1$s</string>
+    <string name="btn_logout_trakt">تسجيل الخروج من Trakt</string>
+    <string name="status_trakt_unlinked">لا يوجد حساب Trakt مرتبط.</string>
+    <string name="btn_auth_trakt">ربط وتفويض حساب Trakt</string>
+
+    <string name="panel_tmdb">بيانات اعتماد حساب TMDb</string>
+    <string name="status_tmdb_active">جلسة TMDb نشطة ومفوضة</string>
+    <string name="btn_login">تسجيل الدخول</string>
+    <string name="btn_logout">تسجيل الخروج</string>
+
+    <string name="panel_torrents">إعدادات بث التورنت</string>
+    <string name="setting_prebuffer_size">حجم التخزين المؤقت المسبق</string>
+    <string name="setting_torrent_cache_clean">التنظيف التلقائي لذاكرة التورنت</string>
+    <string name="header_storage_cache_mgmt">إدارة الذاكرة المؤقتة للتخزين</string>
+    <string name="label_total_cached_p2p">إجمالي حجم الذاكرة المؤقتة لـ P2P</string>
+    <string name="label_cached_subfolders">المجلدات الفرعية المؤقتة</string>
+    <string name="label_clean_interval">الفاصل الزمني للتنظيف</string>
+    <string name="format_every_x_days">كل %1$d أيام</string>
+    <string name="label_disabled_set">معطل / اضغط للتعيين</string>
+    <string name="btn_clear">مسح</string>
+
+    <string name="panel_sync">النسخ الاحتياطي المحلي والاستعادة</string>
+    <string name="desc_local_backup">تصدير واستعادة جميع الإعدادات والمفضلة كملف JSON في مجلد التنزيلات بدون الحاجة لحساب Google.</string>
+    <string name="btn_save_backup">حفظ النسخة الاحتياطية</string>
+    <string name="btn_restore_backup">استعادة النسخة الاحتياطية</string>
+    <string name="header_drive_sync">المزامنة السحابية عبر Google Drive</string>
+    <string name="desc_drive_sync">مزامنة إعداداتك ومفضلتك وسجلك بين أجهزتك باستخدام مجلد التطبيق الخاص على Google Drive.</string>
+    <string name="status_sync">الحالة: %1$s</string>
+    <string name="btn_sign_in_google">تسجيل الدخول عبر Google</string>
+    <string name="btn_force_sync">مزامنة فورية الآن</string>
+
+    <!-- Option values for Dropdowns -->
+    <string name="opt_restore_ask">السؤال قبل الاستعادة</string>
+    <string name="opt_restore_always_load">استعادة وتحميل دائمًا</string>
+    <string name="opt_restore_always">استعادة دائمًا</string>
+    <string name="opt_restore_never">عدم الاستعادة مطلقًا</string>
+
+    <string name="opt_hist_10">10 عناصر</string>
+    <string name="opt_hist_20">20 عنصرًا</string>
+    <string name="opt_hist_50">50 عنصرًا</string>
+    <string name="opt_hist_unlimited">غير محدود</string>
+
+    <string name="opt_icons_snapshots">لقطات معاينة (مصغرة)</string>
+    <string name="opt_icons_favicons">أيقونات المواقع</string>
+
+    <string name="opt_extract_ask">السؤال عند التشغيل</string>
+    <string name="opt_extract_always">التشغيل دائمًا في المشغل الأصلي</string>
+    <string name="opt_extract_never">عدم الاستخراج مطلقًا (مشغل الويب)</string>
+
+    <string name="opt_fallback_ask">سؤال المستخدم عن التبديل</string>
+    <string name="opt_fallback_always">التبديل دائمًا إلى المتصفح</string>
+    <string name="opt_fallback_never">عدم التبديل مطلقًا</string>
+
+    <string name="opt_skip_skip">تخطي</string>
+    <string name="opt_skip_ask">السؤال قبل التخطي</string>
+    <string name="opt_skip_ignore">تجاهل</string>
+
+    <string name="opt_up_next_ask">السؤال لتشغيل التالي</string>
+    <string name="opt_up_next_always">التشغيل التلقائي دائمًا</string>
+    <string name="opt_up_next_never">عدم إظهار الشاشة مطلقًا</string>
+
+    <string name="opt_autoplay_closest">المصدر الأقرب (نفس المستضيف)</string>
+    <string name="opt_autoplay_best">المصدر الأعلى جودة</string>
+    <string name="opt_autoplay_ask">السؤال (عرض القائمة)</string>
+
+    <string name="opt_focus_next_watched">الحلقة التالية بعد آخر حلقة تمت مشاهدتها</string>
+    <string name="opt_focus_first_unwatched">أول حلقة غير مشاهدة</string>
+
+    <string name="opt_nav_pointer">مؤشر افتراضي (فأرة)</string>
+    <string name="opt_nav_dpad">تنقل بأزرار الاتجاهات (D-pad)</string>
+
+    <string name="opt_scrape_web_torrents">الويب، التورنت</string>
+    <string name="opt_scrape_torrents_web">التورنت، الويب</string>
+
+    <string name="opt_hw_auto">اكتشاف تلقائي (موصى به)</string>
+    <string name="opt_hw_always">مفعل دائمًا</string>
+    <string name="opt_hw_disabled">معطل (وضع جهاز التحكم)</string>
+
+    <string name="opt_thumb_portrait">عمودي (2:3) [افتراضي]</string>
+    <string name="opt_thumb_landscape">أفقي (16:9)</string>
+
+    <string name="opt_timeout_global">المهلة الإجمالية فقط</string>
+    <string name="opt_timeout_source">مهلة كل مصدر فقط</string>
+    <string name="opt_timeout_both">تفعيل كلا المهلتين</string>
+
+    <string name="opt_sub_engine_native">مدمج (يتطلب إعادة التحميل)</string>
+    <string name="opt_sub_engine_overlay">طبقة مخصصة (بدون تأخير)</string>
+
+    <string name="opt_sub_behavior_ask">السؤال قبل البحث</string>
+    <string name="opt_sub_behavior_auto">البحث التلقائي</string>
+    <string name="opt_sub_behavior_never">عدم البحث مطلقًا</string>
+
+    <string name="opt_sub_count_other">عدد مخصص</string>
+    <string name="opt_sub_count_all">الكل</string>
+
+    <string name="opt_sub_launch_stop">إيقاف التنزيل فورًا</string>
+    <string name="opt_sub_launch_ask">سؤالي إذا كنت أرغب في الانتظار</string>
+    <string name="opt_sub_launch_background">متابعة التنزيل في الخلفية</string>
+
+    <string name="opt_retention_indefinite">الاحتفاظ إلى الأبد</string>
+    <string name="opt_retention_1d">يوم واحد</string>
+    <string name="opt_retention_3d">3 أيام</string>
+    <string name="opt_retention_7d">7 أيام</string>
+    <string name="opt_retention_14d">14 يومًا</string>
+    <string name="opt_retention_30d">30 يومًا</string>
+
+    <string name="opt_prebuffer_1">قطعة واحدة (الأسرع / افتراضي)</string>
+    <string name="opt_prebuffer_2">قطعتان</string>
+    <string name="opt_prebuffer_4">4 قطع (قياسي)</string>
+    <string name="opt_prebuffer_8">8 قطع (الأكثر استقرارًا)</string>
+
+    <string name="opt_clean_manual">يدوي فقط</string>
+    <string name="opt_clean_new_torrent">عند بدء أي تورنت جديد</string>
+    <string name="opt_clean_exit">عند الخروج من أي فيديو</string>
+    <string name="opt_clean_days">كل X أيام</string>
+
+    <!-- TMDb Genres -->
+    <string name="genre_action">حركة (أكشن)</string>
+    <string name="genre_adventure">مغامرة</string>
+    <string name="genre_animation">رسوم متحركة</string>
+    <string name="genre_comedy">كوميديا</string>
+    <string name="genre_crime">جريمة</string>
+    <string name="genre_documentary">وثائقي</string>
+    <string name="genre_drama">دراما</string>
+    <string name="genre_family">عائلي</string>
+    <string name="genre_fantasy">خيالي</string>
+    <string name="genre_history">تاريخي</string>
+    <string name="genre_horror">رعب</string>
+    <string name="genre_music">موسيقى</string>
+    <string name="genre_mystery">غموض</string>
+    <string name="genre_romance">رومانسي</string>
+    <string name="genre_scifi">خيال علمي</string>
+    <string name="genre_tv_movie">فيلم تلفزيوني</string>
+    <string name="genre_thriller">إثارة وتصاعد</string>
+    <string name="genre_war">حرب</string>
+    <string name="genre_western">غربي</string>
+    <string name="genre_action_adventure">حركة ومغامرة</string>
+    <string name="genre_kids">أطفال</string>
+    <string name="genre_news">أخبار</string>
+    <string name="genre_reality">واقعي</string>
+    <string name="genre_scifi_fantasy">خيال علمي وخيالي</string>
+    <string name="genre_soap">دراما تلفزيونية</string>
+    <string name="genre_talk">حوارات</string>
+    <string name="genre_war_politics">حرب وسياسة</string>
+
+    <string name="opt_system_default">افتراضي النظام</string>
+    <string name="opt_follow_app_language">وفق لغة التطبيق (افتراضي)</string>
+    <string name="setting_action_mode">وضع الإجراء</string>
+    <string name="opt_action_custom_script">سكريبت مخصص</string>
+    <string name="opt_action_simple_elements">قائمة عناصر بسيطة</string>
+    <string name="label_javascript_action">إجراء JavaScript</string>
+</resources>

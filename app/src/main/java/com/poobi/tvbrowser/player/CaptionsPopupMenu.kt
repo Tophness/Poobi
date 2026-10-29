@@ -112,7 +112,7 @@ object CaptionsPopupMenu {
             row
         }
 
-        val addRow = createRow("Add subtitle from disk...", true, false) {
+        val addRow = createRow(context.getString(R.string.captions_add_disk), true, false) {
             playerEngine.showDiskSubtitlePicker()
         }
         popupView.addView(addRow)
@@ -135,7 +135,7 @@ object CaptionsPopupMenu {
             (0 until group.length).any { group.isTrackSelected(it) }
         }
 
-        val offRow = createRow("Off", false, !isAnyTrackSelected) {
+        val offRow = createRow(context.getString(R.string.captions_off), false, !isAnyTrackSelected) {
             playerEngine.disableSubtitles()
         }
         popupView.addView(offRow)
@@ -146,7 +146,7 @@ object CaptionsPopupMenu {
             for (i in 0 until group.length) {
                 val format = group.getTrackFormat(i)
                 val isSelected = isAnyTrackSelected && group.isTrackSelected(i)
-                val trackName = format.label ?: format.language ?: "Subtitle Track ${i + 1}"
+                val trackName = format.label ?: format.language ?: "${context.getString(R.string.captions_embedded)} ${i + 1}"
 
                 val trackRow = createRow(trackName, false, isSelected) {
                     playerEngine.selectSubtitleTrack(group.mediaTrackGroup, i, format)

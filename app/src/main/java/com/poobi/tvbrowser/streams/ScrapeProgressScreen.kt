@@ -352,7 +352,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                     tint = if (isFocused) Color.Black else Color.White,
                                     modifier = Modifier.size(18.dp)
                                 )
-                                Text("Stop Scanning", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(androidx.compose.ui.res.stringResource(R.string.scrape_stop_scanning), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                         }
                     }
@@ -392,7 +392,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                     tint = if (isFocused) Color.Black else Color.White,
                                     modifier = Modifier.size(18.dp)
                                 )
-                                Text(if (isTryingAll) "Stop" else "Try All", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(if (isTryingAll) androidx.compose.ui.res.stringResource(R.string.scrape_stop) else androidx.compose.ui.res.stringResource(R.string.scrape_try_all), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                         }
 
@@ -417,7 +417,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                     tint = if (isFocused) Color.Black else Color.White,
                                     modifier = Modifier.size(18.dp)
                                 )
-                                Text("Sort", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(androidx.compose.ui.res.stringResource(R.string.scrape_sort), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                         }
                     }
@@ -494,7 +494,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
         } else if (currentSources != null) {
             if (currentSources.length() == 0 && !isCurrentTabScraping) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text("No sources found.", color = Color.White, fontSize = 18.sp)
+                    Text(androidx.compose.ui.res.stringResource(R.string.scrape_no_sources), color = Color.White, fontSize = 18.sp)
                 }
             } else {
                 LazyColumn(
@@ -530,7 +530,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                         horizontalArrangement = Arrangement.Center,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("🔍 Search External Subtitles", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                        Text(androidx.compose.ui.res.stringResource(R.string.scrape_search_external_subs), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -727,14 +727,14 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                         Spacer(modifier = Modifier.height(4.dp))
                                         if (isBrowser) {
                                             Text(
-                                                text = "Open in Browser", 
+                                                text = androidx.compose.ui.res.stringResource(R.string.scrape_open_browser), 
                                                 color = if (isFocused) Color.Black.copy(alpha = 0.8f) else Color(0xFFE53935), 
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         } else {
                                             Text(
-                                                text = "Play Native Video", 
+                                                text = androidx.compose.ui.res.stringResource(R.string.scrape_play_native), 
                                                 color = if (isFocused) Color.Black.copy(alpha = 0.8f) else Color(0xFF00BCD4), 
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold
@@ -825,13 +825,13 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     prioritiesList.forEachIndexed { index, criteria ->
                         val displayName = when (criteria) {
-                            "LANGUAGE" -> "Language"
-                            "SIZE" -> "File Size"
-                            "SEEDERS" -> "Seeders"
-                            "RESOLUTION" -> "Resolution"
-                            "NATIVE" -> "Native Player Compatibility"
-                            "DIRECT" -> "Direct Links"
-                            "SOURCE" -> "Host / Source Name"
+                            "LANGUAGE" -> androidx.compose.ui.res.stringResource(R.string.sort_criteria_language)
+                            "SIZE" -> androidx.compose.ui.res.stringResource(R.string.sort_criteria_size)
+                            "SEEDERS" -> androidx.compose.ui.res.stringResource(R.string.sort_criteria_seeders)
+                            "RESOLUTION" -> androidx.compose.ui.res.stringResource(R.string.sort_criteria_resolution)
+                            "NATIVE" -> androidx.compose.ui.res.stringResource(R.string.sort_criteria_native)
+                            "DIRECT" -> androidx.compose.ui.res.stringResource(R.string.sort_criteria_direct)
+                            "SOURCE" -> androidx.compose.ui.res.stringResource(R.string.sort_criteria_source)
                             else -> criteria
                         }
                         Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF333338)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {

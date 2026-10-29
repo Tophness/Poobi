@@ -153,9 +153,26 @@ class SettingsActivity : AppCompatActivity() {
     private var subsourceApikey by mutableStateOf("")
 
     private var autoUpdateCheck by mutableStateOf(true)
+    private var appLanguage by mutableStateOf("system")
+    private var dateFormatPref by mutableStateOf("system")
+    private var audioLanguagePref by mutableStateOf("system")
 
-    enum class Category {
-        General, Web, Player, Interface, Feeds, Streaming, Autoplay, Subtitles, Sorting, Blocked, Trakt, TMDb, Torrents, Sync
+    enum class Category(val titleRes: Int) {
+        General(R.string.category_general),
+        Language(R.string.category_language),
+        Web(R.string.category_web),
+        Player(R.string.category_player),
+        Interface(R.string.category_interface),
+        Feeds(R.string.category_feeds),
+        Streaming(R.string.category_streaming),
+        Autoplay(R.string.category_autoplay),
+        Subtitles(R.string.category_subtitles),
+        Sorting(R.string.category_sorting),
+        Blocked(R.string.category_blocked),
+        Trakt(R.string.category_trakt),
+        TMDb(R.string.category_tmdb),
+        Torrents(R.string.category_torrents),
+        Sync(R.string.category_sync)
     }
 
     private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -169,6 +186,10 @@ class SettingsActivity : AppCompatActivity() {
             Log.e("Settings", "Google sign in failed", e)
             Toast.makeText(this, "Sign-in failed: ${e.message}", Toast.LENGTH_LONG).show()
         }
+    }
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.poobi.tvbrowser.shared.LanguageHelper.wrapContext(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -193,9 +214,11 @@ class SettingsActivity : AppCompatActivity() {
 
         val account = GoogleSignIn.getLastSignedInAccount(this)
         if (account != null) {
-            googleSignInStatusState.value = "Signed in as: ${account.email}"
+            googleSignInStatusState.value = getString(R.string.status_signed_in_as, account.email)
             isGoogleSignedInState.value = true
             driveSyncManager.initService(account)
+        } else {
+            googleSignInStatusState.value = getString(R.string.status_not_signed_in)
         }
 
         onSignInRequested = {
@@ -211,7 +234,13 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         setContent {
-            var selectedCategory by remember { mutableStateOf(Category.General) }
+            var selectedCategory by remember { 
+                mutableStateOf(
+                    intent.getStringExtra("selected_settings_category")?.let { 
+                        try { Category.valueOf(it) } catch (_: Exception) { null } 
+                    } ?: Category.General
+                ) 
+            }
             val firstCategoryFocusRequester = remember { FocusRequester() }
 
             LaunchedEffect(Unit) {
@@ -228,7 +257,13 @@ class SettingsActivity : AppCompatActivity() {
                     modifier = Modifier.width(260.dp).fillMaxHeight().background(Color(0xFF222225)).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Settings", color = Color(0xFF00BCD4), fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(R.string.title_settings), 
+                        color = Color(0xFF00BCD4), 
+                        fontSize = 24.sp, 
+                        fontWeight = FontWeight.Bold, 
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
 
                     LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         itemsIndexed(Category.values()) { index, category ->
@@ -250,7 +285,11 @@ class SettingsActivity : AppCompatActivity() {
                         onClick = { saveAndExit() }
                     ) { isFocused ->
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("Save & Exit", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = androidx.compose.ui.res.stringResource(R.string.btn_save_exit), 
+                                color = if (isFocused) Color.Black else Color.White, 
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
@@ -259,6 +298,7 @@ class SettingsActivity : AppCompatActivity() {
                 Box(modifier = Modifier.weight(1f).fillMaxHeight().padding(24.dp)) {
                     when (selectedCategory) {
                         Category.General -> GeneralPanel()
+                        Category.Language -> LanguagePanel()
                         Category.Web -> WebPanel()
                         Category.Player -> PlayerPanel()
                         Category.Interface -> InterfacePanel()
@@ -311,6 +351,9 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun loadSettingsFromPrefs() {
         autoUpdateCheck = prefs.getBoolean("auto_update_check", true)
+        appLanguage = prefs.getString("app_language", "system") ?: "system"
+        dateFormatPref = prefs.getString("date_format_pref", "system") ?: "system"
+        audioLanguagePref = prefs.getString("audio_language_pref", "system") ?: "system"
         lightTheme = prefs.getBoolean("light_theme", false)
         restoreOption = prefs.getInt("restore_tabs_pref", 0)
         histLimit = prefs.getInt("history_limit", 20)
@@ -387,7 +430,7 @@ class SettingsActivity : AppCompatActivity() {
             try {
                 driveSyncManager.initService(account)
                 isGoogleSignedInState.value = true
-                googleSignInStatusState.value = "Signed in as: ${account.email}"
+                googleSignInStatusState.value = getString(R.string.status_signed_in_as, account.email)
 
                 when (val outcome = driveSyncManager.syncSettings()) {
                     com.poobi.tvbrowser.shared.sync.SyncOutcome.RESTORED_FROM_REMOTE -> {
@@ -500,6 +543,8 @@ class SettingsActivity : AppCompatActivity() {
             val py = Python.getInstance()
             val main = py.getModule("main")
             val cfg = JSONObject().apply {
+                val resolvedCode = com.poobi.tvbrowser.shared.LanguageHelper.getAppLanguage(this@SettingsActivity).code
+                put("app_language", resolvedCode)
                 put("timeout_mode", prefs.getString("timeout_mode", "Per-Source"))
                 put("global_timeout", prefs.getInt("global_timeout", 220))
                 put("per_source_timeout", prefs.getInt("per_source_timeout", 220))
@@ -682,7 +727,7 @@ class SettingsActivity : AppCompatActivity() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = category.name, 
+                    text = androidx.compose.ui.res.stringResource(category.titleRes), 
                     color = if (isFocused) Color.Black else if (isSelected) Color.White else Color.LightGray, 
                     fontSize = 16.sp, 
                     fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal
@@ -692,27 +737,177 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     @Composable
-    fun GeneralPanel() {
+    fun LanguagePanel() {
+        val systemDefaultLabel = androidx.compose.ui.res.stringResource(R.string.opt_system_default)
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
-            item { PanelHeader("General Settings") }
-            item { ToggleSettingRow("Use Light Theme", lightTheme) { lightTheme = it } }
-            item { ToggleSettingRow("Check for Updates Automatically", autoUpdateCheck) { autoUpdateCheck = it } }
-            item { DropdownSettingRow(label = "Restore Session Mode", options = listOf("Ask to Restore", "Always Restore & Load", "Always Restore", "Never Restore"), selectedIndex = restoreOption) {restoreOption = it } }
+            item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_language)) }
+
+            item {
+                val sysLang = remember { com.poobi.tvbrowser.shared.LanguageHelper.getSystemLanguage() }
+                val supportedLangs = remember { com.poobi.tvbrowser.shared.LanguageHelper.supportedLanguages }
+                val langNames = remember {
+                    listOf("$systemDefaultLabel (${sysLang.flag} ${sysLang.nativeName})") +
+                    supportedLangs.map { "${it.flag} ${it.nativeName} (${it.englishName})".trim() }
+                }
+                val selectedLangIdx = remember(appLanguage) {
+                    if (appLanguage.equals("system", ignoreCase = true)) 0
+                    else {
+                        val found = supportedLangs.indexOfFirst { it.code.equals(appLanguage, ignoreCase = true) }
+                        if (found != -1) found + 1 else 0
+                    }
+                }
+
+                DropdownSettingRow(
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_app_language),
+                    options = langNames,
+                    selectedIndex = selectedLangIdx
+                ) { index ->
+                    if (index == 0) {
+                        appLanguage = "system"
+                        torrentLanguage = sysLang.englishName
+                        subsLanguages = if (sysLang.code == "en") "English" else "${sysLang.englishName}, English"
+                        com.poobi.tvbrowser.shared.LanguageHelper.setAppLanguage(this@SettingsActivity, "system")
+                    } else {
+                        val chosen = supportedLangs[index - 1]
+                        appLanguage = chosen.code
+                        torrentLanguage = chosen.englishName
+                        subsLanguages = if (chosen.code == "en") "English" else "${chosen.englishName}, English"
+                        com.poobi.tvbrowser.shared.LanguageHelper.setAppLanguage(this@SettingsActivity, chosen.code)
+                    }
+                    intent.putExtra("selected_settings_category", Category.Language.name)
+                    recreate()
+                }
+            }
+
+            item {
+                val sampleDate = remember { java.util.Date() }
+                val sysSample = remember { android.text.format.DateFormat.getDateFormat(this@SettingsActivity).format(sampleDate) }
+                val dateFormatOptions = listOf(
+                    "$systemDefaultLabel ($sysSample)",
+                    "Day / Month / Year (DD/MM/YYYY)",
+                    "Month / Day / Year (MM/DD/YYYY)",
+                    "Year-Month-Day (YYYY-MM-DD)"
+                )
+                val selectedDateIdx = when (dateFormatPref) {
+                    "DMY" -> 1
+                    "MDY" -> 2
+                    "YMD" -> 3
+                    else -> 0
+                }
+
+                DropdownSettingRow(
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_date_format),
+                    options = dateFormatOptions,
+                    selectedIndex = selectedDateIdx
+                ) { index ->
+                    dateFormatPref = when (index) {
+                        1 -> "DMY"
+                        2 -> "MDY"
+                        3 -> "YMD"
+                        else -> "system"
+                    }
+                    com.poobi.tvbrowser.shared.LanguageHelper.cachedDateFormatPref = dateFormatPref
+                    prefs.edit().putString("date_format_pref", dateFormatPref).apply()
+                }
+            }
+
+            item {
+                val supportedLangs = remember { com.poobi.tvbrowser.shared.LanguageHelper.supportedLanguages }
+                val followAppLangLabel = androidx.compose.ui.res.stringResource(R.string.opt_follow_app_language)
+                val audioOptions = listOf(followAppLangLabel) + supportedLangs.map { "${it.flag} ${it.nativeName} (${it.englishName})".trim() }
+                val selectedAudioIdx = remember(audioLanguagePref) {
+                    if (audioLanguagePref.equals("system", ignoreCase = true)) 0
+                    else {
+                        val found = supportedLangs.indexOfFirst { it.code.equals(audioLanguagePref, ignoreCase = true) }
+                        if (found != -1) found + 1 else 0
+                    }
+                }
+
+                DropdownSettingRow(
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_audio_language),
+                    options = audioOptions,
+                    selectedIndex = selectedAudioIdx
+                ) { index ->
+                    audioLanguagePref = if (index == 0) "system" else supportedLangs[index - 1].code
+                    prefs.edit().putString("audio_language_pref", audioLanguagePref).apply()
+                }
+            }
+
+            item {
+                val torrentLanguages = remember { com.poobi.tvbrowser.shared.LanguageHelper.supportedLanguages.map { it.englishName } }
+                val selectedTorrentIdx = remember(torrentLanguage) {
+                    torrentLanguages.indexOfFirst { it.equals(torrentLanguage, ignoreCase = true) }.coerceAtLeast(0)
+                }
+
+                DropdownSettingRow(
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_torrent_language),
+                    options = torrentLanguages,
+                    selectedIndex = selectedTorrentIdx
+                ) { index ->
+                    torrentLanguage = torrentLanguages[index]
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        prefs.edit().putString("torrent_language", torrentLanguage).apply()
+                    }
+                }
+            }
+
+            item {
+                TvInputField(
+                    value = subsLanguages,
+                    onValueChange = { subsLanguages = it },
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_sub_languages),
+                    placeholder = "e.g. English, Spanish",
+                    containerColor = Color(0xFF222225),
+                    imeAction = ImeAction.Done
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun GeneralPanel() {
+        val restoreOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_restore_ask),
+            androidx.compose.ui.res.stringResource(R.string.opt_restore_always_load),
+            androidx.compose.ui.res.stringResource(R.string.opt_restore_always),
+            androidx.compose.ui.res.stringResource(R.string.opt_restore_never)
+        )
+        val histOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_hist_10),
+            androidx.compose.ui.res.stringResource(R.string.opt_hist_20),
+            androidx.compose.ui.res.stringResource(R.string.opt_hist_50),
+            androidx.compose.ui.res.stringResource(R.string.opt_hist_unlimited)
+        )
+        val iconOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_icons_snapshots),
+            androidx.compose.ui.res.stringResource(R.string.opt_icons_favicons)
+        )
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+            item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_general)) }
+            item { ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_light_theme), lightTheme) { lightTheme = it } }
+            item { ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_auto_update), autoUpdateCheck) { autoUpdateCheck = it } }
+            item { DropdownSettingRow(label = androidx.compose.ui.res.stringResource(R.string.setting_restore_session), options = restoreOptions, selectedIndex = restoreOption) { restoreOption = it } }
             item {
                 DropdownSettingRow(
-                    label = "History Retention Limit",
-                    options = listOf("10 Entries", "20 Entries", "50 Entries", "Unlimited"),
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_history_limit),
+                    options = histOptions,
                     selectedIndex = when (histLimit) { 10 -> 0; 20 -> 1; 50 -> 2; else -> 3 }
                 ) {
                     histLimit = when (it) { 0 -> 10; 1 -> 20; 2 -> 50; else -> 0 }
                 }
             }
-            item { DropdownSettingRow("History Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), historyIconOption) { historyIconOption = it } }
-            item { DropdownSettingRow("Bookmark Icons Style", listOf("Snapshots (Thumbnail)", "Favicons"), bookmarkIconOption) { bookmarkIconOption = it } }
+            item { DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_history_icons), iconOptions, historyIconOption) { historyIconOption = it } }
+            item { DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_bookmark_icons), iconOptions, bookmarkIconOption) { bookmarkIconOption = it } }
             
             item {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -727,7 +922,7 @@ class SettingsActivity : AppCompatActivity() {
                 ) { isFocused ->
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = if (isCheckingUpdates) "Checking for Updates..." else "Check for Updates (v$currentVerDisplay)",
+                            text = if (isCheckingUpdates) androidx.compose.ui.res.stringResource(R.string.status_checking_updates) else androidx.compose.ui.res.stringResource(R.string.btn_check_updates, currentVerDisplay),
                             color = if (isFocused) Color.Black else Color.White,
                             fontWeight = FontWeight.Bold
                         )
@@ -741,21 +936,23 @@ class SettingsActivity : AppCompatActivity() {
     fun WebPanel() {
         val ruleCount by AdBlockManager.ruleCount.collectAsState()
         val isUpdating by AdBlockManager.isUpdating.collectAsState()
+        val successToast = androidx.compose.ui.res.stringResource(R.string.toast_rules_updated)
+        val failToast = androidx.compose.ui.res.stringResource(R.string.toast_rules_update_failed)
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
-            item { PanelHeader("Web & AdBlocker Settings") }
-            item { ToggleSettingRow("Block Popups Silently", silentBlock) { silentBlock = it } }
-            item { ToggleSettingRow("Prevent Clickjacking", clickjack) { clickjack = it } }
+            item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_web)) }
+            item { ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_silent_block), silentBlock) { silentBlock = it } }
+            item { ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_clickjack), clickjack) { clickjack = it } }
 
             item {
                 TvInputField(
                     value = adblockUrl,
                     onValueChange = { adblockUrl = it },
-                    label = "Custom AdBlock Rules URL (EasyList Format)",
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_custom_adblock_url),
                     placeholder = "https://easylist.to/easylist/easylist.txt",
                     containerColor = Color(0xFF222225),
                     imeAction = ImeAction.Done
@@ -769,7 +966,7 @@ class SettingsActivity : AppCompatActivity() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (isUpdating) "Updating filter lists..." else "Active Filter Rules: ~$ruleCount loaded",
+                        text = if (isUpdating) androidx.compose.ui.res.stringResource(R.string.status_rules_updating) else androidx.compose.ui.res.stringResource(R.string.status_rules_loaded, ruleCount),
                         color = Color(0xFF00BCD4),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
@@ -781,12 +978,12 @@ class SettingsActivity : AppCompatActivity() {
                         shape = RoundedCornerShape(18.dp),
                         onClick = {
                             AdBlockManager.updateAllRules(this@SettingsActivity, adblockUrl.ifEmpty { "https://easylist.to/easylist/easylist.txt" }) { success ->
-                                Toast.makeText(this@SettingsActivity, if (success) "Filter lists updated!" else "Update failed", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@SettingsActivity, if (success) successToast else failToast, Toast.LENGTH_SHORT).show()
                             }
                         }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                            Text(if (isUpdating) "Updating..." else "Update Rules Now", color = if (isFocused) Color.Black else Color.White, fontSize = 12.sp)
+                            Text(if (isUpdating) androidx.compose.ui.res.stringResource(R.string.status_rules_updating) else androidx.compose.ui.res.stringResource(R.string.btn_update_rules_now), color = if (isFocused) Color.Black else Color.White, fontSize = 12.sp)
                         }
                     }
                 }
@@ -796,61 +993,90 @@ class SettingsActivity : AppCompatActivity() {
 
     @Composable
     fun PlayerPanel() {
+        val extractOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_extract_ask),
+            androidx.compose.ui.res.stringResource(R.string.opt_extract_always),
+            androidx.compose.ui.res.stringResource(R.string.opt_extract_never)
+        )
+        val fallbackOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_fallback_ask),
+            androidx.compose.ui.res.stringResource(R.string.opt_fallback_always),
+            androidx.compose.ui.res.stringResource(R.string.opt_fallback_never)
+        )
+        val skipCanonicalValues = listOf("Skip", "Ask to Skip", "Ignore")
+        val skipOptionLabels = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_skip_skip),
+            androidx.compose.ui.res.stringResource(R.string.opt_skip_ask),
+            androidx.compose.ui.res.stringResource(R.string.opt_skip_ignore)
+        )
+        val upNextOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_up_next_ask),
+            androidx.compose.ui.res.stringResource(R.string.opt_up_next_always),
+            androidx.compose.ui.res.stringResource(R.string.opt_up_next_never)
+        )
+        val autoplayNextOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_autoplay_closest),
+            androidx.compose.ui.res.stringResource(R.string.opt_autoplay_best),
+            androidx.compose.ui.res.stringResource(R.string.opt_autoplay_ask)
+        )
+        val focusStyleOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_focus_next_watched),
+            androidx.compose.ui.res.stringResource(R.string.opt_focus_first_unwatched)
+        )
+
         Column(modifier = Modifier.fillMaxSize().padding(bottom = 16.dp)) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                item { PanelHeader("Native Player Preferences") }
-                item { DropdownSettingRow("Video Extraction Hijack", listOf("Ask to Play", "Always Play in Native Player", "Never Play (Use Site Browser)"), extractPref) { extractPref = it } }
-                item { DropdownSettingRow("Fallback on Playback Error", listOf("Ask user to switch", "Always fall back to Browser", "Never fall back"), fallbackPref) { fallbackPref = it } }
+                item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_player)) }
+                item { DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_extract_video), extractOptions, extractPref) { extractPref = it } }
+                item { DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_fallback_error), fallbackOptions, fallbackPref) { fallbackPref = it } }
 
                 item { Spacer(modifier = Modifier.height(8.dp)) }
-                item { PanelHeader("Binge Watching & Autoplay") }
-
-                val skipOptions = listOf("Skip", "Ask to Skip", "Ignore")
+                item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.header_binge_autoplay)) }
 
                 item {
                     DropdownSettingRow(
-                        label = "Intro Skip Action",
-                        options = skipOptions,
-                        selectedIndex = skipOptions.indexOf(skipIntroPref).coerceAtLeast(0)
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_intro_skip),
+                        options = skipOptionLabels,
+                        selectedIndex = skipCanonicalValues.indexOf(skipIntroPref).coerceAtLeast(0)
                     ) { index ->
-                        skipIntroPref = skipOptions[index]
+                        skipIntroPref = skipCanonicalValues[index]
                     }
                 }
 
                 item {
                     DropdownSettingRow(
-                        label = "Recap Skip Action",
-                        options = skipOptions,
-                        selectedIndex = skipOptions.indexOf(skipRecapPref).coerceAtLeast(0)
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_recap_skip),
+                        options = skipOptionLabels,
+                        selectedIndex = skipCanonicalValues.indexOf(skipRecapPref).coerceAtLeast(0)
                     ) { index ->
-                        skipRecapPref = skipOptions[index]
+                        skipRecapPref = skipCanonicalValues[index]
                     }
                 }
 
                 item {
                     DropdownSettingRow(
-                        label = "Early Credits Skip Action",
-                        options = skipOptions,
-                        selectedIndex = skipOptions.indexOf(skipEarlyCreditsPref).coerceAtLeast(0)
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_early_credits_skip),
+                        options = skipOptionLabels,
+                        selectedIndex = skipCanonicalValues.indexOf(skipEarlyCreditsPref).coerceAtLeast(0)
                     ) { index ->
-                        skipEarlyCreditsPref = skipOptions[index]
+                        skipEarlyCreditsPref = skipCanonicalValues[index]
                     }
                 }
 
                 item {
                     DropdownSettingRow(
-                        label = "End Credits Skip Action",
-                        options = skipOptions,
-                        selectedIndex = skipOptions.indexOf(skipEndCreditsPref).coerceAtLeast(0)
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_end_credits_skip),
+                        options = skipOptionLabels,
+                        selectedIndex = skipCanonicalValues.indexOf(skipEndCreditsPref).coerceAtLeast(0)
                     ) { index ->
-                        skipEndCreditsPref = skipOptions[index]
+                        skipEndCreditsPref = skipCanonicalValues[index]
                     }
                 }
 
                 item {
                     DropdownSettingRow(
-                        label = "Up Next Overlay Mode",
-                        options = listOf("Ask to Play Next", "Always Play Automatically", "Never Show Overlay"),
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_up_next_mode),
+                        options = upNextOptions,
                         selectedIndex = when(upNextMode) { "Always" -> 1; "Never" -> 2; else -> 0 }
                     ) { index ->
                         upNextMode = when(index) { 1 -> "Always"; 2 -> "Never"; else -> "Ask" }
@@ -867,7 +1093,7 @@ class SettingsActivity : AppCompatActivity() {
                                 upNextTime = filtered.toInt()
                             }
                         },
-                        label = "Seconds Before End (Fallback If Show End Undetected)",
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_up_next_time),
                         placeholder = "20",
                         containerColor = Color(0xFF222225),
                         imeAction = ImeAction.Done
@@ -876,8 +1102,8 @@ class SettingsActivity : AppCompatActivity() {
 
                 item {
                     DropdownSettingRow(
-                        label = "Source Selection for Next Episode",
-                        options = listOf("Closest Source (Matching Host)", "Best Quality Source", "Ask (Show Scraper Results)"),
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_source_selection_next),
+                        options = autoplayNextOptions,
                         selectedIndex = when(autoplayNext) { "Best Source" -> 1; "Ask" -> 2; else -> 0 }
                     ) { index ->
                         autoplayNext = when(index) { 1 -> "Best Source"; 2 -> "Ask"; else -> "Closest Source" }
@@ -886,8 +1112,8 @@ class SettingsActivity : AppCompatActivity() {
 
                 item {
                     DropdownSettingRow(
-                        label = "Episode Auto-Focus Style",
-                        options = listOf("Next Episode after Latest Watched", "First Unwatched Episode"),
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_episode_focus_style),
+                        options = focusStyleOptions,
                         selectedIndex = episodeFocusMode
                     ) { index ->
                         episodeFocusMode = index
@@ -899,42 +1125,58 @@ class SettingsActivity : AppCompatActivity() {
 
     @Composable
     fun InterfacePanel() {
+        val navOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_nav_pointer),
+            androidx.compose.ui.res.stringResource(R.string.opt_nav_dpad)
+        )
+        val tabOrderOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_scrape_web_torrents),
+            androidx.compose.ui.res.stringResource(R.string.opt_scrape_torrents_web)
+        )
+        val hwOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_hw_auto),
+            androidx.compose.ui.res.stringResource(R.string.opt_hw_always),
+            androidx.compose.ui.res.stringResource(R.string.opt_hw_disabled)
+        )
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
-            item { PanelHeader("Interface Navigation Settings") }
-            item { ToggleSettingRow("Scroll up for Navigation Bar", scrollTopbar) { scrollTopbar = it } }
-            item { DropdownSettingRow("Default Pointer Navigation Mode", listOf("Simulated Pointer (Cursor)", "Physical target navigation (D-pad selection)"), navMode) { navMode = it } }
+            item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_interface)) }
+            item { ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_scroll_topbar), scrollTopbar) { scrollTopbar = it } }
+            item { DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_nav_mode), navOptions, navMode) { navMode = it } }
             item {
-                DropdownSettingRow("Scraper Result Tab Order", listOf("Web, Torrents", "Torrents, Web"), if (scrapeTabOrder == "Web,Torrents") 0 else 1) { 
+                DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_scrape_tab_order), tabOrderOptions, if (scrapeTabOrder == "Web,Torrents") 0 else 1) { 
                     scrapeTabOrder = if (it == 0) "Web,Torrents" else "Torrents,Web"
                 }
             }
 
             item {
                 Spacer(modifier = Modifier.height(6.dp))
-                PanelHeader("Hardware Devices & External Input")
+                PanelHeader(androidx.compose.ui.res.stringResource(R.string.header_hardware_devices))
             }
 
             item {
                 DropdownSettingRow(
-                    label = "Hardware Keyboard Mode",
-                    options = listOf("Auto-detect (Recommended)", "Always Enabled", "Disabled (TV Remote Mode)"),
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_hw_keyboard_mode),
+                    options = hwOptions,
                     selectedIndex = hwKeyboardMode
                 ) { hwKeyboardMode = it }
             }
 
             item {
                 DropdownSettingRow(
-                    label = "Physical Mouse Mode",
-                    options = listOf("Auto-detect (Recommended)", "Always Enabled", "Disabled (TV Remote Mode)"),
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_hw_mouse_mode),
+                    options = hwOptions,
                     selectedIndex = hwMouseMode
                 ) { hwMouseMode = it }
             }
 
             item {
+                val listeningKeysText = androidx.compose.ui.res.stringResource(R.string.setting_listening_keys)
+                val currentText = androidx.compose.ui.res.stringResource(R.string.setting_current)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -945,14 +1187,14 @@ class SettingsActivity : AppCompatActivity() {
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (isBindingMenuShortcut) "Press desired key combination" else "Menu Button Keybind",
+                            text = if (isBindingMenuShortcut) androidx.compose.ui.res.stringResource(R.string.setting_press_key_combo) else androidx.compose.ui.res.stringResource(R.string.setting_menu_keybind),
                             color = if (isBindingMenuShortcut) Color.White else Color.LightGray,
                             fontSize = 16.sp,
                             fontWeight = if (isBindingMenuShortcut) FontWeight.Bold else FontWeight.Normal
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (isBindingMenuShortcut) bindingPreviewText.ifEmpty { "Listening for keys..." } else "Current: ${menuShortcut.getDisplayString()}",
+                            text = if (isBindingMenuShortcut) bindingPreviewText.ifEmpty { listeningKeysText } else "$currentText: ${menuShortcut.getDisplayString()}",
                             color = if (isBindingMenuShortcut) Color(0xFFFFB74D) else Color(0xFF00BCD4),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
@@ -969,14 +1211,14 @@ class SettingsActivity : AppCompatActivity() {
                                     isBindingMenuShortcut = false
                                     bindingPreviewText = ""
                                 } else {
-                                    bindingPreviewText = "Listening for keys..."
+                                    bindingPreviewText = listeningKeysText
                                     isBindingMenuShortcut = true
                                 }
                             }
                         ) { isFocused ->
                             Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
                                 Text(
-                                    text = if (isBindingMenuShortcut) "Cancel" else "Rebind",
+                                    text = if (isBindingMenuShortcut) androidx.compose.ui.res.stringResource(R.string.btn_cancel) else androidx.compose.ui.res.stringResource(R.string.setting_menu_rebind),
                                     color = if (isFocused) Color.Black else Color.White,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -996,7 +1238,7 @@ class SettingsActivity : AppCompatActivity() {
                                 }
                             ) { isFocused ->
                                 Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                                    Text("Reset", color = if (isFocused) Color.Black else Color.White)
+                                    Text(androidx.compose.ui.res.stringResource(R.string.setting_menu_reset), color = if (isFocused) Color.Black else Color.White)
                                 }
                             }
                         }
@@ -1050,17 +1292,22 @@ class SettingsActivity : AppCompatActivity() {
             )
         }
 
+        val thumbOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_thumb_portrait),
+            androidx.compose.ui.res.stringResource(R.string.opt_thumb_landscape)
+        )
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
-            item { PanelHeader("Feeds & Dashboard Curation") }
+            item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_feeds)) }
 
             item {
                 DropdownSettingRow(
-                    label = "Card Thumbnail Style",
-                    options = listOf("Portrait (2:3) [Default]", "Landscape (16:9)"),
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_card_thumbnail_style),
+                    options = thumbOptions,
                     selectedIndex = cardThumbnailStyle
                 ) {
                     cardThumbnailStyle = it
@@ -1070,7 +1317,7 @@ class SettingsActivity : AppCompatActivity() {
 
             item {
                 ToggleSettingRow(
-                    label = "Prioritise Favourite Cast across Feeds",
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_prioritize_fav_cast),
                     checked = genresPrioritizeFavCast
                 ) {
                     genresPrioritizeFavCast = it
@@ -1080,73 +1327,74 @@ class SettingsActivity : AppCompatActivity() {
 
             item {
                 Spacer(modifier = Modifier.height(6.dp))
-                Text("For You Feeds", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.header_for_you_feeds), color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_favorites", true)) }
-                ToggleSettingRow("Favourites", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_favorites", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_favourites), checked) { checked = it; prefs.edit().putBoolean("feed_for_you_favorites", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_recents", true)) }
-                ToggleSettingRow("Recently Watched", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_recents", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_recents), checked) { checked = it; prefs.edit().putBoolean("feed_for_you_recents", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_unfinished", true)) }
-                ToggleSettingRow("Unfinished Shows", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_unfinished", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_unfinished), checked) { checked = it; prefs.edit().putBoolean("feed_for_you_unfinished", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_because", true)) }
-                ToggleSettingRow("Because You Watched...", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_because", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_because_watched), checked) { checked = it; prefs.edit().putBoolean("feed_for_you_because", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_spotlight", true)) }
-                ToggleSettingRow("Cast in the Spotlight", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_spotlight", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_cast_spotlight), checked) { checked = it; prefs.edit().putBoolean("feed_for_you_spotlight", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_for_you_trakt", true)) }
-                ToggleSettingRow("Trakt Community & Sync Feeds", checked) { checked = it; prefs.edit().putBoolean("feed_for_you_trakt", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.category_trakt), checked) { checked = it; prefs.edit().putBoolean("feed_for_you_trakt", it).apply() }
             }
 
             item {
                 Spacer(modifier = Modifier.height(6.dp))
-                Text("Movie Feeds", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.header_movie_feeds), color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_trending_today", true)) }
-                ToggleSettingRow("Trending Today", checked) { checked = it; prefs.edit().putBoolean("feed_movies_trending_today", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_trending_today), checked) { checked = it; prefs.edit().putBoolean("feed_movies_trending_today", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_trending_week", true)) }
-                ToggleSettingRow("Trending This Week", checked) { checked = it; prefs.edit().putBoolean("feed_movies_trending_week", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_trending_week), checked) { checked = it; prefs.edit().putBoolean("feed_movies_trending_week", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_in_cinemas", true)) }
-                ToggleSettingRow("In Cinemas", checked) { checked = it; prefs.edit().putBoolean("feed_movies_in_cinemas", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_in_cinemas), checked) { checked = it; prefs.edit().putBoolean("feed_movies_in_cinemas", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_upcoming", true)) }
-                ToggleSettingRow("Upcoming", checked) { checked = it; prefs.edit().putBoolean("feed_movies_upcoming", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_upcoming), checked) { checked = it; prefs.edit().putBoolean("feed_movies_upcoming", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_popular", true)) }
-                ToggleSettingRow("Popular Movies", checked) { checked = it; prefs.edit().putBoolean("feed_movies_popular", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_popular), checked) { checked = it; prefs.edit().putBoolean("feed_movies_popular", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_top_rated", true)) }
-                ToggleSettingRow("Top Rated Movies", checked) { checked = it; prefs.edit().putBoolean("feed_movies_top_rated", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_top_rated), checked) { checked = it; prefs.edit().putBoolean("feed_movies_top_rated", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_movies_hidden_gems", true)) }
-                ToggleSettingRow("Hidden Gems", checked) { checked = it; prefs.edit().putBoolean("feed_movies_hidden_gems", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_hidden_gems), checked) { checked = it; prefs.edit().putBoolean("feed_movies_hidden_gems", it).apply() }
             }
 
             item {
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Movie Genres", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.header_movie_genres), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
             items(movieGenresList) { (name, id) ->
                 var isChecked by remember { mutableStateOf(prefs.getBoolean("genre_movie_$id", true)) }
-                ToggleSettingRow("  $name", isChecked) {
+                val localizedName = com.poobi.tvbrowser.shared.TmdbGenres.getGenreName(this@SettingsActivity, id) ?: name
+                ToggleSettingRow("  $localizedName", isChecked) {
                     isChecked = it
                     prefs.edit().putBoolean("genre_movie_$id", it).apply()
                 }
@@ -1154,36 +1402,37 @@ class SettingsActivity : AppCompatActivity() {
 
             item {
                 Spacer(modifier = Modifier.height(6.dp))
-                Text("TV Show Feeds", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.header_tv_feeds), color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_tv_popular", true)) }
-                ToggleSettingRow("Popular TV", checked) { checked = it; prefs.edit().putBoolean("feed_tv_popular", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_popular_tv), checked) { checked = it; prefs.edit().putBoolean("feed_tv_popular", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_tv_trending_week", true)) }
-                ToggleSettingRow("Trending This Week", checked) { checked = it; prefs.edit().putBoolean("feed_tv_trending_week", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_trending_tv_week), checked) { checked = it; prefs.edit().putBoolean("feed_tv_trending_week", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_tv_airing_today", true)) }
-                ToggleSettingRow("Airing Today", checked) { checked = it; prefs.edit().putBoolean("feed_tv_airing_today", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_airing_today), checked) { checked = it; prefs.edit().putBoolean("feed_tv_airing_today", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_tv_airing_week", true)) }
-                ToggleSettingRow("Airing This Week", checked) { checked = it; prefs.edit().putBoolean("feed_tv_airing_week", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_airing_week), checked) { checked = it; prefs.edit().putBoolean("feed_tv_airing_week", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_tv_top_rated", true)) }
-                ToggleSettingRow("Top Rated TV", checked) { checked = it; prefs.edit().putBoolean("feed_tv_top_rated", it).apply() }
+                ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.pill_top_rated_tv), checked) { checked = it; prefs.edit().putBoolean("feed_tv_top_rated", it).apply() }
             }
 
             item {
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("TV Genres", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.header_tv_genres), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
             items(tvGenresList) { (name, id) ->
                 var isChecked by remember { mutableStateOf(prefs.getBoolean("genre_tv_$id", true)) }
-                ToggleSettingRow("  $name", isChecked) {
+                val localizedName = com.poobi.tvbrowser.shared.TmdbGenres.getGenreName(this@SettingsActivity, id) ?: name
+                ToggleSettingRow("  $localizedName", isChecked) {
                     isChecked = it
                     prefs.edit().putBoolean("genre_tv_$id", it).apply()
                 }
@@ -1191,7 +1440,7 @@ class SettingsActivity : AppCompatActivity() {
 
             item {
                 Spacer(modifier = Modifier.height(6.dp))
-                Text("Discover: Streaming Networks & Eras", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.header_discover_networks), color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             val platformList = listOf("Netflix" to 8, "Disney+" to 337, "Amazon Prime" to 9, "Apple TV+" to 350, "Max" to 1899)
             items(platformList) { (pName, pId) ->
@@ -1204,9 +1453,18 @@ class SettingsActivity : AppCompatActivity() {
 
             item {
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Discover: Eras & Decades", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.header_discover_eras), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
-            val eraList = listOf("2000s Hits" to 2000, "90s Nostalgia" to 1990, "80s Classics" to 1980, "70s Cinema" to 1970)
+            val era2000s = getString(R.string.pill_era_2000s)
+            val era90s = getString(R.string.pill_era_90s)
+            val era80s = getString(R.string.pill_era_80s)
+            val era70s = getString(R.string.pill_era_70s)
+            val eraList = listOf(
+                era2000s to 2000,
+                era90s to 1990,
+                era80s to 1980,
+                era70s to 1970
+            )
             items(eraList) { (eName, eYear) ->
                 var isChecked by remember { mutableStateOf(prefs.getBoolean("feed_era_$eYear", true)) }
                 ToggleSettingRow("  $eName", isChecked) {
@@ -1217,34 +1475,34 @@ class SettingsActivity : AppCompatActivity() {
 
             item {
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Discover: World Cinema & Niches", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.header_discover_world), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_world_anime", true)) }
-                ToggleSettingRow("  Anime", checked) { checked = it; prefs.edit().putBoolean("feed_world_anime", it).apply() }
+                ToggleSettingRow("  " + androidx.compose.ui.res.stringResource(R.string.pill_anime), checked) { checked = it; prefs.edit().putBoolean("feed_world_anime", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_world_kdrama", true)) }
-                ToggleSettingRow("  K-Dramas", checked) { checked = it; prefs.edit().putBoolean("feed_world_kdrama", it).apply() }
+                ToggleSettingRow("  " + androidx.compose.ui.res.stringResource(R.string.pill_kdrama), checked) { checked = it; prefs.edit().putBoolean("feed_world_kdrama", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_world_british", true)) }
-                ToggleSettingRow("  British Mysteries", checked) { checked = it; prefs.edit().putBoolean("feed_world_british", it).apply() }
+                ToggleSettingRow("  " + androidx.compose.ui.res.stringResource(R.string.pill_british_mysteries), checked) { checked = it; prefs.edit().putBoolean("feed_world_british", it).apply() }
             }
             item {
                 var checked by remember { mutableStateOf(prefs.getBoolean("feed_curated_cult", true)) }
-                ToggleSettingRow("  Cult Classics", checked) { checked = it; prefs.edit().putBoolean("feed_curated_cult", it).apply() }
+                ToggleSettingRow("  " + androidx.compose.ui.res.stringResource(R.string.pill_cult_classics), checked) { checked = it; prefs.edit().putBoolean("feed_curated_cult", it).apply() }
             }
 
             item {
                 Spacer(modifier = Modifier.height(10.dp))
-                Text("Favourite Cast Management", color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text("Manage actors from your favourite shows or search to add any actor manually.", color = Color.Gray, fontSize = 12.sp)
+                Text(androidx.compose.ui.res.stringResource(R.string.header_fav_cast_mgmt), color = Color(0xFF00BCD4), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.desc_fav_cast_mgmt), color = Color.Gray, fontSize = 12.sp)
             }
 
             item {
                 ToggleSettingRow(
-                    label = "Auto-Sync Cast from Favourite Shows",
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_auto_sync_fav_cast),
                     checked = autoSyncFavCast
                 ) {
                     autoSyncFavCast = it
@@ -1296,7 +1554,7 @@ class SettingsActivity : AppCompatActivity() {
                                 isSearchingActor = false
                             }
                         },
-                        placeholder = "Search actor to add (e.g. Cillian Murphy)...",
+                        placeholder = androidx.compose.ui.res.stringResource(R.string.prompt_search_actor),
                         containerColor = Color(0xFF222225),
                         imeAction = ImeAction.Search,
                         focusRequester = actorSearchFieldFocusRequester,
@@ -1319,7 +1577,7 @@ class SettingsActivity : AppCompatActivity() {
                         }
                     } else if (liveActorSuggestions.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(6.dp))
-                        Text("Live Results (Select to Add):", color = Color(0xFF00BCD4), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(androidx.compose.ui.res.stringResource(R.string.label_live_results), color = Color(0xFF00BCD4), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(4.dp))
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
@@ -1389,7 +1647,7 @@ class SettingsActivity : AppCompatActivity() {
                                             if (knownTitles.isNotEmpty()) {
                                                 Text(knownTitles, color = if (isFocused) Color.DarkGray else Color.Gray, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
-                                            Text("+ Add", color = if (isFocused) Color.Black else Color(0xFF00BCD4), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                            Text(androidx.compose.ui.res.stringResource(R.string.label_add_actor), color = if (isFocused) Color.Black else Color(0xFF00BCD4), fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                         }
                                     }
                                 }
@@ -1408,7 +1666,7 @@ class SettingsActivity : AppCompatActivity() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Cast Pool (${favoriteActors.size})",
+                        text = androidx.compose.ui.res.stringResource(R.string.label_cast_pool, favoriteActors.size),
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
@@ -1425,7 +1683,7 @@ class SettingsActivity : AppCompatActivity() {
                             }
                         ) { isFocused ->
                             Box(Modifier.fillMaxHeight().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-                                Text("Select All", color = if (isFocused) Color.Black else Color.White, fontSize = 11.sp)
+                                Text(androidx.compose.ui.res.stringResource(R.string.btn_select_all), color = if (isFocused) Color.Black else Color.White, fontSize = 11.sp)
                             }
                         }
 
@@ -1439,7 +1697,7 @@ class SettingsActivity : AppCompatActivity() {
                             }
                         ) { isFocused ->
                             Box(Modifier.fillMaxHeight().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-                                Text("Deselect All", color = if (isFocused) Color.Black else Color.White, fontSize = 11.sp)
+                                Text(androidx.compose.ui.res.stringResource(R.string.btn_deselect_all), color = if (isFocused) Color.Black else Color.White, fontSize = 11.sp)
                             }
                         }
                     }
@@ -1448,12 +1706,15 @@ class SettingsActivity : AppCompatActivity() {
 
             if (favoriteActors.isEmpty()) {
                 item {
-                    Text("No actors discovered yet. Add shows or movies to your Favourites first, or search above to add any actor.", color = Color.Gray, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
+                    Text(androidx.compose.ui.res.stringResource(R.string.desc_no_fav_actors), color = Color.Gray, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
                 }
             } else {
                 itemsIndexed(favoriteActors, key = { _, actor -> actor.id }) { actorIdx, actor ->
                     val rowRequester = remember(actor.id) { FocusRequester() }
                     actorFocusRequesters[actor.id] = rowRequester
+
+                    val addedViaFavTemplate = androidx.compose.ui.res.stringResource(R.string.label_added_via_fav)
+                    val addedViaSearchStr = androidx.compose.ui.res.stringResource(R.string.label_added_via_search)
 
                     TvFocusableHoldToDeleteBox(
                         modifier = Modifier
@@ -1516,9 +1777,9 @@ class SettingsActivity : AppCompatActivity() {
                                 )
 
                                 val originText = if (actor.sourceTitles.isNotEmpty() && actor.sourceTitles[0] != "Added via search") {
-                                    "Added because you favorited: ${actor.sourceTitles.joinToString(", ")}"
+                                    String.format(addedViaFavTemplate, actor.sourceTitles.joinToString(", "))
                                 } else {
-                                    "Added via search"
+                                    addedViaSearchStr
                                 }
 
                                 Text(
@@ -1560,6 +1821,12 @@ class SettingsActivity : AppCompatActivity() {
         var resolveurlHosts by remember { mutableStateOf(emptyList<String>()) }
         var providerPacksList by remember { mutableStateOf(emptyList<String>()) }
 
+        val timeoutOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_timeout_global),
+            androidx.compose.ui.res.stringResource(R.string.opt_timeout_source),
+            androidx.compose.ui.res.stringResource(R.string.opt_timeout_both)
+        )
+
         LaunchedEffect(Unit) {
             withContext(Dispatchers.IO) {
                 try {
@@ -1592,14 +1859,14 @@ class SettingsActivity : AppCompatActivity() {
 
         Column(modifier = Modifier.fillMaxSize()) {
             LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { PanelHeader("Streaming & Scraper Configurations") }
+                item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_streaming)) }
 
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        DropdownSettingRow("Timeout Logic", listOf("Global Timeout Only", "Per-Source Only", "Both Engines Active"), when (timeoutMode) { "Global" -> 0; "Per-Source" -> 1; else -> 2 }, modifier = Modifier.weight(1f)) { 
+                        DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_timeout_logic), timeoutOptions, when (timeoutMode) { "Global" -> 0; "Per-Source" -> 1; else -> 2 }, modifier = Modifier.weight(1f)) { 
                             timeoutMode = when (it) { 0 -> "Global"; 1 -> "Per-Source"; else -> "Both" }
                         }
-                        ToggleSettingRow("Enforce Host Whitelist", enforceWhitelist, modifier = Modifier.weight(1f)) { 
+                        ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_enforce_whitelist), enforceWhitelist, modifier = Modifier.weight(1f)) { 
                             enforceWhitelist = it
                         }
                     }
@@ -1617,7 +1884,7 @@ class SettingsActivity : AppCompatActivity() {
                                         globalTimeout = filtered.toInt()
                                     }
                                 }, 
-                                label = "Global Engine Timeout (Seconds)",
+                                label = androidx.compose.ui.res.stringResource(R.string.setting_global_timeout),
                                 placeholder = "220",
                                 containerColor = Color(0xFF222225),
                                 imeAction = ImeAction.Done
@@ -1633,7 +1900,7 @@ class SettingsActivity : AppCompatActivity() {
                                         sourceTimeout = filtered.toInt()
                                     }
                                 }, 
-                                label = "Per-Source Timeout Limit (Seconds)",
+                                label = androidx.compose.ui.res.stringResource(R.string.setting_source_timeout),
                                 placeholder = "220",
                                 containerColor = Color(0xFF222225),
                                 imeAction = ImeAction.Done
@@ -1652,7 +1919,7 @@ class SettingsActivity : AppCompatActivity() {
                                 scraperMaxWorkers = filtered.toInt().coerceIn(1, 20)
                             }
                         },
-                        label = "Scraper Worker Threads (Default: 3)",
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_scraper_workers),
                         placeholder = "3",
                         containerColor = Color(0xFF222225),
                         imeAction = ImeAction.Done
@@ -1660,7 +1927,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 if (providerPacksList.isNotEmpty()) {
-                    item { Text("Provider Packages", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+                    item { Text(androidx.compose.ui.res.stringResource(R.string.header_provider_packages), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
                     items(providerPacksList) { pack ->
                         var isChecked by remember { mutableStateOf(prefs.getBoolean("pack_$pack", true)) }
                         TvFocusableBox(
@@ -1713,14 +1980,14 @@ class SettingsActivity : AppCompatActivity() {
                             .background(Color(0xFF222225))
                             .padding(12.dp)
                     ) {
-                        Text("Host Whitelists", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(androidx.compose.ui.res.stringResource(R.string.header_host_whitelists), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         
                         Spacer(modifier = Modifier.height(6.dp))
 
                         TvInputField(
                             value = hostSearchQuery,
                             onValueChange = { hostSearchQuery = it },
-                            placeholder = "Search whitelists...",
+                            placeholder = androidx.compose.ui.res.stringResource(R.string.prompt_search_whitelists),
                             containerColor = Color(0xFF222225),
                             imeAction = ImeAction.Done,
                             modifier = Modifier.fillMaxWidth()
@@ -1741,7 +2008,7 @@ class SettingsActivity : AppCompatActivity() {
                                 }
                             ) { isFocused ->
                                 Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                    Text("Select All", color = if (isFocused) Color.Black else Color.White, fontSize = 12.sp)
+                                    Text(androidx.compose.ui.res.stringResource(R.string.btn_select_all), color = if (isFocused) Color.Black else Color.White, fontSize = 12.sp)
                                 }
                             }
 
@@ -1752,7 +2019,7 @@ class SettingsActivity : AppCompatActivity() {
                                 onClick = { whitelistedHosts.clear() }
                             ) { isFocused ->
                                 Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                    Text("Clear All", color = if (isFocused) Color.Black else Color.White, fontSize = 12.sp)
+                                    Text(androidx.compose.ui.res.stringResource(R.string.btn_clear_all), color = if (isFocused) Color.Black else Color.White, fontSize = 12.sp)
                                 }
                             }
                         }
@@ -1761,7 +2028,7 @@ class SettingsActivity : AppCompatActivity() {
 
                         Row(modifier = Modifier.fillMaxWidth().height(240.dp)) {
                             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                Text("Provider Pack Whitelist", color = Color(0xFF00BCD4), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(androidx.compose.ui.res.stringResource(R.string.label_provider_whitelist), color = Color(0xFF00BCD4), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 LazyColumn(modifier = Modifier.fillMaxSize().background(Color(0x0DFFFFFF))) {
                                     val filtered = providerHosts.filter { it.contains(hostSearchQuery, true) }
                                     items(filtered) { host ->
@@ -1807,7 +2074,7 @@ class SettingsActivity : AppCompatActivity() {
                             Spacer(modifier = Modifier.width(10.dp))
 
                             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                Text("ResolveURL Whitelist", color = Color(0xFF00BCD4), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(androidx.compose.ui.res.stringResource(R.string.label_resolveurl_whitelist), color = Color(0xFF00BCD4), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 LazyColumn(modifier = Modifier.fillMaxSize().background(Color(0x0DFFFFFF))) {
                                     val filtered = resolveurlHosts.filter { it.contains(hostSearchQuery, true) }
                                     items(filtered) { host ->
@@ -1865,9 +2132,9 @@ class SettingsActivity : AppCompatActivity() {
         var editProfileData by remember { mutableStateOf(JSONObject()) }
 
         Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            PanelHeader("Autoplay Configuration Profiles")
+            PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_autoplay))
 
-            ToggleSettingRow("Auto-play Video globally", autoplayMaster) {
+            ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_autoplay_global), autoplayMaster) {
                 autoplayMaster = it
                 lifecycleScope.launch(Dispatchers.IO) {
                     prefs.edit().putInt("video_trigger_pref", if (it) 0 else 1).apply()
@@ -1900,7 +2167,7 @@ class SettingsActivity : AppCompatActivity() {
                                 onClick = { editProfileIndex = index; editProfileData = JSONObject(profile.toString()); showEditDialog = true }
                             ) { isFocused ->
                                 Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                    Text("Edit", color = if (isFocused) Color.Black else Color.White)
+                                    Text(androidx.compose.ui.res.stringResource(R.string.btn_edit), color = if (isFocused) Color.Black else Color.White)
                                 }
                             }
                             Spacer(modifier = Modifier.width(4.dp))
@@ -1921,7 +2188,7 @@ class SettingsActivity : AppCompatActivity() {
                                 }
                             ) { isFocused ->
                                 Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                    Text("Delete", color = if (isFocused) Color.Black else Color.White)
+                                    Text(androidx.compose.ui.res.stringResource(R.string.btn_delete), color = if (isFocused) Color.Black else Color.White)
                                 }
                             }
                         }
@@ -1937,7 +2204,7 @@ class SettingsActivity : AppCompatActivity() {
                         onClick = { editProfileIndex = -1; editProfileData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New Profile"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("script", ""); put("use_script", true); put("selectors", JSONArray()) }; showEditDialog = true }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                            Text("Add New Autoplay Profile", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_add_autoplay_profile), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1953,14 +2220,14 @@ class SettingsActivity : AppCompatActivity() {
 
             AlertDialog(
                 onDismissRequest = { showEditDialog = false },
-                title = { Text("Edit Autoplay Profile") },
+                title = { Text(if (editProfileIndex >= 0) androidx.compose.ui.res.stringResource(R.string.btn_edit) else androidx.compose.ui.res.stringResource(R.string.btn_add_autoplay_profile)) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TvInputField(value = name, onValueChange = { name = it }, label = "Profile Name", placeholder = "e.g. My Autoplay", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
-                        TvInputField(value = patterns, onValueChange = { patterns = it }, label = "URL Patterns", placeholder = "e.g. *host*", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
+                        TvInputField(value = name, onValueChange = { name = it }, label = androidx.compose.ui.res.stringResource(R.string.label_profile_name), placeholder = "e.g. My Autoplay", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
+                        TvInputField(value = patterns, onValueChange = { patterns = it }, label = androidx.compose.ui.res.stringResource(R.string.label_url_patterns), placeholder = "e.g. *host*", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Action Mode", color = Color.Gray, modifier = Modifier.weight(1f))
+                            Text(androidx.compose.ui.res.stringResource(R.string.setting_action_mode), color = Color.Gray, modifier = Modifier.weight(1f))
                             TvFocusableBox(
                                 modifier = Modifier.height(36.dp),
                                 defaultColor = Color(0xFF333338),
@@ -1968,15 +2235,15 @@ class SettingsActivity : AppCompatActivity() {
                                 onClick = { useScript = !useScript }
                             ) { isFocused ->
                                 Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                    Text(if (useScript) "Custom Script" else "Simple Element List", color = if (isFocused) Color.Black else Color.White)
+                                    Text(if (useScript) androidx.compose.ui.res.stringResource(R.string.opt_action_custom_script) else androidx.compose.ui.res.stringResource(R.string.opt_action_simple_elements), color = if (isFocused) Color.Black else Color.White)
                                 }
                             }
                         }
 
                         if (useScript) {
-                            TvInputField(value = script, onValueChange = { script = it }, label = "JavaScript Action", placeholder = "Javascript functions...", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
+                            TvInputField(value = script, onValueChange = { script = it }, label = androidx.compose.ui.res.stringResource(R.string.label_javascript_action), placeholder = "Javascript functions...", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
                         } else {
-                            Text("Click Selectors", color = Color.Gray)
+                            Text(androidx.compose.ui.res.stringResource(R.string.label_click_selectors), color = Color.Gray)
                             LazyColumn(modifier = Modifier.height(120.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 itemsIndexed(selectors.toList()) { idx, s ->
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2004,7 +2271,7 @@ class SettingsActivity : AppCompatActivity() {
                                         onClick = { selectors.add("") }
                                     ) { isFocused ->
                                         Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                            Text("+ Add Selector", color = if (isFocused) Color.Black else Color.White)
+                                            Text(androidx.compose.ui.res.stringResource(R.string.btn_add_selector), color = if (isFocused) Color.Black else Color.White)
                                         }
                                     }
                                 }
@@ -2034,7 +2301,7 @@ class SettingsActivity : AppCompatActivity() {
                         }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                            Text("Save", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_save), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 },
@@ -2046,7 +2313,7 @@ class SettingsActivity : AppCompatActivity() {
                         onClick = { showEditDialog = false }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                            Text("Cancel", color = if (isFocused) Color.Black else Color.White)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_cancel), color = if (isFocused) Color.Black else Color.White)
                         }
                     }
                 }
@@ -2059,7 +2326,34 @@ class SettingsActivity : AppCompatActivity() {
         var showCustomSubCountDialog by remember { mutableStateOf(false) }
         var customSubCountInput by remember { mutableStateOf("") }
 
-        val autoSubCountOptions = listOf("1", "2", "3", "4", "5", "Other", "All")
+        val subRenderingOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_sub_engine_native),
+            androidx.compose.ui.res.stringResource(R.string.opt_sub_engine_overlay)
+        )
+        val autoSubOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_sub_behavior_ask),
+            androidx.compose.ui.res.stringResource(R.string.opt_sub_behavior_auto),
+            androidx.compose.ui.res.stringResource(R.string.opt_sub_behavior_never)
+        )
+        val waitOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_sub_launch_stop),
+            androidx.compose.ui.res.stringResource(R.string.opt_sub_launch_ask),
+            androidx.compose.ui.res.stringResource(R.string.opt_sub_launch_background)
+        )
+        val retentionOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_retention_indefinite),
+            androidx.compose.ui.res.stringResource(R.string.opt_retention_1d),
+            androidx.compose.ui.res.stringResource(R.string.opt_retention_3d),
+            androidx.compose.ui.res.stringResource(R.string.opt_retention_7d),
+            androidx.compose.ui.res.stringResource(R.string.opt_retention_14d),
+            androidx.compose.ui.res.stringResource(R.string.opt_retention_30d)
+        )
+        val autoSubCountOptions = listOf(
+            "1", "2", "3", "4", "5",
+            androidx.compose.ui.res.stringResource(R.string.opt_sub_count_other),
+            androidx.compose.ui.res.stringResource(R.string.opt_sub_count_all)
+        )
+
         val selectedSubCountIndex = when (countPref) {
             1 -> 0
             2 -> 1
@@ -2071,24 +2365,24 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item { PanelHeader("Subtitle Search Preferences") }
+            item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_subtitles)) }
 
             item {
                 DropdownSettingRow(
-                    label = "Subtitle Rendering Engine",
-                    options = listOf("Native (Requires Reloading Subs)", "Custom Subtitle Overlay (Zero Delay)"),
+                    label = androidx.compose.ui.res.stringResource(R.string.setting_sub_rendering_engine),
+                    options = subRenderingOptions,
                     selectedIndex = subRenderingMode
                 ) { index ->
                     subRenderingMode = index
                 }
             }
 
-            item { DropdownSettingRow("Auto-search Behavior", listOf("Ask me to search", "Search Automatically", "Never Search"), autoSubPref) { 
+            item { DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_sub_auto_search), autoSubOptions, autoSubPref) { 
                 autoSubPref = it
             } }
             if (autoSubPref == 1) {
                 item {
-                    DropdownSettingRow("Subtitles To Download", autoSubCountOptions, selectedSubCountIndex) { index ->
+                    DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_subs_to_download), autoSubCountOptions, selectedSubCountIndex) { index ->
                         if (index == 5) {
                             customSubCountInput = if (countPref !in 0..5) countPref.toString() else "10"
                             showCustomSubCountDialog = true
@@ -2105,19 +2399,19 @@ class SettingsActivity : AppCompatActivity() {
                         }
                     }
                 }
-                item { DropdownSettingRow("When Video Launches", listOf("Stop downloading immediately", "Ask if I want to wait", "Keep downloading in background"), waitPref) { 
+                item { DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_sub_video_launches), waitOptions, waitPref) { 
                     waitPref = it
                 } }
             }
 
-            item { DropdownSettingRow("Subtitle File Retention", listOf("Keep Indefinitely", "1 Day", "3 Days", "7 Days", "14 Days", "30 Days"), when (retentionDays) { 0 -> 0; 1 -> 1; 3 -> 2; 7 -> 3; 14 -> 4; 30 -> 5; else -> 2 }) { 
+            item { DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_sub_retention), retentionOptions, when (retentionDays) { 0 -> 0; 1 -> 1; 3 -> 2; 7 -> 3; 14 -> 4; 30 -> 5; else -> 2 }) { 
                 retentionDays = when (it) { 0 -> 0; 1 -> 1; 2 -> 3; 3 -> 7; 4 -> 14; 5 -> 30; else -> 3 }
             } }
 
             item { TvInputField(
                 value = subsLanguages, 
                 onValueChange = { subsLanguages = it }, 
-                label = "Preferred Languages (Comma-separated ISO codes)", 
+                label = androidx.compose.ui.res.stringResource(R.string.setting_sub_languages), 
                 placeholder = "English", 
                 containerColor = Color(0xFF222225), 
                 imeAction = ImeAction.Done
@@ -2132,14 +2426,14 @@ class SettingsActivity : AppCompatActivity() {
                         subtitlesLimit = filtered.toInt()
                     }
                 }, 
-                label = "Subtitles Search Limit", 
+                label = androidx.compose.ui.res.stringResource(R.string.setting_sub_limit), 
                 placeholder = "20", 
                 containerColor = Color(0xFF222225), 
                 imeAction = ImeAction.Done
             ) }
 
             item { Spacer(modifier = Modifier.height(10.dp)) }
-            item { Text("Subtitle Accounts & API Keys", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+            item { Text(androidx.compose.ui.res.stringResource(R.string.header_sub_accounts), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
 
             item { TvInputField(
                 value = opensubUser, 
@@ -2195,7 +2489,7 @@ class SettingsActivity : AppCompatActivity() {
             ) }
 
             item { Spacer(modifier = Modifier.height(10.dp)) }
-            item { Text("Subtitle Scraper Engines", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+            item { Text(androidx.compose.ui.res.stringResource(R.string.header_sub_engines), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
 
             val serviceKeys = listOf("addic7ed", "bsplayer", "opensubtitles", "opensubtitles_org", "podnadpisi", "subdl", "subsource")
             items(serviceKeys) { key ->
@@ -2246,11 +2540,11 @@ class SettingsActivity : AppCompatActivity() {
         if (showCustomSubCountDialog) {
             AlertDialog(
                 onDismissRequest = { showCustomSubCountDialog = false },
-                title = { Text("Custom Subtitle Download Limit", color = Color.White) },
+                title = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_custom_sub_limit_title), color = Color.White) },
                 containerColor = Color(0xFF222225),
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Enter numeric count limit:", color = Color.LightGray)
+                        Text(androidx.compose.ui.res.stringResource(R.string.dialog_custom_sub_limit_msg), color = Color.LightGray)
                         TvInputField(
                             value = customSubCountInput,
                             onValueChange = { customSubCountInput = it.filter { char -> char.isDigit() } },
@@ -2272,7 +2566,7 @@ class SettingsActivity : AppCompatActivity() {
                         }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                            Text("OK", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_done), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 },
@@ -2284,7 +2578,7 @@ class SettingsActivity : AppCompatActivity() {
                         onClick = { showCustomSubCountDialog = false }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                            Text("Cancel", color = if (isFocused) Color.Black else Color.White)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_cancel), color = if (isFocused) Color.Black else Color.White)
                         }
                     }
                 }
@@ -2353,20 +2647,20 @@ class SettingsActivity : AppCompatActivity() {
 
         val getCriteriaName = { criteria: String ->
             when (criteria) {
-                "NATIVE" -> "Native Player Compatibility"
-                "DIRECT" -> "Direct Links"
-                "RESOLUTION" -> "Resolution"
-                "SOURCE" -> "Host / Source Name"
-                "LANGUAGE" -> "Language"
-                "SIZE" -> "File Size"
-                "SEEDERS" -> "Seeders"
-                "DATE_ADDED" -> "Date Added"
-                "DATE_ACCESSED" -> "Date Accessed"
-                "A_Z", "A-Z" -> "A-Z (Alphabetical)"
-                "RATING" -> "Rating"
-                "FAV_ACTORS" -> "Favourite Actors"
-                "DATE" -> "Release Date"
-                "DEFAULT" -> "Default Feed Order"
+                "NATIVE" -> getString(R.string.sort_criteria_native)
+                "DIRECT" -> getString(R.string.sort_criteria_direct)
+                "RESOLUTION" -> getString(R.string.sort_criteria_resolution)
+                "SOURCE" -> getString(R.string.sort_criteria_source)
+                "LANGUAGE" -> getString(R.string.sort_criteria_language)
+                "SIZE" -> getString(R.string.sort_criteria_size)
+                "SEEDERS" -> getString(R.string.sort_criteria_seeders)
+                "DATE_ADDED" -> getString(R.string.sort_criteria_date_added)
+                "DATE_ACCESSED" -> getString(R.string.sort_criteria_date_accessed)
+                "A_Z", "A-Z" -> getString(R.string.sort_criteria_az)
+                "RATING" -> getString(R.string.sort_criteria_rating)
+                "FAV_ACTORS" -> getString(R.string.sort_criteria_fav_actors)
+                "DATE" -> getString(R.string.sort_criteria_date)
+                "DEFAULT" -> getString(R.string.sort_criteria_default)
                 else -> criteria
             }
         }
@@ -2457,7 +2751,7 @@ class SettingsActivity : AppCompatActivity() {
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item {
-                PanelHeader("Results & Feed Sorter Priorities")
+                PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_sorting))
             }
 
             item {
@@ -2467,7 +2761,7 @@ class SettingsActivity : AppCompatActivity() {
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
                         SorterBlock(
-                            title = "Regular Streams Sorter",
+                            title = androidx.compose.ui.res.stringResource(R.string.sorter_streams_title),
                             priorities = streamPriorities,
                             prefsKey = "sort_priorities"
                         ) { streamPriorities = it }
@@ -2482,7 +2776,7 @@ class SettingsActivity : AppCompatActivity() {
 
                     Box(modifier = Modifier.weight(1f)) {
                         SorterBlock(
-                            title = "Torrents Sorter",
+                            title = androidx.compose.ui.res.stringResource(R.string.sorter_torrents_title),
                             priorities = torrentPriorities,
                             prefsKey = "torrent_sort_priorities"
                         ) { torrentPriorities = it }
@@ -2508,7 +2802,7 @@ class SettingsActivity : AppCompatActivity() {
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
                         SorterBlock(
-                            title = "Favourites Sorter",
+                            title = androidx.compose.ui.res.stringResource(R.string.sorter_favorites_title),
                             priorities = favoritesPriorities,
                             prefsKey = "favorites_sort_priorities"
                         ) { favoritesPriorities = it }
@@ -2526,7 +2820,7 @@ class SettingsActivity : AppCompatActivity() {
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         SorterBlock(
-                            title = "Recently Watched Sorter",
+                            title = androidx.compose.ui.res.stringResource(R.string.sorter_recent_title),
                             priorities = recentPriorities,
                             prefsKey = "recent_sort_priorities"
                         ) { recentPriorities = it }
@@ -2539,7 +2833,7 @@ class SettingsActivity : AppCompatActivity() {
                         )
 
                         SorterBlock(
-                            title = "Feed Sorter",
+                            title = androidx.compose.ui.res.stringResource(R.string.sorter_feed_title),
                             priorities = feedPriorities,
                             prefsKey = "feed_sort_priorities"
                         ) { feedPriorities = it }
@@ -2557,7 +2851,7 @@ class SettingsActivity : AppCompatActivity() {
         var editRuleData by remember { mutableStateOf(JSONObject()) }
 
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            PanelHeader("Blocked Webpage Elements Rules")
+            PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_blocked))
             LazyColumn(modifier = Modifier.fillMaxWidth().height(260.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed((0 until rulesList.length()).toList()) { index, _ ->
                     val rule = rulesList.getJSONObject(index)
@@ -2584,7 +2878,7 @@ class SettingsActivity : AppCompatActivity() {
                                 onClick = { editRuleIndex = index; editRuleData = JSONObject(rule.toString()); showEditDialog = true }
                             ) { isFocused ->
                                 Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                    Text("Edit", color = if (isFocused) Color.Black else Color.White)
+                                    Text(androidx.compose.ui.res.stringResource(R.string.btn_edit), color = if (isFocused) Color.Black else Color.White)
                                 }
                             }
                             Spacer(modifier = Modifier.width(8.dp))
@@ -2605,7 +2899,7 @@ class SettingsActivity : AppCompatActivity() {
                                 }
                             ) { isFocused ->
                                 Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                    Text("Delete", color = if (isFocused) Color.Black else Color.White)
+                                    Text(androidx.compose.ui.res.stringResource(R.string.btn_delete), color = if (isFocused) Color.Black else Color.White)
                                 }
                             }
                         }
@@ -2619,7 +2913,7 @@ class SettingsActivity : AppCompatActivity() {
                 onClick = { editRuleIndex = -1; editRuleData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New CSS Rule"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("selectors", JSONArray()) }; showEditDialog = true }
             ) { isFocused ->
                 Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                    Text("Add New CSS Block Rule", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    Text(androidx.compose.ui.res.stringResource(R.string.btn_add_css_rule), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -2631,12 +2925,12 @@ class SettingsActivity : AppCompatActivity() {
 
             AlertDialog(
                 onDismissRequest = { showEditDialog = false },
-                title = { Text("Edit Block Rule") },
+                title = { Text(if (editRuleIndex >= 0) androidx.compose.ui.res.stringResource(R.string.dialog_edit_block_rule) else androidx.compose.ui.res.stringResource(R.string.dialog_add_block_rule)) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TvInputField(value = name, onValueChange = { name = it }, label = "Rule Name", placeholder = "Rule Name", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
-                        TvInputField(value = patterns, onValueChange = { patterns = it }, label = "URL Patterns", placeholder = "URL Patterns", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
-                        TvInputField(value = selectors, onValueChange = { selectors = it }, label = "CSS Selectors (one per line)", placeholder = ".selector", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
+                        TvInputField(value = name, onValueChange = { name = it }, label = androidx.compose.ui.res.stringResource(R.string.label_rule_name), placeholder = "Rule Name", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
+                        TvInputField(value = patterns, onValueChange = { patterns = it }, label = androidx.compose.ui.res.stringResource(R.string.label_url_patterns), placeholder = "URL Patterns", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
+                        TvInputField(value = selectors, onValueChange = { selectors = it }, label = androidx.compose.ui.res.stringResource(R.string.label_css_selectors), placeholder = ".selector", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
                     }
                 },
                 confirmButton = {
@@ -2658,7 +2952,7 @@ class SettingsActivity : AppCompatActivity() {
                         }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                            Text("Save", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_save), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 },
@@ -2670,7 +2964,7 @@ class SettingsActivity : AppCompatActivity() {
                         onClick = { showEditDialog = false }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                            Text("Cancel", color = if (isFocused) Color.Black else Color.White)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_cancel), color = if (isFocused) Color.Black else Color.White)
                         }
                     }
                 }
@@ -2767,9 +3061,9 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            PanelHeader("Trakt.tv Sync Integration")
+            PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_trakt))
             if (traktUser.isNotEmpty()) {
-                Text("Authorized account: $traktUser", color = Color(0xFF4CAF50), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.status_trakt_authed, traktUser), color = Color(0xFF4CAF50), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp),
                     defaultColor = Color(0xFFE53935),
@@ -2787,11 +3081,11 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 ) { isFocused ->
                     Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                        Text("Logout Trakt", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_logout_trakt), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             } else {
-                Text("Trakt account not linked.", color = Color.Gray)
+                Text(androidx.compose.ui.res.stringResource(R.string.status_trakt_unlinked), color = Color.Gray)
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp),
                     defaultColor = Color(0xFF00BCD4),
@@ -2799,7 +3093,7 @@ class SettingsActivity : AppCompatActivity() {
                     onClick = { startTraktAuthFlow() }
                 ) { isFocused ->
                     Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                        Text("Authorize Trakt Account", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_auth_trakt), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -2808,15 +3102,15 @@ class SettingsActivity : AppCompatActivity() {
         if (showTraktAuthDialog) {
             AlertDialog(
                 onDismissRequest = { showTraktAuthDialog = false },
-                title = { Text("Authorize Trakt.tv", color = Color.White) },
+                title = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_auth_trakt_title), color = Color.White) },
                 containerColor = Color(0xFF222225),
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("1. Visit verification page:", color = Color.LightGray)
+                        Text(androidx.compose.ui.res.stringResource(R.string.dialog_auth_trakt_step1), color = Color.LightGray)
                         Text(traktVerificationUrl, color = Color(0xFF00BCD4), fontWeight = FontWeight.Bold)
-                        Text("2. Enter the following code on your device:", color = Color.LightGray)
+                        Text(androidx.compose.ui.res.stringResource(R.string.dialog_auth_trakt_step2), color = Color.LightGray)
                         Text(traktUserCode, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                        Text("Waiting for authentication from Trakt...", color = Color.Gray)
+                        Text(androidx.compose.ui.res.stringResource(R.string.dialog_auth_trakt_waiting), color = Color.Gray)
                     }
                 },
                 confirmButton = {
@@ -2833,7 +3127,7 @@ class SettingsActivity : AppCompatActivity() {
                         }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                            Text("Open Link", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_open_link), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 },
@@ -2845,7 +3139,7 @@ class SettingsActivity : AppCompatActivity() {
                         onClick = { showTraktAuthDialog = false }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                            Text("Cancel", color = if (isFocused) Color.Black else Color.White)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_cancel), color = if (isFocused) Color.Black else Color.White)
                         }
                     }
                 }
@@ -2875,10 +3169,10 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            PanelHeader("TMDb Account Credentials")
+            PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_tmdb))
 
             if (isAuthorized) {
-                Text("Authorized TMDb Session Active", color = Color(0xFF4CAF50), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.status_tmdb_active), color = Color(0xFF4CAF50), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp),
                     defaultColor = Color(0xFFE53935),
@@ -2897,12 +3191,12 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 ) { isFocused ->
                     Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                        Text("Logout", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_logout), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             } else {
-                TvInputField(value = usernameVal, onValueChange = { usernameVal = it }, label = "Username", placeholder = "Username", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
-                TvInputField(value = passwordVal, onValueChange = { passwordVal = it }, label = "Password", placeholder = "Password", isPassword = true, containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
+                TvInputField(value = usernameVal, onValueChange = { usernameVal = it }, label = androidx.compose.ui.res.stringResource(R.string.label_username), placeholder = "Username", containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
+                TvInputField(value = passwordVal, onValueChange = { passwordVal = it }, label = androidx.compose.ui.res.stringResource(R.string.label_password), placeholder = "Password", isPassword = true, containerColor = Color(0xFF222225), imeAction = ImeAction.Done)
 
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp),
@@ -2951,7 +3245,7 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 ) { isFocused ->
                     Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                        Text("Login", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_login), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -2963,6 +3257,19 @@ class SettingsActivity : AppCompatActivity() {
         var cacheSize by remember { mutableStateOf(0L) }
         var cacheItems by remember { mutableStateOf(emptyList<com.poobi.tvbrowser.torrent.TorrentCacheItem>()) }
         var showDaysPickerDialog by remember { mutableStateOf(false) }
+
+        val prebufferOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_prebuffer_1),
+            androidx.compose.ui.res.stringResource(R.string.opt_prebuffer_2),
+            androidx.compose.ui.res.stringResource(R.string.opt_prebuffer_4),
+            androidx.compose.ui.res.stringResource(R.string.opt_prebuffer_8)
+        )
+        val cleanModeOptions = listOf(
+            androidx.compose.ui.res.stringResource(R.string.opt_clean_manual),
+            androidx.compose.ui.res.stringResource(R.string.opt_clean_new_torrent),
+            androidx.compose.ui.res.stringResource(R.string.opt_clean_exit),
+            androidx.compose.ui.res.stringResource(R.string.opt_clean_days)
+        )
 
         fun refreshCache() {
             val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
@@ -2976,12 +3283,12 @@ class SettingsActivity : AppCompatActivity() {
 
         Column(modifier = Modifier.fillMaxSize()) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                item { PanelHeader("Torrent Streaming Configuration") }
+                item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_torrents)) }
 
                 item {
                     DropdownSettingRow(
-                        label = "Playback Pre-buffer Size",
-                        options = listOf("1 Piece (Fastest / Default)", "2 Pieces", "4 Pieces (Standard)", "8 Pieces (Most Stable)"),
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_prebuffer_size),
+                        options = prebufferOptions,
                         selectedIndex = when (torrentPrebufferPieces) {
                             1 -> 0
                             2 -> 1
@@ -3005,12 +3312,16 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 item {
+                    val allTorrentLangs = remember { com.poobi.tvbrowser.shared.LanguageHelper.supportedLanguages.map { it.englishName } }
+                    val currentTorrentIdx = remember(torrentLanguage) {
+                        allTorrentLangs.indexOfFirst { it.equals(torrentLanguage, ignoreCase = true) }.coerceAtLeast(0)
+                    }
                     DropdownSettingRow(
-                        label = "Preferred Torrent Language",
-                        options = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi"),
-                        selectedIndex = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi").indexOf(torrentLanguage).coerceAtLeast(0)
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_torrent_language),
+                        options = allTorrentLangs,
+                        selectedIndex = currentTorrentIdx
                     ) { index ->
-                        torrentLanguage = listOf("English", "Russian", "Spanish", "Portuguese", "Italian", "French", "German", "Polish", "Hindi")[index]
+                        torrentLanguage = allTorrentLangs[index]
                         lifecycleScope.launch(Dispatchers.IO) {
                             prefs.edit().putString("torrent_language", torrentLanguage).apply()
                         }
@@ -3019,8 +3330,8 @@ class SettingsActivity : AppCompatActivity() {
 
                 item {
                     DropdownSettingRow(
-                        label = "Torrent Cache Auto-Clean Mode",
-                        options = listOf("Manual Only", "Every time a new torrent starts", "Every time a video is exited", "Every X days"),
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_torrent_cache_clean),
+                        options = cleanModeOptions,
                         selectedIndex = torrentCacheCleanMode
                     ) { index ->
                         torrentCacheCleanMode = index
@@ -3045,9 +3356,9 @@ class SettingsActivity : AppCompatActivity() {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("Clean Interval", color = if (isFocused) Color(0xFF222222) else Color.LightGray, fontSize = 12.sp)
+                                    Text(androidx.compose.ui.res.stringResource(R.string.label_clean_interval), color = if (isFocused) Color(0xFF222222) else Color.LightGray, fontSize = 12.sp)
                                     Text(
-                                        text = if (torrentCacheCleanDays > 0) "Every $torrentCacheCleanDays days" else "Disabled / Click to set", 
+                                        text = if (torrentCacheCleanDays > 0) androidx.compose.ui.res.stringResource(R.string.format_every_x_days, torrentCacheCleanDays) else androidx.compose.ui.res.stringResource(R.string.label_disabled_set), 
                                         color = if (isFocused) Color.Black else Color.White, 
                                         fontSize = 16.sp, 
                                         fontWeight = FontWeight.Bold
@@ -3059,13 +3370,13 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 item { Spacer(modifier = Modifier.height(8.dp)) }
-                item { Text("Storage Cache Manager", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+                item { Text(androidx.compose.ui.res.stringResource(R.string.header_storage_cache_mgmt), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
 
                 item {
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF222225))) {
                         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Total Cached P2P Storage", color = Color.LightGray, fontSize = 12.sp)
+                                Text(androidx.compose.ui.res.stringResource(R.string.label_total_cached_p2p), color = Color.LightGray, fontSize = 12.sp)
                                 Text("%.2f MB".format(cacheSize / (1024f * 1024f)), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             }
                             TvFocusableBox(
@@ -3079,7 +3390,7 @@ class SettingsActivity : AppCompatActivity() {
                                 }
                             ) { isFocused ->
                                 Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                                    Text("Clear All", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                    Text(androidx.compose.ui.res.stringResource(R.string.btn_clear_all), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -3087,7 +3398,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 if (cacheItems.isNotEmpty()) {
-                    item { Text("Cached Directory Sub-folders", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)) }
+                    item { Text(androidx.compose.ui.res.stringResource(R.string.label_cached_subfolders), color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)) }
                     items(cacheItems) { cacheItem ->
                         Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = Color(0x0DFFFFFF))) {
                             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -3106,7 +3417,7 @@ class SettingsActivity : AppCompatActivity() {
                                     }
                                 ) { isFocused ->
                                     Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                        Text("Clear", color = if (isFocused) Color.Black else Color.White, fontSize = 11.sp)
+                                        Text(androidx.compose.ui.res.stringResource(R.string.btn_clear), color = if (isFocused) Color.Black else Color.White, fontSize = 11.sp)
                                     }
                                 }
                             }
@@ -3119,11 +3430,11 @@ class SettingsActivity : AppCompatActivity() {
         if (showDaysPickerDialog) {
             AlertDialog(
                 onDismissRequest = { showDaysPickerDialog = false },
-                title = { Text("Auto-Clean Interval", color = Color.White) },
+                title = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_auto_clean_interval_title), color = Color.White) },
                 containerColor = Color(0xFF222225),
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Enter number of days between cache cleans:", color = Color.LightGray)
+                        Text(androidx.compose.ui.res.stringResource(R.string.dialog_auto_clean_interval_msg), color = Color.LightGray)
                         TvInputField(
                             value = torrentCacheCleanDaysStr,
                             onValueChange = { newValue ->
@@ -3149,7 +3460,7 @@ class SettingsActivity : AppCompatActivity() {
                         onClick = { showDaysPickerDialog = false }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                            Text("OK", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_done), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 },
@@ -3161,7 +3472,7 @@ class SettingsActivity : AppCompatActivity() {
                         onClick = { showDaysPickerDialog = false }
                     ) { isFocused ->
                         Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                            Text("Cancel", color = if (isFocused) Color.Black else Color.White)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_cancel), color = if (isFocused) Color.Black else Color.White)
                         }
                     }
                 }
@@ -3180,9 +3491,9 @@ class SettingsActivity : AppCompatActivity() {
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                PanelHeader("Local Backup & Restore")
+                PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_sync))
                 Text(
-                    text = "Export or restore all settings, bookmarks, and configuration to an offline JSON file in your device's Downloads folder without requiring a Google account.",
+                    text = androidx.compose.ui.res.stringResource(R.string.desc_local_backup),
                     color = Color.Gray,
                     fontSize = 13.sp
                 )
@@ -3209,7 +3520,7 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 ) { isFocused ->
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Save Backup", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_save_backup), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -3237,7 +3548,7 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 ) { isFocused ->
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Restore Backup", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_restore_backup), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -3249,16 +3560,16 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             item {
-                PanelHeader("Google Drive Cloud Sync")
+                PanelHeader(androidx.compose.ui.res.stringResource(R.string.header_drive_sync))
                 Text(
-                    text = "Sync your settings, bookmarks, and history across devices using your private Google Drive App Data folder. Newer settings automatically take priority.",
+                    text = androidx.compose.ui.res.stringResource(R.string.desc_drive_sync),
                     color = Color.Gray,
                     fontSize = 13.sp
                 )
             }
 
             item {
-                Text("Status: $syncStatus", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(androidx.compose.ui.res.stringResource(R.string.status_sync, syncStatus), color = Color.White, fontWeight = FontWeight.Bold)
             }
 
             if (isSignedState) {
@@ -3269,14 +3580,14 @@ class SettingsActivity : AppCompatActivity() {
                         shape = RoundedCornerShape(20.dp),
                         onClick = {
                             onSignOutRequested?.invoke {
-                                googleSignInStatusState.value = "Not signed in."
+                                googleSignInStatusState.value = getString(R.string.status_not_signed_in)
                                 isGoogleSignedInState.value = false
-                                Toast.makeText(this@SettingsActivity, "Signed out successfully", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@SettingsActivity, getString(R.string.btn_done), Toast.LENGTH_SHORT).show()
                             }
                         }
                     ) { isFocused ->
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("Logout", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_logout), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -3289,7 +3600,7 @@ class SettingsActivity : AppCompatActivity() {
                         onClick = { onSignInRequested?.invoke() }
                     ) { isFocused ->
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("Sign in with Google", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            Text(androidx.compose.ui.res.stringResource(R.string.btn_sign_in_google), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -3339,7 +3650,7 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 ) { isFocused ->
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Force Sync Now (Two-Way)", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_force_sync), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -3455,6 +3766,9 @@ class SettingsActivity : AppCompatActivity() {
                 prefs.edit().apply {
                     putString("stream_resume_points", prefs.getString("stream_resume_points", "{}"))
                     putLong("settings_last_modified", System.currentTimeMillis())
+                    putString("app_language", appLanguage)
+                    putString("date_format_pref", dateFormatPref)
+                    putString("audio_language_pref", audioLanguagePref)
                     putBoolean("auto_update_check", autoUpdateCheck)
                     putBoolean("light_theme", lightTheme)
                     putInt("restore_tabs_pref", restoreOption)
@@ -3527,6 +3841,8 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 val cfg = JSONObject().apply {
+                    val resolvedCode = com.poobi.tvbrowser.shared.LanguageHelper.getAppLanguage(this@SettingsActivity).code
+                    put("app_language", resolvedCode)
                     put("timeout_mode", timeoutMode)
                     put("global_timeout", globalTimeout)
                     put("per_source_timeout", sourceTimeout)

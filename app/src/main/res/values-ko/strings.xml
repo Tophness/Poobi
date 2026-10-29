@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Poobi</string>
+
+    <!-- Top Navigation -->
+    <string name="tab_browser">브라우저</string>
+    <string name="tab_streams">스트림</string>
+    <string name="title_settings">설정</string>
+
+    <!-- Common Actions & Buttons -->
+    <string name="btn_save_exit">저장 및 종료</string>
+    <string name="btn_save">저장</string>
+    <string name="btn_cancel">취소</string>
+    <string name="btn_delete">삭제</string>
+    <string name="btn_edit">수정</string>
+    <string name="btn_close">닫기</string>
+    <string name="btn_done">완료</string>
+    <string name="btn_select_all">전체 선택</string>
+    <string name="btn_deselect_all">전체 해제</string>
+    <string name="btn_clear_all">모두 지우기</string>
+    <string name="btn_back">뒤로</string>
+    <string name="btn_apply">적용</string>
+    <string name="btn_play_now">지금 재생</string>
+    <string name="btn_skip_play">건너뛰고 재생</string>
+    <string name="btn_download">다운로드</string>
+    <string name="btn_allow">허용</string>
+    <string name="btn_block">차단</string>
+    <string name="btn_play_native">내장 플레이어로 재생</string>
+    <string name="btn_website_player">웹 플레이어</string>
+    <string name="btn_open_in_browser">브라우저에서 열기</string>
+    <string name="btn_restore">복원</string>
+    <string name="btn_restore_load">복원 및 불러오기</string>
+    <string name="btn_new_session">새 세션</string>
+    <string name="btn_zoom_out">- 축소</string>
+    <string name="btn_zoom_reset">100% (초기화)</string>
+    <string name="btn_zoom_in">+ 확대</string>
+    <string name="btn_load_all_tabs">모든 탭 불러오기</string>
+    <string name="btn_restore_all_tabs">모든 탭 복원</string>
+    <string name="btn_clear_bookmarks">북마크 지우기</string>
+    <string name="btn_clear_history">기록 지우기</string>
+    <string name="btn_clear_downloads">다운로드 기록 지우기</string>
+    <string name="btn_prev">이전</string>
+    <string name="btn_next">다음</string>
+
+    <!-- Settings Categories -->
+    <string name="category_general">일반</string>
+    <string name="category_language">언어</string>
+    <string name="category_web">웹</string>
+    <string name="category_player">플레이어</string>
+    <string name="category_interface">인터페이스</string>
+    <string name="category_feeds">피드</string>
+    <string name="category_streaming">스트리밍</string>
+    <string name="category_autoplay">자동 재생</string>
+    <string name="category_subtitles">자막</string>
+    <string name="category_sorting">정렬</string>
+    <string name="category_blocked">차단됨</string>
+    <string name="category_trakt">Trakt</string>
+    <string name="category_tmdb">TMDb</string>
+    <string name="category_torrents">토렌트</string>
+    <string name="category_sync">동기화</string>
+
+    <!-- Settings Panels & Options -->
+    <string name="panel_general">일반 설정</string>
+    <string name="panel_language">언어 및 지역 설정</string>
+    <string name="setting_app_language">앱 표시 언어</string>
+    <string name="setting_date_format">날짜 형식</string>
+    <string name="setting_audio_language">기본 오디오 트랙</string>
+    <string name="setting_torrent_language">선호 토렌트 언어</string>
+    <string name="setting_sub_languages">선호 자막 검색 언어</string>
+    <string name="setting_light_theme">라이트 테마 사용</string>
+    <string name="setting_auto_update">업데이트 자동 확인</string>
+    <string name="setting_restore_session">세션 복원 모드</string>
+    <string name="setting_history_limit">기록 보관 한도</string>
+    <string name="setting_history_icons">기록 아이콘 스타일</string>
+    <string name="setting_bookmark_icons">북마크 아이콘 스타일</string>
+
+    <!-- Streams Navigation Categories -->
+    <string name="feed_search">검색</string>
+    <string name="feed_for_you">추천</string>
+    <string name="feed_movies">영화</string>
+    <string name="feed_tv_shows">TV 프로그램</string>
+    <string name="feed_discover">탐색</string>
+
+    <!-- Dashboard Pills -->
+    <string name="pill_favourites">즐겨찾기</string>
+    <string name="pill_recents">최근 시청 항목</string>
+    <string name="pill_unfinished">이어보기</string>
+    <string name="pill_because_watched">시청한 콘텐츠 기반 추천</string>
+    <string name="pill_cast_spotlight">주목할 만한 출연진</string>
+    <string name="pill_trakt_watched">가장 많이 시청된 작품</string>
+    <string name="pill_trakt_anticipated">가장 기대되는 작품</string>
+    <string name="pill_trakt_collected">가장 많이 보관된 작품</string>
+    <string name="pill_trakt_watchlist">위시리스트</string>
+    <string name="pill_trakt_recommendations">나를 위한 추천</string>
+    <string name="pill_trending_today">오늘의 인기작</string>
+    <string name="pill_trending_week">이번 주 인기작</string>
+    <string name="pill_in_cinemas">현재 상영작</string>
+    <string name="pill_upcoming">개봉 예정작</string>
+    <string name="pill_popular">대세 작품</string>
+    <string name="pill_top_rated">역대 최고 평점작</string>
+    <string name="pill_hidden_gems">숨겨진 명작</string>
+    <string name="pill_popular_tv">인기 TV 프로그램</string>
+    <string name="pill_trending_tv_week">이번 주 트렌드 시리즈</string>
+    <string name="pill_airing_today">오늘 방영작</string>
+    <string name="pill_airing_week">이번 주 방영작</string>
+    <string name="pill_top_rated_tv">최고 평점 TV 프로그램</string>
+    <string name="pill_era_2000s">2000년대 히트작</string>
+    <string name="pill_era_90s">90년대 레트로</string>
+    <string name="pill_era_80s">80년대 클래식</string>
+    <string name="pill_era_70s">70년대 명작 영화</string>
+    <string name="pill_anime">애니메이션</string>
+    <string name="pill_kdrama">한국 드라마</string>
+    <string name="pill_british_mysteries">영국 미스터리</string>
+    <string name="pill_cult_classics">컬트 클래식</string>
+
+    <!-- Browser Home Tabs -->
+    <string name="browser_open_tabs">열린 탭</string>
+    <string name="browser_bookmarks">북마크</string>
+    <string name="browser_history">기록</string>
+    <string name="browser_downloads">다운로드</string>
+
+    <!-- Media Details Actions -->
+    <string name="media_play_movie">영화 재생</string>
+    <string name="media_trailer">예고편</string>
+    <string name="media_season">시즌</string>
+    <string name="media_top_cast">주요 출연진</string>
+    <string name="media_more_like_this">비슷한 콘텐츠</string>
+    <string name="media_filmography">필모그래피</string>
+    <string name="media_released">개봉일</string>
+    <string name="media_select_season">시즌 선택</string>
+    <string name="media_season_num">시즌 %1$d</string>
+    <string name="media_season_cast">%1$s 출연진</string>
+    <string name="media_no_overview">줄거리 정보가 없습니다.</string>
+    <string name="media_no_cast">출연진 정보가 없습니다.</string>
+    <string name="media_no_recommendations">추천 콘텐츠가 없습니다.</string>
+    <string name="media_loading_trailer">예고편 불러오는 중...</string>
+    <string name="media_filter_all">전체</string>
+    <string name="media_filter_movies">영화</string>
+    <string name="media_filter_tv">TV 프로그램</string>
+    <string name="media_no_titles_category">이 카테고리에는 작품이 없습니다.</string>
+    <string name="media_born_in">출생지: %1$s</string>
+    <string name="media_no_biography">인물 정보가 없습니다.</string>
+    <string name="media_role_as">역할: %1$s</string>
+    <string name="media_badge_actor">배우</string>
+    <string name="media_airing_prefix">방영 예정: </string>
+    <string name="media_aired_prefix">방영일: </string>
+    <string name="media_type_movie">영화</string>
+    <string name="media_type_tv">TV 시리즈</string>
+    <string name="known_for_acting">연기</string>
+
+    <!-- Sorter Dialog -->
+    <string name="sorter_favorites_title">즐겨찾기 정렬 우선순위</string>
+    <string name="sorter_recent_title">최근 시청 항목 정렬 우선순위</string>
+    <string name="sorter_feed_title">피드 정렬 우선순위</string>
+    <string name="sorter_streams_title">일반 스트림 정렬</string>
+    <string name="sorter_torrents_title">토렌트 정렬</string>
+
+    <!-- Subtitle Alignment UI -->
+    <string name="sub_sync_title">자막 싱크 맞추기</string>
+    <string name="sub_sync_offset">현재 오프셋: %1$dms</string>
+    <string name="sub_sync_btn_visual">타임라인 시각적 정렬</string>
+    <string name="sub_sync_btn_search">대사 음성 검색</string>
+    <string name="sub_sync_btn_reset">타이밍 초기화</string>
+    <string name="sub_sync_btn_exit">종료</string>
+    <string name="sub_search_title">대사 텍스트 검색</string>
+    <string name="sub_search_desc">해당 음성 위치로 바로 이동할 대사의 단어를 입력하세요.</string>
+    <string name="sub_search_placeholder">예: 뛰어내렸다</string>
+    <string name="sub_search_btn_align">검색 및 동기화</string>
+    <string name="sub_waveform_title">음성 파형 타임라인</string>
+    <string name="sub_waveform_silence">[ 무음 ]</string>
+    <string name="sub_waveform_offset">타임라인 오프셋: %1$dms</string>
+    <string name="sub_waveform_hint_focused">◀ 방향키 좌/우를 눌러 재생 헤드 기준으로 자막을 이동하세요 ▶</string>
+    <string name="sub_waveform_hint_unfocused">선택하여 자막 블록 위치 조정</string>
+    <string name="sub_waveform_looping">구간 반복 재생 중...</string>
+    <string name="sub_waveform_playback_running">재생 중...</string>
+    <string name="sub_waveform_stop_loop">반복 중지</string>
+    <string name="sub_waveform_loop_track">구간 반복</string>
+
+    <!-- Player Overlays & Prompts -->
+    <string name="overlay_up_next">다음 화 재생</string>
+    <string name="overlay_skip_intro">오프닝 건너뛰기</string>
+    <string name="overlay_skip_recap">지난 이야기 건너뛰기</string>
+    <string name="overlay_skip_early_credits">오프닝 크레딧 건너뛰기</string>
+    <string name="overlay_skip_end_credits">엔딩 크레딧 건너뛰기</string>
+    <string name="overlay_skip_remaining">%1$s 건너뛰기 (남은 시간 %2$d초)</string>
+    <string name="overlay_skip_press_select">선택 버튼을 눌러 건너뛰기</string>
+    <string name="segment_intro">오프닝</string>
+    <string name="segment_recap">지난 이야기</string>
+    <string name="segment_opening_credits">오프닝 크레딧</string>
+    <string name="segment_closing_credits">엔딩 크레딧</string>
+    <string name="toast_skipped_intro">오프닝을 건너뛰었습니다</string>
+    <string name="toast_skipped_recap">지난 이야기를 건너뛰었습니다</string>
+    <string name="toast_skipped_early_credits">오프닝 크레딧을 건너뛰었습니다</string>
+    <string name="toast_skipped_end_credits">엔딩 크레딧을 건너뛰었습니다</string>
+    <string name="captions_add_disk">디스크에서 자막 추가...</string>
+    <string name="captions_off">사용 안 함</string>
+    <string name="captions_embedded">내장 자막</string>
+    <string name="dialog_quality_title">화질 선택</string>
+    <string name="dialog_sub_wait_title">자막 자동 다운로드 중</string>
+    <string name="dialog_sub_wait_msg">자막을 검색하고 다운로드하는 중입니다...</string>
+    <string name="dialog_torrent_prebuffer_title">비디오 스트림 사전 버퍼링 중</string>
+    <string name="disk_picker_select_media">미디어 선택</string>
+    <string name="disk_picker_select_subtitles">자막 선택</string>
+    <string name="disk_picker_no_subs">디스크에서 자막 파일(.srt, .vtt, .ass)을 찾을 수 없습니다.</string>
+
+    <!-- Browser & Web Dialogs -->
+    <string name="menu_cut">잘라내기</string>
+    <string name="menu_copy">복사</string>
+    <string name="menu_paste">붙여넣기</string>
+    <string name="menu_select_all">전체 선택</string>
+    <string name="menu_open_new_tab">새 탭에서 열기</string>
+    <string name="menu_refresh">새로고침</string>
+    <string name="menu_block_element">요소 차단</string>
+    <string name="dialog_video_detected_title">비디오 감지됨</string>
+    <string name="dialog_video_detected_msg">비디오가 감지되었습니다. 내장 플레이어로 재생하시겠습니까, 아니면 웹 플레이어로 계속 보시겠습니까?</string>
+    <string name="dialog_remember_decision">선택 기억하기 (다시 묻지 않음)</string>
+    <string name="dialog_playback_error_title">재생 오류</string>
+    <string name="dialog_playback_error_msg">ExoPlayer에서 재생할 수 없습니다. 브라우저에서 열어보시겠습니까?\n\n오류: %1$s</string>
+    <string name="dialog_download_title">파일을 다운로드하시겠습니까?</string>
+    <string name="dialog_download_msg">%1$s 파일을 다운로드하시겠습니까?\n크기: %2$.2f MB</string>
+    <string name="dialog_popup_blocked_title">팝업 차단됨</string>
+    <string name="dialog_popup_blocked_msg">이 사이트의 팝업을 허용하시겠습니까?</string>
+    <string name="dialog_silent_block_remember">다시 묻지 않음 (자동 차단)</string>
+    <string name="dialog_restore_session_title">세션을 복원하시겠습니까?</string>
+    <string name="dialog_restore_session_msg">이전 탭들을 복원하시겠습니까?</string>
+    <string name="dialog_zoom_title">페이지 배율 (%1$d%%)</string>
+    <string name="dialog_zoom_msg">텍스트 크기 및 배율 조절:</string>
+    <string name="prompt_search_google_url">Google 검색 또는 URL 입력...</string>
+    <string name="status_missing">파일 없음</string>
+
+    <!-- Scraper & Streams Screen -->
+    <string name="search_movie_tv_placeholder">영화 또는 TV 프로그램 검색...</string>
+    <string name="dashboard_recent_searches">최근 검색어</string>
+    <string name="dashboard_no_items">항목이 없습니다</string>
+    <string name="scrape_stop_scanning">검색 중지</string>
+    <string name="scrape_try_all">모두 시도</string>
+    <string name="scrape_stop">중지</string>
+    <string name="scrape_sort">정렬</string>
+    <string name="scrape_no_sources">소스를 찾을 수 없습니다.</string>
+    <string name="scrape_open_browser">브라우저에서 열기</string>
+    <string name="scrape_play_native">내장 플레이어로 재생</string>
+    <string name="scrape_search_external_subs">🔍 외부 자막 검색</string>
+
+    <!-- Sorter Criteria -->
+    <string name="sort_criteria_native">내장 플레이어 호환성</string>
+    <string name="sort_criteria_direct">직접 링크</string>
+    <string name="sort_criteria_resolution">해상도</string>
+    <string name="sort_criteria_source">호스트 / 소스 이름</string>
+    <string name="sort_criteria_language">언어</string>
+    <string name="sort_criteria_size">파일 크기</string>
+    <string name="sort_criteria_seeders">시더 수</string>
+    <string name="sort_criteria_date_added">추가된 날짜</string>
+    <string name="sort_criteria_date_accessed">최근 이용 순</string>
+    <string name="sort_criteria_az">가나다 / 알파벳 순</string>
+    <string name="sort_criteria_rating">평점</string>
+    <string name="sort_criteria_fav_actors">선호 배우</string>
+    <string name="sort_criteria_date">출시일</string>
+    <string name="sort_criteria_default">기본 순서</string>
+
+    <!-- Settings Panels & Options Details -->
+    <string name="panel_web">웹 및 광고 차단 설정</string>
+    <string name="setting_silent_block">팝업 조용히 차단</string>
+    <string name="setting_clickjack">클릭재킹 방지</string>
+    <string name="setting_custom_adblock_url">사용자 지정 AdBlock 규칙 URL (EasyList 형식)</string>
+    <string name="btn_update_rules_now">지금 필터 규칙 업데이트</string>
+    <string name="status_rules_loaded">활성 필터 규칙: 약 %1$d개 로드됨</string>
+    <string name="status_rules_updating">필터 목록 업데이트 중...</string>
+    <string name="toast_rules_updated">Filter lists updated!</string>
+    <string name="toast_rules_update_failed">Update failed</string>
+    <string name="status_checking_updates">업데이트 확인 중...</string>
+    <string name="btn_check_updates">업데이트 확인 (v%1$s)</string>
+    <string name="setting_current">현재</string>
+    <string name="label_profile_name">프로필 이름</string>
+    <string name="label_url_patterns">URL 패턴</string>
+    <string name="label_action_mode">Action Mode</string>
+    <string name="opt_custom_script">Custom Script</string>
+    <string name="opt_simple_selectors">Simple Element List</string>
+    <string name="label_js_action">JavaScript Action</string>
+    <string name="label_click_selectors">클릭 선택자</string>
+    <string name="btn_add_selector">+ 선택자 추가</string>
+    <string name="dialog_edit_autoplay_title">Edit Autoplay Profile</string>
+    <string name="dialog_add_autoplay_title">Add New Autoplay Profile</string>
+    <string name="dialog_custom_sub_limit_title">사용자 지정 자막 다운로드 한도</string>
+    <string name="dialog_custom_sub_limit_msg">숫자 한도를 입력하세요:</string>
+    <string name="label_opensubtitles_username">OpenSubtitles Username</string>
+    <string name="label_opensubtitles_password">OpenSubtitles Password</string>
+    <string name="label_opensubtitles_org_username">OpenSubtitles.org Username</string>
+    <string name="label_opensubtitles_org_password">OpenSubtitles.org Password</string>
+    <string name="label_subdl_apikey">SubDL API Key</string>
+    <string name="label_subsource_apikey">SubSource API Key</string>
+    <string name="label_rule_name">규칙 이름</string>
+    <string name="label_css_selectors">CSS 선택자 (한 줄에 하나씩)</string>
+    <string name="dialog_edit_block_rule">차단 규칙 수정</string>
+    <string name="dialog_add_block_rule">차단 규칙 추가</string>
+    <string name="dialog_auth_trakt_title">Trakt.tv 계정 인증</string>
+    <string name="dialog_auth_trakt_step1">1. 인증 페이지 방문:</string>
+    <string name="dialog_auth_trakt_step2">2. 장치에 다음 코드를 입력하세요:</string>
+    <string name="dialog_auth_trakt_waiting">Trakt 인증 대기 중...</string>
+    <string name="btn_open_link">링크 열기</string>
+    <string name="label_username">사용자 이름</string>
+    <string name="label_password">비밀번호</string>
+    <string name="dialog_auto_clean_interval_title">자동 정리 주기</string>
+    <string name="dialog_auto_clean_interval_msg">캐시 정리 주기(일수)를 입력하세요:</string>
+    <string name="status_signed_in_as">로그인된 계정: %1$s</string>
+    <string name="status_not_signed_in">로그인되지 않음</string>
+
+    <string name="panel_player">내장 플레이어 기본 설정</string>
+    <string name="setting_extract_video">비디오 감지 및 가로채기</string>
+    <string name="setting_fallback_error">재생 오류 시 브라우저 전환 방식</string>
+    <string name="header_binge_autoplay">몰아보기 및 자동 재생</string>
+    <string name="setting_intro_skip">오프닝 건너뛰기 동작</string>
+    <string name="setting_recap_skip">지난 이야기 건너뛰기 동작</string>
+    <string name="setting_early_credits_skip">오프닝 크레딧 건너뛰기 동작</string>
+    <string name="setting_end_credits_skip">엔딩 크레딧 건너뛰기 동작</string>
+    <string name="setting_up_next_mode">다음 화 알림 오버레이 모드</string>
+    <string name="setting_up_next_time">종료 전 시간(초, 엔딩 미감지 시)</string>
+    <string name="setting_source_selection_next">다음 화 소스 선택 방식</string>
+    <string name="setting_episode_focus_style">시즌 열람 시 에피소드 포커스</string>
+
+    <string name="panel_interface">인터페이스 및 탐색 설정</string>
+    <string name="setting_scroll_topbar">위로 스크롤하여 주소 표시줄 노출</string>
+    <string name="setting_nav_mode">기본 포인터 조작 모드</string>
+    <string name="setting_scrape_tab_order">결과 탭 기본 정렬 순서</string>
+    <string name="header_hardware_devices">하드웨어 입력 장치</string>
+    <string name="setting_hw_keyboard_mode">물리 키보드 모드</string>
+    <string name="setting_hw_mouse_mode">물리 마우스 모드</string>
+    <string name="setting_menu_keybind">메뉴 호출 버튼 단축키</string>
+    <string name="setting_menu_rebind">재설정</string>
+    <string name="setting_menu_reset">초기화</string>
+    <string name="setting_press_key_combo">원하는 키 조합을 누르세요</string>
+    <string name="setting_listening_keys">키 입력을 기다리는 중...</string>
+
+    <string name="panel_feeds">피드 및 대시보드 맞춤 설정</string>
+    <string name="setting_card_thumbnail_style">포스터 썸네일 비율</string>
+    <string name="setting_prioritize_fav_cast">피드에서 선호 배우 출연작 우선</string>
+    <string name="header_for_you_feeds">추천 피드</string>
+    <string name="header_movie_feeds">영화 피드</string>
+    <string name="header_movie_genres">영화 장르</string>
+    <string name="header_tv_feeds">TV 프로그램 피드</string>
+    <string name="header_tv_genres">TV 프로그램 장르</string>
+    <string name="header_discover_networks">탐색: 스트리밍 서비스 및 방송사</string>
+    <string name="header_discover_eras">탐색: 시대 및 연도별</string>
+    <string name="header_discover_world">탐색: 세계 영화 및 특수 장르</string>
+    <string name="header_fav_cast_mgmt">선호 배우 목록 관리</string>
+    <string name="desc_fav_cast_mgmt">즐겨찾는 작품의 배우를 관리하거나 직접 검색하여 추가할 수 있습니다.</string>
+    <string name="setting_auto_sync_fav_cast">즐겨찾기 작품의 출연진 자동 동기화</string>
+    <string name="prompt_search_actor">추가할 배우 검색 (예: 킬리언 머피)...</string>
+    <string name="label_live_results">실시간 검색 결과 (선택하여 추가):</string>
+    <string name="label_cast_pool">선호 배우 목록 (%1$d)</string>
+    <string name="label_add_actor">+ 추가</string>
+    <string name="desc_no_fav_actors">아직 추가된 배우가 없습니다. 작품을 즐겨찾기에 추가하거나 검색하세요.</string>
+    <string name="label_added_via_fav">즐겨찾기에 기반하여 추가됨: %1$s</string>
+    <string name="label_added_via_search">검색을 통해 추가됨</string>
+
+    <string name="panel_streaming">스트리밍 및 스크래퍼 환경설정</string>
+    <string name="setting_timeout_logic">타임아웃 제한 방식</string>
+    <string name="setting_enforce_whitelist">허용된 호스트 목록만 사용</string>
+    <string name="setting_global_timeout">엔진 전체 타임아웃 (초)</string>
+    <string name="setting_source_timeout">소스별 타임아웃 (초)</string>
+    <string name="setting_scraper_workers">동시 탐색 스레드 수 (기본: 3)</string>
+    <string name="header_provider_packages">제공자 패키지</string>
+    <string name="header_host_whitelists">호스트 허용 목록 (화이트리스트)</string>
+    <string name="prompt_search_whitelists">목록 내 검색...</string>
+    <string name="label_provider_whitelist">제공자 패키지 화이트리스트</string>
+    <string name="label_resolveurl_whitelist">ResolveURL 화이트리스트</string>
+
+    <string name="panel_autoplay">자동 재생 프로필</string>
+    <string name="setting_autoplay_global">웹 비디오 자동 재생 전역 활성화</string>
+    <string name="btn_add_autoplay_profile">새 자동 재생 프로필 추가</string>
+
+    <string name="panel_subtitles">자막 검색 환경설정</string>
+    <string name="setting_sub_rendering_engine">자막 렌더링 엔진</string>
+    <string name="setting_sub_auto_search">자막 자동 검색 동작</string>
+    <string name="setting_subs_to_download">다운로드할 자막 개수</string>
+    <string name="setting_sub_video_launches">비디오 재생 시작 시</string>
+    <string name="setting_sub_retention">자막 파일 보관 기간</string>
+    <string name="setting_sub_limit">자막 검색 최대 결과 수</string>
+    <string name="header_sub_accounts">자막 계정 및 API 키</string>
+    <string name="header_sub_engines">자막 스크래퍼 엔진</string>
+
+    <string name="panel_sorting">검색 및 피드 정렬 우선순위</string>
+    <string name="panel_blocked">차단된 웹 요소 규칙</string>
+    <string name="btn_add_css_rule">새 CSS 차단 규칙 추가</string>
+
+    <string name="panel_trakt">Trakt.tv 연동</string>
+    <string name="status_trakt_authed">연동된 계정: %1$s</string>
+    <string name="btn_logout_trakt">Trakt 연결 해제</string>
+    <string name="status_trakt_unlinked">연동된 Trakt 계정이 없습니다.</string>
+    <string name="btn_auth_trakt">Trakt 계정 인증</string>
+
+    <string name="panel_tmdb">TMDb 계정 정보</string>
+    <string name="status_tmdb_active">TMDb 인증 세션 활성화됨</string>
+    <string name="btn_login">로그인</string>
+    <string name="btn_logout">로그아웃</string>
+
+    <string name="panel_torrents">토렌트 스트리밍 설정</string>
+    <string name="setting_prebuffer_size">재생 전 버퍼 크기</string>
+    <string name="setting_torrent_cache_clean">토렌트 캐시 자동 정리 모드</string>
+    <string name="header_storage_cache_mgmt">저장 공간 캐시 관리자</string>
+    <string name="label_total_cached_p2p">총 캐시된 P2P 용량</string>
+    <string name="label_cached_subfolders">캐시된 하위 폴더 목록</string>
+    <string name="label_clean_interval">정리 주기</string>
+    <string name="format_every_x_days">%1$d일마다</string>
+    <string name="label_disabled_set">비활성화됨 / 탭하여 설정</string>
+    <string name="btn_clear">지우기</string>
+
+    <string name="panel_sync">로컬 백업 및 복원</string>
+    <string name="desc_local_backup">Google 계정 없이도 모든 설정과 북마크를 다운로드 폴더에 오프라인 JSON 파일로 백업하거나 복원합니다.</string>
+    <string name="btn_save_backup">백업 저장</string>
+    <string name="btn_restore_backup">백업 복원</string>
+    <string name="header_drive_sync">Google Drive 클라우드 동기화</string>
+    <string name="desc_drive_sync">Google Drive 전용 앱 폴더를 통해 여러 기기 간에 설정과 기록을 안전하게 동기화합니다.</string>
+    <string name="status_sync">상태: %1$s</string>
+    <string name="btn_sign_in_google">Google 계정으로 로그인</string>
+    <string name="btn_force_sync">지금 즉시 동기화</string>
+
+    <!-- Option values for Dropdowns -->
+    <string name="opt_restore_ask">복원 여부 확인</string>
+    <string name="opt_restore_always_load">항상 복원하고 즉시 불러오기</string>
+    <string name="opt_restore_always">항상 탭 복원하기</string>
+    <string name="opt_restore_never">복원하지 않음</string>
+
+    <string name="opt_hist_10">10개</string>
+    <string name="opt_hist_20">20개</string>
+    <string name="opt_hist_50">50개</string>
+    <string name="opt_hist_unlimited">제한 없음</string>
+
+    <string name="opt_icons_snapshots">화면 스냅샷 (썸네일)</string>
+    <string name="opt_icons_favicons">파비콘 (아이콘)</string>
+
+    <string name="opt_extract_ask">재생 시 확인</string>
+    <string name="opt_extract_always">항상 내장 플레이어로 재생</string>
+    <string name="opt_extract_never">내장 플레이어 미사용 (웹 브라우저 유지)</string>
+
+    <string name="opt_fallback_ask">전환 여부 확인</string>
+    <string name="opt_fallback_always">항상 브라우저로 전환</string>
+    <string name="opt_fallback_never">전환하지 않음</string>
+
+    <string name="opt_skip_skip">자동 건너뛰기</string>
+    <string name="opt_skip_ask">건너뛰기 여부 확인</string>
+    <string name="opt_skip_ignore">무시</string>
+
+    <string name="opt_up_next_ask">다음 화 재생 여부 묻기</string>
+    <string name="opt_up_next_always">항상 자동으로 즉시 재생</string>
+    <string name="opt_up_next_never">안내 화면 띄우지 않음</string>
+
+    <string name="opt_autoplay_closest">동일 호스트의 가장 근접한 소스</string>
+    <string name="opt_autoplay_best">최고 화질 소스</string>
+    <string name="opt_autoplay_ask">선택창 띄우기</string>
+
+    <string name="opt_focus_next_watched">최근 시청한 화의 다음 화</string>
+    <string name="opt_focus_first_unwatched">아직 보지 않은 첫 번째 화</string>
+
+    <string name="opt_nav_pointer">가상 포인터 (마우스 커서)</string>
+    <string name="opt_nav_dpad">방향키 대상 이동 (D-pad)</string>
+
+    <string name="opt_scrape_web_torrents">웹, 토렌트</string>
+    <string name="opt_scrape_torrents_web">토렌트, 웹</string>
+
+    <string name="opt_hw_auto">자동 감지 (권장)</string>
+    <string name="opt_hw_always">항상 활성화</string>
+    <string name="opt_hw_disabled">비활성화 (TV 리모컨 전용 모드)</string>
+
+    <string name="opt_thumb_portrait">세로형 (2:3) [기본]</string>
+    <string name="opt_thumb_landscape">가로형 (16:9)</string>
+
+    <string name="opt_timeout_global">전체 타임아웃만 적용</string>
+    <string name="opt_timeout_source">소스별 타임아웃만 적용</string>
+    <string name="opt_timeout_both">두 타임아웃 모두 적용</string>
+
+    <string name="opt_sub_engine_native">기본 (자막 변경 시 재로딩 필요)</string>
+    <string name="opt_sub_engine_overlay">커스텀 오버레이 (딜레이 없음)</string>
+
+    <string name="opt_sub_behavior_ask">검색 여부 확인</string>
+    <string name="opt_sub_behavior_auto">자동으로 검색</string>
+    <string name="opt_sub_behavior_never">검색하지 않음</string>
+
+    <string name="opt_sub_count_other">직접 입력</string>
+    <string name="opt_sub_count_all">모두</string>
+
+    <string name="opt_sub_launch_stop">즉시 다운로드 중단</string>
+    <string name="opt_sub_launch_ask">대기 여부 확인</string>
+    <string name="opt_sub_launch_background">백그라운드에서 다운로드 유지</string>
+
+    <string name="opt_retention_indefinite">영구 보관</string>
+    <string name="opt_retention_1d">1일</string>
+    <string name="opt_retention_3d">3일</string>
+    <string name="opt_retention_7d">7일</string>
+    <string name="opt_retention_14d">14일</string>
+    <string name="opt_retention_30d">30일</string>
+
+    <string name="opt_prebuffer_1">1개 조각 (가장 빠름 / 기본값)</string>
+    <string name="opt_prebuffer_2">2개 조각</string>
+    <string name="opt_prebuffer_4">4개 조각 (표준)</string>
+    <string name="opt_prebuffer_8">8개 조각 (가장 안정적)</string>
+
+    <string name="opt_clean_manual">수동으로만</string>
+    <string name="opt_clean_new_torrent">새 토렌트 시작 시마다</string>
+    <string name="opt_clean_exit">비디오 종료 시마다</string>
+    <string name="opt_clean_days">지정된 일수마다</string>
+
+    <!-- TMDb Genres -->
+    <string name="genre_action">액션</string>
+    <string name="genre_adventure">모험</string>
+    <string name="genre_animation">애니메이션</string>
+    <string name="genre_comedy">코미디</string>
+    <string name="genre_crime">범죄</string>
+    <string name="genre_documentary">다큐멘터리</string>
+    <string name="genre_drama">드라마</string>
+    <string name="genre_family">가족</string>
+    <string name="genre_fantasy">판타지</string>
+    <string name="genre_history">역사</string>
+    <string name="genre_horror">공포</string>
+    <string name="genre_music">음악</string>
+    <string name="genre_mystery">미스터리</string>
+    <string name="genre_romance">로맨스</string>
+    <string name="genre_scifi">SF</string>
+    <string name="genre_tv_movie">TV 영화</string>
+    <string name="genre_thriller">스릴러</string>
+    <string name="genre_war">전쟁</string>
+    <string name="genre_western">서부극</string>
+    <string name="genre_action_adventure">액션 &amp; 어드벤처</string>
+    <string name="genre_kids">어린이</string>
+    <string name="genre_news">뉴스</string>
+    <string name="genre_reality">리얼리티</string>
+    <string name="genre_scifi_fantasy">SF &amp; 판타지</string>
+    <string name="genre_soap">일일드라마</string>
+    <string name="genre_talk">토크쇼</string>
+    <string name="genre_war_politics">전쟁 &amp; 정치</string>
+
+    <string name="opt_system_default">시스템 기본값</string>
+    <string name="opt_follow_app_language">앱 언어 따르기 (기본값)</string>
+    <string name="setting_action_mode">동작 모드</string>
+    <string name="opt_action_custom_script">사용자 지정 스크립트</string>
+    <string name="opt_action_simple_elements">단순 요소 목록</string>
+    <string name="label_javascript_action">자바스크립트 동작</string>
+</resources>

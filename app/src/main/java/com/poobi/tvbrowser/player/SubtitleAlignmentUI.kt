@@ -21,11 +21,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.TvFocusableBox
 import com.poobi.tvbrowser.shared.TvInputField
 import kotlinx.coroutines.delay
@@ -141,14 +143,14 @@ fun SubtitleAlignmentOverlay(
                             .padding(24.dp)
                     ) {
                         Text(
-                            text = "Subtitle Synchronizer",
+                            text = stringResource(R.string.sub_sync_title),
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
 
                         Text(
-                            text = "Current Offset: ${offsetMs}ms",
+                            text = stringResource(R.string.sub_sync_offset, offsetMs),
                             color = Color(0xFF00BCD4),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
@@ -167,7 +169,7 @@ fun SubtitleAlignmentOverlay(
                             onClick = { screen = AlignmentScreen.Waveform }
                         ) { isFocused ->
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Visual Timeline Alignment", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(stringResource(R.string.sub_sync_btn_visual), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
                         }
 
@@ -182,7 +184,7 @@ fun SubtitleAlignmentOverlay(
                             onClick = { screen = AlignmentScreen.Search }
                         ) { isFocused ->
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Search Spoken Words", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(stringResource(R.string.sub_sync_btn_search), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
                         }
 
@@ -197,7 +199,7 @@ fun SubtitleAlignmentOverlay(
                             onClick = { manager.setOffset(0L) }
                         ) { isFocused ->
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Reset Timing", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(stringResource(R.string.sub_sync_btn_reset), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
                         }
 
@@ -213,7 +215,7 @@ fun SubtitleAlignmentOverlay(
                             onClick = { onDismiss() }
                         ) { isFocused ->
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Exit", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(stringResource(R.string.sub_sync_btn_exit), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
                         }
                     }
@@ -236,14 +238,14 @@ fun SubtitleAlignmentOverlay(
                             .padding(24.dp)
                     ) {
                         Text(
-                            text = "Search Dialogue Cue",
+                            text = stringResource(R.string.sub_search_title),
                             color = Color.White,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
 
                         Text(
-                            text = "Enter search words to jump closer to target audio sequences.",
+                            text = stringResource(R.string.sub_search_desc),
                             color = Color.Gray,
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center
@@ -252,7 +254,7 @@ fun SubtitleAlignmentOverlay(
                         TvInputField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = "e.g. jumped off",
+                            placeholder = stringResource(R.string.sub_search_placeholder),
                             focusRequester = focusRequester,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -287,7 +289,7 @@ fun SubtitleAlignmentOverlay(
                                 }
                             ) { isFocused ->
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("Search & Align", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text(stringResource(R.string.sub_search_btn_align), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                 }
                             }
 
@@ -301,7 +303,7 @@ fun SubtitleAlignmentOverlay(
                                 onClick = { screen = AlignmentScreen.Menu }
                             ) { isFocused ->
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("Back", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text(stringResource(R.string.btn_back), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                 }
                             }
                         }
@@ -384,7 +386,7 @@ fun WaveformAlignmentLayout(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Waveform Alignment Timeline",
+                text = stringResource(R.string.sub_waveform_title),
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
@@ -410,8 +412,9 @@ fun WaveformAlignmentLayout(
                 .padding(horizontal = 8.dp, vertical = 2.dp),
             contentAlignment = Alignment.Center
         ) {
+            val silenceText = stringResource(R.string.sub_waveform_silence)
             Text(
-                text = (activeCue?.text ?: "[ Silence ]").replace("\n", " "),
+                text = (activeCue?.text ?: silenceText).replace("\n", " "),
                 color = if (activeCue != null) Color.White else Color.Gray,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
@@ -598,13 +601,13 @@ fun WaveformAlignmentLayout(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "Timeline Offset: ${offsetMs}ms",
+                        text = stringResource(R.string.sub_waveform_offset, offsetMs),
                         color = if (isFocused) Color(0xFF00BCD4) else Color(0xFFFFB74D),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (isFocused) "◀ Press D-pad Left / Right to shift subtitle blocks relative to Playhead ▶" else "Select to adjust subtitle blocks",
+                        text = if (isFocused) stringResource(R.string.sub_waveform_hint_focused) else stringResource(R.string.sub_waveform_hint_unfocused),
                         color = Color.Gray,
                         fontSize = 10.sp
                     )
@@ -622,7 +625,7 @@ fun WaveformAlignmentLayout(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (isLooping) "Looping segment..." else "Playback running...",
+                text = if (isLooping) stringResource(R.string.sub_waveform_looping) else stringResource(R.string.sub_waveform_playback_running),
                 color = Color.Gray,
                 fontSize = 11.sp
             )
@@ -647,7 +650,7 @@ fun WaveformAlignmentLayout(
                 ) { isFocused ->
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = if (isLooping) "Stop Loop" else "Loop Track",
+                            text = if (isLooping) stringResource(R.string.sub_waveform_stop_loop) else stringResource(R.string.sub_waveform_loop_track),
                             color = if (isFocused) Color.Black else Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
@@ -669,7 +672,7 @@ fun WaveformAlignmentLayout(
                     onClick = { manager.confirmChanges() }
                 ) { isFocused ->
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Apply", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(stringResource(R.string.btn_apply), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
 
@@ -686,7 +689,7 @@ fun WaveformAlignmentLayout(
                     onClick = { manager.cancelChanges() }
                 ) { isFocused ->
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Cancel", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(stringResource(R.string.btn_cancel), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             }

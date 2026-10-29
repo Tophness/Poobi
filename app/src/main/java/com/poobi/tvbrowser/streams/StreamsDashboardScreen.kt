@@ -67,44 +67,85 @@ fun StreamsDashboardScreen(
         } catch (_: Exception) { false }
     }
 
-    val forYouPills = remember(isTraktAuthed) {
-        val list = mutableListOf<Triple<String, Boolean, () -> Unit>>()
-        if (viewModel.prefs.getBoolean("feed_for_you_favorites", true)) list.add(Triple("Favourites", false, { viewModel.loadFavorites() }))
-        if (viewModel.prefs.getBoolean("feed_for_you_recents", true)) list.add(Triple("Recently Watched", false, { viewModel.loadRecentlyPlayed() }))
-        if (viewModel.prefs.getBoolean("feed_for_you_unfinished", true)) list.add(Triple("Unfinished Shows", false, { viewModel.loadUnfinishedShows() }))
-        if (viewModel.prefs.getBoolean("feed_for_you_because", true)) list.add(Triple("Because You Watched", false, { viewModel.loadBecauseYouWatched() }))
-        if (viewModel.prefs.getBoolean("feed_for_you_spotlight", true)) list.add(Triple("Cast in Spotlight", false, { viewModel.loadCastInSpotlight() }))
+    data class DashboardPill(
+        val id: String,
+        val title: String,
+        val isTrakt: Boolean = false,
+        val action: () -> Unit
+    )
+
+    val forYouPills = remember(isTraktAuthed, context) {
+        val list = mutableListOf<DashboardPill>()
+        if (viewModel.prefs.getBoolean("feed_for_you_favorites", true)) {
+            list.add(DashboardPill("favorites", context.getString(R.string.pill_favourites), false) { viewModel.loadFavorites() })
+        }
+        if (viewModel.prefs.getBoolean("feed_for_you_recents", true)) {
+            list.add(DashboardPill("recents", context.getString(R.string.pill_recents), false) { viewModel.loadRecentlyPlayed() })
+        }
+        if (viewModel.prefs.getBoolean("feed_for_you_unfinished", true)) {
+            list.add(DashboardPill("unfinished", context.getString(R.string.pill_unfinished), false) { viewModel.loadUnfinishedShows() })
+        }
+        if (viewModel.prefs.getBoolean("feed_for_you_because", true)) {
+            list.add(DashboardPill("because_watched", context.getString(R.string.pill_because_watched), false) { viewModel.loadBecauseYouWatched() })
+        }
+        if (viewModel.prefs.getBoolean("feed_for_you_spotlight", true)) {
+            list.add(DashboardPill("spotlight", context.getString(R.string.pill_cast_spotlight), false) { viewModel.loadCastInSpotlight() })
+        }
 
         val traktEnabled = viewModel.prefs.getBoolean("feed_for_you_trakt", true)
         if (traktEnabled) {
-            if (viewModel.prefs.getBoolean("feed_trakt_watched", true)) list.add(Triple("Most Watched", true, { viewModel.loadTraktFeed("trakt_watched_weekly", "watched") }))
-            if (viewModel.prefs.getBoolean("feed_trakt_anticipated", true)) list.add(Triple("Anticipated", true, { viewModel.loadTraktFeed("trakt_anticipated", "anticipated") }))
-            if (viewModel.prefs.getBoolean("feed_trakt_collected", true)) list.add(Triple("Most Collected", true, { viewModel.loadTraktFeed("trakt_collected", "collected") }))
+            if (viewModel.prefs.getBoolean("feed_trakt_watched", true)) {
+                list.add(DashboardPill("trakt_watched", context.getString(R.string.pill_trakt_watched), true) { viewModel.loadTraktFeed("trakt_watched_weekly", "watched") })
+            }
+            if (viewModel.prefs.getBoolean("feed_trakt_anticipated", true)) {
+                list.add(DashboardPill("trakt_anticipated", context.getString(R.string.pill_trakt_anticipated), true) { viewModel.loadTraktFeed("trakt_anticipated", "anticipated") })
+            }
+            if (viewModel.prefs.getBoolean("feed_trakt_collected", true)) {
+                list.add(DashboardPill("trakt_collected", context.getString(R.string.pill_trakt_collected), true) { viewModel.loadTraktFeed("trakt_collected", "collected") })
+            }
 
             if (isTraktAuthed) {
-                if (viewModel.prefs.getBoolean("feed_trakt_watchlist", true)) list.add(Triple("Watchlist", true, { viewModel.loadTraktFeed("trakt_user_watchlist", "watchlist") }))
-                if (viewModel.prefs.getBoolean("feed_trakt_recommendations", true)) list.add(Triple("For Me", true, { viewModel.loadTraktFeed("trakt_user_recs", "recommendations") }))
+                if (viewModel.prefs.getBoolean("feed_trakt_watchlist", true)) {
+                    list.add(DashboardPill("trakt_watchlist", context.getString(R.string.pill_trakt_watchlist), true) { viewModel.loadTraktFeed("trakt_user_watchlist", "watchlist") })
+                }
+                if (viewModel.prefs.getBoolean("feed_trakt_recommendations", true)) {
+                    list.add(DashboardPill("trakt_for_me", context.getString(R.string.pill_trakt_recommendations), true) { viewModel.loadTraktFeed("trakt_user_recs", "recommendations") })
+                }
             }
         }
         list
     }
 
-    val moviesPills = remember {
-        val list = mutableListOf<Triple<String, Boolean, () -> Unit>>()
-        if (viewModel.prefs.getBoolean("feed_movies_trending_today", true)) list.add(Triple("Trending Today", false, { viewModel.loadLibraryCategory("Trending Today", "get_trending", "movie") }))
-        if (viewModel.prefs.getBoolean("feed_movies_trending_week", true)) list.add(Triple("Trending This Week", false, { viewModel.loadLibraryCategory("Trending Week", "get_trending_week", "movie") }))
-        if (viewModel.prefs.getBoolean("feed_movies_in_cinemas", true)) list.add(Triple("In Cinemas", false, { viewModel.loadLibraryCategory("In Cinemas", "get_movies_in_cinemas") }))
-        if (viewModel.prefs.getBoolean("feed_movies_upcoming", true)) list.add(Triple("Upcoming", false, { viewModel.loadLibraryCategory("Upcoming", "get_upcoming_movies") }))
-        if (viewModel.prefs.getBoolean("feed_movies_popular", true)) list.add(Triple("Popular", false, { viewModel.loadLibraryCategory("Popular", "get_popular", "movie") }))
-        if (viewModel.prefs.getBoolean("feed_movies_top_rated", true)) list.add(Triple("Top Rated", false, { viewModel.loadLibraryCategory("Top Rated", "get_top_rated", "movie") }))
-        if (viewModel.prefs.getBoolean("feed_movies_hidden_gems", true)) list.add(Triple("Hidden Gems", false, {
-            val params = JSONObject().apply {
-                put("vote_average.gte", 7.8)
-                put("vote_count.gte", 300)
-                put("sort_by", "vote_average.desc")
-            }
-            viewModel.loadDiscoverCategory("discover_movie_hidden_gems", true, params)
-        }))
+    val moviesPills = remember(context) {
+        val list = mutableListOf<DashboardPill>()
+        if (viewModel.prefs.getBoolean("feed_movies_trending_today", true)) {
+            list.add(DashboardPill("trending_today", context.getString(R.string.pill_trending_today), false) { viewModel.loadLibraryCategory("Trending Today", "get_trending", "movie") })
+        }
+        if (viewModel.prefs.getBoolean("feed_movies_trending_week", true)) {
+            list.add(DashboardPill("trending_week", context.getString(R.string.pill_trending_week), false) { viewModel.loadLibraryCategory("Trending Week", "get_trending_week", "movie") })
+        }
+        if (viewModel.prefs.getBoolean("feed_movies_in_cinemas", true)) {
+            list.add(DashboardPill("in_cinemas", context.getString(R.string.pill_in_cinemas), false) { viewModel.loadLibraryCategory("In Cinemas", "get_movies_in_cinemas") })
+        }
+        if (viewModel.prefs.getBoolean("feed_movies_upcoming", true)) {
+            list.add(DashboardPill("upcoming", context.getString(R.string.pill_upcoming), false) { viewModel.loadLibraryCategory("Upcoming", "get_upcoming_movies") })
+        }
+        if (viewModel.prefs.getBoolean("feed_movies_popular", true)) {
+            list.add(DashboardPill("popular", context.getString(R.string.pill_popular), false) { viewModel.loadLibraryCategory("Popular", "get_popular", "movie") })
+        }
+        if (viewModel.prefs.getBoolean("feed_movies_top_rated", true)) {
+            list.add(DashboardPill("top_rated", context.getString(R.string.pill_top_rated), false) { viewModel.loadLibraryCategory("Top Rated", "get_top_rated", "movie") })
+        }
+        if (viewModel.prefs.getBoolean("feed_movies_hidden_gems", true)) {
+            list.add(DashboardPill("hidden_gems", context.getString(R.string.pill_hidden_gems), false) {
+                val params = JSONObject().apply {
+                    put("vote_average.gte", 7.8)
+                    put("vote_count.gte", 300)
+                    put("sort_by", "vote_average.desc")
+                }
+                viewModel.loadDiscoverCategory("discover_movie_hidden_gems", true, params)
+            })
+        }
 
         val movieGenres = listOf(
             "Action" to 28, "Adventure" to 12, "Animation" to 16, "Comedy" to 35,
@@ -115,25 +156,36 @@ fun StreamsDashboardScreen(
         )
         movieGenres.forEach { (genreName, genreId) ->
             if (viewModel.prefs.getBoolean("genre_movie_$genreId", true)) {
-                list.add(Triple(genreName, false, {
+                val localizedGenre = com.poobi.tvbrowser.shared.TmdbGenres.getGenreName(context, genreId) ?: genreName
+                list.add(DashboardPill("genre_movie_$genreId", localizedGenre, false) {
                     val p = JSONObject().apply {
                         put("with_genres", genreId)
                         put("sort_by", "popularity.desc")
                     }
                     viewModel.loadDiscoverCategory("discover_movie_genre_$genreId", true, p)
-                }))
+                })
             }
         }
         list
     }
 
-    val tvShowsPills = remember {
-        val list = mutableListOf<Triple<String, Boolean, () -> Unit>>()
-        if (viewModel.prefs.getBoolean("feed_tv_popular", true)) list.add(Triple("Popular TV", false, { viewModel.loadLibraryCategory("Popular TV", "get_popular", "tv") }))
-        if (viewModel.prefs.getBoolean("feed_tv_trending_week", true)) list.add(Triple("Trending This Week", false, { viewModel.loadLibraryCategory("Trending TV Week", "get_trending_week", "tv") }))
-        if (viewModel.prefs.getBoolean("feed_tv_airing_today", true)) list.add(Triple("Airing Today", false, { viewModel.loadLibraryCategory("Airing Today", "get_airing_today") }))
-        if (viewModel.prefs.getBoolean("feed_tv_airing_week", true)) list.add(Triple("Airing This Week", false, { viewModel.loadLibraryCategory("Airing This Week", "get_on_the_air") }))
-        if (viewModel.prefs.getBoolean("feed_tv_top_rated", true)) list.add(Triple("Top Rated TV", false, { viewModel.loadLibraryCategory("Top Rated TV", "get_top_rated_tv") }))
+    val tvShowsPills = remember(context) {
+        val list = mutableListOf<DashboardPill>()
+        if (viewModel.prefs.getBoolean("feed_tv_popular", true)) {
+            list.add(DashboardPill("popular_tv", context.getString(R.string.pill_popular_tv), false) { viewModel.loadLibraryCategory("Popular TV", "get_popular", "tv") })
+        }
+        if (viewModel.prefs.getBoolean("feed_tv_trending_week", true)) {
+            list.add(DashboardPill("trending_tv_week", context.getString(R.string.pill_trending_tv_week), false) { viewModel.loadLibraryCategory("Trending TV Week", "get_trending_week", "tv") })
+        }
+        if (viewModel.prefs.getBoolean("feed_tv_airing_today", true)) {
+            list.add(DashboardPill("airing_today", context.getString(R.string.pill_airing_today), false) { viewModel.loadLibraryCategory("Airing Today", "get_airing_today") })
+        }
+        if (viewModel.prefs.getBoolean("feed_tv_airing_week", true)) {
+            list.add(DashboardPill("airing_week", context.getString(R.string.pill_airing_week), false) { viewModel.loadLibraryCategory("Airing This Week", "get_on_the_air") })
+        }
+        if (viewModel.prefs.getBoolean("feed_tv_top_rated", true)) {
+            list.add(DashboardPill("top_rated_tv", context.getString(R.string.pill_top_rated_tv), false) { viewModel.loadLibraryCategory("Top Rated TV", "get_top_rated_tv") })
+        }
 
         val tvGenres = listOf(
             "Action & Adventure" to 10759, "Animation" to 16, "Comedy" to 35, "Crime" to 80,
@@ -143,20 +195,21 @@ fun StreamsDashboardScreen(
         )
         tvGenres.forEach { (genreName, genreId) ->
             if (viewModel.prefs.getBoolean("genre_tv_$genreId", true)) {
-                list.add(Triple(genreName, false, {
+                val localizedGenre = com.poobi.tvbrowser.shared.TmdbGenres.getGenreName(context, genreId) ?: genreName
+                list.add(DashboardPill("genre_tv_$genreId", localizedGenre, false) {
                     val p = JSONObject().apply {
                         put("with_genres", genreId)
                         put("sort_by", "popularity.desc")
                     }
                     viewModel.loadDiscoverCategory("discover_tv_genre_$genreId", false, p)
-                }))
+                })
             }
         }
         list
     }
 
-    val discoverPills = remember {
-        val list = mutableListOf<Triple<String, Boolean, () -> Unit>>()
+    val discoverPills = remember(context) {
+        val list = mutableListOf<DashboardPill>()
         val platforms = listOf(
             "Netflix" to (8 to true),
             "Disney+" to (337 to true),
@@ -167,71 +220,79 @@ fun StreamsDashboardScreen(
         platforms.forEach { (name, info) ->
             val (providerId, isMovie) = info
             if (viewModel.prefs.getBoolean("feed_platform_$providerId", true)) {
-                list.add(Triple(name, false, {
+                list.add(DashboardPill("discover_platform_$providerId", name, false) {
                     val p = JSONObject().apply {
                         put("with_watch_providers", providerId)
                         put("watch_region", "US")
                         put("sort_by", "popularity.desc")
                     }
                     viewModel.loadDiscoverCategory("discover_platform_$providerId", isMovie, p)
-                }))
+                })
             }
         }
 
         val eras = listOf(
-            "2000s Hits" to (2000 to 2009),
-            "90s Nostalgia" to (1990 to 1999),
-            "80s Classics" to (1980 to 1989),
-            "70s Cinema" to (1970 to 1979)
+            context.getString(R.string.pill_era_2000s) to (2000 to 2009),
+            context.getString(R.string.pill_era_90s) to (1990 to 1999),
+            context.getString(R.string.pill_era_80s) to (1980 to 1989),
+            context.getString(R.string.pill_era_70s) to (1970 to 1979)
         )
         eras.forEach { (eraName, range) ->
             if (viewModel.prefs.getBoolean("feed_era_${range.first}", true)) {
-                list.add(Triple(eraName, false, {
+                list.add(DashboardPill("discover_era_${range.first}", eraName, false) {
                     val p = JSONObject().apply {
                         put("primary_release_date.gte", "${range.first}-01-01")
                         put("primary_release_date.lte", "${range.second}-12-31")
                         put("sort_by", "popularity.desc")
                     }
                     viewModel.loadDiscoverCategory("discover_era_${range.first}", true, p)
-                }))
+                })
             }
         }
 
-        if (viewModel.prefs.getBoolean("feed_world_anime", true)) list.add(Triple("Anime", false, {
-            val p = JSONObject().apply {
-                put("with_genres", 16)
-                put("with_original_language", "ja")
-                put("sort_by", "popularity.desc")
-            }
-            viewModel.loadDiscoverCategory("discover_anime", false, p)
-        }))
+        if (viewModel.prefs.getBoolean("feed_world_anime", true)) {
+            list.add(DashboardPill("discover_anime", context.getString(R.string.pill_anime), false) {
+                val p = JSONObject().apply {
+                    put("with_genres", 16)
+                    put("with_original_language", "ja")
+                    put("sort_by", "popularity.desc")
+                }
+                viewModel.loadDiscoverCategory("discover_anime", false, p)
+            })
+        }
 
-        if (viewModel.prefs.getBoolean("feed_world_kdrama", true)) list.add(Triple("K-Dramas", false, {
-            val p = JSONObject().apply {
-                put("with_origin_country", "KR")
-                put("sort_by", "popularity.desc")
-            }
-            viewModel.loadDiscoverCategory("discover_kdrama", false, p)
-        }))
+        if (viewModel.prefs.getBoolean("feed_world_kdrama", true)) {
+            list.add(DashboardPill("discover_kdrama", context.getString(R.string.pill_kdrama), false) {
+                val p = JSONObject().apply {
+                    put("with_origin_country", "KR")
+                    put("sort_by", "popularity.desc")
+                }
+                viewModel.loadDiscoverCategory("discover_kdrama", false, p)
+            })
+        }
 
-        if (viewModel.prefs.getBoolean("feed_world_british", true)) list.add(Triple("British Mysteries", false, {
-            val p = JSONObject().apply {
-                put("with_origin_country", "GB")
-                put("with_genres", "18,9648")
-                put("sort_by", "popularity.desc")
-            }
-            viewModel.loadDiscoverCategory("discover_british", false, p)
-        }))
+        if (viewModel.prefs.getBoolean("feed_world_british", true)) {
+            list.add(DashboardPill("discover_british", context.getString(R.string.pill_british_mysteries), false) {
+                val p = JSONObject().apply {
+                    put("with_origin_country", "GB")
+                    put("with_genres", "18,9648")
+                    put("sort_by", "popularity.desc")
+                }
+                viewModel.loadDiscoverCategory("discover_british", false, p)
+            })
+        }
 
-        if (viewModel.prefs.getBoolean("feed_curated_cult", true)) list.add(Triple("Cult Classics", false, {
-            val p = JSONObject().apply {
-                put("primary_release_date.lte", "2010-01-01")
-                put("vote_average.gte", 7.5)
-                put("vote_count.gte", 200)
-                put("sort_by", "popularity.desc")
-            }
-            viewModel.loadDiscoverCategory("discover_cult_classics", true, p)
-        }))
+        if (viewModel.prefs.getBoolean("feed_curated_cult", true)) {
+            list.add(DashboardPill("discover_cult", context.getString(R.string.pill_cult_classics), false) {
+                val p = JSONObject().apply {
+                    put("primary_release_date.lte", "2010-01-01")
+                    put("vote_average.gte", 7.5)
+                    put("vote_count.gte", 200)
+                    put("sort_by", "popularity.desc")
+                }
+                viewModel.loadDiscoverCategory("discover_cult_classics", true, p)
+            })
+        }
         list
     }
 
@@ -240,10 +301,10 @@ fun StreamsDashboardScreen(
     val tvShowsPillTitle by viewModel.tvShowsPillTitle.collectAsState()
     val discoverPillTitle by viewModel.discoverPillTitle.collectAsState()
 
-    val forYouActiveIndex = forYouPills.indexOfFirst { it.first == forYouPillTitle }.coerceAtLeast(0)
-    val moviesActiveIndex = moviesPills.indexOfFirst { it.first == moviesPillTitle }.coerceAtLeast(0)
-    val tvShowsActiveIndex = tvShowsPills.indexOfFirst { it.first == tvShowsPillTitle }.coerceAtLeast(0)
-    val discoverActiveIndex = discoverPills.indexOfFirst { it.first == discoverPillTitle }.coerceAtLeast(0)
+    val forYouActiveIndex = forYouPills.indexOfFirst { it.id == forYouPillTitle || it.title == forYouPillTitle }.coerceAtLeast(0)
+    val moviesActiveIndex = moviesPills.indexOfFirst { it.id == moviesPillTitle || it.title == moviesPillTitle }.coerceAtLeast(0)
+    val tvShowsActiveIndex = tvShowsPills.indexOfFirst { it.id == tvShowsPillTitle || it.title == tvShowsPillTitle }.coerceAtLeast(0)
+    val discoverActiveIndex = discoverPills.indexOfFirst { it.id == discoverPillTitle || it.title == discoverPillTitle }.coerceAtLeast(0)
 
     val currentPills = when (activeCategoryIndex) {
         1 -> forYouPills
@@ -265,16 +326,16 @@ fun StreamsDashboardScreen(
     val bottomSubPillFocusRequester = remember { FocusRequester() }
 
     val categories = listOf(
-        "Search" to { viewModel.loadSearchHistory() },
-        "For You" to { forYouPills.getOrNull(forYouActiveIndex)?.third?.invoke() ?: viewModel.loadFavorites() },
-        "Movies" to { moviesPills.getOrNull(moviesActiveIndex)?.third?.invoke() ?: viewModel.loadLibraryCategory("Trending Today", "get_trending", "movie") },
-        "TV Shows" to { tvShowsPills.getOrNull(tvShowsActiveIndex)?.third?.invoke() ?: viewModel.loadLibraryCategory("Popular TV", "get_popular", "tv") },
-        "Discover" to { discoverPills.getOrNull(discoverActiveIndex)?.third?.invoke() }
+        androidx.compose.ui.res.stringResource(R.string.feed_search) to { viewModel.loadSearchHistory() },
+        androidx.compose.ui.res.stringResource(R.string.feed_for_you) to { forYouPills.getOrNull(forYouActiveIndex)?.action?.invoke() ?: viewModel.loadFavorites() },
+        androidx.compose.ui.res.stringResource(R.string.feed_movies) to { moviesPills.getOrNull(moviesActiveIndex)?.action?.invoke() ?: viewModel.loadLibraryCategory("Trending Today", "get_trending", "movie") },
+        androidx.compose.ui.res.stringResource(R.string.feed_tv_shows) to { tvShowsPills.getOrNull(tvShowsActiveIndex)?.action?.invoke() ?: viewModel.loadLibraryCategory("Popular TV", "get_popular", "tv") },
+        androidx.compose.ui.res.stringResource(R.string.feed_discover) to { discoverPills.getOrNull(discoverActiveIndex)?.action?.invoke() }
     )
 
-    val activePillTitle = currentPills.getOrNull(currentActivePillIndex)?.first ?: ""
-    val isFavorites = activeCategoryIndex == 1 && activePillTitle == "Favourites"
-    val isRecentlyWatched = activeCategoryIndex == 1 && activePillTitle == "Recently Watched"
+    val activePillId = currentPills.getOrNull(currentActivePillIndex)?.id ?: ""
+    val isFavorites = activeCategoryIndex == 1 && (activePillId == "favorites" || activePillId == "Favourites")
+    val isRecentlyWatched = activeCategoryIndex == 1 && (activePillId == "recents" || activePillId == "Recently Watched")
 
     val defaultSort = when {
         isFavorites -> "Last Added"
@@ -465,7 +526,7 @@ fun StreamsDashboardScreen(
                         searchInput = it
                         viewModel.updateLiveSearch(it)
                     },
-                    placeholder = "Search Movie or TV Show...",
+                    placeholder = androidx.compose.ui.res.stringResource(R.string.search_movie_tv_placeholder),
                     predictedSuffix = predictedSuffix,
                     onAcceptPrediction = {
                         if (predictedSuffix.isNotEmpty()) {
@@ -521,7 +582,7 @@ fun StreamsDashboardScreen(
             if (searchResults == null && liveSuggestions.isEmpty() && searchHistory.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Recent Searches", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text(androidx.compose.ui.res.stringResource(R.string.dashboard_recent_searches), color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     
                     TvFocusableBox(
                         modifier = Modifier.height(36.dp),
@@ -532,7 +593,7 @@ fun StreamsDashboardScreen(
                             modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp)
                         ) {
                             Text(
-                                text = "Clear All",
+                                text = androidx.compose.ui.res.stringResource(R.string.btn_clear_all),
                                 color = if (isFocused) Color.Black else Color.White,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
@@ -874,7 +935,7 @@ fun StreamsDashboardScreen(
 
                     if (objList.isEmpty()) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Text("No items found", color = Color.Gray, fontSize = 16.sp)
+                            Text(androidx.compose.ui.res.stringResource(R.string.dashboard_no_items), color = Color.Gray, fontSize = 16.sp)
                         }
                     } else {
                         Box(modifier = Modifier.fillMaxSize()) {
@@ -1079,23 +1140,23 @@ fun StreamsDashboardScreen(
                         onClick = {
                             if (currentActivePillIndex != pIdx) {
                                 when (activeCategoryIndex) {
-                                    1 -> viewModel.forYouPillTitle.value = pill.first
-                                    2 -> viewModel.moviesPillTitle.value = pill.first
-                                    3 -> viewModel.tvShowsPillTitle.value = pill.first
-                                    4 -> viewModel.discoverPillTitle.value = pill.first
+                                    1 -> viewModel.forYouPillTitle.value = pill.id
+                                    2 -> viewModel.moviesPillTitle.value = pill.id
+                                    3 -> viewModel.tvShowsPillTitle.value = pill.id
+                                    4 -> viewModel.discoverPillTitle.value = pill.id
                                 }
                             }
-                            pill.third()
+                            pill.action()
                         },
                         onFocus = {
                             if (currentActivePillIndex != pIdx) {
                                 when (activeCategoryIndex) {
-                                    1 -> viewModel.forYouPillTitle.value = pill.first
-                                    2 -> viewModel.moviesPillTitle.value = pill.first
-                                    3 -> viewModel.tvShowsPillTitle.value = pill.first
-                                    4 -> viewModel.discoverPillTitle.value = pill.first
+                                    1 -> viewModel.forYouPillTitle.value = pill.id
+                                    2 -> viewModel.moviesPillTitle.value = pill.id
+                                    3 -> viewModel.tvShowsPillTitle.value = pill.id
+                                    4 -> viewModel.discoverPillTitle.value = pill.id
                                 }
-                                pill.third()
+                                pill.action()
                             }
                         }
                     ) { isFocused ->
@@ -1103,7 +1164,7 @@ fun StreamsDashboardScreen(
                             modifier = Modifier.fillMaxHeight().padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (pill.second) {
+                            if (pill.isTrakt) {
                                 androidx.compose.foundation.Image(
                                     painter = painterResource(id = R.drawable.trakt),
                                     contentDescription = "Trakt",
@@ -1115,7 +1176,7 @@ fun StreamsDashboardScreen(
                                 )
                             }
                             Text(
-                                text = pill.first,
+                                text = pill.title,
                                 color = if (isFocused) Color.Black else if (isSelected) Color(0xFF00BCD4) else Color.LightGray,
                                 fontSize = 12.sp,
                                 fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal
@@ -1130,17 +1191,17 @@ fun StreamsDashboardScreen(
     if (showSortDialog) {
         val (dialogTitle, prefsKey, defaultList) = when {
             isFavorites -> Triple(
-                "Favourites Sorter Priorities",
+                context.getString(R.string.sorter_favorites_title),
                 "favorites_sort_priorities",
                 listOf("DATE_ADDED", "DATE_ACCESSED", "A_Z", "RATING")
             )
             isRecentlyWatched -> Triple(
-                "Recently Watched Sorter Priorities",
+                context.getString(R.string.sorter_recent_title),
                 "recent_sort_priorities",
                 listOf("DATE_ACCESSED", "A_Z", "RATING")
             )
             else -> Triple(
-                "Feed Sorter Priorities",
+                context.getString(R.string.sorter_feed_title),
                 "feed_sort_priorities",
                 listOf("FAV_ACTORS", "RATING", "DATE", "A_Z", "DEFAULT")
             )
@@ -1162,13 +1223,13 @@ fun StreamsDashboardScreen(
 
         val getDisplayName = { criteria: String ->
             when (criteria) {
-                "DATE_ADDED", "LAST_ADDED" -> "Date Added"
-                "DATE_ACCESSED", "LAST_ACCESSED" -> "Date Accessed"
-                "A_Z", "A-Z" -> "A-Z (Alphabetical)"
-                "RATING" -> "Rating"
-                "FAV_ACTORS" -> "Favourite Actors"
-                "DATE" -> "Release Date"
-                "DEFAULT" -> "Default Feed Order"
+                "DATE_ADDED", "LAST_ADDED" -> context.getString(R.string.sort_criteria_date_added)
+                "DATE_ACCESSED", "LAST_ACCESSED" -> context.getString(R.string.sort_criteria_date_accessed)
+                "A_Z", "A-Z" -> context.getString(R.string.sort_criteria_az)
+                "RATING" -> context.getString(R.string.sort_criteria_rating)
+                "FAV_ACTORS" -> context.getString(R.string.sort_criteria_fav_actors)
+                "DATE" -> context.getString(R.string.sort_criteria_date)
+                "DEFAULT" -> context.getString(R.string.sort_criteria_default)
                 else -> criteria
             }
         }
@@ -1252,7 +1313,19 @@ fun StreamsDashboardScreen(
                     onClick = { showSortDialog = false }
                 ) { isFocused ->
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Apply", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_apply), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            dismissButton = {
+                TvFocusableBox(
+                    modifier = Modifier.height(40.dp).width(90.dp),
+                    defaultColor = Color(0xFF333338),
+                    shape = RoundedCornerShape(20.dp),
+                    onClick = { showSortDialog = false }
+                ) { isFocused ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_cancel), color = if (isFocused) Color.Black else Color.White)
                     }
                 }
             }

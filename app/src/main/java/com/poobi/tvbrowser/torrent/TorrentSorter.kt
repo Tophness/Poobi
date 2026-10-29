@@ -26,21 +26,13 @@ class TorrentSorter(
         )
 
         fun matchesPreferredLanguage(title: String, data: JSONObject, preferredLanguage: String): Boolean {
-            val langCode = when (preferredLanguage.lowercase()) {
-                "english" -> "en"
-                "russian" -> "ru"
-                "spanish" -> "es"
-                "portuguese" -> "pt"
-                "italian" -> "it"
-                "french" -> "fr"
-                "german" -> "de"
-                "polish" -> "pl"
-                "hindi" -> "hi"
-                else -> "en"
+            val lang = LanguageHelper.findLanguage(preferredLanguage)
+            val dataLang = data.optString("language", "").lowercase().trim()
+            if (dataLang.isNotEmpty()) {
+                if (dataLang == lang.code || dataLang == lang.iso3 || lang.altIso3.contains(dataLang)) {
+                    return true
+                }
             }
-            val dataLang = data.optString("language", "").lowercase()
-            if (dataLang == langCode) return true
-            
             val keywords = LanguageHelper.getPrioritizationKeywords(preferredLanguage)
             return keywords.any { title.contains(it, ignoreCase = true) }
         }

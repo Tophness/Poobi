@@ -113,13 +113,17 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _activeCategoryIndex = MutableStateFlow(0)
     val activeCategoryIndex: StateFlow<Int> = _activeCategoryIndex.asStateFlow()
 
-    val forYouPillTitle = MutableStateFlow("Favourites")
-    val moviesPillTitle = MutableStateFlow("Trending Today")
-    val tvShowsPillTitle = MutableStateFlow("Popular TV")
-    val discoverPillTitle = MutableStateFlow("Netflix")
+    val forYouPillTitle = MutableStateFlow("favorites")
+    val moviesPillTitle = MutableStateFlow("trending_today")
+    val tvShowsPillTitle = MutableStateFlow("popular_tv")
+    val discoverPillTitle = MutableStateFlow("discover_platform_8")
 
     fun selectForYouPill(title: String) {
-        forYouPillTitle.value = title
+        forYouPillTitle.value = when (title.lowercase()) {
+            "favourites", "favorites" -> "favorites"
+            "recently watched", "recents" -> "recents"
+            else -> title
+        }
     }
 
     private val _isScraping = MutableStateFlow(false)
@@ -2675,11 +2679,11 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun filterPersonCredits(filter: String) {
-        personFilterMode.value = filter
-        val filtered = when (filter) {
-            "Movies" -> fullPersonCreditsList.filter { it.optString("media_type") == "movie" }
-            "TV Shows" -> fullPersonCreditsList.filter { it.optString("media_type") == "tv" }
+    fun filterPersonCredits(filterKey: String) {
+        personFilterMode.value = filterKey
+        val filtered = when (filterKey.lowercase()) {
+            "movies", "movie" -> fullPersonCreditsList.filter { it.optString("media_type") == "movie" }
+            "tv shows", "tv" -> fullPersonCreditsList.filter { it.optString("media_type") == "tv" }
             else -> fullPersonCreditsList
         }
         _personCredits.value = filtered

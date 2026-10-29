@@ -25,6 +25,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,7 +41,7 @@ private fun findViewByResourceName(root: android.view.View, name: String): andro
         try {
             val entryName = root.resources.getResourceEntryName(root.id)
             if (entryName == name) return root
-        } catch (e: Exception) {}
+        } catch (_: Exception) {}
     }
     if (root is android.view.ViewGroup) {
         for (i in 0 until root.childCount) {
@@ -435,7 +436,7 @@ fun UpNextOverlay(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "UP NEXT",
+                        text = stringResource(R.string.overlay_up_next),
                         color = if (isFocused) Color(0xFF0D47A1) else Color(0xFF00BCD4),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
@@ -488,10 +489,17 @@ fun SkipSegmentOverlay(
     if (promptData == null) return
 
     val tagText = when (promptData.type) {
-        SkipSegmentType.INTRO -> "SKIP INTRO"
-        SkipSegmentType.RECAP -> "SKIP RECAP"
-        SkipSegmentType.EARLY_CREDITS -> "SKIP OPENING CREDITS"
-        SkipSegmentType.END_CREDITS -> "SKIP CLOSING CREDITS"
+        SkipSegmentType.INTRO -> stringResource(R.string.overlay_skip_intro)
+        SkipSegmentType.RECAP -> stringResource(R.string.overlay_skip_recap)
+        SkipSegmentType.EARLY_CREDITS -> stringResource(R.string.overlay_skip_early_credits)
+        SkipSegmentType.END_CREDITS -> stringResource(R.string.overlay_skip_end_credits)
+    }
+
+    val typeDisplayName = when (promptData.type) {
+        SkipSegmentType.INTRO -> stringResource(R.string.segment_intro)
+        SkipSegmentType.RECAP -> stringResource(R.string.segment_recap)
+        SkipSegmentType.EARLY_CREDITS -> stringResource(R.string.segment_opening_credits)
+        SkipSegmentType.END_CREDITS -> stringResource(R.string.segment_closing_credits)
     }
 
     CollapsiblePromptOverlay(
@@ -533,9 +541,9 @@ fun SkipSegmentOverlay(
                     fontWeight = FontWeight.Bold
                 )
 
-                val remainingSec = ((promptData.endMs - (playerEngine.exoPlayer?.currentPosition ?: promptData.startMs)) / 1000L).coerceAtLeast(1L)
+                val remainingSec = ((promptData.endMs - (playerEngine.exoPlayer?.currentPosition ?: promptData.startMs)) / 1000L).coerceAtLeast(1L).toInt()
                 Text(
-                    text = "Skip ${promptData.type.displayName} ($remainingSec s remaining)",
+                    text = stringResource(R.string.overlay_skip_remaining, typeDisplayName, remainingSec),
                     color = if (isFocused) Color.Black else Color.White,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
@@ -544,7 +552,7 @@ fun SkipSegmentOverlay(
                 )
 
                 Text(
-                    text = "Press Select to jump past",
+                    text = stringResource(R.string.overlay_skip_press_select),
                     color = if (isFocused) Color(0xFF333333) else Color.LightGray,
                     fontSize = 11.sp
                 )

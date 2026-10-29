@@ -88,7 +88,7 @@ fun BrowserHomeScreen(
                     urlInput = it
                     viewModel.updateBrowserSuggestions(it)
                 },
-                placeholder = "Search Google or type a URL...",
+                placeholder = androidx.compose.ui.res.stringResource(R.string.prompt_search_google_url),
                 predictedSuffix = predictedSuffix,
                 onAcceptPrediction = {
                     if (predictedSuffix.isNotEmpty()) {
@@ -160,7 +160,7 @@ fun BrowserHomeScreen(
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             HomeCategoryButton(
-                text = "Open Tabs", 
+                text = androidx.compose.ui.res.stringResource(R.string.browser_open_tabs), 
                 iconRes = R.drawable.ic_tab, 
                 isSelected = activeTab == HomeTab.Tabs,
                 focusRequester = openTabsFocusRequester,
@@ -170,7 +170,7 @@ fun BrowserHomeScreen(
             ) { activeTab = HomeTab.Tabs }
 
             HomeCategoryButton(
-                text = "Bookmarks", 
+                text = androidx.compose.ui.res.stringResource(R.string.browser_bookmarks), 
                 iconRes = R.drawable.ic_heart_empty, 
                 isSelected = activeTab == HomeTab.Bookmarks,
                 focusRequester = bookmarksFocusRequester,
@@ -180,7 +180,7 @@ fun BrowserHomeScreen(
             ) { activeTab = HomeTab.Bookmarks }
 
             HomeCategoryButton(
-                text = "History", 
+                text = androidx.compose.ui.res.stringResource(R.string.browser_history), 
                 iconRes = R.drawable.ic_history, 
                 isSelected = activeTab == HomeTab.History,
                 focusRequester = historyFocusRequester,
@@ -190,7 +190,7 @@ fun BrowserHomeScreen(
             ) { activeTab = HomeTab.History }
 
             HomeCategoryButton(
-                text = "Downloads", 
+                text = androidx.compose.ui.res.stringResource(R.string.browser_downloads), 
                 iconRes = R.drawable.ic_download, 
                 isSelected = activeTab == HomeTab.Downloads,
                 focusRequester = downloadsFocusRequester,
@@ -279,7 +279,11 @@ fun BrowserHomeScreen(
 
                         if (showRestoreOrLoadButton) {
                             val isLoadOnly = hasIdleTabs
-                            val buttonText = if (isLoadOnly) "Load All Tabs" else "Restore All Tabs"
+                            val buttonText = if (isLoadOnly) {
+                                androidx.compose.ui.res.stringResource(R.string.btn_load_all_tabs)
+                            } else {
+                                androidx.compose.ui.res.stringResource(R.string.btn_restore_all_tabs)
+                            }
 
                             Spacer(modifier = Modifier.height(16.dp))
                             Row(
@@ -344,7 +348,7 @@ fun BrowserHomeScreen(
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)),
                                         modifier = Modifier.padding(end = 8.dp)
                                     ) {
-                                        Text("< Prev", color = Color.White)
+                                        Text("< " + androidx.compose.ui.res.stringResource(R.string.btn_prev), color = Color.White)
                                     }
                                 }
                                 if (endIdx < bookmarksArray.length()) {
@@ -352,7 +356,7 @@ fun BrowserHomeScreen(
                                         onClick = { bookmarkPage++ },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
                                     ) {
-                                        Text("Next >", color = Color.White)
+                                        Text(androidx.compose.ui.res.stringResource(R.string.btn_next) + " >", color = Color.White)
                                     }
                                 }
                             }
@@ -416,7 +420,7 @@ fun BrowserHomeScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = "Clear Bookmarks",
+                                            text = androidx.compose.ui.res.stringResource(R.string.btn_clear_bookmarks),
                                             color = if (isFocused) Color.Black else Color.White,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -486,7 +490,7 @@ fun BrowserHomeScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = "Clear History",
+                                            text = androidx.compose.ui.res.stringResource(R.string.btn_clear_history),
                                             color = if (isFocused) Color.Black else Color.White,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -569,7 +573,7 @@ fun BrowserHomeScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = "Clear Downloads",
+                                            text = androidx.compose.ui.res.stringResource(R.string.btn_clear_downloads),
                                             color = if (isFocused) Color.Black else Color.White,
                                             fontWeight = FontWeight.Bold
                                         )

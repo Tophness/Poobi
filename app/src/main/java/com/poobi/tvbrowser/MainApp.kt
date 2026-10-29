@@ -83,7 +83,8 @@ fun ModernTab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester,
-    keyTracker: KeyTracker
+    keyTracker: KeyTracker,
+    isLeftTab: Boolean = true
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -146,7 +147,7 @@ fun ModernTab(
                 val isDpadRight = lastKey == KeyEvent.KEYCODE_DPAD_RIGHT
                 val isStartup = lastKey == -1
 
-                val computedCanFocus = if (text == "Browser") {
+                val computedCanFocus = if (isLeftTab) {
                     currentIsSelected || isDpadLeft || isStartup
                 } else {
                     currentIsSelected || isDpadRight || isStartup
@@ -251,12 +252,13 @@ fun MainApp(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         ModernTab(
-                            text = "Browser",
+                            text = androidx.compose.ui.res.stringResource(R.string.tab_browser),
                             isSelected = currentTab == AppTab.Browser,
                             onFocus = { browserViewModel.currentAppTab.value = 0 },
                             onClick = { browserViewModel.currentAppTab.value = 0 },
                             focusRequester = browserTabFocusRequester,
                             keyTracker = KeyTracker,
+                            isLeftTab = true,
                             modifier = Modifier.focusProperties {
                                 if (!isBrowsing) {
                                     down = homeSearchBarFocusRequester
@@ -275,12 +277,13 @@ fun MainApp(
                         }
 
                         ModernTab(
-                            text = "Streams",
+                            text = androidx.compose.ui.res.stringResource(R.string.tab_streams),
                             isSelected = currentTab == AppTab.Streams,
                             onFocus = { browserViewModel.currentAppTab.value = 1 },
                             onClick = { browserViewModel.currentAppTab.value = 1 },
                             focusRequester = streamsTabFocusRequester,
                             keyTracker = KeyTracker,
+                            isLeftTab = false,
                             modifier = Modifier.focusProperties {
                                 if (isScrapeScreenActive) {
                                     down = streamsContentTabFocusRequester
@@ -783,7 +786,7 @@ fun MainApp(
                 if (showQualitySelector && qualityOptions.isNotEmpty()) {
                     AlertDialog(
                         onDismissRequest = { playerEngine.dismissQualitySelector() },
-                        title = { Text("Select Video Quality", color = Color.White) },
+                        title = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_quality_title), color = Color.White) },
                         containerColor = Color(0xFF222225),
                         text = {
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -978,11 +981,11 @@ fun MainApp(
             val download = dialogState as BrowserDialogState.Download
             AlertDialog(
                 onDismissRequest = { browserViewModel.dismissDialog() },
-                title = { Text("Download File?", color = Color.White) },
+                title = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_download_title), color = Color.White) },
                 containerColor = Color(0xFF222225),
                 text = {
                     Text(
-                        text = "Do you want to download ${download.fileName}?\nSize: %.2f MB".format(download.sizeMb),
+                        text = androidx.compose.ui.res.stringResource(R.string.dialog_download_msg, download.fileName, download.sizeMb),
                         color = Color.LightGray
                     )
                 },
@@ -1002,7 +1005,7 @@ fun MainApp(
                         ) { isFocused ->
                             Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
                                 Text(
-                                    text = "Download",
+                                    text = androidx.compose.ui.res.stringResource(R.string.btn_download),
                                     color = if (isFocused) Color.Black else Color.White,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -1017,7 +1020,7 @@ fun MainApp(
                         ) { isFocused ->
                             Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
                                 Text(
-                                    text = "Cancel",
+                                    text = androidx.compose.ui.res.stringResource(R.string.btn_cancel),
                                     color = if (isFocused) Color.Black else Color.White,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -1035,11 +1038,11 @@ fun MainApp(
 
             AlertDialog(
                 onDismissRequest = { browserViewModel.dismissDialog() },
-                title = { Text("Popup Blocked", color = Color.White) },
+                title = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_popup_blocked_title), color = Color.White) },
                 containerColor = Color(0xFF222225),
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Do you want to allow a popup from this site?", color = Color.LightGray)
+                        Text(androidx.compose.ui.res.stringResource(R.string.dialog_popup_blocked_msg), color = Color.LightGray)
                         TvFocusableBox(
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             onClick = { rememberDecision = !rememberDecision }
@@ -1058,7 +1061,7 @@ fun MainApp(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Never ask again (Silent Block)",
+                                    text = androidx.compose.ui.res.stringResource(R.string.dialog_silent_block_remember),
                                     color = Color.White,
                                     fontSize = 14.sp
                                 )
@@ -1073,7 +1076,7 @@ fun MainApp(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
                     ) {
-                        Text("Allow", color = Color.White)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_allow), color = Color.White)
                     }
                 },
                 dismissButton = {
@@ -1083,7 +1086,7 @@ fun MainApp(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
                     ) {
-                        Text("Block", color = Color.White)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_block), color = Color.White)
                     }
                 }
             )
@@ -1225,12 +1228,12 @@ fun MainApp(
                 onDismissRequest = {
                     browserViewModel.handleHijackChoice(useNative = false, remember = false, ask = ask)
                 },
-                title = { Text("Video Detected", color = Color.White) },
+                title = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_video_detected_title), color = Color.White) },
                 containerColor = Color(0xFF222225),
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "Video intercepted. Would you like to play it inside the native player or keep using the website player?",
+                            text = androidx.compose.ui.res.stringResource(R.string.dialog_video_detected_msg),
                             color = Color.LightGray
                         )
                         
@@ -1252,7 +1255,7 @@ fun MainApp(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Remember my decision (Don't ask again)",
+                                    text = androidx.compose.ui.res.stringResource(R.string.dialog_remember_decision),
                                     color = Color.White,
                                     fontSize = 14.sp
                                 )
@@ -1267,7 +1270,7 @@ fun MainApp(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
                     ) {
-                        Text("Play Native", color = Color.White)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_play_native), color = Color.White)
                     }
                 },
                 dismissButton = {
@@ -1277,7 +1280,7 @@ fun MainApp(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
                     ) {
-                        Text("Website Player", color = Color.White)
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_website_player), color = Color.White)
                     }
                 }
             )
@@ -1305,7 +1308,7 @@ fun MainApp(
         if (isBufferingTorrent) {
             AlertDialog(
                 onDismissRequest = { streamsViewModel.cancelTorrentBuffering() },
-                title = { Text("Pre-Buffering Video Stream", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+                title = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_torrent_prebuffer_title), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
                 containerColor = Color(0xFF222225),
                 text = {
                     Column(
@@ -1357,7 +1360,7 @@ fun MainApp(
                             onClick = { streamsViewModel.forcePlayTorrentNow() }
                         ) { isFocused ->
                             Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
-                                Text("Play Now", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                Text(androidx.compose.ui.res.stringResource(R.string.btn_play_now), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
                         
@@ -1368,7 +1371,7 @@ fun MainApp(
                             onClick = { streamsViewModel.cancelTorrentBuffering() }
                         ) { isFocused ->
                             Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
-                                Text("Cancel", color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                Text(androidx.compose.ui.res.stringResource(R.string.btn_cancel), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

@@ -52,46 +52,15 @@ import com.poobi.tvbrowser.shared.HardwareInputManager
 import org.json.JSONObject
 
 private fun formatDateToDMY(dateStr: String?): String {
-    if (dateStr.isNullOrEmpty() || dateStr == "null" || dateStr == "0000") return dateStr ?: ""
-    return try {
-        val parser = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-        val formatter = java.text.SimpleDateFormat("d/M/yyyy", java.util.Locale.US)
-        val date = parser.parse(dateStr)
-        if (date != null) formatter.format(date) else dateStr
-    } catch (e: Exception) {
-        dateStr
-    }
+    return com.poobi.tvbrowser.shared.LanguageHelper.formatDate(null, dateStr)
 }
 
 private fun formatBirthAndAge(birthdayStr: String?, deathdayStr: String?): String {
-    if (birthdayStr.isNullOrEmpty() || birthdayStr == "null") return ""
-    try {
-        val parser = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-        val birthDate = parser.parse(birthdayStr) ?: return ""
-        val birthCal = java.util.Calendar.getInstance().apply { time = birthDate }
-
-        val endCal = java.util.Calendar.getInstance()
-        val isDeceased = !deathdayStr.isNullOrEmpty() && deathdayStr != "null"
-        if (isDeceased) {
-            val deathDate = parser.parse(deathdayStr)
-            if (deathDate != null) endCal.time = deathDate
-        }
-
-        var age = endCal.get(java.util.Calendar.YEAR) - birthCal.get(java.util.Calendar.YEAR)
-        if (endCal.get(java.util.Calendar.DAY_OF_YEAR) < birthCal.get(java.util.Calendar.DAY_OF_YEAR)) {
-            age--
-        }
-
-        val formattedBirth = formatDateToDMY(birthdayStr)
-        return if (isDeceased) {
-            val formattedDeath = formatDateToDMY(deathdayStr)
-            "Died: $formattedDeath (Age $age) • Born: $formattedBirth"
-        } else {
-            "Age $age • Born: $formattedBirth"
-        }
-    } catch (_: Exception) {
-        return "Born: ${formatDateToDMY(birthdayStr)}"
-    }
+    return com.poobi.tvbrowser.shared.LanguageHelper.formatBirthAndAge(
+        null,
+        birthdayStr,
+        deathdayStr
+    )
 }
 
 private val MovieIcon: ImageVector = ImageVector.Builder(
@@ -161,13 +130,15 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     val castListState = rememberLazyListState()
     var lastFocusedCastIndex by remember { mutableStateOf(0) }
     val castItemFocusRequesters = remember { mutableMapOf<Int, FocusRequester>() }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val titleRaw = details?.optString("title")?.takeIf { it.isNotBlank() } 
         ?: item?.optString("title")?.takeIf { it.isNotBlank() } 
         ?: details?.optString("name")?.takeIf { it.isNotBlank() } 
         ?: item?.optString("name") ?: "Unknown"
     val title = titleRaw.replace(Regex("\\s\\(\\d{4}\\)$"), "")
+    val noOverviewStr = androidx.compose.ui.res.stringResource(R.string.media_no_overview)
     val overview = details?.optString("overview")?.takeIf { it.isNotBlank() } 
-        ?: item?.optString("overview") ?: "No description available."
+        ?: item?.optString("overview") ?: noOverviewStr
     val hasBackdrop = (details?.optString("backdrop_path")?.isNotBlank() == true && details?.optString("backdrop_path") != "null") || 
                       (item?.optString("backdrop_path")?.isNotBlank() == true && item?.optString("backdrop_path") != "null")
     val imagePath = if (hasBackdrop) {
@@ -338,19 +309,29 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 
+                val mediaTypeLabel = if (mediaType == "tv") {
+                    androidx.compose.ui.res.stringResource(R.string.media_type_tv)
+                } else {
+                    androidx.compose.ui.res.stringResource(R.string.media_type_movie)
+                }
+
                 Row(modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(text = year, color = Color(0xFFB0BEC5), fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     Text(text = " • ", color = Color.DarkGray, fontSize = 15.sp)
-                    Text(text = mediaType.uppercase(), color = Color(0xFF90A4AE), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(text = mediaTypeLabel.uppercase(), color = Color(0xFF90A4AE), fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     if (rating > 0.0) {
                         Text(text = " • ", color = Color.DarkGray, fontSize = 15.sp)
                         Text(text = "⭐ %.1f".format(rating), color = Color(0xFF00BCD4), fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                if (genresStr.isNotEmpty()) {
+                val localizedGenres = remember(genresArr, context) {
+                    com.poobi.tvbrowser.shared.TmdbGenres.formatGenres(genresArr, context)
+                }
+
+                if (localizedGenres.isNotEmpty()) {
                     TvMarqueeText(
-                        text = genresStr,
+                        text = localizedGenres,
                         color = Color(0xFFFFB74D),
                         fontSize = 14.sp,
                         maxLines = 1,
@@ -361,9 +342,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
                 if (mediaType == "movie" && releaseDate != "0000" && releaseDate.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    val formattedReleaseDate = remember(releaseDate) { formatDateToDMY(releaseDate) }
+                    val formattedReleaseDate = remember(releaseDate) { com.poobi.tvbrowser.shared.LanguageHelper.formatDate(context, releaseDate) }
+                    val releasedLabel = androidx.compose.ui.res.stringResource(R.string.media_released)
                     Text(
-                        text = "Released: $formattedReleaseDate",
+                        text = "$releasedLabel: $formattedReleaseDate",
                         color = Color(0xFF90A4AE),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
@@ -439,7 +421,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                         tint = playContentColor
                                     )
                                     Text(
-                                        text = "Play Movie",
+                                        text = androidx.compose.ui.res.stringResource(R.string.media_play_movie),
                                         color = playContentColor,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold
@@ -484,7 +466,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Text(
-                                        text = "Trailer",
+                                        text = androidx.compose.ui.res.stringResource(R.string.media_trailer),
                                         color = trailerContentColor,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold
@@ -496,7 +478,13 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
                     if (mediaType == "tv" && seasons != null && seasons!!.length() > 0) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Season:", color = Color.Gray, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
+                            Text(
+                                text = "${androidx.compose.ui.res.stringResource(R.string.media_season)}:",
+                                color = Color.Gray,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(end = 10.dp)
+                            )
                             
                             TvFocusableBox(
                                 modifier = Modifier
@@ -544,7 +532,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Text(
-                                        "Trailer",
+                                        text = androidx.compose.ui.res.stringResource(R.string.media_trailer),
                                         color = if (isFocused) Color.Black else Color.White,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold
@@ -752,7 +740,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                                 if (airDate.isNotEmpty()) {
                                                     val isFuture = isFutureDate(airDate)
                                                     val formattedAirDate = remember(airDate) { formatDateToDMY(airDate) }
-                                                    val prefix = if (isFuture) "Airing: " else "Aired: "
+                                                    val prefix = if (isFuture) androidx.compose.ui.res.stringResource(R.string.media_airing_prefix) else androidx.compose.ui.res.stringResource(R.string.media_aired_prefix)
                                                     Text(
                                                         text = "$prefix$formattedAirDate",
                                                         color = if (isHighlighted) Color(0xFF2E2E35) else Color(0xFF00BCD4),
@@ -883,9 +871,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     item {
                         val castHeader = if (mediaType == "tv" && seasons != null && selectedSeasonIndex in 0 until seasons!!.length()) {
                             val sName = seasons!!.getJSONObject(selectedSeasonIndex).optString("name", "")
-                            if (sName.isNotBlank()) "$sName Cast" else "Season ${selectedSeasonIndex + 1} Cast"
+                            val seasonLabel = if (sName.isNotBlank()) sName else androidx.compose.ui.res.stringResource(R.string.media_season_num, selectedSeasonIndex + 1)
+                            androidx.compose.ui.res.stringResource(R.string.media_season_cast, seasonLabel)
                         } else {
-                            "Top Cast"
+                            androidx.compose.ui.res.stringResource(R.string.media_top_cast)
                         }
                         Text(castHeader, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp, 20.dp, 0.dp, 10.dp))
                         if (cast != null) {
@@ -975,7 +964,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                     }
                                 }
                             } else {
-                                Text("No cast details available.", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(10.dp))
+                                Text(androidx.compose.ui.res.stringResource(R.string.media_no_cast), color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(10.dp))
                             }
                         } else {
                             LazyRow(
@@ -994,7 +983,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     }
 
                     item {
-                        Text("More Like This", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp, 20.dp, 0.dp, 10.dp))
+                        Text(androidx.compose.ui.res.stringResource(R.string.media_more_like_this), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp, 20.dp, 0.dp, 10.dp))
                         if (recs != null) {
                             if (recs!!.length() > 0) {
                                 LazyRow(
@@ -1026,7 +1015,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                     }
                                 }
                             } else {
-                                Text("No recommendations available.", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(10.dp))
+                                Text(androidx.compose.ui.res.stringResource(R.string.media_no_recommendations), color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(10.dp))
                             }
                         } else {
                             LazyRow(
@@ -1055,7 +1044,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     CircularProgressIndicator(color = Color(0xFF00BCD4))
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Loading Trailer...",
+                        text = androidx.compose.ui.res.stringResource(R.string.media_loading_trailer),
                         color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
@@ -1068,22 +1057,24 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     if (spinnerExpanded && seasons != null) {
         AlertDialog(
             onDismissRequest = { spinnerExpanded = false },
-            title = { Text("Select Season", color = Color.White) },
+            title = { Text(androidx.compose.ui.res.stringResource(R.string.media_select_season), color = Color.White) },
             containerColor = Color(0xFF222225),
             text = {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(seasons!!.length()) { i ->
                         val s = seasons!!.getJSONObject(i)
+                        val sNum = s.optInt("season_number")
+                        val defaultSeasonName = androidx.compose.ui.res.stringResource(R.string.media_season_num, sNum)
                         TvFocusableBox(
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             onClick = {
                                 selectedSeasonIndex = i
                                 spinnerExpanded = false
-                                viewModel.loadEpisodes(item!!, s.optInt("season_number"))
+                                viewModel.loadEpisodes(item!!, sNum)
                             }
                         ) {
                             Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
-                                Text(s.optString("name", "Season ${s.optInt("season_number")}"), color = Color.White)
+                                Text(s.optString("name", defaultSeasonName), color = Color.White)
                             }
                         }
                     }
@@ -1235,7 +1226,8 @@ fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
     val birthAndAge = remember(birthday, deathday) { formatBirthAndAge(birthday, deathday) }
     val placeOfBirth = personDetails?.optString("place_of_birth", "") ?: ""
     val knownFor = personDetails?.optString("known_for_department", "Acting") ?: "Acting"
-    val biography = personDetails?.optString("biography")?.takeIf { it.isNotBlank() } ?: "No biography available."
+    val noBiographyStr = androidx.compose.ui.res.stringResource(R.string.media_no_biography)
+    val biography = personDetails?.optString("biography")?.takeIf { it.isNotBlank() } ?: noBiographyStr
 
     val isFavActor = favoriteActors.contains(personId)
     val leftColumnScrollState = rememberScrollState()
@@ -1267,8 +1259,14 @@ fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
                     Text(actorName, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
 
+                val localizedKnownFor = if (knownFor.equals("Acting", ignoreCase = true)) {
+                    androidx.compose.ui.res.stringResource(R.string.known_for_acting)
+                } else {
+                    knownFor
+                }
+
                 Row(modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = knownFor.uppercase(), color = Color(0xFF00BCD4), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(text = localizedKnownFor.uppercase(), color = Color(0xFF00BCD4), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     val pop = personDetails?.optDouble("popularity", 0.0) ?: 0.0
                     if (pop > 0.0) {
                         Text(text = " • ", color = Color.DarkGray, fontSize = 15.sp)
@@ -1289,7 +1287,7 @@ fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
                 if (placeOfBirth.isNotEmpty() && placeOfBirth != "null") {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Born in: $placeOfBirth",
+                        text = androidx.compose.ui.res.stringResource(R.string.media_born_in, placeOfBirth),
                         color = Color(0xFF90A4AE),
                         fontSize = 13.sp,
                         maxLines = 2,
@@ -1329,7 +1327,7 @@ fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Filmography",
+                        text = androidx.compose.ui.res.stringResource(R.string.media_filmography),
                         color = Color.White,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
@@ -1337,21 +1335,25 @@ fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
 
                     Spacer(modifier = Modifier.width(20.dp))
 
-                    val filterOptions = listOf("All", "Movies", "TV Shows")
+                    val filterOptions = listOf(
+                        "All" to androidx.compose.ui.res.stringResource(R.string.media_filter_all),
+                        "Movies" to androidx.compose.ui.res.stringResource(R.string.media_filter_movies),
+                        "TV Shows" to androidx.compose.ui.res.stringResource(R.string.media_filter_tv)
+                    )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        filterOptions.forEach { filter ->
-                            val isSelected = filterMode == filter
+                        filterOptions.forEach { (key, label) ->
+                            val isSelected = filterMode == key
                             TvFocusableBox(
                                 modifier = Modifier.height(38.dp),
                                 defaultColor = if (isSelected) Color(0xFF00BCD4).copy(alpha = 0.25f) else Color(0xFF222225),
-                                onClick = { viewModel.filterPersonCredits(filter) }
+                                onClick = { viewModel.filterPersonCredits(key) }
                             ) { isFocused ->
                                 Box(Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                                     Text(
-                                        text = filter,
+                                        text = label,
                                         color = if (isFocused) Color.Black else if (isSelected) Color(0xFF00BCD4) else Color.LightGray,
                                         fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal,
                                         fontSize = 13.sp
@@ -1382,7 +1384,7 @@ fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
                     }
                 } else if (displayedCredits.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No titles found for this category.", color = Color.Gray, fontSize = 16.sp)
+                        Text(androidx.compose.ui.res.stringResource(R.string.media_no_titles_category), color = Color.Gray, fontSize = 16.sp)
                     }
                 } else {
                     val filmographyListState = rememberLazyListState()

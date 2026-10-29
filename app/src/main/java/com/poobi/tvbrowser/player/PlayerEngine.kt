@@ -719,64 +719,20 @@ class PlayerEngine(
         return list
     }
 
-    private fun isEnglishAudioTrack(track: AudioTrackInfo): Boolean {
-        val lang = track.language?.lowercase()?.trim() ?: ""
-        if (lang == "en" || lang == "eng" || lang.startsWith("en-") || lang.startsWith("en_")) {
-            return true
-        }
-
-        val pattern = Regex("(?i)(?:^|[^a-zA-Z])(en|eng|english)(?:[^a-zA-Z]|$)")
-
-        val label = track.label ?: ""
-        if (label.isNotEmpty() && pattern.containsMatchIn(label)) {
-            return true
-        }
-
-        val id = track.id ?: ""
-        if (id.isNotEmpty() && pattern.containsMatchIn(id)) {
-            return true
-        }
-
-        return false
+    private fun isTargetAudioTrack(track: AudioTrackInfo, lang: com.poobi.tvbrowser.shared.SupportedLanguage): Boolean {
+        return com.poobi.tvbrowser.shared.LanguageHelper.isMatchingAudioLanguage(track.language, track.label, track.id, lang)
     }
 
-    private fun getEnglishAudioScore(track: AudioTrackInfo): Int {
-        if (!isEnglishAudioTrack(track)) return -1
-
-        var score = 1000
-
-        val label = (track.label ?: "").lowercase()
-        val id = (track.id ?: "").lowercase()
-
-        // Deprioritize commentary or audio descriptions
-        if (label.contains("commentary") || id.contains("commentary") ||
-            label.contains("director") || id.contains("director")) {
-            score -= 500
-        }
-        if (label.contains("descriptive") || label.contains("description") || label.contains("audio desc") ||
-            id.contains("descriptive") || id.contains("description")) {
-            score -= 300
-        }
-
-        // Prioritize original audio
-        if (label.contains("original") || id.contains("original")) {
-            score += 100
-        }
-
-        // Prioritize higher channel counts (surround sound over stereo)
-        try {
-            val format = track.group.getTrackFormat(track.trackIndexInGroup)
-            val channels = format.channelCount
-            if (channels > 0) {
-                score += channels * 10
-            }
-            val bitrate = format.bitrate
-            if (bitrate > 0) {
-                score += (bitrate / 10000).coerceAtMost(50)
-            }
-        } catch (_: Exception) {}
-
-        return score
+    private fun getAudioScore(track: AudioTrackInfo, lang: com.poobi.tvbrowser.shared.SupportedLanguage): Int {
+        val format = try { track.group.getTrackFormat(track.trackIndexInGroup) } catch (_: Exception) { null }
+        return com.poobi.tvbrowser.shared.LanguageHelper.getAudioTrackScore(
+            language = track.language,
+            label = track.label,
+            id = track.id,
+            channelCount = format?.channelCount ?: 2,
+            bitrate = format?.bitrate ?: 0,
+            targetLang = lang
+        )
     }
 
     private fun selectAudioTrack(track: AudioTrackInfo) {
@@ -895,15 +851,22 @@ class PlayerEngine(
                 }
             }
 
-            val bestEnglishTrack = audioTracks
-                .filter { isEnglishAudioTrack(it) }
-                .maxByOrNull { getEnglishAudioScore(it) }
+            val audioPref = prefs.getString("audio_language_pref", "system") ?: "system"
+            val targetAudioLang = if (audioPref.equals("system", ignoreCase = true)) {
+                com.poobi.tvbrowser.shared.LanguageHelper.getAppLanguage(context)
+            } else {
+                com.poobi.tvbrowser.shared.LanguageHelper.findLanguage(audioPref)
+            }
 
-            if (bestEnglishTrack != null) {
+            val bestAudioTrack = audioTracks
+                .filter { isTargetAudioTrack(it, targetAudioLang) || (targetAudioLang.code != "en" && isTargetAudioTrack(it, com.poobi.tvbrowser.shared.LanguageHelper.ENGLISH)) }
+                .maxByOrNull { getAudioScore(it, targetAudioLang) }
+
+            if (bestAudioTrack != null) {
                 hasRestoredAudioTrack = true
-                lastAudioTrackKey = getAudioTrackKey(bestEnglishTrack)
-                if (!bestEnglishTrack.isSelected) {
-                    selectAudioTrack(bestEnglishTrack)
+                lastAudioTrackKey = getAudioTrackKey(bestAudioTrack)
+                if (!bestAudioTrack.isSelected) {
+                    selectAudioTrack(bestAudioTrack)
                 }
                 return
             }
@@ -989,6 +952,17 @@ class PlayerEngine(
                 matchedPrefUrl = match.key
                 matchedPrefLabel = match.value["label"] ?: getLanguageInfo(match.key).second
             }
+        } else if (savedPref == null && !isPrefOff && allSubs.isNotEmpty()) {
+            val prefSubLang = com.poobi.tvbrowser.shared.LanguageHelper.getAppLanguage(context)
+            val match = allSubs.entries.find {
+                val l = it.value["lang"]?.lowercase() ?: ""
+                val lbl = it.value["label"]?.lowercase() ?: ""
+                l == prefSubLang.code || l == prefSubLang.iso3 || lbl.contains(prefSubLang.englishName, ignoreCase = true) || lbl.contains(prefSubLang.nativeName, ignoreCase = true)
+            }
+            if (match != null) {
+                matchedPrefUrl = match.key
+                matchedPrefLabel = match.value["label"] ?: getLanguageInfo(match.key).second
+            }
         }
 
         pendingSelectedSubtitleLabel = if (!isPrefOff) (matchedPrefLabel ?: allSubs.values.firstOrNull()?.get("label")) else null
@@ -1045,9 +1019,18 @@ class PlayerEngine(
             .setInitialBitrateEstimate(20000000L)
             .build()
 
+        val audioPref = prefs.getString("audio_language_pref", "system") ?: "system"
+        val preferredLang = if (audioPref.equals("system", ignoreCase = true)) {
+            com.poobi.tvbrowser.shared.LanguageHelper.getAppLanguage(context)
+        } else {
+            com.poobi.tvbrowser.shared.LanguageHelper.findLanguage(audioPref)
+        }
+        val preferredSubLang = com.poobi.tvbrowser.shared.LanguageHelper.getAppLanguage(context)
+
         val trackSelector = DefaultTrackSelector(context)
         trackSelector.parameters = trackSelector.parameters.buildUpon()
-            .setPreferredAudioLanguages("en", "eng")
+            .setPreferredAudioLanguages(preferredLang.code, preferredLang.iso3)
+            .setPreferredTextLanguage(preferredSubLang.code)
             .build()
         val renderersFactory = object : androidx.media3.exoplayer.DefaultRenderersFactory(context) {
             override fun buildAudioSink(
@@ -1608,30 +1591,6 @@ class PlayerEngine(
     }
 
     private fun getLanguageInfo(url: String): Pair<String, String> {
-        val uri = Uri.parse(url)
-        val fileName = uri.lastPathSegment?.lowercase() ?: ""
-        val langMap = mapOf(
-            "en" to "English", "es" to "Spanish", "fr" to "French", "de" to "German",
-            "it" to "Italian", "pt" to "Portuguese", "ru" to "Russian", "zh" to "Chinese",
-            "ja" to "Japanese", "ko" to "Korean", "ar" to "Arabic", "hi" to "Hindi",
-            "tr" to "Turkish", "vi" to "Vietnamese", "th" to "Thai", "id" to "Indonesian"
-        )
-        var code = "und"
-        var label = "Unknown"
-
-        for ((c, name) in langMap) {
-            if (fileName.contains(name.lowercase()) || fileName.contains("-$c.") || fileName.contains("_$c.") || fileName.contains(".$c.") || fileName.startsWith("$c.")) {
-                code = c
-                label = name
-                if (fileName.contains("sdh")) label += " (SDH)"
-                if (fileName.contains("forced")) label += " (Forced)"
-                return Pair(code, label)
-            }
-        }
-        val cleanName = fileName.substringBeforeLast(".").replace(Regex("[-_]"), " ").trim()
-        if (cleanName.length > 2 && !cleanName.all { it.isDigit() || it == ' ' }) {
-            return Pair(code, cleanName.split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } })
-        }
-        return Pair(code, label)
+        return com.poobi.tvbrowser.shared.LanguageHelper.getLanguageInfo(url)
     }
 }

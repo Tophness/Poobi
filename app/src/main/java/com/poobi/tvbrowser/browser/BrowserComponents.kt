@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -105,6 +106,7 @@ fun BrowserCardItem(
             )
 
             if (listKey == "downloads") {
+                val missingLabel = stringResource(R.string.status_missing)
                 var statusText by remember { mutableStateOf("Checking...") }
                 var statusColor by remember { mutableStateOf(secondaryTextColor) }
 
@@ -115,7 +117,7 @@ fun BrowserCardItem(
                         statusText = String.format("%.2f MB", sizeMb)
                         statusColor = if (isFocused) Color(0xFF222222) else Color(0xFFAAAAAA)
                     } else {
-                        statusText = "Missing"
+                        statusText = missingLabel
                         statusColor = if (isFocused) Color(0xFFB71C1C) else Color(0xFFFF5252)
                     }
                 }

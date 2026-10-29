@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Poobi</string>
+
+    <!-- Top Navigation -->
+    <string name="tab_browser">浏览器</string>
+    <string name="tab_streams">影视源</string>
+    <string name="title_settings">设置</string>
+
+    <!-- Common Actions & Buttons -->
+    <string name="btn_save_exit">保存并退出</string>
+    <string name="btn_save">保存</string>
+    <string name="btn_cancel">取消</string>
+    <string name="btn_delete">删除</string>
+    <string name="btn_edit">编辑</string>
+    <string name="btn_close">关闭</string>
+    <string name="btn_done">完成</string>
+    <string name="btn_select_all">全选</string>
+    <string name="btn_deselect_all">取消全选</string>
+    <string name="btn_clear_all">全部清除</string>
+    <string name="btn_back">返回</string>
+    <string name="btn_apply">应用</string>
+    <string name="btn_play_now">立即播放</string>
+    <string name="btn_skip_play">跳过并播放</string>
+    <string name="btn_download">下载</string>
+    <string name="btn_allow">允许</string>
+    <string name="btn_block">拦截</string>
+    <string name="btn_play_native">内置播放器播放</string>
+    <string name="btn_website_player">网页播放器</string>
+    <string name="btn_open_in_browser">在浏览器中打开</string>
+    <string name="btn_restore">恢复</string>
+    <string name="btn_restore_load">恢复并加载</string>
+    <string name="btn_new_session">新会话</string>
+    <string name="btn_zoom_out">- 缩小</string>
+    <string name="btn_zoom_reset">100% (重置)</string>
+    <string name="btn_zoom_in">+ 放大</string>
+    <string name="btn_load_all_tabs">加载所有标签页</string>
+    <string name="btn_restore_all_tabs">恢复所有标签页</string>
+    <string name="btn_clear_bookmarks">清除收藏书签</string>
+    <string name="btn_clear_history">清除历史记录</string>
+    <string name="btn_clear_downloads">清除下载记录</string>
+    <string name="btn_prev">上一页</string>
+    <string name="btn_next">下一页</string>
+
+    <!-- Settings Categories -->
+    <string name="category_general">通用</string>
+    <string name="category_language">语言</string>
+    <string name="category_web">网页</string>
+    <string name="category_player">播放器</string>
+    <string name="category_interface">界面</string>
+    <string name="category_feeds">订阅流</string>
+    <string name="category_streaming">解析采集</string>
+    <string name="category_autoplay">自动播放</string>
+    <string name="category_subtitles">字幕</string>
+    <string name="category_sorting">排序规则</string>
+    <string name="category_blocked">元素过滤</string>
+    <string name="category_trakt">Trakt</string>
+    <string name="category_tmdb">TMDb</string>
+    <string name="category_torrents">种子磁力</string>
+    <string name="category_sync">云同步</string>
+
+    <!-- Settings Panels & Options -->
+    <string name="panel_general">通用设置</string>
+    <string name="panel_language">语言与区域设置</string>
+    <string name="setting_app_language">界面语言</string>
+    <string name="setting_date_format">日期格式</string>
+    <string name="setting_audio_language">默认音频语言</string>
+    <string name="setting_torrent_language">偏好种子语言</string>
+    <string name="setting_sub_languages">偏好字幕搜索语言</string>
+    <string name="setting_light_theme">使用浅色主题</string>
+    <string name="setting_auto_update">自动检查版本更新</string>
+    <string name="setting_restore_session">会话恢复策略</string>
+    <string name="setting_history_limit">历史记录条数上限</string>
+    <string name="setting_history_icons">历史记录图标风格</string>
+    <string name="setting_bookmark_icons">书签图标风格</string>
+
+    <!-- Streams Navigation Categories -->
+    <string name="feed_search">搜索</string>
+    <string name="feed_for_you">为你推荐</string>
+    <string name="feed_movies">电影</string>
+    <string name="feed_tv_shows">电视剧</string>
+    <string name="feed_discover">探索发现</string>
+
+    <!-- Dashboard Pills -->
+    <string name="pill_favourites">收藏</string>
+    <string name="pill_recents">最近播放</string>
+    <string name="pill_unfinished">未完结追剧</string>
+    <string name="pill_because_watched">因为你观看过</string>
+    <string name="pill_cast_spotlight">焦点影人</string>
+    <string name="pill_trakt_watched">观看最多</string>
+    <string name="pill_trakt_anticipated">最受期待</string>
+    <string name="pill_trakt_collected">收藏最多</string>
+    <string name="pill_trakt_watchlist">待看清单</string>
+    <string name="pill_trakt_recommendations">为我推荐</string>
+    <string name="pill_trending_today">今日热播</string>
+    <string name="pill_trending_week">本周趋势</string>
+    <string name="pill_in_cinemas">院线上映</string>
+    <string name="pill_upcoming">即将上映</string>
+    <string name="pill_popular">热门流行</string>
+    <string name="pill_top_rated">高分佳作</string>
+    <string name="pill_hidden_gems">冷门宝藏</string>
+    <string name="pill_popular_tv">热门剧集</string>
+    <string name="pill_trending_tv_week">本周热播剧集</string>
+    <string name="pill_airing_today">今日播出</string>
+    <string name="pill_airing_week">本周播出</string>
+    <string name="pill_top_rated_tv">高分剧集</string>
+    <string name="pill_era_2000s">2000年代经典</string>
+    <string name="pill_era_90s">90年代怀旧</string>
+    <string name="pill_era_80s">80年代传奇</string>
+    <string name="pill_era_70s">70年代光影</string>
+    <string name="pill_anime">日本动漫</string>
+    <string name="pill_kdrama">热门韩剧</string>
+    <string name="pill_british_mysteries">英伦悬疑</string>
+    <string name="pill_cult_classics">邪典经典</string>
+
+    <!-- Browser Home Tabs -->
+    <string name="browser_open_tabs">打开的标签页</string>
+    <string name="browser_bookmarks">我的收藏</string>
+    <string name="browser_history">浏览历史</string>
+    <string name="browser_downloads">下载管理</string>
+
+    <!-- Media Details Actions -->
+    <string name="media_play_movie">播放电影</string>
+    <string name="media_trailer">预告片</string>
+    <string name="media_season">季</string>
+    <string name="media_top_cast">主要演员</string>
+    <string name="media_more_like_this">同类推荐</string>
+    <string name="media_filmography">影视作品</string>
+    <string name="media_released">上映日期</string>
+    <string name="media_select_season">选择季</string>
+    <string name="media_season_num">第 %1$d 季</string>
+    <string name="media_season_cast">%1$s 演职人员</string>
+    <string name="media_no_overview">暂无简介。</string>
+    <string name="media_no_cast">暂无演职人员信息。</string>
+    <string name="media_no_recommendations">暂无同类推荐。</string>
+    <string name="media_loading_trailer">正在加载预告片...</string>
+    <string name="media_filter_all">全部</string>
+    <string name="media_filter_movies">电影</string>
+    <string name="media_filter_tv">剧集</string>
+    <string name="media_no_titles_category">该分类下暂无作品。</string>
+    <string name="media_born_in">出生地: %1$s</string>
+    <string name="media_no_biography">暂无人物生平资料。</string>
+    <string name="media_role_as">饰演 %1$s</string>
+    <string name="media_badge_actor">演员</string>
+    <string name="media_airing_prefix">首播: </string>
+    <string name="media_aired_prefix">已播出: </string>
+    <string name="media_type_movie">电影</string>
+    <string name="media_type_tv">电视剧</string>
+    <string name="known_for_acting">演艺</string>
+
+    <!-- Sorter Dialog -->
+    <string name="sorter_favorites_title">收藏夹排序规则</string>
+    <string name="sorter_recent_title">最近播放排序规则</string>
+    <string name="sorter_feed_title">影视推荐流排序规则</string>
+    <string name="sorter_streams_title">常规在线播放源排序</string>
+    <string name="sorter_torrents_title">种子磁力排序</string>
+
+    <!-- Subtitle Alignment UI -->
+    <string name="sub_sync_title">字幕校准同步工具</string>
+    <string name="sub_sync_offset">当前时间偏移: %1$dms</string>
+    <string name="sub_sync_btn_visual">波形时间轴可视化对齐</string>
+    <string name="sub_sync_btn_search">台词语音关键词搜索</string>
+    <string name="sub_sync_btn_reset">重置时间轴偏移</string>
+    <string name="sub_sync_btn_exit">退出</string>
+    <string name="sub_search_title">搜索台词对白</string>
+    <string name="sub_search_desc">输入对白台词关键词快速定位并跳转到目标音频画面。</string>
+    <string name="sub_search_placeholder">例如: 跳了下去</string>
+    <string name="sub_search_btn_align">搜索并校准</string>
+    <string name="sub_waveform_title">音频波形时间轴</string>
+    <string name="sub_waveform_silence">[ 静音片段 ]</string>
+    <string name="sub_waveform_offset">时间轴偏移: %1$dms</string>
+    <string name="sub_waveform_hint_focused">◀ 按遥控器左/右键微调移动字幕块相对于播放点的位置 ▶</string>
+    <string name="sub_waveform_hint_unfocused">点击选中后调整字幕块</string>
+    <string name="sub_waveform_looping">正在循环微调当前片段...</string>
+    <string name="sub_waveform_playback_running">正在播放...</string>
+    <string name="sub_waveform_stop_loop">停止循环</string>
+    <string name="sub_waveform_loop_track">循环播放片段</string>
+
+    <!-- Player Overlays & Prompts -->
+    <string name="overlay_up_next">即将播放下一集</string>
+    <string name="overlay_skip_intro">跳过片头</string>
+    <string name="overlay_skip_recap">跳过前情提要</string>
+    <string name="overlay_skip_early_credits">跳过片头演职员表</string>
+    <string name="overlay_skip_end_credits">跳过片尾字幕</string>
+    <string name="overlay_skip_remaining">跳过 %1$s (剩余 %2$d 秒)</string>
+    <string name="overlay_skip_press_select">按确认键立即跳过</string>
+    <string name="segment_intro">片头</string>
+    <string name="segment_recap">前情提要</string>
+    <string name="segment_opening_credits">片头演职员表</string>
+    <string name="segment_closing_credits">片尾名单</string>
+    <string name="toast_skipped_intro">已跳过片头</string>
+    <string name="toast_skipped_recap">已跳过前情提要</string>
+    <string name="toast_skipped_early_credits">已跳过片头名单</string>
+    <string name="toast_skipped_end_credits">已跳过片尾名单</string>
+    <string name="captions_add_disk">从本地文件添加字幕...</string>
+    <string name="captions_off">关闭</string>
+    <string name="captions_embedded">内嵌字幕</string>
+    <string name="dialog_quality_title">选择视频画质</string>
+    <string name="dialog_sub_wait_title">正在自动下载字幕</string>
+    <string name="dialog_sub_wait_msg">正在搜索并获取最匹配的字幕...</string>
+    <string name="dialog_torrent_prebuffer_title">正在预加载视频缓冲</string>
+    <string name="disk_picker_select_media">选择媒体</string>
+    <string name="disk_picker_select_subtitles">选择字幕文件</string>
+    <string name="disk_picker_no_subs">未在存储中找到字幕文件 (.srt, .vtt, .ass)。</string>
+
+    <!-- Browser & Web Dialogs -->
+    <string name="menu_cut">剪切</string>
+    <string name="menu_copy">复制</string>
+    <string name="menu_paste">粘贴</string>
+    <string name="menu_select_all">全选</string>
+    <string name="menu_open_new_tab">在后台新标签页打开</string>
+    <string name="menu_refresh">刷新网页</string>
+    <string name="menu_block_element">屏蔽此网页元素</string>
+    <string name="dialog_video_detected_title">检测到媒体视频</string>
+    <string name="dialog_video_detected_msg">已成功拦截视频流。是否使用内置全功能播放器播放？</string>
+    <string name="dialog_remember_decision">记住我的决定（不再提示）</string>
+    <string name="dialog_playback_error_title">播放异常</string>
+    <string name="dialog_playback_error_msg">ExoPlayer 无法播放此链接，是否尝试转到网页中播放？\n\n错误信息: %1$s</string>
+    <string name="dialog_download_title">确认下载此文件？</string>
+    <string name="dialog_download_msg">是否下载 %1$s？\n文件大小: %2$.2f MB</string>
+    <string name="dialog_popup_blocked_title">已拦截弹窗窗口</string>
+    <string name="dialog_popup_blocked_msg">是否允许此网页打开新弹窗？</string>
+    <string name="dialog_silent_block_remember">不再提示（静默拦截）</string>
+    <string name="dialog_restore_session_title">恢复上次浏览会话？</string>
+    <string name="dialog_restore_session_msg">是否恢复上一次关闭时的标签页？</string>
+    <string name="dialog_zoom_title">页面缩放比例 (%1$d%%)</string>
+    <string name="dialog_zoom_msg">调整字体与视口放大倍数：</string>
+    <string name="prompt_search_google_url">输入网址或 Google 搜索关键词...</string>
+    <string name="status_missing">文件丢失</string>
+
+    <!-- Scraper & Streams Screen -->
+    <string name="search_movie_tv_placeholder">搜索电影、剧集或演员...</string>
+    <string name="dashboard_recent_searches">历史搜索</string>
+    <string name="dashboard_no_items">暂无相关内容</string>
+    <string name="scrape_stop_scanning">停止扫描</string>
+    <string name="scrape_try_all">自动尝试全部</string>
+    <string name="scrape_stop">停止</string>
+    <string name="scrape_sort">排序</string>
+    <string name="scrape_no_sources">未找到可用播放源。</string>
+    <string name="scrape_open_browser">在浏览器中打开</string>
+    <string name="scrape_play_native">原生播放</string>
+    <string name="scrape_search_external_subs">🔍 搜索外挂字幕</string>
+
+    <!-- Sorter Criteria -->
+    <string name="sort_criteria_native">内置播放器兼容性</string>
+    <string name="sort_criteria_direct">直链视频源优先</string>
+    <string name="sort_criteria_resolution">清晰度分辨率</string>
+    <string name="sort_criteria_source">解析站源名称</string>
+    <string name="sort_criteria_language">语言偏好</string>
+    <string name="sort_criteria_size">文件大小</string>
+    <string name="sort_criteria_seeders">做种数 (Seeders)</string>
+    <string name="sort_criteria_date_added">添加时间</string>
+    <string name="sort_criteria_date_accessed">最近访问时间</string>
+    <string name="sort_criteria_az">字母顺序 (A-Z)</string>
+    <string name="sort_criteria_rating">评分高低</string>
+    <string name="sort_criteria_fav_actors">关注演员数量</string>
+    <string name="sort_criteria_date">发行上映年份</string>
+    <string name="sort_criteria_default">默认排序</string>
+
+    <!-- Settings Panels & Options Details -->
+    <string name="panel_web">网页与广告拦截设置</string>
+    <string name="setting_silent_block">静默拦截弹窗页面</string>
+    <string name="setting_clickjack">防止点击劫持攻击</string>
+    <string name="setting_custom_adblock_url">自定义 AdBlock 规则订阅链接 (EasyList 格式)</string>
+    <string name="btn_update_rules_now">立即更新规则</string>
+    <string name="status_rules_loaded">活跃过滤规则: 已加载约 %1$d 条</string>
+    <string name="status_rules_updating">正在更新规则列表...</string>
+    <string name="toast_rules_updated">Filter lists updated!</string>
+    <string name="toast_rules_update_failed">Update failed</string>
+    <string name="status_checking_updates">正在检查更新...</string>
+    <string name="btn_check_updates">检查版本更新 (v%1$s)</string>
+    <string name="setting_current">当前</string>
+    <string name="label_profile_name">配置名称</string>
+    <string name="label_url_patterns">URL 匹配模式</string>
+    <string name="label_action_mode">Action Mode</string>
+    <string name="opt_custom_script">Custom Script</string>
+    <string name="opt_simple_selectors">Simple Element List</string>
+    <string name="label_js_action">JavaScript Action</string>
+    <string name="label_click_selectors">元素点击选择器</string>
+    <string name="btn_add_selector">+ 添加选择器</string>
+    <string name="dialog_edit_autoplay_title">Edit Autoplay Profile</string>
+    <string name="dialog_add_autoplay_title">Add New Autoplay Profile</string>
+    <string name="dialog_custom_sub_limit_title">自定义字幕下载上限</string>
+    <string name="dialog_custom_sub_limit_msg">请输入数字上限:</string>
+    <string name="label_opensubtitles_username">OpenSubtitles Username</string>
+    <string name="label_opensubtitles_password">OpenSubtitles Password</string>
+    <string name="label_opensubtitles_org_username">OpenSubtitles.org Username</string>
+    <string name="label_opensubtitles_org_password">OpenSubtitles.org Password</string>
+    <string name="label_subdl_apikey">SubDL API Key</string>
+    <string name="label_subsource_apikey">SubSource API Key</string>
+    <string name="label_rule_name">规则名称</string>
+    <string name="label_css_selectors">CSS 选择器 (每行一个)</string>
+    <string name="dialog_edit_block_rule">编辑屏蔽规则</string>
+    <string name="dialog_add_block_rule">添加屏蔽规则</string>
+    <string name="dialog_auth_trakt_title">授权 Trakt.tv 账号</string>
+    <string name="dialog_auth_trakt_step1">1. 请访问验证网页:</string>
+    <string name="dialog_auth_trakt_step2">2. 在您的设备上输入如下授权码:</string>
+    <string name="dialog_auth_trakt_waiting">正在等待 Trakt 服务器授权验证...</string>
+    <string name="btn_open_link">打开链接</string>
+    <string name="label_username">用户名</string>
+    <string name="label_password">密码</string>
+    <string name="dialog_auto_clean_interval_title">自动清理周期设置</string>
+    <string name="dialog_auto_clean_interval_msg">请输入缓存清理的间隔天数:</string>
+    <string name="status_signed_in_as">已登录: %1$s</string>
+    <string name="status_not_signed_in">未登录</string>
+
+    <string name="panel_player">内置播放器偏好设置</string>
+    <string name="setting_extract_video">嗅探拦截网页视频并播放</string>
+    <string name="setting_fallback_error">播放发生错误时的备选动作</string>
+    <string name="header_binge_autoplay">连续追剧与自动播放</string>
+    <string name="setting_intro_skip">检测到片头时的动作</string>
+    <string name="setting_recap_skip">检测到前情提要时的动作</string>
+    <string name="setting_early_credits_skip">检测到片头名单时的动作</string>
+    <string name="setting_end_credits_skip">检测到片尾名单时的动作</string>
+    <string name="setting_up_next_mode">下集预告弹窗触发逻辑</string>
+    <string name="setting_up_next_time">片尾未识别时的倒数提前秒数</string>
+    <string name="setting_source_selection_next">播放下一集时的选源模式</string>
+    <string name="setting_episode_focus_style">剧集页面自动高亮选集逻辑</string>
+
+    <string name="panel_interface">界面导航与外部输入设置</string>
+    <string name="setting_scroll_topbar">向上滚动页面呼出顶部导航栏</string>
+    <string name="setting_nav_mode">默认指针交互导航模式</string>
+    <string name="setting_scrape_tab_order">播放源结果标签页默认顺序</string>
+    <string name="header_hardware_devices">硬件外设与输入设备</string>
+    <string name="setting_hw_keyboard_mode">物理外接键盘输入模式</string>
+    <string name="setting_hw_mouse_mode">物理外接鼠标指针模式</string>
+    <string name="setting_menu_keybind">菜单按键按键映射</string>
+    <string name="setting_menu_rebind">重新设置映射</string>
+    <string name="setting_menu_reset">重置默认</string>
+    <string name="setting_press_key_combo">请按下您想要绑定的按键组合</string>
+    <string name="setting_listening_keys">正在等待按键输入...</string>
+
+    <string name="panel_feeds">首页定制与影视推荐流</string>
+    <string name="setting_card_thumbnail_style">海报卡片显示宽高比</string>
+    <string name="setting_prioritize_fav_cast">在推荐流中置顶关注演员的作品</string>
+    <string name="header_for_you_feeds">为你推荐板块</string>
+    <string name="header_movie_feeds">电影流推荐</string>
+    <string name="header_movie_genres">电影分类流</string>
+    <string name="header_tv_feeds">剧集流推荐</string>
+    <string name="header_tv_genres">剧集分类流</string>
+    <string name="header_discover_networks">探索: 流媒体平台与厂牌</string>
+    <string name="header_discover_eras">探索: 年代光影记忆</string>
+    <string name="header_discover_world">探索: 世界电影与特色流派</string>
+    <string name="header_fav_cast_mgmt">关注影人演员管理</string>
+    <string name="desc_fav_cast_mgmt">管理来自您收藏剧集的演员阵容，或搜索手动添加关注任何演员。</string>
+    <string name="setting_auto_sync_fav_cast">自动将收藏影视的主演同步加入关注列表</string>
+    <string name="prompt_search_actor">搜索演员姓名并添加 (例如: 基里安·墨菲)...</string>
+    <string name="label_live_results">实时搜索结果 (点击选择添加):</string>
+    <string name="label_cast_pool">已关注影人演员池 (%1$d)</string>
+    <string name="label_add_actor">+ 添加</string>
+    <string name="desc_no_fav_actors">尚未关注任何演员。您可以先收藏影视剧集，或在上方搜索手动添加。</string>
+    <string name="label_added_via_fav">添加来源: 您收藏了《%1$s》</string>
+    <string name="label_added_via_search">通过搜索手动添加</string>
+
+    <string name="panel_streaming">流媒体解析采集引擎配置</string>
+    <string name="setting_timeout_logic">请求超时判定逻辑</string>
+    <string name="setting_enforce_whitelist">仅允许解析白名单内的托管站</string>
+    <string name="setting_global_timeout">全局并发引擎超时时间 (秒)</string>
+    <string name="setting_source_timeout">单个源解析限制超时 (秒)</string>
+    <string name="setting_scraper_workers">并行采集工作线程数 (默认: 3)</string>
+    <string name="header_provider_packages">内置提供商采集扩展包</string>
+    <string name="header_host_whitelists">托管服务器白名单管理</string>
+    <string name="prompt_search_whitelists">搜索白名单托管域名...</string>
+    <string name="label_provider_whitelist">提供商扩展解析白名单</string>
+    <string name="label_resolveurl_whitelist">ResolveURL 解析引擎白名单</string>
+
+    <string name="panel_autoplay">自动化播放动作配置文件</string>
+    <string name="setting_autoplay_global">全局启用视频自动播放脚本</string>
+    <string name="btn_add_autoplay_profile">新增自动播放动作配置</string>
+
+    <string name="panel_subtitles">字幕搜索与语言偏好</string>
+    <string name="setting_sub_rendering_engine">字幕渲染核心引擎</string>
+    <string name="setting_sub_auto_search">字幕自动搜索匹配策略</string>
+    <string name="setting_subs_to_download">自动预加载下载字幕数量</string>
+    <string name="setting_sub_video_launches">视频已就绪但字幕仍在下载时的动作</string>
+    <string name="setting_sub_retention">本地外挂字幕文件保留天数</string>
+    <string name="setting_sub_limit">字幕搜索单次最大结果数量</string>
+    <string name="header_sub_accounts">字幕服务账户与第三方 API 密钥</string>
+    <string name="header_sub_engines">字幕在线刮削源引擎</string>
+
+    <string name="panel_sorting">播放源与推荐排序权重规则</string>
+    <string name="panel_blocked">网页特定元素屏蔽规则</string>
+    <string name="btn_add_css_rule">添加新 CSS 元素屏蔽规则</string>
+
+    <string name="panel_trakt">Trakt.tv 观看记录云同步</string>
+    <string name="status_trakt_authed">已授权绑定的 Trakt 账户: %1$s</string>
+    <string name="btn_logout_trakt">退出 Trakt 登录</string>
+    <string name="status_trakt_unlinked">当前尚未绑定 Trakt 账户。</string>
+    <string name="btn_auth_trakt">授权连接 Trakt 账户</string>
+
+    <string name="panel_tmdb">TheMovieDb (TMDb) 开发者凭据</string>
+    <string name="status_tmdb_active">当前 TMDb 授权会话有效生效中</string>
+    <string name="btn_login">登录验证</string>
+    <string name="btn_logout">退出登录</string>
+
+    <string name="panel_torrents">P2P 种子与磁力流媒体引擎配置</string>
+    <string name="setting_prebuffer_size">起播前预缓冲分片块数</string>
+    <string name="setting_torrent_cache_clean">P2P 种子本地缓存自动清理模式</string>
+    <string name="header_storage_cache_mgmt">本地磁盘 P2P 缓存管理器</string>
+    <string name="label_total_cached_p2p">当前占用 P2P 本地存储空间</string>
+    <string name="label_cached_subfolders">已缓存的影视资源子目录</string>
+    <string name="label_clean_interval">自动清理周期</string>
+    <string name="format_every_x_days">每隔 %1$d 天</string>
+    <string name="label_disabled_set">已禁用 / 点击设置清理周期</string>
+    <string name="btn_clear">清理</string>
+
+    <string name="panel_sync">本地离线备份与数据还原</string>
+    <string name="desc_local_backup">无需 Google 账号，即可将您的全部设置、书签收藏及配置完整导出为 JSON 备份文件至设备的“下载”目录中，或从备份中随时还原。</string>
+    <string name="btn_save_backup">生成并导出备份</string>
+    <string name="btn_restore_backup">从本地文件恢复</string>
+    <string name="header_drive_sync">Google Drive 谷歌网盘云端同步</string>
+    <string name="desc_drive_sync">通过 Google Drive 专属应用私有文件夹，在不同智能电视与设备间实时无缝同步您的偏好设置、书签与观看历史。最新更改将自动保持最高优先级。</string>
+    <string name="status_sync">当前状态: %1$s</string>
+    <string name="btn_sign_in_google">登录 Google 账号进行同步</string>
+    <string name="btn_force_sync">立即双向强制同步</string>
+
+    <!-- Option values for Dropdowns -->
+    <string name="opt_restore_ask">恢复时弹窗询问</string>
+    <string name="opt_restore_always_load">始终恢复并立即加载网络</string>
+    <string name="opt_restore_always">始终恢复会话（挂起待访问）</string>
+    <string name="opt_restore_never">从不恢复（每次全新启动）</string>
+
+    <string name="opt_hist_10">保留 10 条记录</string>
+    <string name="opt_hist_20">保留 20 条记录</string>
+    <string name="opt_hist_50">保留 50 条记录</string>
+    <string name="opt_hist_unlimited">无限制完整保留</string>
+
+    <string name="opt_icons_snapshots">网页实时快照 (微缩图)</string>
+    <string name="opt_icons_favicons">网站 Favicon 图标</string>
+
+    <string name="opt_extract_ask">拦截时询问是否使用播放器</string>
+    <string name="opt_extract_always">始终强制在内置播放器中打开</string>
+    <string name="opt_extract_never">从不嗅探（直接在网页内播放）</string>
+
+    <string name="opt_fallback_ask">播放失败时询问是否回退到浏览器</string>
+    <string name="opt_fallback_always">播放失败时直接切换至网页端播放</string>
+    <string name="opt_fallback_never">从不回退网页端</string>
+
+    <string name="opt_skip_skip">直接自动跳过</string>
+    <string name="opt_skip_ask">弹出跳过按钮由用户选择</string>
+    <string name="opt_skip_ignore">忽略（不跳过）</string>
+
+    <string name="opt_up_next_ask">弹出提示并由用户选择</string>
+    <string name="opt_up_next_always">到达片尾直接自动播下一集</string>
+    <string name="opt_up_next_never">从不弹出下一集遮罩</string>
+
+    <string name="opt_autoplay_closest">同名同源站点优先 (相同 Host 主机)</string>
+    <string name="opt_autoplay_best">全网最佳分辨率最高源优先</string>
+    <string name="opt_autoplay_ask">弹窗让用户手动选源</string>
+
+    <string name="opt_focus_next_watched">自动定位到最后观看集的下一集</string>
+    <string name="opt_focus_first_unwatched">自动定位到首个未观看集</string>
+
+    <string name="opt_nav_pointer">虚拟鼠标指针 (遥控器模拟游标)</string>
+    <string name="opt_nav_dpad">实体方向键焦点选择 (物理 D-pad 模式)</string>
+
+    <string name="opt_scrape_web_torrents">在线解析流, 种子磁力</string>
+    <string name="opt_scrape_torrents_web">种子磁力, 在线解析流</string>
+
+    <string name="opt_hw_auto">自动检测适配 (官方推荐)</string>
+    <string name="opt_hw_always">强制始终启用</string>
+    <string name="opt_hw_disabled">完全禁用 (锁定 TV 遥控器模式)</string>
+
+    <string name="opt_thumb_portrait">竖屏比例 (2:3) [官方默认]</string>
+    <string name="opt_thumb_landscape">宽屏比例 (16:9)</string>
+
+    <string name="opt_timeout_global">仅遵循全局总超时</string>
+    <string name="opt_timeout_source">仅遵循单个数据源超时</string>
+    <string name="opt_timeout_both">双重限制引擎同时生效</string>
+
+    <string name="opt_sub_engine_native">系统原生 (切换需重新加载流)</string>
+    <string name="opt_sub_engine_overlay">自定义无感即时遮罩 (0 秒延迟切换)</string>
+
+    <string name="opt_sub_behavior_ask">播放时询问我是否搜索</string>
+    <string name="opt_sub_behavior_auto">后台静默自动匹配下载</string>
+    <string name="opt_sub_behavior_never">完全关闭字幕自动搜索</string>
+
+    <string name="opt_sub_count_other">其他自定义数量</string>
+    <string name="opt_sub_count_all">下载所有可用匹配项</string>
+
+    <string name="opt_sub_launch_stop">立即终止正在进行的字幕下载</string>
+    <string name="opt_sub_launch_ask">弹窗询问我是否继续等待</string>
+    <string name="opt_sub_launch_background">在后台继续静默下载并挂载</string>
+
+    <string name="opt_retention_indefinite">永久保存不清理</string>
+    <string name="opt_retention_1d">保留 1 天</string>
+    <string name="opt_retention_3d">保留 3 天</string>
+    <string name="opt_retention_7d">保留 7 天</string>
+    <string name="opt_retention_14d">保留 14 天</string>
+    <string name="opt_retention_30d">保留 30 天</string>
+
+    <string name="opt_prebuffer_1">1 个分片 (极速秒起播 / 默认推荐)</string>
+    <string name="opt_prebuffer_2">2 个分片</string>
+    <string name="opt_prebuffer_4">4 个分片 (标准流畅)</string>
+    <string name="opt_prebuffer_8">8 个分片 (极高稳定性)</string>
+
+    <string name="opt_clean_manual">仅手动点击清理</string>
+    <string name="opt_clean_new_torrent">每次启动新种子时自动清空</string>
+    <string name="opt_clean_exit">每次退出播放时自动清空</string>
+    <string name="opt_clean_days">按设定的间隔天数定期清理</string>
+
+    <!-- TMDb Genres -->
+    <string name="genre_action">动作</string>
+    <string name="genre_adventure">冒险</string>
+    <string name="genre_animation">动画</string>
+    <string name="genre_comedy">喜剧</string>
+    <string name="genre_crime">犯罪</string>
+    <string name="genre_documentary">纪录片</string>
+    <string name="genre_drama">剧情</string>
+    <string name="genre_family">家庭</string>
+    <string name="genre_fantasy">奇幻</string>
+    <string name="genre_history">历史</string>
+    <string name="genre_horror">恐怖</string>
+    <string name="genre_music">音乐</string>
+    <string name="genre_mystery">悬疑</string>
+    <string name="genre_romance">爱情</string>
+    <string name="genre_scifi">科幻</string>
+    <string name="genre_tv_movie">电视电影</string>
+    <string name="genre_thriller">惊悚</string>
+    <string name="genre_war">战争</string>
+    <string name="genre_western">西部</string>
+    <string name="genre_action_adventure">动作冒险</string>
+    <string name="genre_kids">儿童</string>
+    <string name="genre_news">新闻</string>
+    <string name="genre_reality">真人秀</string>
+    <string name="genre_scifi_fantasy">科幻奇幻</string>
+    <string name="genre_soap">肥皂剧</string>
+    <string name="genre_talk">脱口秀</string>
+    <string name="genre_war_politics">战争与政治</string>
+
+    <string name="opt_system_default">系统默认</string>
+    <string name="opt_follow_app_language">跟随应用语言 (默认)</string>
+    <string name="setting_action_mode">执行动作模式</string>
+    <string name="opt_action_custom_script">自定义脚本</string>
+    <string name="opt_action_simple_elements">元素选择器列表</string>
+    <string name="label_javascript_action">JavaScript 执行动作</string>
+</resources>

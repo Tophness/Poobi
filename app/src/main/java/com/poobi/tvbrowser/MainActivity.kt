@@ -230,7 +230,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.poobi.tvbrowser.shared.LanguageHelper.wrapContext(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        val appLangPref = getSharedPreferences("BrowserSettings", MODE_PRIVATE).getString("app_language", "system") ?: "system"
+        com.poobi.tvbrowser.shared.LanguageHelper.applyAppLanguage(this, appLangPref)
         setTheme(androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
         super.onCreate(savedInstanceState)
@@ -728,7 +734,12 @@ class MainActivity : AppCompatActivity() {
                 val py = Python.getInstance()
                 py.getModule("modules.control")
                 py.getModule("tmdb.tmdb_utils")
-                py.getModule("main")
+                val main = py.getModule("main")
+                val currentLang = com.poobi.tvbrowser.shared.LanguageHelper.getAppLanguage(this@MainActivity).code
+                val cfg = org.json.JSONObject().apply {
+                    put("app_language", currentLang)
+                }
+                main.callAttr("set_config", cfg.toString())
             } catch (e: Exception) {
                 Log.e("TVBrowser", "Error warming up Python modules", e)
             }
@@ -739,15 +750,15 @@ class MainActivity : AppCompatActivity() {
     private fun showExoFallbackDialog(url: String, errorName: String) {
         val prefs = getSharedPreferences("BrowserSettings", MODE_PRIVATE)
         val checkBox = android.widget.CheckBox(this).apply {
-            text = "Never ask again (Remember choice)"
+            text = getString(R.string.dialog_remember_decision)
             setPadding(50, 20, 50, 20)
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Playback Error")
-            .setMessage("ExoPlayer failed to play this stream. Would you like to try opening it in the browser instead?\n\nError: $errorName")
+            .setTitle(getString(R.string.dialog_playback_error_title))
+            .setMessage(getString(R.string.dialog_playback_error_msg, errorName))
             .setView(checkBox)
-            .setPositiveButton("Open in Browser") { _, _ ->
+            .setPositiveButton(getString(R.string.btn_open_in_browser)) { _, _ ->
                 if (checkBox.isChecked) {
                     prefs.edit().putInt("exo_fallback_pref", 1).apply()
                 }
@@ -762,7 +773,7 @@ class MainActivity : AppCompatActivity() {
                 )
                 browserViewModel.currentAppTab.value = 0
             }
-            .setNegativeButton("Cancel") { _, _ ->
+            .setNegativeButton(getString(R.string.btn_cancel)) { _, _ ->
                 if (checkBox.isChecked) {
                     prefs.edit().putInt("exo_fallback_pref", 2).apply()
                 }
@@ -902,7 +913,7 @@ class MainActivity : AppCompatActivity() {
                 0 -> {
                     val density = resources.displayMetrics.density
                     val checkBox = android.widget.CheckBox(this@MainActivity).apply {
-                        text = "Remember choice"
+                        text = getString(R.string.dialog_remember_decision)
                         setTextColor(android.graphics.Color.WHITE)
                         isFocusable = true
                         setPadding((10 * density).toInt(), (8 * density).toInt(), (16 * density).toInt(), (8 * density).toInt())
@@ -916,22 +927,22 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     val dialog = AlertDialog.Builder(this@MainActivity)
-                        .setTitle("Restore Session?")
-                        .setMessage("Do you want to restore your previous tabs?")
+                        .setTitle(getString(R.string.dialog_restore_session_title))
+                        .setMessage(getString(R.string.dialog_restore_session_msg))
                         .setView(container)
-                        .setPositiveButton("Restore") { _, _ ->
+                        .setPositiveButton(getString(R.string.btn_restore)) { _, _ ->
                             if (checkBox.isChecked) {
                                 prefs.edit().putInt("restore_tabs_pref", 2).apply()
                             }
                             browserViewModel.restoreAllTabs(this@MainActivity, idle = true)
                         }
-                        .setNeutralButton("Restore & Load") { _, _ ->
+                        .setNeutralButton(getString(R.string.btn_restore_load)) { _, _ ->
                             if (checkBox.isChecked) {
                                 prefs.edit().putInt("restore_tabs_pref", 1).apply()
                             }
                             browserViewModel.restoreAllTabs(this@MainActivity, idle = false)
                         }
-                        .setNegativeButton("New Session") { _, _ ->
+                        .setNegativeButton(getString(R.string.btn_new_session)) { _, _ ->
                             if (checkBox.isChecked) {
                                 prefs.edit().putInt("restore_tabs_pref", 3).apply()
                             }

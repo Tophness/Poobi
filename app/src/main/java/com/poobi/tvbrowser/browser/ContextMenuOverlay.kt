@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -88,7 +89,7 @@ fun ContextMenuOverlay(
             if (isEditable && hasSelection) {
                 val req = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
                 ContextMenuBtn(
-                    text = "Cut",
+                    text = stringResource(R.string.menu_cut),
                     icon = { CutMenuIcon() },
                     focusRequester = req,
                     onClick = { onCut(); onDismiss() }
@@ -98,7 +99,7 @@ fun ContextMenuOverlay(
             if (hasSelection) {
                 val req = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
                 ContextMenuBtn(
-                    text = "Copy",
+                    text = stringResource(R.string.menu_copy),
                     icon = { CopyMenuIcon() },
                     focusRequester = req,
                     onClick = { onCopy(); onDismiss() }
@@ -108,7 +109,7 @@ fun ContextMenuOverlay(
             if (isEditable && hasClipboard) {
                 val req = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
                 ContextMenuBtn(
-                    text = "Paste",
+                    text = stringResource(R.string.menu_paste),
                     icon = { PasteMenuIcon() },
                     focusRequester = req,
                     onClick = { onPaste(); onDismiss() }
@@ -118,7 +119,7 @@ fun ContextMenuOverlay(
             if (isEditable) {
                 val req = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
                 ContextMenuBtn(
-                    text = "Select All",
+                    text = stringResource(R.string.menu_select_all),
                     icon = { SelectAllMenuIcon() },
                     focusRequester = req,
                     onClick = { onSelectAll(); onDismiss() }
@@ -128,7 +129,7 @@ fun ContextMenuOverlay(
             if (url.isNotEmpty() && url.startsWith("http")) {
                 val req = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
                 ContextMenuBtn(
-                    text = "Open in New Tab",
+                    text = stringResource(R.string.menu_open_new_tab),
                     icon = {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_add),
@@ -144,7 +145,7 @@ fun ContextMenuOverlay(
 
             val refreshReq = if (!firstAssigned) { firstAssigned = true; firstItemFocusRequester } else null
             ContextMenuBtn(
-                text = "Refresh Page",
+                text = stringResource(R.string.menu_refresh),
                 icon = {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_refresh),
@@ -158,7 +159,7 @@ fun ContextMenuOverlay(
             )
 
             ContextMenuBtn(
-                text = "Block Element",
+                text = stringResource(R.string.menu_block_element),
                 icon = {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_close),

@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Poobi</string>
+
+    <!-- Top Navigation -->
+    <string name="tab_browser">ブラウザ</string>
+    <string name="tab_streams">ストリーム</string>
+    <string name="title_settings">設定</string>
+
+    <!-- Common Actions & Buttons -->
+    <string name="btn_save_exit">保存して終了</string>
+    <string name="btn_save">保存</string>
+    <string name="btn_cancel">キャンセル</string>
+    <string name="btn_delete">削除</string>
+    <string name="btn_edit">編集</string>
+    <string name="btn_close">閉じる</string>
+    <string name="btn_done">完了</string>
+    <string name="btn_select_all">すべて選択</string>
+    <string name="btn_deselect_all">選択を解除</string>
+    <string name="btn_clear_all">すべて消去</string>
+    <string name="btn_back">戻る</string>
+    <string name="btn_apply">適用</string>
+    <string name="btn_play_now">今すぐ再生</string>
+    <string name="btn_skip_play">スキップして再生</string>
+    <string name="btn_download">ダウンロード</string>
+    <string name="btn_allow">許可</string>
+    <string name="btn_block">ブロック</string>
+    <string name="btn_play_native">内蔵プレーヤーで再生</string>
+    <string name="btn_website_player">ウェブプレーヤー</string>
+    <string name="btn_open_in_browser">ブラウザで開く</string>
+    <string name="btn_restore">復元</string>
+    <string name="btn_restore_load">復元して読み込む</string>
+    <string name="btn_new_session">新規セッション</string>
+    <string name="btn_zoom_out">- 縮小</string>
+    <string name="btn_zoom_reset">100% (リセット)</string>
+    <string name="btn_zoom_in">+ 拡大</string>
+    <string name="btn_load_all_tabs">すべてのタブを読み込む</string>
+    <string name="btn_restore_all_tabs">すべてのタブを復元</string>
+    <string name="btn_clear_bookmarks">ブックマークを消去</string>
+    <string name="btn_clear_history">履歴を消去</string>
+    <string name="btn_clear_downloads">ダウンロードを消去</string>
+    <string name="btn_prev">前へ</string>
+    <string name="btn_next">次へ</string>
+
+    <!-- Settings Categories -->
+    <string name="category_general">一般</string>
+    <string name="category_language">言語</string>
+    <string name="category_web">ウェブ</string>
+    <string name="category_player">プレーヤー</string>
+    <string name="category_interface">インターフェース</string>
+    <string name="category_feeds">フィード</string>
+    <string name="category_streaming">ストリーミング</string>
+    <string name="category_autoplay">自動再生</string>
+    <string name="category_subtitles">字幕</string>
+    <string name="category_sorting">並び替え</string>
+    <string name="category_blocked">ブロック済み</string>
+    <string name="category_trakt">Trakt</string>
+    <string name="category_tmdb">TMDb</string>
+    <string name="category_torrents">トレント</string>
+    <string name="category_sync">同期</string>
+
+    <!-- Settings Panels & Options -->
+    <string name="panel_general">一般設定</string>
+    <string name="panel_language">言語と地域の設定</string>
+    <string name="setting_app_language">アプリの表示言語</string>
+    <string name="setting_date_format">日付の表示形式</string>
+    <string name="setting_audio_language">デフォルトの音声トラック</string>
+    <string name="setting_torrent_language">優先トレント言語</string>
+    <string name="setting_sub_languages">優先字幕検索言語</string>
+    <string name="setting_light_theme">ライトテーマを使用</string>
+    <string name="setting_auto_update">アップデートを自動確認</string>
+    <string name="setting_restore_session">セッション復元モード</string>
+    <string name="setting_history_limit">履歴の保持上限</string>
+    <string name="setting_history_icons">履歴アイコンのスタイル</string>
+    <string name="setting_bookmark_icons">ブックマークアイコンのスタイル</string>
+
+    <!-- Streams Navigation Categories -->
+    <string name="feed_search">検索</string>
+    <string name="feed_for_you">おすすめ</string>
+    <string name="feed_movies">映画</string>
+    <string name="feed_tv_shows">テレビ番組</string>
+    <string name="feed_discover">見つける</string>
+
+    <!-- Dashboard Pills -->
+    <string name="pill_favourites">お気に入り</string>
+    <string name="pill_recents">最近再生したもの</string>
+    <string name="pill_unfinished">視聴中の番組</string>
+    <string name="pill_because_watched">視聴履歴からのオススメ</string>
+    <string name="pill_cast_spotlight">注目のキャスト</string>
+    <string name="pill_trakt_watched">最も視聴された作品</string>
+    <string name="pill_trakt_anticipated">最も期待されている作品</string>
+    <string name="pill_trakt_collected">最も収集された作品</string>
+    <string name="pill_trakt_watchlist">ウォッチリスト</string>
+    <string name="pill_trakt_recommendations">あなたへのおすすめ</string>
+    <string name="pill_trending_today">今日のトレンド</string>
+    <string name="pill_trending_week">今週のトレンド</string>
+    <string name="pill_in_cinemas">上映中の作品</string>
+    <string name="pill_upcoming">近日公開</string>
+    <string name="pill_popular">人気作品</string>
+    <string name="pill_top_rated">高評価の作品</string>
+    <string name="pill_hidden_gems">隠れた名作</string>
+    <string name="pill_popular_tv">人気のテレビ番組</string>
+    <string name="pill_trending_tv_week">トレンドの番組</string>
+    <string name="pill_airing_today">本日放送</string>
+    <string name="pill_airing_week">今週放送</string>
+    <string name="pill_top_rated_tv">高評価の番組</string>
+    <string name="pill_era_2000s">2000年代のヒット</string>
+    <string name="pill_era_90s">90年代の名作</string>
+    <string name="pill_era_80s">80年代のクラシック</string>
+    <string name="pill_era_70s">70年代の映画</string>
+    <string name="pill_anime">アニメ</string>
+    <string name="pill_kdrama">韓国ドラマ</string>
+    <string name="pill_british_mysteries">英国ミステリー</string>
+    <string name="pill_cult_classics">カルトクラシック</string>
+
+    <!-- Browser Home Tabs -->
+    <string name="browser_open_tabs">開いているタブ</string>
+    <string name="browser_bookmarks">ブックマーク</string>
+    <string name="browser_history">履歴</string>
+    <string name="browser_downloads">ダウンロード</string>
+
+    <!-- Media Details Actions -->
+    <string name="media_play_movie">映画を再生</string>
+    <string name="media_trailer">予告編</string>
+    <string name="media_season">シーズン</string>
+    <string name="media_top_cast">主な出演者</string>
+    <string name="media_more_like_this">関連作品</string>
+    <string name="media_filmography">フィルモグラフィ</string>
+    <string name="media_released">公開日</string>
+    <string name="media_select_season">シーズンを選択</string>
+    <string name="media_season_num">シーズン %1$d</string>
+    <string name="media_season_cast">%1$sのキャスト</string>
+    <string name="media_no_overview">あらすじはありません。</string>
+    <string name="media_no_cast">キャストの詳細はありません。</string>
+    <string name="media_no_recommendations">おすすめの作品はありません。</string>
+    <string name="media_loading_trailer">予告編を読み込み中...</string>
+    <string name="media_filter_all">すべて</string>
+    <string name="media_filter_movies">映画</string>
+    <string name="media_filter_tv">テレビ番組</string>
+    <string name="media_no_titles_category">このカテゴリの作品は見つかりませんでした。</string>
+    <string name="media_born_in">出身地: %1$s</string>
+    <string name="media_no_biography">プロフィール情報はありません。</string>
+    <string name="media_role_as">役名: %1$s</string>
+    <string name="media_badge_actor">俳優</string>
+    <string name="media_airing_prefix">放送: </string>
+    <string name="media_aired_prefix">放送日: </string>
+    <string name="media_type_movie">映画</string>
+    <string name="media_type_tv">テレビ番組</string>
+    <string name="known_for_acting">演技</string>
+
+    <!-- Sorter Dialog -->
+    <string name="sorter_favorites_title">お気に入りの並び替え優先順位</string>
+    <string name="sorter_recent_title">最近再生した項目の並び替え</string>
+    <string name="sorter_feed_title">フィードの並び替え優先順位</string>
+    <string name="sorter_streams_title">通常ストリームの並び替え</string>
+    <string name="sorter_torrents_title">トレントの並び替え</string>
+
+    <!-- Subtitle Alignment UI -->
+    <string name="sub_sync_title">字幕同期ツール</string>
+    <string name="sub_sync_offset">現在のズレ: %1$dms</string>
+    <string name="sub_sync_btn_visual">タイムラインでの視覚的調整</string>
+    <string name="sub_sync_btn_search">セリフ検索</string>
+    <string name="sub_sync_btn_reset">タイミングをリセット</string>
+    <string name="sub_sync_btn_exit">終了</string>
+    <string name="sub_search_title">セリフの検索</string>
+    <string name="sub_search_desc">セリフの単語を入力すると、該当する音声の位置にスキップします。</string>
+    <string name="sub_search_placeholder">例: 飛び降りた</string>
+    <string name="sub_search_btn_align">検索して同期</string>
+    <string name="sub_waveform_title">波形タイムライン</string>
+    <string name="sub_waveform_silence">[ 無音 ]</string>
+    <string name="sub_waveform_offset">タイムラインのズレ: %1$dms</string>
+    <string name="sub_waveform_hint_focused">◀ 方向キーの左/右で字幕ブロックの位置をずらします ▶</string>
+    <string name="sub_waveform_hint_unfocused">選択して字幕を調整</string>
+    <string name="sub_waveform_looping">区間ループ中...</string>
+    <string name="sub_waveform_playback_running">再生中...</string>
+    <string name="sub_waveform_stop_loop">ループ停止</string>
+    <string name="sub_waveform_loop_track">シーンをループ</string>
+
+    <!-- Player Overlays & Prompts -->
+    <string name="overlay_up_next">次を再生</string>
+    <string name="overlay_skip_intro">イントロをスキップ</string>
+    <string name="overlay_skip_recap">あらすじをスキップ</string>
+    <string name="overlay_skip_early_credits">オープニングクレジットをスキップ</string>
+    <string name="overlay_skip_end_credits">エンディングをスキップ</string>
+    <string name="overlay_skip_remaining">%1$sをスキップ (残り %2$d 秒)</string>
+    <string name="overlay_skip_press_select">選択を押してスキップ</string>
+    <string name="segment_intro">イントロ</string>
+    <string name="segment_recap">あらすじ</string>
+    <string name="segment_opening_credits">オープニングクレジット</string>
+    <string name="segment_closing_credits">エンディングクレジット</string>
+    <string name="toast_skipped_intro">イントロをスキップしました</string>
+    <string name="toast_skipped_recap">あらすじをスキップしました</string>
+    <string name="toast_skipped_early_credits">オープニングをスキップしました</string>
+    <string name="toast_skipped_end_credits">エンディングをスキップしました</string>
+    <string name="captions_add_disk">ディスクから字幕を追加...</string>
+    <string name="captions_off">オフ</string>
+    <string name="captions_embedded">内蔵字幕</string>
+    <string name="dialog_quality_title">画質を選択</string>
+    <string name="dialog_sub_wait_title">字幕を自動ダウンロード中</string>
+    <string name="dialog_sub_wait_msg">字幕を検索・取得しています...</string>
+    <string name="dialog_torrent_prebuffer_title">動画ストリームを事前読み込み中</string>
+    <string name="disk_picker_select_media">メディアを選択</string>
+    <string name="disk_picker_select_subtitles">字幕を選択</string>
+    <string name="disk_picker_no_subs">ディスク上に字幕ファイル (.srt, .vtt, .ass) が見つかりません。</string>
+
+    <!-- Browser & Web Dialogs -->
+    <string name="menu_cut">切り取り</string>
+    <string name="menu_copy">コピー</string>
+    <string name="menu_paste">貼り付け</string>
+    <string name="menu_select_all">すべて選択</string>
+    <string name="menu_open_new_tab">新しいタブで開く</string>
+    <string name="menu_refresh">ページを再読み込み</string>
+    <string name="menu_block_element">要素をブロック</string>
+    <string name="dialog_video_detected_title">動画が検出されました</string>
+    <string name="dialog_video_detected_msg">動画をインターセプトしました。内蔵プレーヤーで再生しますか、それともウェブプレーヤーを使い続けますか？</string>
+    <string name="dialog_remember_decision">この決定を記憶する (今後表示しない)</string>
+    <string name="dialog_playback_error_title">再生エラー</string>
+    <string name="dialog_playback_error_msg">ExoPlayer で再生できませんでした。ブラウザで開いてみますか？\n\nエラー: %1$s</string>
+    <string name="dialog_download_title">ファイルをダウンロードしますか？</string>
+    <string name="dialog_download_msg">%1$s をダウンロードしますか？\nサイズ: %2$.2f MB</string>
+    <string name="dialog_popup_blocked_title">ポップアップをブロックしました</string>
+    <string name="dialog_popup_blocked_msg">このサイトからのポップアップを許可しますか？</string>
+    <string name="dialog_silent_block_remember">今後確認しない (サイレントブロック)</string>
+    <string name="dialog_restore_session_title">セッションを復元しますか？</string>
+    <string name="dialog_restore_session_msg">前回のタブを復元しますか？</string>
+    <string name="dialog_zoom_title">ページズーム (%1$d%%)</string>
+    <string name="dialog_zoom_msg">テキストサイズと表示倍率を調整:</string>
+    <string name="prompt_search_google_url">Google 検索または URL 入力...</string>
+    <string name="status_missing">見つかりません</string>
+
+    <!-- Scraper & Streams Screen -->
+    <string name="search_movie_tv_placeholder">映画やテレビ番組を検索...</string>
+    <string name="dashboard_recent_searches">最近の検索</string>
+    <string name="dashboard_no_items">見つかりませんでした</string>
+    <string name="scrape_stop_scanning">検索を停止</string>
+    <string name="scrape_try_all">すべて試す</string>
+    <string name="scrape_stop">停止</string>
+    <string name="scrape_sort">並び替え</string>
+    <string name="scrape_no_sources">ソースが見つかりませんでした。</string>
+    <string name="scrape_open_browser">ブラウザで開く</string>
+    <string name="scrape_play_native">内蔵プレーヤーで再生</string>
+    <string name="scrape_search_external_subs">🔍 外部字幕を検索</string>
+
+    <!-- Sorter Criteria -->
+    <string name="sort_criteria_native">内蔵プレーヤー対応度</string>
+    <string name="sort_criteria_direct">直接リンク</string>
+    <string name="sort_criteria_resolution">解像度</string>
+    <string name="sort_criteria_source">ホスト / ソース名</string>
+    <string name="sort_criteria_language">言語</string>
+    <string name="sort_criteria_size">ファイルサイズ</string>
+    <string name="sort_criteria_seeders">シーダー数</string>
+    <string name="sort_criteria_date_added">追加日時</string>
+    <string name="sort_criteria_date_accessed">最終アクセス</string>
+    <string name="sort_criteria_az">五十音 / アルファベット順</string>
+    <string name="sort_criteria_rating">評価</string>
+    <string name="sort_criteria_fav_actors">お気に入りの俳優</string>
+    <string name="sort_criteria_date">公開日</string>
+    <string name="sort_criteria_default">デフォルト順</string>
+
+    <!-- Settings Panels & Options Details -->
+    <string name="panel_web">ウェブ＆広告ブロック設定</string>
+    <string name="setting_silent_block">ポップアップを静かにブロック</string>
+    <string name="setting_clickjack">クリックジャッキング防止</string>
+    <string name="setting_custom_adblock_url">カスタムAdBlockルールURL（EasyList形式）</string>
+    <string name="btn_update_rules_now">今すぐルールを更新</string>
+    <string name="status_rules_loaded">有効なフィルタールール: 約%1$d件</string>
+    <string name="status_rules_updating">フィルターリストを更新中...</string>
+    <string name="toast_rules_updated">Filter lists updated!</string>
+    <string name="toast_rules_update_failed">Update failed</string>
+    <string name="status_checking_updates">アップデートを確認中...</string>
+    <string name="btn_check_updates">アップデートを確認 (v%1$s)</string>
+    <string name="setting_current">現在</string>
+    <string name="label_profile_name">プロファイル名</string>
+    <string name="label_url_patterns">URLパターン</string>
+    <string name="label_action_mode">Action Mode</string>
+    <string name="opt_custom_script">Custom Script</string>
+    <string name="opt_simple_selectors">Simple Element List</string>
+    <string name="label_js_action">JavaScript Action</string>
+    <string name="label_click_selectors">クリックセレクター</string>
+    <string name="btn_add_selector">+ セレクターを追加</string>
+    <string name="dialog_edit_autoplay_title">Edit Autoplay Profile</string>
+    <string name="dialog_add_autoplay_title">Add New Autoplay Profile</string>
+    <string name="dialog_custom_sub_limit_title">字幕ダウンロード数の上限設定</string>
+    <string name="dialog_custom_sub_limit_msg">上限数を入力してください:</string>
+    <string name="label_opensubtitles_username">OpenSubtitles Username</string>
+    <string name="label_opensubtitles_password">OpenSubtitles Password</string>
+    <string name="label_opensubtitles_org_username">OpenSubtitles.org Username</string>
+    <string name="label_opensubtitles_org_password">OpenSubtitles.org Password</string>
+    <string name="label_subdl_apikey">SubDL API Key</string>
+    <string name="label_subsource_apikey">SubSource API Key</string>
+    <string name="label_rule_name">ルール名</string>
+    <string name="label_css_selectors">CSSセレクター (1行に1つ)</string>
+    <string name="dialog_edit_block_rule">ブロックルールを編集</string>
+    <string name="dialog_add_block_rule">ブロックルールを追加</string>
+    <string name="dialog_auth_trakt_title">Trakt.tvの認証</string>
+    <string name="dialog_auth_trakt_step1">1. 認証ページにアクセスしてください:</string>
+    <string name="dialog_auth_trakt_step2">2. デバイスに次のコードを入力してください:</string>
+    <string name="dialog_auth_trakt_waiting">Traktの認証を待機中...</string>
+    <string name="btn_open_link">リンクを開く</string>
+    <string name="label_username">ユーザー名</string>
+    <string name="label_password">パスワード</string>
+    <string name="dialog_auto_clean_interval_title">自動削除の間隔</string>
+    <string name="dialog_auto_clean_interval_msg">キャッシュ削除の間隔(日数)を入力してください:</string>
+    <string name="status_signed_in_as">ログイン中: %1$s</string>
+    <string name="status_not_signed_in">未ログイン</string>
+
+    <string name="panel_player">内蔵プレーヤーの設定</string>
+    <string name="setting_extract_video">動画抽出インターセプト</string>
+    <string name="setting_fallback_error">再生エラー時のフォールバック</string>
+    <string name="header_binge_autoplay">連続再生と自動再生</string>
+    <string name="setting_intro_skip">イントロ検出時の動作</string>
+    <string name="setting_recap_skip">あらすじ検出時の動作</string>
+    <string name="setting_early_credits_skip">オープニング検出時の動作</string>
+    <string name="setting_end_credits_skip">エンディング検出時の動作</string>
+    <string name="setting_up_next_mode">次のエピソード通知モード</string>
+    <string name="setting_up_next_time">終了前の秒数（検出不可時）</string>
+    <string name="setting_source_selection_next">次のエピソードのソース選択</string>
+    <string name="setting_episode_focus_style">エピソード自動フォーカス形式</string>
+
+    <string name="panel_interface">インターフェースとナビゲーション設定</string>
+    <string name="setting_scroll_topbar">上スクロールでメニューバー表示</string>
+    <string name="setting_nav_mode">デフォルトのポインターモード</string>
+    <string name="setting_scrape_tab_order">検索結果タブの並び順</string>
+    <string name="header_hardware_devices">ハードウェア機器と外部入力</string>
+    <string name="setting_hw_keyboard_mode">物理キーボードモード</string>
+    <string name="setting_hw_mouse_mode">物理マウスモード</string>
+    <string name="setting_menu_keybind">メニューボタンのショートカット</string>
+    <string name="setting_menu_rebind">再割り当て</string>
+    <string name="setting_menu_reset">リセット</string>
+    <string name="setting_press_key_combo">設定したいキーの組み合わせを押してください</string>
+    <string name="setting_listening_keys">キー入力を待機中...</string>
+
+    <string name="panel_feeds">フィードとホームのカスタマイズ</string>
+    <string name="setting_card_thumbnail_style">サムネイルのアスペクト比</string>
+    <string name="setting_prioritize_fav_cast">フィードでお気に入りキャストを優先</string>
+    <string name="header_for_you_feeds">おすすめフィード</string>
+    <string name="header_movie_feeds">映画フィード</string>
+    <string name="header_movie_genres">映画ジャンル</string>
+    <string name="header_tv_feeds">番組フィード</string>
+    <string name="header_tv_genres">番組ジャンル</string>
+    <string name="header_discover_networks">見つける: 配信サービスと時代</string>
+    <string name="header_discover_eras">見つける: 年代と時代</string>
+    <string name="header_discover_world">見つける: 世界の映画とジャンル</string>
+    <string name="header_fav_cast_mgmt">お気に入りキャストの管理</string>
+    <string name="desc_fav_cast_mgmt">お気に入りの番組のキャストを管理したり、検索して手動で追加できます。</string>
+    <string name="setting_auto_sync_fav_cast">お気に入り作品のキャストを自動同期</string>
+    <string name="prompt_search_actor">追加する俳優を検索 (例: キリアン・マーフィー)...</string>
+    <string name="label_live_results">検索結果 (選択して追加):</string>
+    <string name="label_cast_pool">キャスト一覧 (%1$d)</string>
+    <string name="label_add_actor">+ 追加</string>
+    <string name="desc_no_fav_actors">キャストはまだ追加されていません。作品をお気に入りに追加するか、上記で検索してください。</string>
+    <string name="label_added_via_fav">お気に入りに基づき追加: %1$s</string>
+    <string name="label_added_via_search">検索から追加</string>
+
+    <string name="panel_streaming">ストリーミングと検索エンジンの設定</string>
+    <string name="setting_timeout_logic">タイムアウト判定</string>
+    <string name="setting_enforce_whitelist">ホストのホワイトリストを適用</string>
+    <string name="setting_global_timeout">エンジン全体のタイムアウト (秒)</string>
+    <string name="setting_source_timeout">ソースごとのタイムアウト制限 (秒)</string>
+    <string name="setting_scraper_workers">検索スレッド数 (デフォルト: 3)</string>
+    <string name="header_provider_packages">プロバイダーパッケージ</string>
+    <string name="header_host_whitelists">ホストホワイトリスト</string>
+    <string name="prompt_search_whitelists">ホワイトリストを検索...</string>
+    <string name="label_provider_whitelist">パッケージのホワイトリスト</string>
+    <string name="label_resolveurl_whitelist">ResolveURL ホワイトリスト</string>
+
+    <string name="panel_autoplay">自動再生プロファイル</string>
+    <string name="setting_autoplay_global">動画をグローバルに自動再生</string>
+    <string name="btn_add_autoplay_profile">新規プロファイルを追加</string>
+
+    <string name="panel_subtitles">字幕検索設定</string>
+    <string name="setting_sub_rendering_engine">字幕描画エンジン</string>
+    <string name="setting_sub_auto_search">自動検索の動作</string>
+    <string name="setting_subs_to_download">ダウンロードする字幕数</string>
+    <string name="setting_sub_video_launches">動画再生開始時</string>
+    <string name="setting_sub_retention">字幕ファイルの保存期間</string>
+    <string name="setting_sub_limit">字幕検索の上限件数</string>
+    <string name="header_sub_accounts">字幕アカウントとAPIキー</string>
+    <string name="header_sub_engines">字幕検索エンジン</string>
+
+    <string name="panel_sorting">結果とフィードの並び替え設定</string>
+    <string name="panel_blocked">ブロックされたウェブ要素のルール</string>
+    <string name="btn_add_css_rule">新規CSSブロックルールを追加</string>
+
+    <string name="panel_trakt">Trakt.tv 同期連携</string>
+    <string name="status_trakt_authed">認証済みアカウント: %1$s</string>
+    <string name="btn_logout_trakt">Traktからログアウト</string>
+    <string name="status_trakt_unlinked">Traktアカウントは未連携です。</string>
+    <string name="btn_auth_trakt">Traktアカウントを認証</string>
+
+    <string name="panel_tmdb">TMDb アカウント情報</string>
+    <string name="status_tmdb_active">TMDbセッションが有効です</string>
+    <string name="btn_login">ログイン</string>
+    <string name="btn_logout">ログアウト</string>
+
+    <string name="panel_torrents">トレントストリーミング設定</string>
+    <string name="setting_prebuffer_size">再生事前バッファサイズ</string>
+    <string name="setting_torrent_cache_clean">トレントキャッシュの自動削除モード</string>
+    <string name="header_storage_cache_mgmt">ストレージキャッシュ管理</string>
+    <string name="label_total_cached_p2p">キャッシュされた合計P2P容量</string>
+    <string name="label_cached_subfolders">キャッシュ内サブフォルダ</string>
+    <string name="label_clean_interval">削除間隔</string>
+    <string name="format_every_x_days">%1$d日ごと</string>
+    <string name="label_disabled_set">無効 / タップして設定</string>
+    <string name="btn_clear">消去</string>
+
+    <string name="panel_sync">ローカルバックアップと復元</string>
+    <string name="desc_local_backup">Googleアカウントを使用せず、設定やブックマークを端末のダウンロードフォルダにJSON形式で保存・復元します。</string>
+    <string name="btn_save_backup">バックアップを保存</string>
+    <string name="btn_restore_backup">バックアップを復元</string>
+    <string name="header_drive_sync">Google Drive クラウド同期</string>
+    <string name="desc_drive_sync">Google Drive内の専用アプリフォルダを使用して、端末間で設定や履歴を自動的に同期します。</string>
+    <string name="status_sync">ステータス: %1$s</string>
+    <string name="btn_sign_in_google">Googleでログイン</string>
+    <string name="btn_force_sync">今すぐ手動同期</string>
+
+    <!-- Option values for Dropdowns -->
+    <string name="opt_restore_ask">復元するか確認する</string>
+    <string name="opt_restore_always_load">常に復元して読み込む</string>
+    <string name="opt_restore_always">常に復元する</string>
+    <string name="opt_restore_never">復元しない</string>
+
+    <string name="opt_hist_10">10件</string>
+    <string name="opt_hist_20">20件</string>
+    <string name="opt_hist_50">50件</string>
+    <string name="opt_hist_unlimited">無制限</string>
+
+    <string name="opt_icons_snapshots">スナップショット (サムネイル)</string>
+    <string name="opt_icons_favicons">ファビコン</string>
+
+    <string name="opt_extract_ask">再生するか確認する</string>
+    <string name="opt_extract_always">常に内蔵プレーヤーで再生</string>
+    <string name="opt_extract_never">再生しない (ブラウザを使用)</string>
+
+    <string name="opt_fallback_ask">切り替えるか確認する</string>
+    <string name="opt_fallback_always">常にブラウザに切り替える</string>
+    <string name="opt_fallback_never">切り替えない</string>
+
+    <string name="opt_skip_skip">スキップ</string>
+    <string name="opt_skip_ask">スキップするか確認</string>
+    <string name="opt_skip_ignore">何もしない</string>
+
+    <string name="opt_up_next_ask">次を再生するか確認</string>
+    <string name="opt_up_next_always">常に自動で再生</string>
+    <string name="opt_up_next_never">通知を表示しない</string>
+
+    <string name="opt_autoplay_closest">最も近いソース (同一ホスト)</string>
+    <string name="opt_autoplay_best">最高画質のソース</string>
+    <string name="opt_autoplay_ask">確認する (結果一覧を表示)</string>
+
+    <string name="opt_focus_next_watched">最近見た回の次のエピソード</string>
+    <string name="opt_focus_first_unwatched">最初の未視聴エピソード</string>
+
+    <string name="opt_nav_pointer">仮想ポインター (マウス)</string>
+    <string name="opt_nav_dpad">十字キーによるフォーカス移動</string>
+
+    <string name="opt_scrape_web_torrents">ウェブ、トレント</string>
+    <string name="opt_scrape_torrents_web">トレント、ウェブ</string>
+
+    <string name="opt_hw_auto">自動検出 (推奨)</string>
+    <string name="opt_hw_always">常に有効</string>
+    <string name="opt_hw_disabled">無効 (TVリモコンモード)</string>
+
+    <string name="opt_thumb_portrait">縦長 (2:3) [標準]</string>
+    <string name="opt_thumb_landscape">横長 (16:9)</string>
+
+    <string name="opt_timeout_global">全体タイムアウトのみ</string>
+    <string name="opt_timeout_source">ソース別タイムアウトのみ</string>
+    <string name="opt_timeout_both">両方を適用</string>
+
+    <string name="opt_sub_engine_native">標準 (再読み込みが必要)</string>
+    <string name="opt_sub_engine_overlay">カスタムオーバーレイ (遅延なし)</string>
+
+    <string name="opt_sub_behavior_ask">検索するか確認する</string>
+    <string name="opt_sub_behavior_auto">自動で検索する</string>
+    <string name="opt_sub_behavior_never">検索しない</string>
+
+    <string name="opt_sub_count_other">カスタム</string>
+    <string name="opt_sub_count_all">すべて</string>
+
+    <string name="opt_sub_launch_stop">ダウンロードを即座に中止</string>
+    <string name="opt_sub_launch_ask">待機するか確認する</string>
+    <string name="opt_sub_launch_background">バックグラウンドで続行</string>
+
+    <string name="opt_retention_indefinite">無期限に保持</string>
+    <string name="opt_retention_1d">1日間</string>
+    <string name="opt_retention_3d">3日間</string>
+    <string name="opt_retention_7d">7日間</string>
+    <string name="opt_retention_14d">14日間</string>
+    <string name="opt_retention_30d">30日間</string>
+
+    <string name="opt_prebuffer_1">1ピース (最速 / 標準)</string>
+    <string name="opt_prebuffer_2">2ピース</string>
+    <string name="opt_prebuffer_4">4ピース (標準的)</string>
+    <string name="opt_prebuffer_8">8ピース (最も安定的)</string>
+
+    <string name="opt_clean_manual">手動のみ</string>
+    <string name="opt_clean_new_torrent">新しいトレント開始時</string>
+    <string name="opt_clean_exit">動画終了時</string>
+    <string name="opt_clean_days">指定日数ごと</string>
+
+    <!-- TMDb Genres -->
+    <string name="genre_action">アクション</string>
+    <string name="genre_adventure">アドベンチャー</string>
+    <string name="genre_animation">アニメーション</string>
+    <string name="genre_comedy">コメディ</string>
+    <string name="genre_crime">犯罪</string>
+    <string name="genre_documentary">ドキュメンタリー</string>
+    <string name="genre_drama">ドラマ</string>
+    <string name="genre_family">ファミリー</string>
+    <string name="genre_fantasy">ファンタジー</string>
+    <string name="genre_history">歴史</string>
+    <string name="genre_horror">ホラー</string>
+    <string name="genre_music">音楽</string>
+    <string name="genre_mystery">ミステリー</string>
+    <string name="genre_romance">ロマンス</string>
+    <string name="genre_scifi">SF</string>
+    <string name="genre_tv_movie">テレビ映画</string>
+    <string name="genre_thriller">スリラー</string>
+    <string name="genre_war">戦争</string>
+    <string name="genre_western">西部劇</string>
+    <string name="genre_action_adventure">アクション＆アドベンチャー</string>
+    <string name="genre_kids">キッズ</string>
+    <string name="genre_news">ニュース</string>
+    <string name="genre_reality">リアリティ</string>
+    <string name="genre_scifi_fantasy">SF＆ファンタジー</string>
+    <string name="genre_soap">ソープオペラ</string>
+    <string name="genre_talk">トーク番組</string>
+    <string name="genre_war_politics">戦争＆政治</string>
+
+    <string name="opt_system_default">システムのデフォルト</string>
+    <string name="opt_follow_app_language">アプリの言語に従う (デフォルト)</string>
+    <string name="setting_action_mode">動作モード</string>
+    <string name="opt_action_custom_script">カスタムスクリプト</string>
+    <string name="opt_action_simple_elements">シンプル要素リスト</string>
+    <string name="label_javascript_action">JavaScriptアクション</string>
+</resources>

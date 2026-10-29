@@ -19,8 +19,8 @@ import java.security.MessageDigest
 object AppCacheManager {
     private const val TAG = "AppCacheManager"
 
-    private const val MAX_IMAGE_CACHE_BYTES = 80L * 1024L * 1024L // 80 MB limit
-    private const val MAX_JSON_CACHE_BYTES = 20L * 1024L * 1024L  // 20 MB limit
+    private const val MAX_IMAGE_CACHE_BYTES = 80L * 1024L * 1024L
+    private const val MAX_JSON_CACHE_BYTES = 20L * 1024L * 1024L
 
     private val ramMemoryMax = (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt().coerceAtLeast(4096)
     val memoryBitmapCache = object : LruCache<String, Bitmap>(ramMemoryMax) {
@@ -31,6 +31,10 @@ object AppCacheManager {
     private val episodesMemCache = LruCache<String, JSONArray>(60)
     private val seasonCreditsMemCache = LruCache<String, JSONArray>(60)
     private val libraryMemCache = LruCache<String, JSONArray>(20)
+
+    private fun getLang(context: Context): String {
+        return LanguageHelper.getAppLanguage(context).code
+    }
 
     private fun md5(str: String): String {
         val digest = MessageDigest.getInstance("MD5")
@@ -43,8 +47,6 @@ object AppCacheManager {
 
     private fun getJsonDir(context: Context): File =
         File(context.cacheDir, "tmdb_json_cache").apply { if (!exists()) mkdirs() }
-
-    // --- BITMAP IMAGE CACHE (DISK + RAM) ---
 
     fun getImageBitmap(context: Context, url: String): Bitmap? {
         if (url.isBlank()) return null
@@ -84,10 +86,9 @@ object AppCacheManager {
         }
     }
 
-    // --- DETAILS JSON CACHE (DISK + RAM) ---
-
     fun getDetails(context: Context, mediaType: String, id: String): JSONObject? {
-        val key = "${mediaType}_$id"
+        val lang = getLang(context)
+        val key = "${mediaType}_${id}_$lang"
         val mem = detailsMemCache.get(key)
         if (mem != null) {
             if (mediaType == "tv" && !mem.has("aggregate_credits")) {
@@ -117,7 +118,8 @@ object AppCacheManager {
     }
 
     fun saveDetails(context: Context, mediaType: String, id: String, data: JSONObject) {
-        val key = "${mediaType}_$id"
+        val lang = getLang(context)
+        val key = "${mediaType}_${id}_$lang"
         detailsMemCache.put(key, data)
         try {
             val file = File(getJsonDir(context), "details_$key.json")
@@ -127,7 +129,8 @@ object AppCacheManager {
     }
 
     fun getEpisodes(context: Context, showId: String, season: Int): JSONArray? {
-        val key = "${showId}_$season"
+        val lang = getLang(context)
+        val key = "${showId}_${season}_$lang"
         val mem = episodesMemCache.get(key)
         if (mem != null && mem.length() > 0) return mem
 
@@ -153,7 +156,8 @@ object AppCacheManager {
 
     fun saveEpisodes(context: Context, showId: String, season: Int, array: JSONArray) {
         if (array.length() == 0) return
-        val key = "${showId}_$season"
+        val lang = getLang(context)
+        val key = "${showId}_${season}_$lang"
         episodesMemCache.put(key, array)
         try {
             val file = File(getJsonDir(context), "episodes_$key.json")
@@ -163,7 +167,8 @@ object AppCacheManager {
     }
 
     fun getSeasonCredits(context: Context, showId: String, season: Int): JSONArray? {
-        val key = "${showId}_$season"
+        val lang = getLang(context)
+        val key = "${showId}_${season}_$lang"
         val mem = seasonCreditsMemCache.get(key)
         if (mem != null && mem.length() > 0) return mem
 
@@ -189,7 +194,8 @@ object AppCacheManager {
 
     fun saveSeasonCredits(context: Context, showId: String, season: Int, array: JSONArray) {
         if (array.length() == 0) return
-        val key = "${showId}_$season"
+        val lang = getLang(context)
+        val key = "${showId}_${season}_$lang"
         seasonCreditsMemCache.put(key, array)
         try {
             val file = File(getJsonDir(context), "season_credits_$key.json")
@@ -199,14 +205,15 @@ object AppCacheManager {
     }
 
     fun getActorCredits(context: Context, actorId: Int): JSONArray? {
-        val key = "actor_credits_$actorId"
+        val lang = getLang(context)
+        val key = "actor_credits_${actorId}_$lang"
         val mem = libraryMemCache.get(key)
         if (mem != null) return mem
 
-        val file = File(getJsonDir(context), "credits_$actorId.json")
+        val file = File(getJsonDir(context), "credits_${actorId}_$lang.json")
         if (file.exists()) {
             val age = System.currentTimeMillis() - file.lastModified()
-            if (age < 7L * 24L * 60L * 60L * 1000L) { // 7 days TTL for actor filmographies
+            if (age < 7L * 24L * 60L * 60L * 1000L) {
                 return try {
                     val arr = JSONArray(file.readText(Charsets.UTF_8))
                     libraryMemCache.put(key, arr)
@@ -221,28 +228,29 @@ object AppCacheManager {
     }
 
     fun saveActorCredits(context: Context, actorId: Int, array: JSONArray) {
-        val key = "actor_credits_$actorId"
+        val lang = getLang(context)
+        val key = "actor_credits_${actorId}_$lang"
         libraryMemCache.put(key, array)
         try {
-            val file = File(getJsonDir(context), "credits_$actorId.json")
+            val file = File(getJsonDir(context), "credits_${actorId}_$lang.json")
             file.writeText(array.toString(), Charsets.UTF_8)
             pruneCacheDir(getJsonDir(context), MAX_JSON_CACHE_BYTES)
         } catch (_: Exception) {}
     }
 
-    // --- LIBRARY CATEGORY CACHE (DISK + RAM) ---
-
     fun getLibraryCategory(context: Context, key: String): JSONArray? {
-        val mem = libraryMemCache.get(key)
+        val lang = getLang(context)
+        val localizedKey = "${key}_$lang"
+        val mem = libraryMemCache.get(localizedKey)
         if (mem != null) return mem
 
-        val file = File(getJsonDir(context), "lib_${md5(key)}.json")
+        val file = File(getJsonDir(context), "lib_${md5(localizedKey)}.json")
         if (file.exists()) {
             val age = System.currentTimeMillis() - file.lastModified()
-            if (age < 24L * 60L * 60L * 1000L) { // 24 hours TTL
+            if (age < 24L * 60L * 60L * 1000L) {
                 return try {
                     val arr = JSONArray(file.readText(Charsets.UTF_8))
-                    libraryMemCache.put(key, arr)
+                    libraryMemCache.put(localizedKey, arr)
                     arr
                 } catch (e: Exception) {
                     file.delete()
@@ -254,9 +262,11 @@ object AppCacheManager {
     }
 
     fun saveLibraryCategory(context: Context, key: String, array: JSONArray) {
-        libraryMemCache.put(key, array)
+        val lang = getLang(context)
+        val localizedKey = "${key}_$lang"
+        libraryMemCache.put(localizedKey, array)
         try {
-            val file = File(getJsonDir(context), "lib_${md5(key)}.json")
+            val file = File(getJsonDir(context), "lib_${md5(localizedKey)}.json")
             file.writeText(array.toString(), Charsets.UTF_8)
             pruneCacheDir(getJsonDir(context), MAX_JSON_CACHE_BYTES)
         } catch (_: Exception) {}
@@ -271,6 +281,20 @@ object AppCacheManager {
                 if (file.name.startsWith("lib_")) {
                     file.delete()
                 }
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun clearAllTmdbCaches(context: Context) {
+        libraryMemCache.evictAll()
+        detailsMemCache.evictAll()
+        episodesMemCache.evictAll()
+        seasonCreditsMemCache.evictAll()
+        try {
+            val dir = getJsonDir(context)
+            val files = dir.listFiles() ?: return
+            for (file in files) {
+                file.delete()
             }
         } catch (_: Exception) {}
     }

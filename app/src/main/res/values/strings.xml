@@ -1,3 +1,537 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TVBrowser</string>
+    <string name="app_name">Poobi</string>
+
+    <!-- Top Navigation -->
+    <string name="tab_browser">Browser</string>
+    <string name="tab_streams">Streams</string>
+    <string name="title_settings">Settings</string>
+
+    <!-- Common Actions & Buttons -->
+    <string name="btn_save_exit">Save &amp; Exit</string>
+    <string name="btn_save">Save</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_delete">Delete</string>
+    <string name="btn_edit">Edit</string>
+    <string name="btn_close">Close</string>
+    <string name="btn_done">Done</string>
+    <string name="btn_select_all">Select All</string>
+    <string name="btn_deselect_all">Deselect All</string>
+    <string name="btn_clear_all">Clear All</string>
+    <string name="btn_back">Back</string>
+    <string name="btn_apply">Apply</string>
+    <string name="btn_play_now">Play Now</string>
+    <string name="btn_skip_play">Skip &amp; Play</string>
+    <string name="btn_download">Download</string>
+    <string name="btn_allow">Allow</string>
+    <string name="btn_block">Block</string>
+    <string name="btn_play_native">Play Native</string>
+    <string name="btn_website_player">Website Player</string>
+    <string name="btn_open_in_browser">Open in Browser</string>
+    <string name="btn_restore">Restore</string>
+    <string name="btn_restore_load">Restore &amp; Load</string>
+    <string name="btn_new_session">New Session</string>
+    <string name="btn_zoom_out">- Zoom Out</string>
+    <string name="btn_zoom_reset">100% (Reset)</string>
+    <string name="btn_zoom_in">+ Zoom In</string>
+    <string name="btn_load_all_tabs">Load All Tabs</string>
+    <string name="btn_restore_all_tabs">Restore All Tabs</string>
+    <string name="btn_clear_bookmarks">Clear Bookmarks</string>
+    <string name="btn_clear_history">Clear History</string>
+    <string name="btn_clear_downloads">Clear Downloads</string>
+    <string name="btn_prev">Prev</string>
+    <string name="btn_next">Next</string>
+
+    <!-- Settings Categories -->
+    <string name="category_general">General</string>
+    <string name="category_language">Language</string>
+    <string name="category_web">Web</string>
+    <string name="category_player">Player</string>
+    <string name="category_interface">Interface</string>
+    <string name="category_feeds">Feeds</string>
+    <string name="category_streaming">Streaming</string>
+    <string name="category_autoplay">Autoplay</string>
+    <string name="category_subtitles">Subtitles</string>
+    <string name="category_sorting">Sorting</string>
+    <string name="category_blocked">Blocked</string>
+    <string name="category_trakt">Trakt</string>
+    <string name="category_tmdb">TMDb</string>
+    <string name="category_torrents">Torrents</string>
+    <string name="category_sync">Sync</string>
+
+    <!-- Settings Panels & Options -->
+    <string name="panel_general">General Settings</string>
+    <string name="panel_language">Language &amp; Regional Settings</string>
+    <string name="setting_app_language">App Interface Language</string>
+    <string name="setting_date_format">App Date Format</string>
+    <string name="setting_audio_language">Default Video Audio Track</string>
+    <string name="setting_torrent_language">Preferred Torrent Language</string>
+    <string name="setting_sub_languages">Preferred Subtitle Search Languages</string>
+    <string name="setting_light_theme">Use Light Theme</string>
+    <string name="setting_auto_update">Check for Updates Automatically</string>
+    <string name="setting_restore_session">Restore Session Mode</string>
+    <string name="setting_history_limit">History Retention Limit</string>
+    <string name="setting_history_icons">History Icons Style</string>
+    <string name="setting_bookmark_icons">Bookmark Icons Style</string>
+
+    <!-- Streams Navigation Categories -->
+    <string name="feed_search">Search</string>
+    <string name="feed_for_you">For You</string>
+    <string name="feed_movies">Movies</string>
+    <string name="feed_tv_shows">TV Shows</string>
+    <string name="feed_discover">Discover</string>
+
+    <!-- Dashboard Pills -->
+    <string name="pill_favourites">Favourites</string>
+    <string name="pill_recents">Recently Watched</string>
+    <string name="pill_unfinished">Unfinished Shows</string>
+    <string name="pill_because_watched">Because You Watched</string>
+    <string name="pill_cast_spotlight">Cast in Spotlight</string>
+    <string name="pill_trakt_watched">Most Watched</string>
+    <string name="pill_trakt_anticipated">Anticipated</string>
+    <string name="pill_trakt_collected">Most Collected</string>
+    <string name="pill_trakt_watchlist">Watchlist</string>
+    <string name="pill_trakt_recommendations">For Me</string>
+    <string name="pill_trending_today">Trending Today</string>
+    <string name="pill_trending_week">Trending This Week</string>
+    <string name="pill_in_cinemas">In Cinemas</string>
+    <string name="pill_upcoming">Upcoming</string>
+    <string name="pill_popular">Popular</string>
+    <string name="pill_top_rated">Top Rated</string>
+    <string name="pill_hidden_gems">Hidden Gems</string>
+    <string name="pill_popular_tv">Popular TV</string>
+    <string name="pill_trending_tv_week">Trending This Week</string>
+    <string name="pill_airing_today">Airing Today</string>
+    <string name="pill_airing_week">Airing This Week</string>
+    <string name="pill_top_rated_tv">Top Rated TV</string>
+    <string name="pill_era_2000s">2000s Hits</string>
+    <string name="pill_era_90s">90s Nostalgia</string>
+    <string name="pill_era_80s">80s Classics</string>
+    <string name="pill_era_70s">70s Cinema</string>
+    <string name="pill_anime">Anime</string>
+    <string name="pill_kdrama">K-Dramas</string>
+    <string name="pill_british_mysteries">British Mysteries</string>
+    <string name="pill_cult_classics">Cult Classics</string>
+
+    <!-- Browser Home Tabs -->
+    <string name="browser_open_tabs">Open Tabs</string>
+    <string name="browser_bookmarks">Bookmarks</string>
+    <string name="browser_history">History</string>
+    <string name="browser_downloads">Downloads</string>
+
+    <!-- Media Details Actions -->
+    <string name="media_play_movie">Play Movie</string>
+    <string name="media_trailer">Trailer</string>
+    <string name="media_season">Season</string>
+    <string name="media_top_cast">Top Cast</string>
+    <string name="media_more_like_this">More Like This</string>
+    <string name="media_filmography">Filmography</string>
+    <string name="media_released">Released</string>
+    <string name="media_select_season">Select Season</string>
+    <string name="media_season_num">Season %1$d</string>
+    <string name="media_season_cast">%1$s Cast</string>
+    <string name="media_no_overview">No description available.</string>
+    <string name="media_no_cast">No cast details available.</string>
+    <string name="media_no_recommendations">No recommendations available.</string>
+    <string name="media_loading_trailer">Loading Trailer...</string>
+    <string name="media_filter_all">All</string>
+    <string name="media_filter_movies">Movies</string>
+    <string name="media_filter_tv">TV Shows</string>
+    <string name="media_no_titles_category">No titles found for this category.</string>
+    <string name="media_born_in">Born in: %1$s</string>
+    <string name="media_no_biography">No biography available.</string>
+    <string name="media_role_as">as %1$s</string>
+    <string name="media_badge_actor">ACTOR</string>
+    <string name="media_airing_prefix">Airing: </string>
+    <string name="media_aired_prefix">Aired: </string>
+    <string name="media_type_movie">Movie</string>
+    <string name="media_type_tv">TV Series</string>
+    <string name="known_for_acting">Acting</string>
+
+    <!-- Sorter Dialog -->
+    <string name="sorter_favorites_title">Favourites Sorter Priorities</string>
+    <string name="sorter_recent_title">Recently Watched Sorter Priorities</string>
+    <string name="sorter_feed_title">Feed Sorter Priorities</string>
+    <string name="sorter_streams_title">Regular Streams Sorter</string>
+    <string name="sorter_torrents_title">Torrents Sorter</string>
+
+    <!-- Subtitle Alignment UI -->
+    <string name="sub_sync_title">Subtitle Synchronizer</string>
+    <string name="sub_sync_offset">Current Offset: %1$dms</string>
+    <string name="sub_sync_btn_visual">Visual Timeline Alignment</string>
+    <string name="sub_sync_btn_search">Search Spoken Words</string>
+    <string name="sub_sync_btn_reset">Reset Timing</string>
+    <string name="sub_sync_btn_exit">Exit</string>
+    <string name="sub_search_title">Search Dialogue Cue</string>
+    <string name="sub_search_desc">Enter search words to jump closer to target audio sequences.</string>
+    <string name="sub_search_placeholder">e.g. jumped off</string>
+    <string name="sub_search_btn_align">Search &amp; Align</string>
+    <string name="sub_waveform_title">Waveform Alignment Timeline</string>
+    <string name="sub_waveform_silence">[ Silence ]</string>
+    <string name="sub_waveform_offset">Timeline Offset: %1$dms</string>
+    <string name="sub_waveform_hint_focused">◀ Press D-pad Left / Right to shift subtitle blocks relative to Playhead ▶</string>
+    <string name="sub_waveform_hint_unfocused">Select to adjust subtitle blocks</string>
+    <string name="sub_waveform_looping">Looping segment...</string>
+    <string name="sub_waveform_playback_running">Playback running...</string>
+    <string name="sub_waveform_stop_loop">Stop Loop</string>
+    <string name="sub_waveform_loop_track">Loop Track</string>
+
+    <!-- Player Overlays & Prompts -->
+    <string name="overlay_up_next">UP NEXT</string>
+    <string name="overlay_skip_intro">SKIP INTRO</string>
+    <string name="overlay_skip_recap">SKIP RECAP</string>
+    <string name="overlay_skip_early_credits">SKIP OPENING CREDITS</string>
+    <string name="overlay_skip_end_credits">SKIP CLOSING CREDITS</string>
+    <string name="overlay_skip_remaining">Skip %1$s (%2$d s remaining)</string>
+    <string name="overlay_skip_press_select">Press Select to jump past</string>
+    <string name="segment_intro">Intro</string>
+    <string name="segment_recap">Recap</string>
+    <string name="segment_opening_credits">Opening Credits</string>
+    <string name="segment_closing_credits">Closing Credits</string>
+    <string name="toast_skipped_intro">Skipped Intro</string>
+    <string name="toast_skipped_recap">Skipped Recap</string>
+    <string name="toast_skipped_early_credits">Skipped Opening Credits</string>
+    <string name="toast_skipped_end_credits">Skipped End Credits</string>
+    <string name="captions_add_disk">Add subtitle from disk...</string>
+    <string name="captions_off">Off</string>
+    <string name="captions_embedded">Embedded Subtitle</string>
+    <string name="dialog_quality_title">Select Video Quality</string>
+    <string name="dialog_sub_wait_title">Auto-Downloading Subtitles</string>
+    <string name="dialog_sub_wait_msg">Searching and fetching subtitles...</string>
+    <string name="dialog_torrent_prebuffer_title">Pre-Buffering Video Stream</string>
+    <string name="disk_picker_select_media">Select Media</string>
+    <string name="disk_picker_select_subtitles">Select Subtitles</string>
+    <string name="disk_picker_no_subs">No subtitle files (.srt, .vtt, .ass) found on disk.</string>
+
+    <!-- Browser & Web Dialogs -->
+    <string name="menu_cut">Cut</string>
+    <string name="menu_copy">Copy</string>
+    <string name="menu_paste">Paste</string>
+    <string name="menu_select_all">Select All</string>
+    <string name="menu_open_new_tab">Open in New Tab</string>
+    <string name="menu_refresh">Refresh Page</string>
+    <string name="menu_block_element">Block Element</string>
+    <string name="dialog_video_detected_title">Video Detected</string>
+    <string name="dialog_video_detected_msg">Video intercepted. Would you like to play it inside the native player or keep using the website player?</string>
+    <string name="dialog_remember_decision">Remember my decision (Don\'t ask again)</string>
+    <string name="dialog_playback_error_title">Playback Error</string>
+    <string name="dialog_playback_error_msg">ExoPlayer failed to play this stream. Would you like to try opening it in the browser instead?\n\nError: %1$s</string>
+    <string name="dialog_download_title">Download File?</string>
+    <string name="dialog_download_msg">Do you want to download %1$s?\nSize: %2$.2f MB</string>
+    <string name="dialog_popup_blocked_title">Popup Blocked</string>
+    <string name="dialog_popup_blocked_msg">Do you want to allow a popup from this site?</string>
+    <string name="dialog_silent_block_remember">Never ask again (Silent Block)</string>
+    <string name="dialog_restore_session_title">Restore Session?</string>
+    <string name="dialog_restore_session_msg">Do you want to restore your previous tabs?</string>
+    <string name="dialog_zoom_title">Page Zoom (%1$d%%)</string>
+    <string name="dialog_zoom_msg">Adjust webpage text and magnification:</string>
+    <string name="prompt_search_google_url">Search Google or type a URL...</string>
+    <string name="status_missing">Missing</string>
+
+    <!-- Scraper & Streams Screen -->
+    <string name="search_movie_tv_placeholder">Search Movie or TV Show...</string>
+    <string name="dashboard_recent_searches">Recent Searches</string>
+    <string name="dashboard_no_items">No items found</string>
+    <string name="scrape_stop_scanning">Stop Scanning</string>
+    <string name="scrape_try_all">Try All</string>
+    <string name="scrape_stop">Stop</string>
+    <string name="scrape_sort">Sort</string>
+    <string name="scrape_no_sources">No sources found.</string>
+    <string name="scrape_open_browser">Open in Browser</string>
+    <string name="scrape_play_native">Play Native Video</string>
+    <string name="scrape_search_external_subs">🔍 Search External Subtitles</string>
+
+    <!-- Sorter Criteria -->
+    <string name="sort_criteria_native">Native Player Compatibility</string>
+    <string name="sort_criteria_direct">Direct Links</string>
+    <string name="sort_criteria_resolution">Resolution</string>
+    <string name="sort_criteria_source">Host / Source Name</string>
+    <string name="sort_criteria_language">Language</string>
+    <string name="sort_criteria_size">File Size</string>
+    <string name="sort_criteria_seeders">Seeders</string>
+    <string name="sort_criteria_date_added">Date Added</string>
+    <string name="sort_criteria_date_accessed">Date Accessed</string>
+    <string name="sort_criteria_az">A-Z (Alphabetical)</string>
+    <string name="sort_criteria_rating">Rating</string>
+    <string name="sort_criteria_fav_actors">Favourite Actors</string>
+    <string name="sort_criteria_date">Release Date</string>
+    <string name="sort_criteria_default">Default Feed Order</string>
+
+    <!-- Settings Panels & Options Details -->
+    <string name="panel_web">Web &amp; AdBlocker Settings</string>
+    <string name="setting_silent_block">Block Popups Silently</string>
+    <string name="setting_clickjack">Prevent Clickjacking</string>
+    <string name="setting_custom_adblock_url">Custom AdBlock Rules URL (EasyList Format)</string>
+    <string name="btn_update_rules_now">Update Rules Now</string>
+    <string name="status_rules_loaded">Active Filter Rules: ~%1$d loaded</string>
+    <string name="status_rules_updating">Updating filter lists...</string>
+    <string name="toast_rules_updated">Filter lists updated!</string>
+    <string name="toast_rules_update_failed">Update failed</string>
+    <string name="status_checking_updates">Checking for Updates...</string>
+    <string name="btn_check_updates">Check for Updates (v%1$s)</string>
+    <string name="setting_current">Current</string>
+    <string name="label_profile_name">Profile Name</string>
+    <string name="label_url_patterns">URL Patterns</string>
+    <string name="label_action_mode">Action Mode</string>
+    <string name="opt_custom_script">Custom Script</string>
+    <string name="opt_simple_selectors">Simple Element List</string>
+    <string name="label_js_action">JavaScript Action</string>
+    <string name="label_click_selectors">Click Selectors</string>
+    <string name="btn_add_selector">+ Add Selector</string>
+    <string name="dialog_edit_autoplay_title">Edit Autoplay Profile</string>
+    <string name="dialog_add_autoplay_title">Add New Autoplay Profile</string>
+    <string name="dialog_custom_sub_limit_title">Custom Subtitle Download Limit</string>
+    <string name="dialog_custom_sub_limit_msg">Enter numeric count limit:</string>
+    <string name="label_opensubtitles_username">OpenSubtitles Username</string>
+    <string name="label_opensubtitles_password">OpenSubtitles Password</string>
+    <string name="label_opensubtitles_org_username">OpenSubtitles.org Username</string>
+    <string name="label_opensubtitles_org_password">OpenSubtitles.org Password</string>
+    <string name="label_subdl_apikey">SubDL API Key</string>
+    <string name="label_subsource_apikey">SubSource API Key</string>
+    <string name="label_rule_name">Rule Name</string>
+    <string name="label_css_selectors">CSS Selectors (one per line)</string>
+    <string name="dialog_edit_block_rule">Edit Block Rule</string>
+    <string name="dialog_add_block_rule">Add Block Rule</string>
+    <string name="dialog_auth_trakt_title">Authorize Trakt.tv</string>
+    <string name="dialog_auth_trakt_step1">1. Visit verification page:</string>
+    <string name="dialog_auth_trakt_step2">2. Enter the following code on your device:</string>
+    <string name="dialog_auth_trakt_waiting">Waiting for authentication from Trakt...</string>
+    <string name="btn_open_link">Open Link</string>
+    <string name="label_username">Username</string>
+    <string name="label_password">Password</string>
+    <string name="dialog_auto_clean_interval_title">Auto-Clean Interval</string>
+    <string name="dialog_auto_clean_interval_msg">Enter number of days between cache cleans:</string>
+    <string name="status_signed_in_as">Signed in as: %1$s</string>
+    <string name="status_not_signed_in">Not signed in.</string>
+
+    <string name="panel_player">Native Player Preferences</string>
+    <string name="setting_extract_video">Video Extraction Hijack</string>
+    <string name="setting_fallback_error">Fallback on Playback Error</string>
+    <string name="header_binge_autoplay">Binge Watching &amp; Autoplay</string>
+    <string name="setting_intro_skip">Intro Skip Action</string>
+    <string name="setting_recap_skip">Recap Skip Action</string>
+    <string name="setting_early_credits_skip">Early Credits Skip Action</string>
+    <string name="setting_end_credits_skip">End Credits Skip Action</string>
+    <string name="setting_up_next_mode">Up Next Overlay Mode</string>
+    <string name="setting_up_next_time">Seconds Before End (Fallback If Show End Undetected)</string>
+    <string name="setting_source_selection_next">Source Selection for Next Episode</string>
+    <string name="setting_episode_focus_style">Episode Auto-Focus Style</string>
+
+    <string name="panel_interface">Interface Navigation Settings</string>
+    <string name="setting_scroll_topbar">Scroll up for Navigation Bar</string>
+    <string name="setting_nav_mode">Default Pointer Navigation Mode</string>
+    <string name="setting_scrape_tab_order">Scraper Result Tab Order</string>
+    <string name="header_hardware_devices">Hardware Devices &amp; External Input</string>
+    <string name="setting_hw_keyboard_mode">Hardware Keyboard Mode</string>
+    <string name="setting_hw_mouse_mode">Physical Mouse Mode</string>
+    <string name="setting_menu_keybind">Menu Button Keybind</string>
+    <string name="setting_menu_rebind">Rebind</string>
+    <string name="setting_menu_reset">Reset</string>
+    <string name="setting_press_key_combo">Press desired key combination</string>
+    <string name="setting_listening_keys">Listening for keys...</string>
+
+    <string name="panel_feeds">Feeds &amp; Dashboard Curation</string>
+    <string name="setting_card_thumbnail_style">Card Thumbnail Style</string>
+    <string name="setting_prioritize_fav_cast">Prioritise Favourite Cast across Feeds</string>
+    <string name="header_for_you_feeds">For You Feeds</string>
+    <string name="header_movie_feeds">Movie Feeds</string>
+    <string name="header_movie_genres">Movie Genres</string>
+    <string name="header_tv_feeds">TV Show Feeds</string>
+    <string name="header_tv_genres">TV Genres</string>
+    <string name="header_discover_networks">Discover: Streaming Networks &amp; Eras</string>
+    <string name="header_discover_eras">Discover: Eras &amp; Decades</string>
+    <string name="header_discover_world">Discover: World Cinema &amp; Niches</string>
+    <string name="header_fav_cast_mgmt">Favourite Cast Management</string>
+    <string name="desc_fav_cast_mgmt">Manage actors from your favourite shows or search to add any actor manually.</string>
+    <string name="setting_auto_sync_fav_cast">Auto-Sync Cast from Favourite Shows</string>
+    <string name="prompt_search_actor">Search actor to add (e.g. Cillian Murphy)...</string>
+    <string name="label_live_results">Live Results (Select to Add):</string>
+    <string name="label_cast_pool">Cast Pool (%1$d)</string>
+    <string name="label_add_actor">+ Add</string>
+    <string name="desc_no_fav_actors">No actors discovered yet. Add shows or movies to your Favourites first, or search above to add any actor.</string>
+    <string name="label_added_via_fav">Added because you favorited: %1$s</string>
+    <string name="label_added_via_search">Added via search</string>
+
+    <string name="panel_streaming">Streaming &amp; Scraper Configurations</string>
+    <string name="setting_timeout_logic">Timeout Logic</string>
+    <string name="setting_enforce_whitelist">Enforce Host Whitelist</string>
+    <string name="setting_global_timeout">Global Engine Timeout (Seconds)</string>
+    <string name="setting_source_timeout">Per-Source Timeout Limit (Seconds)</string>
+    <string name="setting_scraper_workers">Scraper Worker Threads (Default: 3)</string>
+    <string name="header_provider_packages">Provider Packages</string>
+    <string name="header_host_whitelists">Host Whitelists</string>
+    <string name="prompt_search_whitelists">Search whitelists...</string>
+    <string name="label_provider_whitelist">Provider Pack Whitelist</string>
+    <string name="label_resolveurl_whitelist">ResolveURL Whitelist</string>
+
+    <string name="panel_autoplay">Autoplay Configuration Profiles</string>
+    <string name="setting_autoplay_global">Auto-play Video globally</string>
+    <string name="btn_add_autoplay_profile">Add New Autoplay Profile</string>
+
+    <string name="panel_subtitles">Subtitle Search Preferences</string>
+    <string name="setting_sub_rendering_engine">Subtitle Rendering Engine</string>
+    <string name="setting_sub_auto_search">Auto-search Behavior</string>
+    <string name="setting_subs_to_download">Subtitles To Download</string>
+    <string name="setting_sub_video_launches">When Video Launches</string>
+    <string name="setting_sub_retention">Subtitle File Retention</string>
+    <string name="setting_sub_limit">Subtitles Search Limit</string>
+    <string name="header_sub_accounts">Subtitle Accounts &amp; API Keys</string>
+    <string name="header_sub_engines">Subtitle Scraper Engines</string>
+
+    <string name="panel_sorting">Results &amp; Feed Sorter Priorities</string>
+    <string name="panel_blocked">Blocked Webpage Elements Rules</string>
+    <string name="btn_add_css_rule">Add New CSS Block Rule</string>
+
+    <string name="panel_trakt">Trakt.tv Sync Integration</string>
+    <string name="status_trakt_authed">Authorized account: %1$s</string>
+    <string name="btn_logout_trakt">Logout Trakt</string>
+    <string name="status_trakt_unlinked">Trakt account not linked.</string>
+    <string name="btn_auth_trakt">Authorize Trakt Account</string>
+
+    <string name="panel_tmdb">TMDb Account Credentials</string>
+    <string name="status_tmdb_active">Authorized TMDb Session Active</string>
+    <string name="btn_login">Login</string>
+    <string name="btn_logout">Logout</string>
+
+    <string name="panel_torrents">Torrent Streaming Configuration</string>
+    <string name="setting_prebuffer_size">Playback Pre-buffer Size</string>
+    <string name="setting_torrent_cache_clean">Torrent Cache Auto-Clean Mode</string>
+    <string name="header_storage_cache_mgmt">Storage Cache Manager</string>
+    <string name="label_total_cached_p2p">Total Cached P2P Storage</string>
+    <string name="label_cached_subfolders">Cached Directory Sub-folders</string>
+    <string name="label_clean_interval">Clean Interval</string>
+    <string name="format_every_x_days">Every %1$d days</string>
+    <string name="label_disabled_set">Disabled / Click to set</string>
+    <string name="btn_clear">Clear</string>
+
+    <string name="panel_sync">Local Backup &amp; Restore</string>
+    <string name="desc_local_backup">Export or restore all settings, bookmarks, and configuration to an offline JSON file in your device\'s Downloads folder without requiring a Google account.</string>
+    <string name="btn_save_backup">Save Backup</string>
+    <string name="btn_restore_backup">Restore Backup</string>
+    <string name="header_drive_sync">Google Drive Cloud Sync</string>
+    <string name="desc_drive_sync">Sync your settings, bookmarks, and history across devices using your private Google Drive App Data folder. Newer settings automatically take priority.</string>
+    <string name="status_sync">Status: %1$s</string>
+    <string name="btn_sign_in_google">Sign in with Google</string>
+    <string name="btn_force_sync">Force Sync Now (Two-Way)</string>
+
+    <!-- Option values for Dropdowns -->
+    <string name="opt_restore_ask">Ask to Restore</string>
+    <string name="opt_restore_always_load">Always Restore &amp; Load</string>
+    <string name="opt_restore_always">Always Restore</string>
+    <string name="opt_restore_never">Never Restore</string>
+
+    <string name="opt_hist_10">10 Entries</string>
+    <string name="opt_hist_20">20 Entries</string>
+    <string name="opt_hist_50">50 Entries</string>
+    <string name="opt_hist_unlimited">Unlimited</string>
+
+    <string name="opt_icons_snapshots">Snapshots (Thumbnail)</string>
+    <string name="opt_icons_favicons">Favicons</string>
+
+    <string name="opt_extract_ask">Ask to Play</string>
+    <string name="opt_extract_always">Always Play in Native Player</string>
+    <string name="opt_extract_never">Never Play (Use Site Browser)</string>
+
+    <string name="opt_fallback_ask">Ask user to switch</string>
+    <string name="opt_fallback_always">Always fall back to Browser</string>
+    <string name="opt_fallback_never">Never fall back</string>
+
+    <string name="opt_skip_skip">Skip</string>
+    <string name="opt_skip_ask">Ask to Skip</string>
+    <string name="opt_skip_ignore">Ignore</string>
+
+    <string name="opt_up_next_ask">Ask to Play Next</string>
+    <string name="opt_up_next_always">Always Play Automatically</string>
+    <string name="opt_up_next_never">Never Show Overlay</string>
+
+    <string name="opt_autoplay_closest">Closest Source (Matching Host)</string>
+    <string name="opt_autoplay_best">Best Quality Source</string>
+    <string name="opt_autoplay_ask">Ask (Show Scraper Results)</string>
+
+    <string name="opt_focus_next_watched">Next Episode after Latest Watched</string>
+    <string name="opt_focus_first_unwatched">First Unwatched Episode</string>
+
+    <string name="opt_nav_pointer">Simulated Pointer (Cursor)</string>
+    <string name="opt_nav_dpad">Physical target navigation (D-pad selection)</string>
+
+    <string name="opt_scrape_web_torrents">Web, Torrents</string>
+    <string name="opt_scrape_torrents_web">Torrents, Web</string>
+
+    <string name="opt_hw_auto">Auto-detect (Recommended)</string>
+    <string name="opt_hw_always">Always Enabled</string>
+    <string name="opt_hw_disabled">Disabled (TV Remote Mode)</string>
+
+    <string name="opt_thumb_portrait">Portrait (2:3) [Default]</string>
+    <string name="opt_thumb_landscape">Landscape (16:9)</string>
+
+    <string name="opt_timeout_global">Global Timeout Only</string>
+    <string name="opt_timeout_source">Per-Source Only</string>
+    <string name="opt_timeout_both">Both Engines Active</string>
+
+    <string name="opt_sub_engine_native">Native (Requires Reloading Subs)</string>
+    <string name="opt_sub_engine_overlay">Custom Subtitle Overlay (Zero Delay)</string>
+
+    <string name="opt_sub_behavior_ask">Ask me to search</string>
+    <string name="opt_sub_behavior_auto">Search Automatically</string>
+    <string name="opt_sub_behavior_never">Never Search</string>
+
+    <string name="opt_sub_count_other">Other</string>
+    <string name="opt_sub_count_all">All</string>
+
+    <string name="opt_sub_launch_stop">Stop downloading immediately</string>
+    <string name="opt_sub_launch_ask">Ask if I want to wait</string>
+    <string name="opt_sub_launch_background">Keep downloading in background</string>
+
+    <string name="opt_retention_indefinite">Keep Indefinitely</string>
+    <string name="opt_retention_1d">1 Day</string>
+    <string name="opt_retention_3d">3 Days</string>
+    <string name="opt_retention_7d">7 Days</string>
+    <string name="opt_retention_14d">14 Days</string>
+    <string name="opt_retention_30d">30 Days</string>
+
+    <string name="opt_prebuffer_1">1 Piece (Fastest / Default)</string>
+    <string name="opt_prebuffer_2">2 Pieces</string>
+    <string name="opt_prebuffer_4">4 Pieces (Standard)</string>
+    <string name="opt_prebuffer_8">8 Pieces (Most Stable)</string>
+
+    <string name="opt_clean_manual">Manual Only</string>
+    <string name="opt_clean_new_torrent">Every time a new torrent starts</string>
+    <string name="opt_clean_exit">Every time a video is exited</string>
+    <string name="opt_clean_days">Every X days</string>
+
+    <!-- TMDb Genres -->
+    <string name="genre_action">Action</string>
+    <string name="genre_adventure">Adventure</string>
+    <string name="genre_animation">Animation</string>
+    <string name="genre_comedy">Comedy</string>
+    <string name="genre_crime">Crime</string>
+    <string name="genre_documentary">Documentary</string>
+    <string name="genre_drama">Drama</string>
+    <string name="genre_family">Family</string>
+    <string name="genre_fantasy">Fantasy</string>
+    <string name="genre_history">History</string>
+    <string name="genre_horror">Horror</string>
+    <string name="genre_music">Music</string>
+    <string name="genre_mystery">Mystery</string>
+    <string name="genre_romance">Romance</string>
+    <string name="genre_scifi">Sci-Fi</string>
+    <string name="genre_tv_movie">TV Movie</string>
+    <string name="genre_thriller">Thriller</string>
+    <string name="genre_war">War</string>
+    <string name="genre_western">Western</string>
+    <string name="genre_action_adventure">Action &amp; Adventure</string>
+    <string name="genre_kids">Kids</string>
+    <string name="genre_news">News</string>
+    <string name="genre_reality">Reality</string>
+    <string name="genre_scifi_fantasy">Sci-Fi &amp; Fantasy</string>
+    <string name="genre_soap">Soap</string>
+    <string name="genre_talk">Talk</string>
+    <string name="genre_war_politics">War &amp; Politics</string>
+
+    <string name="opt_system_default">System Default</string>
+    <string name="opt_follow_app_language">Follow App Language (Default)</string>
+    <string name="setting_action_mode">Action Mode</string>
+    <string name="opt_action_custom_script">Custom Script</string>
+    <string name="opt_action_simple_elements">Simple Element List</string>
+    <string name="label_javascript_action">JavaScript Action</string>
 </resources>

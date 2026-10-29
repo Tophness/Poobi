@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Poobi</string>
+
+    <!-- Top Navigation -->
+    <string name="tab_browser">ब्राउज़र</string>
+    <string name="tab_streams">स्ट्रीम्स</string>
+    <string name="title_settings">सेटिंग्स</string>
+
+    <!-- Common Actions & Buttons -->
+    <string name="btn_save_exit">सहेजें और बाहर निकलें</string>
+    <string name="btn_save">सहेजें</string>
+    <string name="btn_cancel">रद्द करें</string>
+    <string name="btn_delete">हटाएं</string>
+    <string name="btn_edit">संपादित करें</string>
+    <string name="btn_close">बंद करें</string>
+    <string name="btn_done">पूर्ण</string>
+    <string name="btn_select_all">सभी चुनें</string>
+    <string name="btn_deselect_all">सभी अचयनित करें</string>
+    <string name="btn_clear_all">सभी साफ़ करें</string>
+    <string name="btn_back">वापस</string>
+    <string name="btn_apply">लागू करें</string>
+    <string name="btn_play_now">अभी चलाएं</string>
+    <string name="btn_skip_play">छोड़ें और चलाएं</string>
+    <string name="btn_download">डाउनलोड करें</string>
+    <string name="btn_allow">अनुमति दें</string>
+    <string name="btn_block">ब्लॉक करें</string>
+    <string name="btn_play_native">नेटिव प्लेयर में चलाएं</string>
+    <string name="btn_website_player">वेबसाइट प्लेयर</string>
+    <string name="btn_open_in_browser">ब्राउज़र में खोलें</string>
+    <string name="btn_restore">पुनर्स्थापित करें</string>
+    <string name="btn_restore_load">पुनर्स्थापित करें और लोड करें</string>
+    <string name="btn_new_session">नया सत्र</string>
+    <string name="btn_zoom_out">- ज़ूम आउट</string>
+    <string name="btn_zoom_reset">100% (रीसेट)</string>
+    <string name="btn_zoom_in">+ ज़ूम इन</string>
+    <string name="btn_load_all_tabs">सभी टैब लोड करें</string>
+    <string name="btn_restore_all_tabs">सभी टैब पुनर्स्थापित करें</string>
+    <string name="btn_clear_bookmarks">बुकमार्क साफ़ करें</string>
+    <string name="btn_clear_history">इतिहास साफ़ करें</string>
+    <string name="btn_clear_downloads">डाउनलोड साफ़ करें</string>
+    <string name="btn_prev">पिछला</string>
+    <string name="btn_next">अगला</string>
+
+    <!-- Settings Categories -->
+    <string name="category_general">सामान्य</string>
+    <string name="category_language">भाषा</string>
+    <string name="category_web">वेब</string>
+    <string name="category_player">प्लेयर</string>
+    <string name="category_interface">इंटरफ़ेस</string>
+    <string name="category_feeds">फ़ीड्स</string>
+    <string name="category_streaming">स्ट्रीमिंग</string>
+    <string name="category_autoplay">ऑटोप्ले</string>
+    <string name="category_subtitles">सबटाइटल</string>
+    <string name="category_sorting">सॉर्टिंग</string>
+    <string name="category_blocked">अवरुद्ध</string>
+    <string name="category_trakt">Trakt</string>
+    <string name="category_tmdb">TMDb</string>
+    <string name="category_torrents">टॉरेंट</string>
+    <string name="category_sync">सिंक</string>
+
+    <!-- Settings Panels & Options -->
+    <string name="panel_general">सामान्य सेटिंग्स</string>
+    <string name="panel_language">भाषा और क्षेत्रीय सेटिंग्स</string>
+    <string name="setting_app_language">ऐप इंटरफ़ेस भाषा</string>
+    <string name="setting_date_format">दिनांक प्रारूप</string>
+    <string name="setting_audio_language">डिफ़ॉल्ट ऑडियो ट्रैक</string>
+    <string name="setting_torrent_language">पसंदीदा टॉरेंट भाषा</string>
+    <string name="setting_sub_languages">पसंदीदा सबटाइटल भाषाएं</string>
+    <string name="setting_light_theme">लाइट थीम का उपयोग करें</string>
+    <string name="setting_auto_update">अपडेट्स के लिए स्वचालित रूप से जांचें</string>
+    <string name="setting_restore_session">सत्र पुनर्स्थापना मोड</string>
+    <string name="setting_history_limit">इतिहास प्रतिधारण सीमा</string>
+    <string name="setting_history_icons">इतिहास आइकन शैली</string>
+    <string name="setting_bookmark_icons">बुकमार्क आइकन शैली</string>
+
+    <!-- Streams Navigation Categories -->
+    <string name="feed_search">खोजें</string>
+    <string name="feed_for_you">आपके लिए</string>
+    <string name="feed_movies">फ़िल्में</string>
+    <string name="feed_tv_shows">टीवी शो</string>
+    <string name="feed_discover">खोजें</string>
+
+    <!-- Dashboard Pills -->
+    <string name="pill_favourites">पसंदीदा</string>
+    <string name="pill_recents">हाल ही में देखा गया</string>
+    <string name="pill_unfinished">अधूरे शो</string>
+    <string name="pill_because_watched">क्योंकि आपने देखा</string>
+    <string name="pill_cast_spotlight">चर्चा में कलाकार</string>
+    <string name="pill_trakt_watched">सबसे ज़्यादा देखे गए</string>
+    <string name="pill_trakt_anticipated">सर्वाधिक प्रतीक्षित</string>
+    <string name="pill_trakt_collected">सबसे ज़्यादा संग्रहित</string>
+    <string name="pill_trakt_watchlist">वॉचलिस्ट</string>
+    <string name="pill_trakt_recommendations">मेरे लिए खास</string>
+    <string name="pill_trending_today">आज ट्रेंडिंग</string>
+    <string name="pill_trending_week">इस हफ़्ते ट्रेंडिंग</string>
+    <string name="pill_in_cinemas">सिनेमाघरों में</string>
+    <string name="pill_upcoming">आगामी</string>
+    <string name="pill_popular">लोकप्रिय</string>
+    <string name="pill_top_rated">सर्वश्रेष्ठ रेटेड</string>
+    <string name="pill_hidden_gems">अनमोल रत्न</string>
+    <string name="pill_popular_tv">लोकप्रिय टीवी शो</string>
+    <string name="pill_trending_tv_week">ट्रेंडिंग टीवी शो</string>
+    <string name="pill_airing_today">आज प्रसारित</string>
+    <string name="pill_airing_week">इस हफ़्ते प्रसारित</string>
+    <string name="pill_top_rated_tv">सर्वश्रेष्ठ टीवी शो</string>
+    <string name="pill_era_2000s">2000 के दशक के हिट</string>
+    <string name="pill_era_90s">90 के दशक की यादें</string>
+    <string name="pill_era_80s">80 के क्लासिक्स</string>
+    <string name="pill_era_70s">70 के दशक का सिनेमा</string>
+    <string name="pill_anime">एनीमे</string>
+    <string name="pill_kdrama">के-ड्रामा</string>
+    <string name="pill_british_mysteries">ब्रिटिश रहस्य</string>
+    <string name="pill_cult_classics">कल्ट क्लासिक्स</string>
+
+    <!-- Browser Home Tabs -->
+    <string name="browser_open_tabs">खुले टैब</string>
+    <string name="browser_bookmarks">बुकमार्क</string>
+    <string name="browser_history">इतिहास</string>
+    <string name="browser_downloads">डाउनलोड्स</string>
+
+    <!-- Media Details Actions -->
+    <string name="media_play_movie">फ़िल्म चलाएं</string>
+    <string name="media_trailer">ट्रेलर</string>
+    <string name="media_season">सीज़न</string>
+    <string name="media_top_cast">प्रमुख कलाकार</string>
+    <string name="media_more_like_this">इसके जैसा और भी</string>
+    <string name="media_filmography">फ़िल्मोग्राफ़ी</string>
+    <string name="media_released">रिलीज़ दिनांक</string>
+    <string name="media_select_season">सीज़न चुनें</string>
+    <string name="media_season_num">सीज़न %1$d</string>
+    <string name="media_season_cast">%1$s के कलाकार</string>
+    <string name="media_no_overview">कोई विवरण उपलब्ध नहीं है।</string>
+    <string name="media_no_cast">कलाकारों का कोई विवरण उपलब्ध नहीं है।</string>
+    <string name="media_no_recommendations">कोई सुझाव उपलब्ध नहीं है।</string>
+    <string name="media_loading_trailer">ट्रेलर लोड हो रहा है...</string>
+    <string name="media_filter_all">सभी</string>
+    <string name="media_filter_movies">फ़िल्में</string>
+    <string name="media_filter_tv">टीवी शो</string>
+    <string name="media_no_titles_category">इस श्रेणी में कोई शीर्षक नहीं मिला।</string>
+    <string name="media_born_in">जन्म स्थान: %1$s</string>
+    <string name="media_no_biography">कोई जीवनी उपलब्ध नहीं है।</string>
+    <string name="media_role_as">%1$s के रूप में</string>
+    <string name="media_badge_actor">अभिनेता</string>
+    <string name="media_airing_prefix">प्रसारण: </string>
+    <string name="media_aired_prefix">प्रसारित: </string>
+    <string name="media_type_movie">फ़िल्म</string>
+    <string name="media_type_tv">टीवी सीरीज़</string>
+    <string name="known_for_acting">अभिनय</string>
+
+    <!-- Sorter Dialog -->
+    <string name="sorter_favorites_title">पसंदीदा सॉर्ट प्राथमिकताएं</string>
+    <string name="sorter_recent_title">हाल ही में देखे गए सॉर्ट प्राथमिकताएं</string>
+    <string name="sorter_feed_title">फ़ीड सॉर्ट प्राथमिकताएं</string>
+    <string name="sorter_streams_title">सामान्य स्ट्रीम सॉर्टिंग</string>
+    <string name="sorter_torrents_title">टॉरेंट सॉर्टिंग</string>
+
+    <!-- Subtitle Alignment UI -->
+    <string name="sub_sync_title">सबटाइटल सिंक्रोनाइज़र</string>
+    <string name="sub_sync_offset">वर्तमान ऑफ़सेट: %1$dms</string>
+    <string name="sub_sync_btn_visual">दृश्य टाइमलाइन संरेखण</string>
+    <string name="sub_sync_btn_search">बोले गए शब्द खोजें</string>
+    <string name="sub_sync_btn_reset">समय रीसेट करें</string>
+    <string name="sub_sync_btn_exit">बाहर निकलें</string>
+    <string name="sub_search_title">संवाद पंक्ति खोजें</string>
+    <string name="sub_search_desc">संबंधित ऑडियो दृश्य पर कूदने के लिए संवाद के शब्द टाइप करें।</string>
+    <string name="sub_search_placeholder">उदा. कूद पड़ा</string>
+    <string name="sub_search_btn_align">खोजें और संरेखित करें</string>
+    <string name="sub_waveform_title">ध्वनि तरंग टाइमलाइन</string>
+    <string name="sub_waveform_silence">[ सन्नाटा ]</string>
+    <string name="sub_waveform_offset">टाइमलाइन ऑफ़सेट: %1$dms</string>
+    <string name="sub_waveform_hint_focused">◀ सबटाइटल आगे या पीछे खिसकाने के लिए D-pad बाएँ/दाएँ दबाएँ ▶</string>
+    <string name="sub_waveform_hint_unfocused">सबटाइटल समायोजित करने के लिए चुनें</string>
+    <string name="sub_waveform_looping">दृश्य दोहराया जा रहा है...</string>
+    <string name="sub_waveform_playback_running">चल रहा है...</string>
+    <string name="sub_waveform_stop_loop">लूप रोकें</string>
+    <string name="sub_waveform_loop_track">दृश्य लूप करें</string>
+
+    <!-- Player Overlays & Prompts -->
+    <string name="overlay_up_next">अगला एपिसोड</string>
+    <string name="overlay_skip_intro">इंट्रो छोड़ें</string>
+    <string name="overlay_skip_recap">रीकैप छोड़ें</string>
+    <string name="overlay_skip_early_credits">शुरुआती क्रेडिट छोड़ें</string>
+    <string name="overlay_skip_end_credits">अंतिम क्रेडिट छोड़ें</string>
+    <string name="overlay_skip_remaining">%1$s छोड़ें (%2$d सेकंड शेष)</string>
+    <string name="overlay_skip_press_select">छोड़ने के लिए सेलेक्ट दबाएं</string>
+    <string name="segment_intro">इंट्रो</string>
+    <string name="segment_recap">रीकैप</string>
+    <string name="segment_opening_credits">आरंभिक क्रेडिट</string>
+    <string name="segment_closing_credits">समापन क्रेडिट</string>
+    <string name="toast_skipped_intro">इंट्रो छोड़ दिया गया</string>
+    <string name="toast_skipped_recap">रीकैप छोड़ दिया गया</string>
+    <string name="toast_skipped_early_credits">शुरुआती क्रेडिट छोड़ दिए गए</string>
+    <string name="toast_skipped_end_credits">अंतिम क्रेडिट छोड़ दिए गए</string>
+    <string name="captions_add_disk">डिस्क से सबटाइटल जोड़ें...</string>
+    <string name="captions_off">बंद</string>
+    <string name="captions_embedded">एम्बेडेड सबटाइटल</string>
+    <string name="dialog_quality_title">वीडियो गुणवत्ता चुनें</string>
+    <string name="dialog_sub_wait_title">सबटाइटल स्वतः डाउनलोड हो रहे हैं</string>
+    <string name="dialog_sub_wait_msg">सबटाइटल खोजे और डाउनलोड किए जा रहे हैं...</string>
+    <string name="dialog_torrent_prebuffer_title">वीडियो स्ट्रीम प्री-बफर हो रही है</string>
+    <string name="disk_picker_select_media">मीडिया चुनें</string>
+    <string name="disk_picker_select_subtitles">सबटाइटल चुनें</string>
+    <string name="disk_picker_no_subs">डिस्क पर कोई सबटाइटल फ़ाइल (.srt, .vtt, .ass) नहीं मिली।</string>
+
+    <!-- Browser & Web Dialogs -->
+    <string name="menu_cut">कट करें</string>
+    <string name="menu_copy">कॉपी करें</string>
+    <string name="menu_paste">पेस्ट करें</string>
+    <string name="menu_select_all">सभी चुनें</string>
+    <string name="menu_open_new_tab">नए टैब में खोलें</string>
+    <string name="menu_refresh">पेज रीफ़्रेश करें</string>
+    <string name="menu_block_element">एलिमेंट ब्लॉक करें</string>
+    <string name="dialog_video_detected_title">वीडियो का पता चला</string>
+    <string name="dialog_video_detected_msg">वीडियो स्ट्रीम इंटरसेप्ट की गई। क्या आप इसे नेटिव प्लेयर में चलाना चाहते हैं?</string>
+    <string name="dialog_remember_decision">मेरा निर्णय याद रखें (दोबारा न पूछें)</string>
+    <string name="dialog_playback_error_title">प्लेबैक त्रुटि</string>
+    <string name="dialog_playback_error_msg">ExoPlayer इस स्ट्रीम को चलाने में असमर्थ रहा। क्या आप इसे ब्राउज़र में खोलना चाहते हैं?\n\nत्रुटि: %1$s</string>
+    <string name="dialog_download_title">फ़ाइल डाउनलोड करें?</string>
+    <string name="dialog_download_msg">क्या आप %1$s डाउनलोड करना चाहते हैं?\nआकार: %2$.2f MB</string>
+    <string name="dialog_popup_blocked_title">पॉपअप ब्लॉक किया गया</string>
+    <string name="dialog_popup_blocked_msg">क्या आप इस साइट से पॉपअप विंडो की अनुमति देना चाहते हैं?</string>
+    <string name="dialog_silent_block_remember">दोबारा न पूछें (साइलेंट ब्लॉक)</string>
+    <string name="dialog_restore_session_title">सत्र पुनर्स्थापित करें?</string>
+    <string name="dialog_restore_session_msg">क्या आप अपने पिछले टैब पुनर्स्थापित करना चाहते हैं?</string>
+    <string name="dialog_zoom_title">पेज ज़ूम (%1$d%%)</string>
+    <string name="dialog_zoom_msg">टेक्स्ट आकार और ज़ूम स्तर समायोजित करें:</string>
+    <string name="prompt_search_google_url">Google पर खोजें या URL दर्ज करें...</string>
+    <string name="status_missing">अनुपलब्ध</string>
+
+    <!-- Scraper & Streams Screen -->
+    <string name="search_movie_tv_placeholder">फ़िल्म या टीवी शो खोजें...</string>
+    <string name="dashboard_recent_searches">हाल की खोजें</string>
+    <string name="dashboard_no_items">कोई आइटम नहीं मिला</string>
+    <string name="scrape_stop_scanning">खोज रोकें</string>
+    <string name="scrape_try_all">सभी आज़माएँ</string>
+    <string name="scrape_stop">रोकें</string>
+    <string name="scrape_sort">सॉर्ट करें</string>
+    <string name="scrape_no_sources">कोई स्रोत नहीं मिला।</string>
+    <string name="scrape_open_browser">ब्राउज़र में खोलें</string>
+    <string name="scrape_play_native">नेटिव प्लेयर में चलाएं</string>
+    <string name="scrape_search_external_subs">🔍 बाहरी सबटाइटल खोजें</string>
+
+    <!-- Sorter Criteria -->
+    <string name="sort_criteria_native">नेटिव प्लेयर अनुकूलता</string>
+    <string name="sort_criteria_direct">प्रत्यक्ष लिंक्स</string>
+    <string name="sort_criteria_resolution">रिज़ॉल्यूशन</string>
+    <string name="sort_criteria_source">होस्ट / स्रोत का नाम</string>
+    <string name="sort_criteria_language">भाषा</string>
+    <string name="sort_criteria_size">फ़ाइल का आकार</string>
+    <string name="sort_criteria_seeders">सीडर्स संख्या</string>
+    <string name="sort_criteria_date_added">जोड़े जाने की तिथि</string>
+    <string name="sort_criteria_date_accessed">अंतिम बार देखा गया</string>
+    <string name="sort_criteria_az">वर्णमाला क्रम (A-Z)</string>
+    <string name="sort_criteria_rating">रेटिंग</string>
+    <string name="sort_criteria_fav_actors">पसंदीदा कलाकार</string>
+    <string name="sort_criteria_date">रिलीज़ दिनांक</string>
+    <string name="sort_criteria_default">डिफ़ॉल्ट क्रम</string>
+
+    <!-- Settings Panels & Options Details -->
+    <string name="panel_web">वेब और एड-ब्लॉकर सेटिंग्स</string>
+    <string name="setting_silent_block">पॉप-अप बिना आवाज ब्लॉक करें</string>
+    <string name="setting_clickjack">क्लिकजैकिंग को रोकें</string>
+    <string name="setting_custom_adblock_url">कस्टम AdBlock नियम URL (EasyList प्रारूप)</string>
+    <string name="btn_update_rules_now">नियम अभी अपडेट करें</string>
+    <string name="status_rules_loaded">सक्रिय फ़िल्टर नियम: लगभग %1$d लोड</string>
+    <string name="status_rules_updating">फ़िल्टर सूचियाँ अपडेट हो रही हैं...</string>
+    <string name="toast_rules_updated">Filter lists updated!</string>
+    <string name="toast_rules_update_failed">Update failed</string>
+    <string name="status_checking_updates">अपडेट्स की जांच हो रही है...</string>
+    <string name="btn_check_updates">अपडेट्स की जांच करें (v%1$s)</string>
+    <string name="setting_current">वर्तमान</string>
+    <string name="label_profile_name">प्रोफ़ाइल का नाम</string>
+    <string name="label_url_patterns">URL पैटर्न</string>
+    <string name="label_action_mode">Action Mode</string>
+    <string name="opt_custom_script">Custom Script</string>
+    <string name="opt_simple_selectors">Simple Element List</string>
+    <string name="label_js_action">JavaScript Action</string>
+    <string name="label_click_selectors">क्लिक चयनकर्ता</string>
+    <string name="btn_add_selector">+ चयनकर्ता जोड़ें</string>
+    <string name="dialog_edit_autoplay_title">Edit Autoplay Profile</string>
+    <string name="dialog_add_autoplay_title">Add New Autoplay Profile</string>
+    <string name="dialog_custom_sub_limit_title">कस्टम सबटाइटल डाउनलोड सीमा</string>
+    <string name="dialog_custom_sub_limit_msg">संख्यात्मक सीमा दर्ज करें:</string>
+    <string name="label_opensubtitles_username">OpenSubtitles Username</string>
+    <string name="label_opensubtitles_password">OpenSubtitles Password</string>
+    <string name="label_opensubtitles_org_username">OpenSubtitles.org Username</string>
+    <string name="label_opensubtitles_org_password">OpenSubtitles.org Password</string>
+    <string name="label_subdl_apikey">SubDL API Key</string>
+    <string name="label_subsource_apikey">SubSource API Key</string>
+    <string name="label_rule_name">नियम का नाम</string>
+    <string name="label_css_selectors">CSS चयनकर्ता (प्रति पंक्ति एक)</string>
+    <string name="dialog_edit_block_rule">ब्लॉक नियम संपादित करें</string>
+    <string name="dialog_add_block_rule">ब्लॉक नियम जोड़ें</string>
+    <string name="dialog_auth_trakt_title">Trakt.tv अधिकृत करें</string>
+    <string name="dialog_auth_trakt_step1">1. सत्यापन पृष्ठ पर जाएं:</string>
+    <string name="dialog_auth_trakt_step2">2. अपने डिवाइस पर निम्न कोड दर्ज करें:</string>
+    <string name="dialog_auth_trakt_waiting">Trakt से प्रमाणीकरण की प्रतीक्षा है...</string>
+    <string name="btn_open_link">लिंक खोलें</string>
+    <string name="label_username">उपयोगकर्ता नाम</string>
+    <string name="label_password">पासवर्ड</string>
+    <string name="dialog_auto_clean_interval_title">स्वतः साफ़ करने का अंतराल</string>
+    <string name="dialog_auto_clean_interval_msg">कैश साफ़ करने के बीच के दिनों की संख्या दर्ज करें:</string>
+    <string name="status_signed_in_as">इस रूप में साइन इन हैं: %1$s</string>
+    <string name="status_not_signed_in">साइन इन नहीं हैं।</string>
+
+    <string name="panel_player">नेटिव प्लेयर प्राथमिकताएं</string>
+    <string name="setting_extract_video">वीडियो निष्कर्षण और कैप्चर</string>
+    <string name="setting_fallback_error">प्लेबैक त्रुटि पर बैकअप विकल्प</string>
+    <string name="header_binge_autoplay">बिंज वॉचिंग और ऑटोप्ले</string>
+    <string name="setting_intro_skip">इंट्रो मिलने पर कार्रवाई</string>
+    <string name="setting_recap_skip">रीकैप मिलने पर कार्रवाई</string>
+    <string name="setting_early_credits_skip">आरंभिक क्रेडिट पर कार्रवाई</string>
+    <string name="setting_end_credits_skip">समापन क्रेडिट पर कार्रवाई</string>
+    <string name="setting_up_next_mode">अगले एपिसोड की सूचना का प्रकार</string>
+    <string name="setting_up_next_time">समाप्ति से पहले के सेकंड</string>
+    <string name="setting_source_selection_next">अगले एपिसोड के लिए स्रोत चयन</string>
+    <string name="setting_episode_focus_style">एपिसोड पर स्वतः फोकस करने की शैली</string>
+
+    <string name="panel_interface">इंटरफ़ेस और नेविगेशन सेटिंग्स</string>
+    <string name="setting_scroll_topbar">नेविगेशन बार के लिए ऊपर स्क्रॉल करें</string>
+    <string name="setting_nav_mode">डिफ़ॉल्ट पॉइंटर मोड</string>
+    <string name="setting_scrape_tab_order">खोज परिणाम टैब क्रम</string>
+    <string name="header_hardware_devices">हार्डवेयर डिवाइस और बाहरी इनपुट</string>
+    <string name="setting_hw_keyboard_mode">भौतिक कीबोर्ड मोड</string>
+    <string name="setting_hw_mouse_mode">भौतिक माउस मोड</string>
+    <string name="setting_menu_keybind">मेनू बटन शॉर्टकट</string>
+    <string name="setting_menu_rebind">पुनर्निर्धारित करें</string>
+    <string name="setting_menu_reset">रीसेट करें</string>
+    <string name="setting_press_key_combo">वांछित कुंजी संयोजन दबाएं</string>
+    <string name="setting_listening_keys">कुंजी इनपुट की प्रतीक्षा है...</string>
+
+    <string name="panel_feeds">फ़ीड्स और होमस्क्रीन प्रबंधन</string>
+    <string name="setting_card_thumbnail_style">कार्ड थंबनेल शैली</string>
+    <string name="setting_prioritize_fav_cast">फ़ीड में पसंदीदा कलाकारों को प्राथमिकता दें</string>
+    <string name="header_for_you_feeds">आपके लिए फ़ीड्स</string>
+    <string name="header_movie_feeds">फ़िल्म फ़ीड्स</string>
+    <string name="header_movie_genres">फ़िल्म शैलियाँ</string>
+    <string name="header_tv_feeds">टीवी शो फ़ीड्स</string>
+    <string name="header_tv_genres">टीवी शो शैलियाँ</string>
+    <string name="header_discover_networks">खोजें: स्ट्रीमिंग नेटवर्क और चैनल</string>
+    <string name="header_discover_eras">खोजें: दशक और युग</string>
+    <string name="header_discover_world">खोजें: विश्व सिनेमा और खास शैलियाँ</string>
+    <string name="header_fav_cast_mgmt">पसंदीदा कलाकारों का प्रबंधन</string>
+    <string name="desc_fav_cast_mgmt">अपने पसंदीदा शो के कलाकारों को प्रबंधित करें या किसी भी अभिनेता को खोजकर जोड़ें।</string>
+    <string name="setting_auto_sync_fav_cast">पसंदीदा शो से कलाकारों को स्वतः सिंक करें</string>
+    <string name="prompt_search_actor">जोड़ने के लिए अभिनेता खोजें (उदा. Cillian Murphy)...</string>
+    <string name="label_live_results">लाइव परिणाम (जोड़ने के लिए चुनें):</string>
+    <string name="label_cast_pool">कलाकार पूल (%1$d)</string>
+    <string name="label_add_actor">+ जोड़ें</string>
+    <string name="desc_no_fav_actors">अभी तक कोई अभिनेता नहीं मिला। अपने पसंदीदा में शो जोड़ें या ऊपर खोजें।</string>
+    <string name="label_added_via_fav">पसंदीदा में होने के कारण जोड़ा गया: %1$s</string>
+    <string name="label_added_via_search">खोज द्वारा जोड़ा गया</string>
+
+    <string name="panel_streaming">स्ट्रीमिंग और स्क्रेपर विन्यास</string>
+    <string name="setting_timeout_logic">टाइमआउट व्यवस्था</string>
+    <string name="setting_enforce_whitelist">होस्ट व्हाइटलिस्ट लागू करें</string>
+    <string name="setting_global_timeout">इंजन का कुल टाइमआउट (सेकंड)</string>
+    <string name="setting_source_timeout">प्रति-स्रोत टाइमआउट सीमा (सेकंड)</string>
+    <string name="setting_scraper_workers">स्क्रेपर थ्रेड्स (डिफ़ॉल्ट: 3)</string>
+    <string name="header_provider_packages">प्रदाता पैकेज</string>
+    <string name="header_host_whitelists">होस्ट व्हाइटलिस्ट्स</string>
+    <string name="prompt_search_whitelists">व्हाइटलिस्ट में खोजें...</string>
+    <string name="label_provider_whitelist">प्रदाता पैकेज व्हाइटलिस्ट</string>
+    <string name="label_resolveurl_whitelist">ResolveURL व्हाइटलिस्ट</string>
+
+    <string name="panel_autoplay">ऑटोप्ले विन्यास प्रोफ़ाइल</string>
+    <string name="setting_autoplay_global">वीडियो स्वतः चलाएं</string>
+    <string name="btn_add_autoplay_profile">नई ऑटोप्ले प्रोफ़ाइल जोड़ें</string>
+
+    <string name="panel_subtitles">सबटाइटल खोज प्राथमिकताएं</string>
+    <string name="setting_sub_rendering_engine">सबटाइटल रेंडरिंग इंजन</string>
+    <string name="setting_sub_auto_search">स्वतः खोज व्यवहार</string>
+    <string name="setting_subs_to_download">डाउनलोड करने के लिए सबटाइटल संख्या</string>
+    <string name="setting_sub_video_launches">वीडियो शुरू होने पर</string>
+    <string name="setting_sub_retention">सबटाइटल फ़ाइल रखने की अवधि</string>
+    <string name="setting_sub_limit">सबटाइटल खोज सीमा</string>
+    <string name="header_sub_accounts">सबटाइटल खाते और API कुंजियाँ</string>
+    <string name="header_sub_engines">सबटाइटल खोज इंजन</string>
+
+    <string name="panel_sorting">परिणाम और फ़ीड सॉर्ट प्राथमिकताएं</string>
+    <string name="panel_blocked">अवरुद्ध वेबपेज तत्व नियम</string>
+    <string name="btn_add_css_rule">नया CSS ब्लॉक नियम जोड़ें</string>
+
+    <string name="panel_trakt">Trakt.tv सिंक एकीकरण</string>
+    <string name="status_trakt_authed">अधिकृत खाता: %1$s</string>
+    <string name="btn_logout_trakt">Trakt से लॉगआउट करें</string>
+    <string name="status_trakt_unlinked">Trakt खाता जुड़ा नहीं है।</string>
+    <string name="btn_auth_trakt">Trakt खाता अधिकृत करें</string>
+
+    <string name="panel_tmdb">TMDb खाता क्रेडेंशियल्स</string>
+    <string name="status_tmdb_active">अधिकृत TMDb सत्र सक्रिय है</string>
+    <string name="btn_login">लॉगिन करें</string>
+    <string name="btn_logout">लॉगआउट करें</string>
+
+    <string name="panel_torrents">टॉरेंट स्ट्रीमिंग विन्यास</string>
+    <string name="setting_prebuffer_size">प्लेबैक प्री-बफर आकार</string>
+    <string name="setting_torrent_cache_clean">टॉरेंट कैश स्वतः साफ़ करने का मोड</string>
+    <string name="header_storage_cache_mgmt">स्टोरेज कैश प्रबंधक</string>
+    <string name="label_total_cached_p2p">कुल कैश्ड P2P स्टोरेज</string>
+    <string name="label_cached_subfolders">कैश्ड सब-फ़ोल्डर्स</string>
+    <string name="label_clean_interval">सफ़ाई का अंतराल</string>
+    <string name="format_every_x_days">प्रत्येक %1$d दिन</string>
+    <string name="label_disabled_set">अक्षम / सेट करने के लिए टैप करें</string>
+    <string name="btn_clear">साफ़ करें</string>
+
+    <string name="panel_sync">स्थानीय बैकअप और पुनर्स्थापना</string>
+    <string name="desc_local_backup">Google खाते के बिना अपनी सभी सेटिंग्स और बुकमार्क को डाउनलोड फ़ोल्डर में एक ऑफ़लाइन JSON फ़ाइल में सहेजें या पुनर्स्थापित करें।</string>
+    <string name="btn_save_backup">बैकअप सहेजें</string>
+    <string name="btn_restore_backup">बैकअप पुनर्स्थापित करें</string>
+    <string name="header_drive_sync">Google Drive क्लाउड सिंक</string>
+    <string name="desc_drive_sync">Google Drive के ऐप डेटा फ़ोल्डर का उपयोग करके विभिन्न उपकरणों के बीच अपनी सेटिंग्स और इतिहास सिंक करें।</string>
+    <string name="status_sync">स्थिति: %1$s</string>
+    <string name="btn_sign_in_google">Google से साइन इन करें</string>
+    <string name="btn_force_sync">अभी सिंक करें</string>
+
+    <!-- Option values for Dropdowns -->
+    <string name="opt_restore_ask">पुनर्स्थापित करने से पहले पूछें</string>
+    <string name="opt_restore_always_load">हमेशा पुनर्स्थापित करें और लोड करें</string>
+    <string name="opt_restore_always">हमेशा पुनर्स्थापित करें</string>
+    <string name="opt_restore_never">कभी पुनर्स्थापित न करें</string>
+
+    <string name="opt_hist_10">10 प्रविष्टियाँ</string>
+    <string name="opt_hist_20">20 प्रविष्टियाँ</string>
+    <string name="opt_hist_50">50 प्रविष्टियाँ</string>
+    <string name="opt_hist_unlimited">असीमित</string>
+
+    <string name="opt_icons_snapshots">स्नैपशॉट (थंबनेल)</string>
+    <string name="opt_icons_favicons">फ़ेविकॉन</string>
+
+    <string name="opt_extract_ask">चलाने से पहले पूछें</string>
+    <string name="opt_extract_always">हमेशा नेटिव प्लेयर में चलाएं</string>
+    <string name="opt_extract_never">कभी नहीं (वेबसाइट प्लेयर का उपयोग करें)</string>
+
+    <string name="opt_fallback_ask">उपयोगकर्ता से पूछें</string>
+    <string name="opt_fallback_always">हमेशा ब्राउज़र पर वापस जाएं</string>
+    <string name="opt_fallback_never">कभी वापस न जाएं</string>
+
+    <string name="opt_skip_skip">छोड़ें</string>
+    <string name="opt_skip_ask">छोड़ने के लिए पूछें</string>
+    <string name="opt_skip_ignore">अनदेखा करें</string>
+
+    <string name="opt_up_next_ask">अगला चलाने के लिए पूछें</string>
+    <string name="opt_up_next_always">हमेशा स्वतः चलाएं</string>
+    <string name="opt_up_next_never">कभी न दिखाएं</string>
+
+    <string name="opt_autoplay_closest">निकटतम स्रोत (समान होस्ट)</string>
+    <string name="opt_autoplay_best">सर्वश्रेष्ठ गुणवत्ता वाला स्रोत</string>
+    <string name="opt_autoplay_ask">पूछें (परिणाम दिखाएं)</string>
+
+    <string name="opt_focus_next_watched">अंतिम देखे गए के बाद का एपिसोड</string>
+    <string name="opt_focus_first_unwatched">पहला न देखा गया एपिसोड</string>
+
+    <string name="opt_nav_pointer">सिम्युलेटेड पॉइंटर (माउस कर्सर)</string>
+    <string name="opt_nav_dpad">D-pad नेविगेशन</string>
+
+    <string name="opt_scrape_web_torrents">वेब, टॉरेंट</string>
+    <string name="opt_scrape_torrents_web">टॉरेंट, वेब</string>
+
+    <string name="opt_hw_auto">स्वतः पता लगाएं (अनुशंसित)</string>
+    <string name="opt_hw_always">हमेशा सक्षम</string>
+    <string name="opt_hw_disabled">अक्षम (टीवी रिमोट मोड)</string>
+
+    <string name="opt_thumb_portrait">पोर्ट्रेट (2:3) [डिफ़ॉल्ट]</string>
+    <string name="opt_thumb_landscape">लैंडस्केप (16:9)</string>
+
+    <string name="opt_timeout_global">केवल वैश्विक टाइमआउट</string>
+    <string name="opt_timeout_source">केवल प्रति-स्रोत टाइमआउट</string>
+    <string name="opt_timeout_both">दोनों टाइमआउट सक्रिय</string>
+
+    <string name="opt_sub_engine_native">नेटिव (पुनः लोड आवश्यक)</string>
+    <string name="opt_sub_engine_overlay">कस्टम ओवरले (बिना देरी)</string>
+
+    <string name="opt_sub_behavior_ask">खोजने से पहले पूछें</string>
+    <string name="opt_sub_behavior_auto">स्वतः खोजें</string>
+    <string name="opt_sub_behavior_never">कभी न खोजें</string>
+
+    <string name="opt_sub_count_other">अन्य</string>
+    <string name="opt_sub_count_all">सभी</string>
+
+    <string name="opt_sub_launch_stop">डाउनलोड तुरंत रोकें</string>
+    <string name="opt_sub_launch_ask">पूछें कि क्या मैं इंतज़ार करना चाहता हूँ</string>
+    <string name="opt_sub_launch_background">बैकग्राउंड में डाउनलोड जारी रखें</string>
+
+    <string name="opt_retention_indefinite">हमेशा के लिए रखें</string>
+    <string name="opt_retention_1d">1 दिन</string>
+    <string name="opt_retention_3d">3 दिन</string>
+    <string name="opt_retention_7d">7 दिन</string>
+    <string name="opt_retention_14d">14 दिन</string>
+    <string name="opt_retention_30d">30 दिन</string>
+
+    <string name="opt_prebuffer_1">1 हिस्सा (सबसे तेज़ / डिफ़ॉल्ट)</string>
+    <string name="opt_prebuffer_2">2 हिस्से</string>
+    <string name="opt_prebuffer_4">4 हिस्से (मानक)</string>
+    <string name="opt_prebuffer_8">8 हिस्से (अधिकतम स्थिरता)</string>
+
+    <string name="opt_clean_manual">केवल मैनुअल</string>
+    <string name="opt_clean_new_torrent">हर बार नया टॉरेंट शुरू होने पर</string>
+    <string name="opt_clean_exit">हर बार वीडियो बंद होने पर</string>
+    <string name="opt_clean_days">प्रत्येक X दिन</string>
+
+    <!-- TMDb Genres -->
+    <string name="genre_action">एक्शन</string>
+    <string name="genre_adventure">रोमांच (एडवेंचर)</string>
+    <string name="genre_animation">एनिमेशन</string>
+    <string name="genre_comedy">कॉमेडी</string>
+    <string name="genre_crime">क्राइम</string>
+    <string name="genre_documentary">डॉक्यूमेंट्री</string>
+    <string name="genre_drama">ड्रामा</string>
+    <string name="genre_family">पारिवारिक</string>
+    <string name="genre_fantasy">फैंटेसी</string>
+    <string name="genre_history">इतिहास</string>
+    <string name="genre_horror">हॉरर</string>
+    <string name="genre_music">संगीत</string>
+    <string name="genre_mystery">रहस्य</string>
+    <string name="genre_romance">रोमांस</string>
+    <string name="genre_scifi">साइंस फिक्शन</string>
+    <string name="genre_tv_movie">टीवी फ़िल्म</string>
+    <string name="genre_thriller">थ्रिलर</string>
+    <string name="genre_war">युद्ध</string>
+    <string name="genre_western">वेस्टर्न</string>
+    <string name="genre_action_adventure">एक्शन और एडवेंचर</string>
+    <string name="genre_kids">बच्चे</string>
+    <string name="genre_news">समाचार</string>
+    <string name="genre_reality">रियलिटी</string>
+    <string name="genre_scifi_fantasy">साइंस फिक्शन और फैंटेसी</string>
+    <string name="genre_soap">धारावाहिक (सोप)</string>
+    <string name="genre_talk">टॉक शो</string>
+    <string name="genre_war_politics">युद्ध और राजनीति</string>
+
+    <string name="opt_system_default">सिस्टम डिफ़ॉल्ट</string>
+    <string name="opt_follow_app_language">ऐप की भाषा के अनुसार (डिफ़ॉल्ट)</string>
+    <string name="setting_action_mode">एक्शन मोड</string>
+    <string name="opt_action_custom_script">कस्टम स्क्रिप्ट</string>
+    <string name="opt_action_simple_elements">सरल तत्व सूची</string>
+    <string name="label_javascript_action">जावास्क्रिप्ट एक्शन</string>
+</resources>

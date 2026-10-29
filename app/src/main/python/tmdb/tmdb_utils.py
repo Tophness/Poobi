@@ -22,6 +22,25 @@ _adapter = HTTPAdapter(pool_connections=15, pool_maxsize=30, max_retries=Retry(t
 _session.mount("https://", _adapter)
 _session.mount("http://", _adapter)
 
+def get_language():
+    try:
+        from com.chaquo.python import Python
+        context = Python.getPlatform().getApplication()
+        from com.poobi.tvbrowser.shared import LanguageHelper
+        lang = str(LanguageHelper.INSTANCE.getAppLanguage(context).getCode())
+        if lang and lang != 'system':
+            return lang
+    except:
+        pass
+    try:
+        from main import GLOBAL_CONFIG
+        lang = GLOBAL_CONFIG.get('app_language', 'en')
+        if lang and lang != 'system':
+            return lang
+    except:
+        pass
+    return 'en'
+
 def get_headers():
     return {
         "Authorization": f"Bearer {READ_TOKEN}",
@@ -29,42 +48,51 @@ def get_headers():
     }
 
 def get_movies_in_cinemas(page=1):
-    url = f"{API_URL}/movie/now_playing?page={page}"
+    lang = get_language()
+    url = f"{API_URL}/movie/now_playing?page={page}&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_trending(media_type='all', time_window='day', page=1):
     if isinstance(time_window, int) or (isinstance(time_window, str) and time_window.isdigit()):
         page = int(time_window)
         time_window = 'day'
-    url = f"{API_URL}/trending/{media_type}/{time_window}?page={page}"
+    lang = get_language()
+    url = f"{API_URL}/trending/{media_type}/{time_window}?page={page}&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_trending_week(media_type='all', page=1):
-    url = f"{API_URL}/trending/{media_type}/week?page={page}"
+    lang = get_language()
+    url = f"{API_URL}/trending/{media_type}/week?page={page}&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_popular(media_type='movie', page=1):
-    url = f"{API_URL}/{media_type}/popular?page={page}"
+    lang = get_language()
+    url = f"{API_URL}/{media_type}/popular?page={page}&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_top_rated(media_type='movie', page=1):
-    url = f"{API_URL}/{media_type}/top_rated?page={page}"
+    lang = get_language()
+    url = f"{API_URL}/{media_type}/top_rated?page={page}&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_top_rated_tv(page=1):
-    url = f"{API_URL}/tv/top_rated?page={page}"
+    lang = get_language()
+    url = f"{API_URL}/tv/top_rated?page={page}&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_upcoming_movies(page=1):
-    url = f"{API_URL}/movie/upcoming?page={page}"
+    lang = get_language()
+    url = f"{API_URL}/movie/upcoming?page={page}&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_airing_today(page=1):
-    url = f"{API_URL}/tv/airing_today?page={page}"
+    lang = get_language()
+    url = f"{API_URL}/tv/airing_today?page={page}&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_on_the_air(page=1):
-    url = f"{API_URL}/tv/on_the_air?page={page}"
+    lang = get_language()
+    url = f"{API_URL}/tv/on_the_air?page={page}&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def discover_movies(params_str="{}", page=1):
@@ -73,6 +101,7 @@ def discover_movies(params_str="{}", page=1):
     except:
         params = {}
     params['page'] = page
+    params['language'] = get_language()
     query_str = urlencode(params)
     url = f"{API_URL}/discover/movie?{query_str}"
     return _session.get(url, headers=get_headers()).json()
@@ -83,19 +112,22 @@ def discover_tv(params_str="{}", page=1):
     except:
         params = {}
     params['page'] = page
+    params['language'] = get_language()
     query_str = urlencode(params)
     url = f"{API_URL}/discover/tv?{query_str}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_recommendations(tmdb_id, media_type='movie', page=1):
-    url = f"{API_URL}/{media_type}/{tmdb_id}/recommendations?page={page}"
+    lang = get_language()
+    url = f"{API_URL}/{media_type}/{tmdb_id}/recommendations?page={page}&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_details(tmdb_id, media_type='movie'):
+    lang = get_language()
     if media_type in ['tv', 'tvshow']:
-        url = f"{API_URL}/tv/{tmdb_id}?append_to_response=aggregate_credits,credits,videos,images,external_ids,recommendations,content_ratings"
+        url = f"{API_URL}/tv/{tmdb_id}?append_to_response=aggregate_credits,credits,videos,images,external_ids,recommendations,content_ratings&language={lang}&include_image_language={lang},en,null"
     else:
-        url = f"{API_URL}/movie/{tmdb_id}?append_to_response=credits,videos,images,external_ids,recommendations,release_dates"
+        url = f"{API_URL}/movie/{tmdb_id}?append_to_response=credits,videos,images,external_ids,recommendations,release_dates&language={lang}&include_image_language={lang},en,null"
     res = _session.get(url, headers=get_headers()).json()
     if media_type in ['tv', 'tvshow']:
         agg = res.get('aggregate_credits')
@@ -121,15 +153,18 @@ def get_tv_next_episode(tmdb_id):
     return details.get('next_episode_to_air')
 
 def search(query, media_type='multi', page=1):
-    url = f"{API_URL}/search/{media_type}?query={query}&page={page}"
+    lang = get_language()
+    url = f"{API_URL}/search/{media_type}?query={query}&page={page}&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_genres(media_type='movie'):
-    url = f"{API_URL}/genre/{media_type}/list"
+    lang = get_language()
+    url = f"{API_URL}/genre/{media_type}/list?language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_person_details(person_id):
-    url = f"{API_URL}/person/{person_id}?append_to_response=combined_credits,images"
+    lang = get_language()
+    url = f"{API_URL}/person/{person_id}?append_to_response=combined_credits,images&language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_popular_people(page=1):
@@ -141,7 +176,8 @@ def get_external_ids(tmdb_id, media_type):
     return _session.get(url, headers=get_headers()).json()
 
 def get_tv_episodes(tv_id, season_number):
-    url = f"{API_URL}/tv/{tv_id}/season/{season_number}"
+    lang = get_language()
+    url = f"{API_URL}/tv/{tv_id}/season/{season_number}?language={lang}"
     return _session.get(url, headers=get_headers()).json()
 
 def get_landscape_image(tmdb_id, media_type='movie', season=None, episode=None):
@@ -174,8 +210,9 @@ def get_landscape_image(tmdb_id, media_type='movie', season=None, episode=None):
 def parse_genres(genres, line=True):
     new_genres = []
     try:
-        movie_genres = _session.get(f"{API_URL}/genre/movie/list", headers=get_headers()).json().get('genres', [])
-        tv_genres = _session.get(f"{API_URL}/genre/tv/list", headers=get_headers()).json().get('genres', [])
+        lang = get_language()
+        movie_genres = _session.get(f"{API_URL}/genre/movie/list?language={lang}", headers=get_headers()).json().get('genres', [])
+        tv_genres = _session.get(f"{API_URL}/genre/tv/list?language={lang}", headers=get_headers()).json().get('genres', [])
         all_genres = {str(g['id']): g['name'] for g in movie_genres + tv_genres}
         for genre_id in genres:
             name = all_genres.get(str(genre_id))

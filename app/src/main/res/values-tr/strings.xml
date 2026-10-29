@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Poobi</string>
+
+    <!-- Top Navigation -->
+    <string name="tab_browser">Tarayıcı</string>
+    <string name="tab_streams">Akışlar</string>
+    <string name="title_settings">Ayarlar</string>
+
+    <!-- Common Actions & Buttons -->
+    <string name="btn_save_exit">Kaydet ve Çık</string>
+    <string name="btn_save">Kaydet</string>
+    <string name="btn_cancel">İptal</string>
+    <string name="btn_delete">Sil</string>
+    <string name="btn_edit">Düzenle</string>
+    <string name="btn_close">Kapat</string>
+    <string name="btn_done">Bitti</string>
+    <string name="btn_select_all">Tümünü Seç</string>
+    <string name="btn_deselect_all">Seçimi Kaldır</string>
+    <string name="btn_clear_all">Tümünü Temizle</string>
+    <string name="btn_back">Geri</string>
+    <string name="btn_apply">Uygula</string>
+    <string name="btn_play_now">Şimdi Oynat</string>
+    <string name="btn_skip_play">Atla ve Oynat</string>
+    <string name="btn_download">İndir</string>
+    <string name="btn_allow">İzin Ver</string>
+    <string name="btn_block">Engelle</string>
+    <string name="btn_play_native">Dahili Oynatıcı</string>
+    <string name="btn_website_player">Web Oynatıcı</string>
+    <string name="btn_open_in_browser">Tarayıcıda Aç</string>
+    <string name="btn_restore">Geri Yükle</string>
+    <string name="btn_restore_load">Geri Yükle ve Yükle</string>
+    <string name="btn_new_session">Yeni Oturum</string>
+    <string name="btn_zoom_out">- Uzaklaştır</string>
+    <string name="btn_zoom_reset">%100 (Sıfırla)</string>
+    <string name="btn_zoom_in">+ Yakınlaştır</string>
+    <string name="btn_load_all_tabs">Tüm Sekmeleri Yükle</string>
+    <string name="btn_restore_all_tabs">Tüm Sekmeleri Geri Yükle</string>
+    <string name="btn_clear_bookmarks">Yer İmlerini Temizle</string>
+    <string name="btn_clear_history">Geçmişi Temizle</string>
+    <string name="btn_clear_downloads">İndirilenleri Temizle</string>
+    <string name="btn_prev">Önceki</string>
+    <string name="btn_next">Sonraki</string>
+
+    <!-- Settings Categories -->
+    <string name="category_general">Genel</string>
+    <string name="category_language">Dil</string>
+    <string name="category_web">Web</string>
+    <string name="category_player">Oynatıcı</string>
+    <string name="category_interface">Arayüz</string>
+    <string name="category_feeds">Akışlar</string>
+    <string name="category_streaming">Yayın</string>
+    <string name="category_autoplay">Otomatik Oynatma</string>
+    <string name="category_subtitles">Altyazılar</string>
+    <string name="category_sorting">Sıralama</string>
+    <string name="category_blocked">Engellenenler</string>
+    <string name="category_trakt">Trakt</string>
+    <string name="category_tmdb">TMDb</string>
+    <string name="category_torrents">Torrentler</string>
+    <string name="category_sync">Senkronizasyon</string>
+
+    <!-- Settings Panels & Options -->
+    <string name="panel_general">Genel Ayarlar</string>
+    <string name="panel_language">Dil ve Bölge Ayarları</string>
+    <string name="setting_app_language">Uygulama Arayüz Dili</string>
+    <string name="setting_date_format">Tarih Biçimi</string>
+    <string name="setting_audio_language">Varsayılan Ses İzi</string>
+    <string name="setting_torrent_language">Tercih Edilen Torrent Dili</string>
+    <string name="setting_sub_languages">Altyazı Arama Dilleri</string>
+    <string name="setting_light_theme">Açık Temayı Kullan</string>
+    <string name="setting_auto_update">Güncellemeleri Otomatik Denetle</string>
+    <string name="setting_restore_session">Oturum Geri Yükleme Modu</string>
+    <string name="setting_history_limit">Geçmiş Saklama Sınırı</string>
+    <string name="setting_history_icons">Geçmiş Simgeleri Stili</string>
+    <string name="setting_bookmark_icons">Yer İmleri Simgeleri Stili</string>
+
+    <!-- Streams Navigation Categories -->
+    <string name="feed_search">Ara</string>
+    <string name="feed_for_you">Sizin İçin</string>
+    <string name="feed_movies">Filmler</string>
+    <string name="feed_tv_shows">Diziler</string>
+    <string name="feed_discover">Keşfet</string>
+
+    <!-- Dashboard Pills -->
+    <string name="pill_favourites">Favoriler</string>
+    <string name="pill_recents">Son İzlenenler</string>
+    <string name="pill_unfinished">Yarım Kalan Diziler</string>
+    <string name="pill_because_watched">İzlediğiniz İçin</string>
+    <string name="pill_cast_spotlight">Öne Çıkan Oyuncular</string>
+    <string name="pill_trakt_watched">En Çok İzlenenler</string>
+    <string name="pill_trakt_anticipated">En Çok Beklenenler</string>
+    <string name="pill_trakt_collected">En Çok Arşivlenenler</string>
+    <string name="pill_trakt_watchlist">İzleme Listesi</string>
+    <string name="pill_trakt_recommendations">Bana Özel</string>
+    <string name="pill_trending_today">Bugün Trendlerde</string>
+    <string name="pill_trending_week">Bu Hafta Trendlerde</string>
+    <string name="pill_in_cinemas">Vizyonda</string>
+    <string name="pill_upcoming">Yakında</string>
+    <string name="pill_popular">Popüler</string>
+    <string name="pill_top_rated">En Çok Beğenilenler</string>
+    <string name="pill_hidden_gems">Gizli Hazineler</string>
+    <string name="pill_popular_tv">Popüler Diziler</string>
+    <string name="pill_trending_tv_week">Trend Diziler</string>
+    <string name="pill_airing_today">Bugün Yayınlananlar</string>
+    <string name="pill_airing_week">Bu Hafta Yayınlananlar</string>
+    <string name="pill_top_rated_tv">En Beğenilen Diziler</string>
+    <string name="pill_era_2000s">2000\'ler Hitleri</string>
+    <string name="pill_era_90s">90\'lar Nostaljisi</string>
+    <string name="pill_era_80s">80\'ler Klasikleri</string>
+    <string name="pill_era_70s">70\'ler Sineması</string>
+    <string name="pill_anime">Anime</string>
+    <string name="pill_kdrama">K-Dramaları</string>
+    <string name="pill_british_mysteries">İngiliz Gizemleri</string>
+    <string name="pill_cult_classics">Kült Klasikler</string>
+
+    <!-- Browser Home Tabs -->
+    <string name="browser_open_tabs">Açık Sekmeler</string>
+    <string name="browser_bookmarks">Yer İmleri</string>
+    <string name="browser_history">Geçmiş</string>
+    <string name="browser_downloads">İndirilenler</string>
+
+    <!-- Media Details Actions -->
+    <string name="media_play_movie">Filmi Oynat</string>
+    <string name="media_trailer">Fragman</string>
+    <string name="media_season">Sezon</string>
+    <string name="media_top_cast">Başlıca Oyuncular</string>
+    <string name="media_more_like_this">Benzerleri</string>
+    <string name="media_filmography">Filmografi</string>
+    <string name="media_released">Yayın Tarihi</string>
+    <string name="media_select_season">Sezon Seç</string>
+    <string name="media_season_num">%1$d. Sezon</string>
+    <string name="media_season_cast">%1$s Oyuncuları</string>
+    <string name="media_no_overview">Açıklama bulunmuyor.</string>
+    <string name="media_no_cast">Oyuncu detayı bulunamadı.</string>
+    <string name="media_no_recommendations">Benzer öneri bulunamadı.</string>
+    <string name="media_loading_trailer">Fragman Yükleniyor...</string>
+    <string name="media_filter_all">Tümü</string>
+    <string name="media_filter_movies">Filmler</string>
+    <string name="media_filter_tv">Diziler</string>
+    <string name="media_no_titles_category">Bu kategoride başlık bulunamadı.</string>
+    <string name="media_born_in">Doğum Yeri: %1$s</string>
+    <string name="media_no_biography">Biyografi bulunmuyor.</string>
+    <string name="media_role_as">%1$s rolünde</string>
+    <string name="media_badge_actor">OYUNCU</string>
+    <string name="media_airing_prefix">Yayın: </string>
+    <string name="media_aired_prefix">Yayınlandı: </string>
+    <string name="media_type_movie">Film</string>
+    <string name="media_type_tv">Dizi</string>
+    <string name="known_for_acting">Oyunculuk</string>
+
+    <!-- Sorter Dialog -->
+    <string name="sorter_favorites_title">Favori Sıralama Öncelikleri</string>
+    <string name="sorter_recent_title">Son İzlenen Sıralama Öncelikleri</string>
+    <string name="sorter_feed_title">Akış Sıralama Öncelikleri</string>
+    <string name="sorter_streams_title">Normal Akış Sıralaması</string>
+    <string name="sorter_torrents_title">Torrent Sıralaması</string>
+
+    <!-- Subtitle Alignment UI -->
+    <string name="sub_sync_title">Altyazı Senkronizasyonu</string>
+    <string name="sub_sync_offset">Mevcut Fark: %1$dms</string>
+    <string name="sub_sync_btn_visual">Görsel Zaman Çizelgesi Eşleme</string>
+    <string name="sub_sync_btn_search">Konuşulan Kelimeleri Ara</string>
+    <string name="sub_sync_btn_reset">Zamanlamayı Sıfırla</string>
+    <string name="sub_sync_btn_exit">Çıkış</string>
+    <string name="sub_search_title">Diyalog İpucu Ara</string>
+    <string name="sub_search_desc">Hedef ses sahnesine yaklaşmak için konuşulan kelimeleri girin.</string>
+    <string name="sub_search_placeholder">örn. aşağı atladı</string>
+    <string name="sub_search_btn_align">Ara ve Senkronla</string>
+    <string name="sub_waveform_title">Ses Dalgası Zaman Çizelgesi</string>
+    <string name="sub_waveform_silence">[ Sessizlik ]</string>
+    <string name="sub_waveform_offset">Zaman Çizelgesi Farkı: %1$dms</string>
+    <string name="sub_waveform_hint_focused">◀ Altyazıyı oynatma kafasına göre kaydırmak için Sol / Sağ basın ▶</string>
+    <string name="sub_waveform_hint_unfocused">Altyazı bloklarını ayarlamak için seçin</string>
+    <string name="sub_waveform_looping">Bölüm tekrarlanıyor...</string>
+    <string name="sub_waveform_playback_running">Oynatılıyor...</string>
+    <string name="sub_waveform_stop_loop">Tekrarı Durdur</string>
+    <string name="sub_waveform_loop_track">Bölümü Tekrarla</string>
+
+    <!-- Player Overlays & Prompts -->
+    <string name="overlay_up_next">SIRADAKİ</string>
+    <string name="overlay_skip_intro">JENERİĞİ ATLA</string>
+    <string name="overlay_skip_recap">ÖZETİ ATLA</string>
+    <string name="overlay_skip_early_credits">BAŞLANGIÇ JENERİĞİNİ ATLA</string>
+    <string name="overlay_skip_end_credits">BİTİŞ JENERİĞİNİ ATLA</string>
+    <string name="overlay_skip_remaining">%1$s atla (%2$d sn kaldı)</string>
+    <string name="overlay_skip_press_select">Atlamak için Seç düğmesine basın</string>
+    <string name="segment_intro">Jenerik</string>
+    <string name="segment_recap">Özet</string>
+    <string name="segment_opening_credits">Açılış Jeneriği</string>
+    <string name="segment_closing_credits">Kapanış Jeneriği</string>
+    <string name="toast_skipped_intro">Jenerik atlandı</string>
+    <string name="toast_skipped_recap">Özet atlandı</string>
+    <string name="toast_skipped_early_credits">Açılış jeneriği atlandı</string>
+    <string name="toast_skipped_end_credits">Kapanış jeneriği atlandı</string>
+    <string name="captions_add_disk">Diskten altyazı ekle...</string>
+    <string name="captions_off">Kapalı</string>
+    <string name="captions_embedded">Gömülü Altyazı</string>
+    <string name="dialog_quality_title">Video Kalitesini Seç</string>
+    <string name="dialog_sub_wait_title">Altyazılar Otomatik İndiriliyor</string>
+    <string name="dialog_sub_wait_msg">Altyazılar aranıyor ve indiriliyor...</string>
+    <string name="dialog_torrent_prebuffer_title">Video Akışı Önceden Arabelleğe Alınıyor</string>
+    <string name="disk_picker_select_media">Medya Seç</string>
+    <string name="disk_picker_select_subtitles">Altyazı Seç</string>
+    <string name="disk_picker_no_subs">Diskte altyazı dosyası (.srt, .vtt, .ass) bulunamadı.</string>
+
+    <!-- Browser & Web Dialogs -->
+    <string name="menu_cut">Kes</string>
+    <string name="menu_copy">Kopyala</string>
+    <string name="menu_paste">Yapıştır</string>
+    <string name="menu_select_all">Tümünü Seç</string>
+    <string name="menu_open_new_tab">Yeni Sekmede Aç</string>
+    <string name="menu_refresh">Sayfayı Yenile</string>
+    <string name="menu_block_element">Öğeyi Engelle</string>
+    <string name="dialog_video_detected_title">Video Algılandı</string>
+    <string name="dialog_video_detected_msg">Video akışı yakalandı. Dahili oynatıcıda mı yoksa sitede mi izlemek istersiniz?</string>
+    <string name="dialog_remember_decision">Seçimimi hatırla (tekrar sorma)</string>
+    <string name="dialog_playback_error_title">Oynatma Hatası</string>
+    <string name="dialog_playback_error_msg">ExoPlayer bu akışı oynatamadı. Tarayıcıda açmayı denemek ister misiniz?\n\nHata: %1$s</string>
+    <string name="dialog_download_title">Dosya indirilsin mi?</string>
+    <string name="dialog_download_msg">%1$s indirilsin mi?\nBoyut: %2$.2f MB</string>
+    <string name="dialog_popup_blocked_title">Açılır Pencere Engellendi</string>
+    <string name="dialog_popup_blocked_msg">Bu siteden açılır pencereye izin vermek istiyor musunuz?</string>
+    <string name="dialog_silent_block_remember">Bir daha sorma (Sessizce Engelle)</string>
+    <string name="dialog_restore_session_title">Oturum Geri Yüklensin mi?</string>
+    <string name="dialog_restore_session_msg">Önceki sekmelerinizi geri yüklemek istiyor musunuz?</string>
+    <string name="dialog_zoom_title">Sayfa Yakınlaştırma (%1$d%%)</string>
+    <string name="dialog_zoom_msg">Yazı boyutunu ve yakınlaştırmayı ayarlayın:</string>
+    <string name="prompt_search_google_url">Google\'da arayın veya URL girin...</string>
+    <string name="status_missing">Eksik</string>
+
+    <!-- Scraper & Streams Screen -->
+    <string name="search_movie_tv_placeholder">Film veya dizi arayın...</string>
+    <string name="dashboard_recent_searches">Son Aramalar</string>
+    <string name="dashboard_no_items">Öğe bulunamadı</string>
+    <string name="scrape_stop_scanning">Aramayı Durdur</string>
+    <string name="scrape_try_all">Hepsini Dene</string>
+    <string name="scrape_stop">Durdur</string>
+    <string name="scrape_sort">Sırala</string>
+    <string name="scrape_no_sources">Kaynak bulunamadı.</string>
+    <string name="scrape_open_browser">Tarayıcıda Aç</string>
+    <string name="scrape_play_native">Dahili Oynatıcı</string>
+    <string name="scrape_search_external_subs">🔍 Harici Altyazı Ara</string>
+
+    <!-- Sorter Criteria -->
+    <string name="sort_criteria_native">Dahili Oynatıcı Uyumluluğu</string>
+    <string name="sort_criteria_direct">Doğrudan Bağlantılar</string>
+    <string name="sort_criteria_resolution">Çözünürlük</string>
+    <string name="sort_criteria_source">Sunucu / Kaynak Adı</string>
+    <string name="sort_criteria_language">Dil</string>
+    <string name="sort_criteria_size">Dosya Boyutu</string>
+    <string name="sort_criteria_seeders">Kaynaklar (Seeders)</string>
+    <string name="sort_criteria_date_added">Eklenme Tarihi</string>
+    <string name="sort_criteria_date_accessed">Son Erişim</string>
+    <string name="sort_criteria_az">A-Z (Alfabetik)</string>
+    <string name="sort_criteria_rating">Puan</string>
+    <string name="sort_criteria_fav_actors">Favori Oyuncular</string>
+    <string name="sort_criteria_date">Yayın Tarihi</string>
+    <string name="sort_criteria_default">Varsayılan Sıra</string>
+
+    <!-- Settings Panels & Options Details -->
+    <string name="panel_web">Web ve Reklam Engelleyici Ayarları</string>
+    <string name="setting_silent_block">Açılır Pencereleri Sessizce Engelle</string>
+    <string name="setting_clickjack">Tıklama Tuzağını (Clickjacking) Önle</string>
+    <string name="setting_custom_adblock_url">Özel AdBlock Kuralı URL\'si (EasyList Biçimi)</string>
+    <string name="btn_update_rules_now">Kuralları Şimdi Güncelle</string>
+    <string name="status_rules_loaded">Aktif Filtre Kuralları: ~%1$d yüklendi</string>
+    <string name="status_rules_updating">Filtre listeleri güncelleniyor...</string>
+    <string name="toast_rules_updated">Filter lists updated!</string>
+    <string name="toast_rules_update_failed">Update failed</string>
+    <string name="status_checking_updates">Güncellemeler denetleniyor...</string>
+    <string name="btn_check_updates">Güncellemeleri Denetle (v%1$s)</string>
+    <string name="setting_current">Mevcut</string>
+    <string name="label_profile_name">Profil Adı</string>
+    <string name="label_url_patterns">URL Kalıpları</string>
+    <string name="label_action_mode">Action Mode</string>
+    <string name="opt_custom_script">Custom Script</string>
+    <string name="opt_simple_selectors">Simple Element List</string>
+    <string name="label_js_action">JavaScript Action</string>
+    <string name="label_click_selectors">Tıklama Seçicileri</string>
+    <string name="btn_add_selector">+ Seçici Ekle</string>
+    <string name="dialog_edit_autoplay_title">Edit Autoplay Profile</string>
+    <string name="dialog_add_autoplay_title">Add New Autoplay Profile</string>
+    <string name="dialog_custom_sub_limit_title">Özel Altyazı İndirme Sınırı</string>
+    <string name="dialog_custom_sub_limit_msg">Sayısal sınır girin:</string>
+    <string name="label_opensubtitles_username">OpenSubtitles Username</string>
+    <string name="label_opensubtitles_password">OpenSubtitles Password</string>
+    <string name="label_opensubtitles_org_username">OpenSubtitles.org Username</string>
+    <string name="label_opensubtitles_org_password">OpenSubtitles.org Password</string>
+    <string name="label_subdl_apikey">SubDL API Key</string>
+    <string name="label_subsource_apikey">SubSource API Key</string>
+    <string name="label_rule_name">Kural Adı</string>
+    <string name="label_css_selectors">CSS Seçicileri (her satıra bir tane)</string>
+    <string name="dialog_edit_block_rule">Engelleme Kuralını Düzenle</string>
+    <string name="dialog_add_block_rule">Engelleme Kuralı Ekle</string>
+    <string name="dialog_auth_trakt_title">Trakt.tv\'yi Yetkilendir</string>
+    <string name="dialog_auth_trakt_step1">1. Doğrulama sayfasını ziyaret edin:</string>
+    <string name="dialog_auth_trakt_step2">2. Cihazınızda şu kodu girin:</string>
+    <string name="dialog_auth_trakt_waiting">Trakt\'tan kimlik doğrulaması bekleniyor...</string>
+    <string name="btn_open_link">Bağlantıyı Aç</string>
+    <string name="label_username">Kullanıcı Adı</string>
+    <string name="label_password">Şifre</string>
+    <string name="dialog_auto_clean_interval_title">Otomatik Temizleme Aralığı</string>
+    <string name="dialog_auto_clean_interval_msg">Önbellek temizleme aralığını gün olarak girin:</string>
+    <string name="status_signed_in_as">Giriş yapıldı: %1$s</string>
+    <string name="status_not_signed_in">Giriş yapılmadı.</string>
+
+    <string name="panel_player">Dahili Oynatıcı Tercihleri</string>
+    <string name="setting_extract_video">Video Yakalama ve Çıkarma</string>
+    <string name="setting_fallback_error">Oynatma Hatasında Geri Çekilme</string>
+    <string name="header_binge_autoplay">Dizi İzleme ve Otomatik Oynatma</string>
+    <string name="setting_intro_skip">Jenerik Atlama Eylemi</string>
+    <string name="setting_recap_skip">Özet Atlama Eylemi</string>
+    <string name="setting_early_credits_skip">Açılış Jeneriği Atlama Eylemi</string>
+    <string name="setting_end_credits_skip">Kapanış Jeneriği Atlama Eylemi</string>
+    <string name="setting_up_next_mode">Sıradaki Bölüm Bildirimi Modu</string>
+    <string name="setting_up_next_time">Bitişten Önceki Süre (Saniye)</string>
+    <string name="setting_source_selection_next">Sonraki Bölüm Kaynak Seçimi</string>
+    <string name="setting_episode_focus_style">Bölüm Otomatik Odaklanma Stili</string>
+
+    <string name="panel_interface">Arayüz ve Gezinme Ayarları</string>
+    <string name="setting_scroll_topbar">Gezinme Çubuğu İçin Yukarı Kaydır</string>
+    <string name="setting_nav_mode">Varsayılan İşaretçi Modu</string>
+    <string name="setting_scrape_tab_order">Arama Sonucu Sekme Sırası</string>
+    <string name="header_hardware_devices">Donanım Aygıtları ve Harici Giriş</string>
+    <string name="setting_hw_keyboard_mode">Fiziksel Klavye Modu</string>
+    <string name="setting_hw_mouse_mode">Fiziksel Fare Modu</string>
+    <string name="setting_menu_keybind">Menü Düğmesi Kısayolu</string>
+    <string name="setting_menu_rebind">Yeniden Ata</string>
+    <string name="setting_menu_reset">Sıfırla</string>
+    <string name="setting_press_key_combo">İstenen tuş kombinasyonuna basın</string>
+    <string name="setting_listening_keys">Tuşlar bekleniyor...</string>
+
+    <string name="panel_feeds">Akışlar ve Ana Sayfa Düzeni</string>
+    <string name="setting_card_thumbnail_style">Kart Küçük Resim Stili</string>
+    <string name="setting_prioritize_fav_cast">Akışlarda Favori Oyunculara Öncelik Ver</string>
+    <string name="header_for_you_feeds">Sizin İçin Akışları</string>
+    <string name="header_movie_feeds">Film Akışları</string>
+    <string name="header_movie_genres">Film Türleri</string>
+    <string name="header_tv_feeds">Dizi Akışları</string>
+    <string name="header_tv_genres">Dizi Türleri</string>
+    <string name="header_discover_networks">Keşfet: Yayın Ağları ve Dönemler</string>
+    <string name="header_discover_eras">Keşfet: Dönemler ve On Yıllar</string>
+    <string name="header_discover_world">Keşfet: Dünya Sineması ve Nişler</string>
+    <string name="header_fav_cast_mgmt">Favori Oyuncu Yönetimi</string>
+    <string name="desc_fav_cast_mgmt">Favori dizilerinizdeki oyuncuları yönetin veya arayarak manuel olarak ekleyin.</string>
+    <string name="setting_auto_sync_fav_cast">Favori Dizilerden Oyuncuları Otomatik Eşle</string>
+    <string name="prompt_search_actor">Eklemek için oyuncu arayın (örn. Cillian Murphy)...</string>
+    <string name="label_live_results">Canlı Sonuçlar (Eklemek için seçin):</string>
+    <string name="label_cast_pool">Oyuncu Havuzu (%1$d)</string>
+    <string name="label_add_actor">+ Ekle</string>
+    <string name="desc_no_fav_actors">Henüz oyuncu keşfedilmedi. Favorilerinize dizi ekleyin veya yukarıdan arayın.</string>
+    <string name="label_added_via_fav">Favorilediğiniz için eklendi: %1$s</string>
+    <string name="label_added_via_search">Arama ile eklendi</string>
+
+    <string name="panel_streaming">Yayın ve Kazıma Yapılandırmaları</string>
+    <string name="setting_timeout_logic">Zaman Aşımı Mantığı</string>
+    <string name="setting_enforce_whitelist">Ana Bilgisayar Beyaz Listesini Uygula</string>
+    <string name="setting_global_timeout">Genel Motor Zaman Aşımı (Saniye)</string>
+    <string name="setting_source_timeout">Kaynak Başına Zaman Aşımı Sınırı (Saniye)</string>
+    <string name="setting_scraper_workers">Kazıyıcı İş Parçacıkları (Varsayılan: 3)</string>
+    <string name="header_provider_packages">Sağlayıcı Paketleri</string>
+    <string name="header_host_whitelists">Ana Bilgisayar Beyaz Listeleri</string>
+    <string name="prompt_search_whitelists">Beyaz listeleri ara...</string>
+    <string name="label_provider_whitelist">Sağlayıcı Paketi Beyaz Listesi</string>
+    <string name="label_resolveurl_whitelist">ResolveURL Beyaz Listesi</string>
+
+    <string name="panel_autoplay">Otomatik Oynatma Yapılandırma Profilleri</string>
+    <string name="setting_autoplay_global">Videoları genel olarak otomatik oynat</string>
+    <string name="btn_add_autoplay_profile">Yeni Otomatik Oynatma Profili Ekle</string>
+
+    <string name="panel_subtitles">Altyazı Arama Tercihleri</string>
+    <string name="setting_sub_rendering_engine">Altyazı İşleme Motoru</string>
+    <string name="setting_sub_auto_search">Otomatik Arama Davranışı</string>
+    <string name="setting_subs_to_download">İndirilecek Altyazı Sayısı</string>
+    <string name="setting_sub_video_launches">Video Başladığında</string>
+    <string name="setting_sub_retention">Altyazı Dosyası Saklama Süresi</string>
+    <string name="setting_sub_limit">Altyazı Arama Sınırı</string>
+    <string name="header_sub_accounts">Altyazı Hesapları ve API Anahtarları</string>
+    <string name="header_sub_engines">Altyazı Kazıma Motorları</string>
+
+    <string name="panel_sorting">Sonuç ve Akış Sıralama Öncelikleri</string>
+    <string name="panel_blocked">Engellenen Web Öğesi Kuralları</string>
+    <string name="btn_add_css_rule">Yeni CSS Engelleme Kuralı Ekle</string>
+
+    <string name="panel_trakt">Trakt.tv Senkronizasyon Entegrasyonu</string>
+    <string name="status_trakt_authed">Yetkilendirilmiş hesap: %1$s</string>
+    <string name="btn_logout_trakt">Trakt Çıkışı</string>
+    <string name="status_trakt_unlinked">Trakt hesabı bağlı değil.</string>
+    <string name="btn_auth_trakt">Trakt Hesabını Yetkilendir</string>
+
+    <string name="panel_tmdb">TMDb Hesap Bilgileri</string>
+    <string name="status_tmdb_active">Yetkilendirilmiş TMDb Oturumu Aktif</string>
+    <string name="btn_login">Giriş Yap</string>
+    <string name="btn_logout">Çıkış Yap</string>
+
+    <string name="panel_torrents">Torrent Yayın Yapılandırması</string>
+    <string name="setting_prebuffer_size">Oynatma Ön Arabellek Boyutu</string>
+    <string name="setting_torrent_cache_clean">Torrent Önbellek Otomatik Temizleme Modu</string>
+    <string name="header_storage_cache_mgmt">Depolama Önbellek Yöneticisi</string>
+    <string name="label_total_cached_p2p">Toplam Önbelleğe Alınmış P2P Depolaması</string>
+    <string name="label_cached_subfolders">Önbelleğe Alınan Alt Dizin Klasörleri</string>
+    <string name="label_clean_interval">Temizleme Aralığı</string>
+    <string name="format_every_x_days">%1$d günde bir</string>
+    <string name="label_disabled_set">Devre Dışı / Ayarlamak için tıklayın</string>
+    <string name="btn_clear">Temizle</string>
+
+    <string name="panel_sync">Yerel Yedekleme ve Geri Yükleme</string>
+    <string name="desc_local_backup">Tüm ayarları, yer imlerini ve yapılandırmayı Google hesabı olmadan İndirilenler klasörüne aktarın veya geri yükleyin.</string>
+    <string name="btn_save_backup">Yedeği Kaydet</string>
+    <string name="btn_restore_backup">Yedeği Geri Yükle</string>
+    <string name="header_drive_sync">Google Drive Bulut Senkronizasyonu</string>
+    <string name="desc_drive_sync">Google Drive Uygulama Verileri klasörünüzü kullanarak ayarları ve geçmişi cihazlar arasında eşitleyin.</string>
+    <string name="status_sync">Durum: %1$s</string>
+    <string name="btn_sign_in_google">Google ile Giriş Yap</string>
+    <string name="btn_force_sync">Şimdi Senkronize Et</string>
+
+    <!-- Option values for Dropdowns -->
+    <string name="opt_restore_ask">Geri Yüklemeyi Sor</string>
+    <string name="opt_restore_always_load">Her Zaman Geri Yükle ve Yükle</string>
+    <string name="opt_restore_always">Her Zaman Geri Yükle</string>
+    <string name="opt_restore_never">Asla Geri Yükleme</string>
+
+    <string name="opt_hist_10">10 Kayıt</string>
+    <string name="opt_hist_20">20 Kayıt</string>
+    <string name="opt_hist_50">50 Kayıt</string>
+    <string name="opt_hist_unlimited">Sınırsız</string>
+
+    <string name="opt_icons_snapshots">Ekran Görüntüleri (Küçük Resim)</string>
+    <string name="opt_icons_favicons">Site Simgeleri (Favicon)</string>
+
+    <string name="opt_extract_ask">Oynatmayı Sor</string>
+    <string name="opt_extract_always">Her Zaman Dahili Oynatıcıda Aç</string>
+    <string name="opt_extract_never">Asla Açma (Web Tarayıcısını Kullan)</string>
+
+    <string name="opt_fallback_ask">Kullanıcıya geçişi sor</string>
+    <string name="opt_fallback_always">Her zaman Tarayıcıya geri dön</string>
+    <string name="opt_fallback_never">Asla geri dönme</string>
+
+    <string name="opt_skip_skip">Atla</string>
+    <string name="opt_skip_ask">Atlamayı Sor</string>
+    <string name="opt_skip_ignore">Görmezden Gel</string>
+
+    <string name="opt_up_next_ask">Sonrakini Oynatmayı Sor</string>
+    <string name="opt_up_next_always">Her Zaman Otomatik Oynat</string>
+    <string name="opt_up_next_never">Bildirimi Asla Gösterme</string>
+
+    <string name="opt_autoplay_closest">En Yakın Kaynak (Eşleşen Sunucu)</string>
+    <string name="opt_autoplay_best">En Yüksek Kalitedeki Kaynak</string>
+    <string name="opt_autoplay_ask">Sor (Sonuçları Göster)</string>
+
+    <string name="opt_focus_next_watched">Son İzlenenden Sonraki Bölüm</string>
+    <string name="opt_focus_first_unwatched">İlk İzlenmemiş Bölüm</string>
+
+    <string name="opt_nav_pointer">Sanal İşaretçi (Fare İmleci)</string>
+    <string name="opt_nav_dpad">D-pad ile Gezinme</string>
+
+    <string name="opt_scrape_web_torrents">Web, Torrentler</string>
+    <string name="opt_scrape_torrents_web">Torrentler, Web</string>
+
+    <string name="opt_hw_auto">Otomatik Algıla (Önerilen)</string>
+    <string name="opt_hw_always">Her Zaman Etkin</string>
+    <string name="opt_hw_disabled">Devre Dışı (TV Kumandası Modu)</string>
+
+    <string name="opt_thumb_portrait">Dikey (2:3) [Varsayılan]</string>
+    <string name="opt_thumb_landscape">Yatay (16:9)</string>
+
+    <string name="opt_timeout_global">Yalnızca Genel Zaman Aşımı</string>
+    <string name="opt_timeout_source">Yalnızca Kaynak Başına</string>
+    <string name="opt_timeout_both">Her İki Motor da Aktif</string>
+
+    <string name="opt_sub_engine_native">Dahili (Yeniden Yükleme Gerektirir)</string>
+    <string name="opt_sub_engine_overlay">Özel Arayüz (Gecikmesiz)</string>
+
+    <string name="opt_sub_behavior_ask">Aramak için bana sor</string>
+    <string name="opt_sub_behavior_auto">Otomatik Olarak Ara</string>
+    <string name="opt_sub_behavior_never">Asla Arama</string>
+
+    <string name="opt_sub_count_other">Diğer</string>
+    <string name="opt_sub_count_all">Tümü</string>
+
+    <string name="opt_sub_launch_stop">İndirmeyi hemen durdur</string>
+    <string name="opt_sub_launch_ask">Beklemek isteyip istemediğimi sor</string>
+    <string name="opt_sub_launch_background">Arka planda indirmeye devam et</string>
+
+    <string name="opt_retention_indefinite">Süresiz Sakla</string>
+    <string name="opt_retention_1d">1 Gün</string>
+    <string name="opt_retention_3d">3 Gün</string>
+    <string name="opt_retention_7d">7 Gün</string>
+    <string name="opt_retention_14d">14 Gün</string>
+    <string name="opt_retention_30d">30 Gün</string>
+
+    <string name="opt_prebuffer_1">1 Parça (En Hızlı / Varsayılan)</string>
+    <string name="opt_prebuffer_2">2 Parça</string>
+    <string name="opt_prebuffer_4">4 Parça (Standart)</string>
+    <string name="opt_prebuffer_8">8 Parça (En Kararlı)</string>
+
+    <string name="opt_clean_manual">Yalnızca Manuel</string>
+    <string name="opt_clean_new_torrent">Her yeni torrent başladığında</string>
+    <string name="opt_clean_exit">Videodan her çıkıldığında</string>
+    <string name="opt_clean_days">Her X günde bir</string>
+
+    <!-- TMDb Genres -->
+    <string name="genre_action">Aksiyon</string>
+    <string name="genre_adventure">Macera</string>
+    <string name="genre_animation">Animasyon</string>
+    <string name="genre_comedy">Komedi</string>
+    <string name="genre_crime">Suç</string>
+    <string name="genre_documentary">Belgesel</string>
+    <string name="genre_drama">Dram</string>
+    <string name="genre_family">Aile</string>
+    <string name="genre_fantasy">Fantastik</string>
+    <string name="genre_history">Tarih</string>
+    <string name="genre_horror">Korku</string>
+    <string name="genre_music">Müzik</string>
+    <string name="genre_mystery">Gizem</string>
+    <string name="genre_romance">Romantik</string>
+    <string name="genre_scifi">Bilim Kurgu</string>
+    <string name="genre_tv_movie">TV Filmi</string>
+    <string name="genre_thriller">Gerilim</string>
+    <string name="genre_war">Savaş</string>
+    <string name="genre_western">Vahşi Batı</string>
+    <string name="genre_action_adventure">Aksiyon ve Macera</string>
+    <string name="genre_kids">Çocuk</string>
+    <string name="genre_news">Haber</string>
+    <string name="genre_reality">Reality Show</string>
+    <string name="genre_scifi_fantasy">Bilim Kurgu ve Fantastik</string>
+    <string name="genre_soap">Pembe Dizi</string>
+    <string name="genre_talk">Talk Show</string>
+    <string name="genre_war_politics">Savaş ve Politika</string>
+
+    <string name="opt_system_default">Sistem Varsayılanı</string>
+    <string name="opt_follow_app_language">Uygulama Dilini Takip Et (Varsayılan)</string>
+    <string name="setting_action_mode">Eylem Modu</string>
+    <string name="opt_action_custom_script">Özel Betik</string>
+    <string name="opt_action_simple_elements">Basit Öğe Listesi</string>
+    <string name="label_javascript_action">JavaScript Eylemi</string>
+</resources>

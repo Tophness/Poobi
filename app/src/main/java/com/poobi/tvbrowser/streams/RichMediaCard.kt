@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -241,7 +242,7 @@ fun RichMediaCard(
                 )
             } else if (!model.character.isNullOrBlank()) {
                 Text(
-                    text = "as ${model.character}", 
+                    text = stringResource(R.string.media_role_as, model.character), 
                     color = if (isFocused) Color(0xFF004D40) else Color(0xFF40C4FF), 
                     fontSize = 11.sp, 
                     fontWeight = FontWeight.Bold,
@@ -275,8 +276,13 @@ fun RichMediaCard(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val typeBadge = when (model.mediaType) {
+                    "person" -> stringResource(R.string.media_badge_actor)
+                    "tv" -> stringResource(R.string.media_type_tv)
+                    else -> stringResource(R.string.media_type_movie)
+                }
                 Text(
-                    text = if (model.mediaType == "person") "ACTOR" else model.mediaType.uppercase(), 
+                    text = typeBadge.uppercase(), 
                     color = if (isFocused) Color(0xFF1B5E20) else Color(0xFF4CAF50), 
                     fontSize = 11.sp, 
                     fontWeight = FontWeight.Bold

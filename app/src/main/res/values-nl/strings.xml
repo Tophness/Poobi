@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Poobi</string>
+
+    <!-- Top Navigation -->
+    <string name="tab_browser">Browser</string>
+    <string name="tab_streams">Streams</string>
+    <string name="title_settings">Instellingen</string>
+
+    <!-- Common Actions & Buttons -->
+    <string name="btn_save_exit">Opslaan &amp; afsluiten</string>
+    <string name="btn_save">Opslaan</string>
+    <string name="btn_cancel">Annuleren</string>
+    <string name="btn_delete">Verwijderen</string>
+    <string name="btn_edit">Bewerken</string>
+    <string name="btn_close">Sluiten</string>
+    <string name="btn_done">Klaar</string>
+    <string name="btn_select_all">Alles selecteren</string>
+    <string name="btn_deselect_all">Alles deselecteren</string>
+    <string name="btn_clear_all">Alles wissen</string>
+    <string name="btn_back">Terug</string>
+    <string name="btn_apply">Toepassen</string>
+    <string name="btn_play_now">Nu afspelen</string>
+    <string name="btn_skip_play">Overslaan &amp; afspelen</string>
+    <string name="btn_download">Downloaden</string>
+    <string name="btn_allow">Toestaan</string>
+    <string name="btn_block">Blokkeren</string>
+    <string name="btn_play_native">Ingebouwde speler</string>
+    <string name="btn_website_player">Webspeler</string>
+    <string name="btn_open_in_browser">Openen in browser</string>
+    <string name="btn_restore">Herstellen</string>
+    <string name="btn_restore_load">Herstellen &amp; laden</string>
+    <string name="btn_new_session">Nieuwe sessie</string>
+    <string name="btn_zoom_out">- Uitzoomen</string>
+    <string name="btn_zoom_reset">100% (Standaard)</string>
+    <string name="btn_zoom_in">+ Inzoomen</string>
+    <string name="btn_load_all_tabs">Alle tabbladen laden</string>
+    <string name="btn_restore_all_tabs">Alle tabbladen herstellen</string>
+    <string name="btn_clear_bookmarks">Bladwijzers wissen</string>
+    <string name="btn_clear_history">Geschiedenis wissen</string>
+    <string name="btn_clear_downloads">Downloads wissen</string>
+    <string name="btn_prev">Vorige</string>
+    <string name="btn_next">Volgende</string>
+
+    <!-- Settings Categories -->
+    <string name="category_general">Algemeen</string>
+    <string name="category_language">Taal</string>
+    <string name="category_web">Web</string>
+    <string name="category_player">Speler</string>
+    <string name="category_interface">Interface</string>
+    <string name="category_feeds">Feeds</string>
+    <string name="category_streaming">Streaming</string>
+    <string name="category_autoplay">Automatisch afspelen</string>
+    <string name="category_subtitles">Ondertitels</string>
+    <string name="category_sorting">Sorteren</string>
+    <string name="category_blocked">Geblokkeerd</string>
+    <string name="category_trakt">Trakt</string>
+    <string name="category_tmdb">TMDb</string>
+    <string name="category_torrents">Torrents</string>
+    <string name="category_sync">Synchronisatie</string>
+
+    <!-- Settings Panels & Options -->
+    <string name="panel_general">Algemene instellingen</string>
+    <string name="panel_language">Taal- en regio-instellingen</string>
+    <string name="setting_app_language">App-taal</string>
+    <string name="setting_date_format">Datumnotatie</string>
+    <string name="setting_audio_language">Standaard audiotrack</string>
+    <string name="setting_torrent_language">Voorkeurstaal voor torrents</string>
+    <string name="setting_sub_languages">Zoektalen voor ondertitels</string>
+    <string name="setting_light_theme">Licht thema gebruiken</string>
+    <string name="setting_auto_update">Automatisch controleren op updates</string>
+    <string name="setting_restore_session">Sessieherstelfunctie</string>
+    <string name="setting_history_limit">Geschiedenishuishouding</string>
+    <string name="setting_history_icons">Stijl van geschiedenispictogrammen</string>
+    <string name="setting_bookmark_icons">Stijl van bladwijzerpictogrammen</string>
+
+    <!-- Streams Navigation Categories -->
+    <string name="feed_search">Zoeken</string>
+    <string name="feed_for_you">Voor jou</string>
+    <string name="feed_movies">Films</string>
+    <string name="feed_tv_shows">Series</string>
+    <string name="feed_discover">Ontdekken</string>
+
+    <!-- Dashboard Pills -->
+    <string name="pill_favourites">Favorieten</string>
+    <string name="pill_recents">Onlangs bekeken</string>
+    <string name="pill_unfinished">Niet-voltooide series</string>
+    <string name="pill_because_watched">Omdat je keek naar</string>
+    <string name="pill_cast_spotlight">Cast in de schijnwerpers</string>
+    <string name="pill_trakt_watched">Meest bekeken</string>
+    <string name="pill_trakt_anticipated">Meest verwacht</string>
+    <string name="pill_trakt_collected">Meest verzameld</string>
+    <string name="pill_trakt_watchlist">Kijklijst</string>
+    <string name="pill_trakt_recommendations">Voor mij</string>
+    <string name="pill_trending_today">Vandaag trending</string>
+    <string name="pill_trending_week">Deze week trending</string>
+    <string name="pill_in_cinemas">In de bioscoop</string>
+    <string name="pill_upcoming">Binnenkort</string>
+    <string name="pill_popular">Populair</string>
+    <string name="pill_top_rated">Hoogst gewaardeerd</string>
+    <string name="pill_hidden_gems">Verborgen parels</string>
+    <string name="pill_popular_tv">Populaire series</string>
+    <string name="pill_trending_tv_week">Trending series</string>
+    <string name="pill_airing_today">Vandaag op tv</string>
+    <string name="pill_airing_week">Deze week op tv</string>
+    <string name="pill_top_rated_tv">Hoogst gewaardeerde series</string>
+    <string name="pill_era_2000s">Hits van de jaren 2000</string>
+    <string name="pill_era_90s">Nostalgie van de jaren 90</string>
+    <string name="pill_era_80s">Klassiekers van de jaren 80</string>
+    <string name="pill_era_70s">Cinema van de jaren 70</string>
+    <string name="pill_anime">Anime</string>
+    <string name="pill_kdrama">K-Dramas</string>
+    <string name="pill_british_mysteries">Britse mysteries</string>
+    <string name="pill_cult_classics">Cultklassiekers</string>
+
+    <!-- Browser Home Tabs -->
+    <string name="browser_open_tabs">Geopende tabbladen</string>
+    <string name="browser_bookmarks">Bladwijzers</string>
+    <string name="browser_history">Geschiedenis</string>
+    <string name="browser_downloads">Downloads</string>
+
+    <!-- Media Details Actions -->
+    <string name="media_play_movie">Film afspelen</string>
+    <string name="media_trailer">Trailer</string>
+    <string name="media_season">Seizoen</string>
+    <string name="media_top_cast">Belangrijkste cast</string>
+    <string name="media_more_like_this">Vergelijkbaar</string>
+    <string name="media_filmography">Filmografie</string>
+    <string name="media_released">Uitgebracht</string>
+    <string name="media_select_season">Seizoen selecteren</string>
+    <string name="media_season_num">Seizoen %1$d</string>
+    <string name="media_season_cast">Cast van %1$s</string>
+    <string name="media_no_overview">Geen beschrijving beschikbaar.</string>
+    <string name="media_no_cast">Geen castgegevens beschikbaar.</string>
+    <string name="media_no_recommendations">Geen aanbevelingen beschikbaar.</string>
+    <string name="media_loading_trailer">Trailer laden...</string>
+    <string name="media_filter_all">Alles</string>
+    <string name="media_filter_movies">Films</string>
+    <string name="media_filter_tv">Series</string>
+    <string name="media_no_titles_category">Geen titels gevonden in deze categorie.</string>
+    <string name="media_born_in">Geboren in: %1$s</string>
+    <string name="media_no_biography">Geen biografie beschikbaar.</string>
+    <string name="media_role_as">als %1$s</string>
+    <string name="media_badge_actor">ACTEUR</string>
+    <string name="media_airing_prefix">Uitzending: </string>
+    <string name="media_aired_prefix">Uitgezonden: </string>
+    <string name="media_type_movie">Film</string>
+    <string name="media_type_tv">Serie</string>
+    <string name="known_for_acting">Acteren</string>
+
+    <!-- Sorter Dialog -->
+    <string name="sorter_favorites_title">Sorteerprioriteiten voor favorieten</string>
+    <string name="sorter_recent_title">Sorteerprioriteiten voor onlangs bekeken</string>
+    <string name="sorter_feed_title">Sorteerprioriteiten voor feeds</string>
+    <string name="sorter_streams_title">Sorteren van gewone streams</string>
+    <string name="sorter_torrents_title">Sorteren van torrents</string>
+
+    <!-- Subtitle Alignment UI -->
+    <string name="sub_sync_title">Ondertitelsynchronisatie</string>
+    <string name="sub_sync_offset">Huidige verschuiving: %1$dms</string>
+    <string name="sub_sync_btn_visual">Visuele tijdlijnuitlijning</string>
+    <string name="sub_sync_btn_search">Zoek gesproken woorden</string>
+    <string name="sub_sync_btn_reset">Timing resetten</string>
+    <string name="sub_sync_btn_exit">Afsluiten</string>
+    <string name="sub_search_title">Dialoogregel zoeken</string>
+    <string name="sub_search_desc">Voer gesproken woorden in om naar die audiosequentie te springen.</string>
+    <string name="sub_search_placeholder">bijv. sprong van</string>
+    <string name="sub_search_btn_align">Zoeken &amp; uitlijnen</string>
+    <string name="sub_waveform_title">Geluidsgolftijdlijn</string>
+    <string name="sub_waveform_silence">[ Stilte ]</string>
+    <string name="sub_waveform_offset">Tijdlijnverschuiving: %1$dms</string>
+    <string name="sub_waveform_hint_focused">◀ Druk op Links / Rechts op D-pad om ondertitels te verschuiven ▶</string>
+    <string name="sub_waveform_hint_unfocused">Selecteer om ondertitels aan te passen</string>
+    <string name="sub_waveform_looping">Segment herhalen...</string>
+    <string name="sub_waveform_playback_running">Wordt afgespeeld...</string>
+    <string name="sub_waveform_stop_loop">Herhaling stoppen</string>
+    <string name="sub_waveform_loop_track">Herhaal fragment</string>
+
+    <!-- Player Overlays & Prompts -->
+    <string name="overlay_up_next">VOLGENDE</string>
+    <string name="overlay_skip_intro">INTRO OVERSLAAN</string>
+    <string name="overlay_skip_recap">SAMENVATTING OVERSLAAN</string>
+    <string name="overlay_skip_early_credits">BEGINGENERIEK OVERSLAAN</string>
+    <string name="overlay_skip_end_credits">EINDGENERIEK OVERSLAAN</string>
+    <string name="overlay_skip_remaining">%1$s overslaan (nog %2$d s)</string>
+    <string name="overlay_skip_press_select">Druk op Selecteren om over te slaan</string>
+    <string name="segment_intro">Intro</string>
+    <string name="segment_recap">Terugblik</string>
+    <string name="segment_opening_credits">Begingeneriek</string>
+    <string name="segment_closing_credits">Eindgeneriek</string>
+    <string name="toast_skipped_intro">Intro overgeslagen</string>
+    <string name="toast_skipped_recap">Terugblik overgeslagen</string>
+    <string name="toast_skipped_early_credits">Begingeneriek overgeslagen</string>
+    <string name="toast_skipped_end_credits">Eindgeneriek overgeslagen</string>
+    <string name="captions_add_disk">Ondertiteling toevoegen...</string>
+    <string name="captions_off">Uit</string>
+    <string name="captions_embedded">Ingebouwde ondertitel</string>
+    <string name="dialog_quality_title">Videokwaliteit kiezen</string>
+    <string name="dialog_sub_wait_title">Ondertiteling automatisch downloaden</string>
+    <string name="dialog_sub_wait_msg">Zoeken en downloaden van ondertitels...</string>
+    <string name="dialog_torrent_prebuffer_title">Videostream vooraf bufferen</string>
+    <string name="disk_picker_select_media">Media selecteren</string>
+    <string name="disk_picker_select_subtitles">Ondertitels selecteren</string>
+    <string name="disk_picker_no_subs">Geen ondertitelingsbestanden (.srt, .vtt, .ass) gevonden op schijf.</string>
+
+    <!-- Browser & Web Dialogs -->
+    <string name="menu_cut">Knippen</string>
+    <string name="menu_copy">Kopiëren</string>
+    <string name="menu_paste">Plakken</string>
+    <string name="menu_select_all">Alles selecteren</string>
+    <string name="menu_open_new_tab">Openen in nieuw tabblad</string>
+    <string name="menu_refresh">Pagina vernieuwen</string>
+    <string name="menu_block_element">Element blokkeren</string>
+    <string name="dialog_video_detected_title">Video gedetecteerd</string>
+    <string name="dialog_video_detected_msg">Video onderschept. Wil je deze afspelen in de ingebouwde speler of verdergaan via de webspeler?</string>
+    <string name="dialog_remember_decision">Keuze onthouden (niet meer vragen)</string>
+    <string name="dialog_playback_error_title">Afspeelfout</string>
+    <string name="dialog_playback_error_msg">ExoPlayer kon deze stream niet afspelen. Proberen te openen in de browser?\n\nFout: %1$s</string>
+    <string name="dialog_download_title">Bestand downloaden?</string>
+    <string name="dialog_download_msg">Wil je %1$s downloaden?\nGrootte: %2$.2f MB</string>
+    <string name="dialog_popup_blocked_title">Pop-up geblokkeerd</string>
+    <string name="dialog_popup_blocked_msg">Wil je een pop-up van deze website toestaan?</string>
+    <string name="dialog_silent_block_remember">Niet meer vragen (stille blokkering)</string>
+    <string name="dialog_restore_session_title">Sessie herstellen?</string>
+    <string name="dialog_restore_session_msg">Wil je de vorige tabbladen herstellen?</string>
+    <string name="dialog_zoom_title">Paginazoom (%1$d%%)</string>
+    <string name="dialog_zoom_msg">Tekstgrootte en weergaveschaal aanpassen:</string>
+    <string name="prompt_search_google_url">Zoeken op Google of een URL typen...</string>
+    <string name="status_missing">Ontbreekt</string>
+
+    <!-- Scraper & Streams Screen -->
+    <string name="search_movie_tv_placeholder">Zoek film of serie...</string>
+    <string name="dashboard_recent_searches">Recente zoekopdrachten</string>
+    <string name="dashboard_no_items">Geen items gevonden</string>
+    <string name="scrape_stop_scanning">Scannen stoppen</string>
+    <string name="scrape_try_all">Alles proberen</string>
+    <string name="scrape_stop">Stoppen</string>
+    <string name="scrape_sort">Sorteren</string>
+    <string name="scrape_no_sources">Geen bronnen gevonden.</string>
+    <string name="scrape_open_browser">Openen in browser</string>
+    <string name="scrape_play_native">Ingebouwde speler</string>
+    <string name="scrape_search_external_subs">🔍 Externe ondertitels zoeken</string>
+
+    <!-- Sorter Criteria -->
+    <string name="sort_criteria_native">Compatibiliteit ingebouwde speler</string>
+    <string name="sort_criteria_direct">Directe links</string>
+    <string name="sort_criteria_resolution">Resolutie</string>
+    <string name="sort_criteria_source">Host- / bronnaam</string>
+    <string name="sort_criteria_language">Taal</string>
+    <string name="sort_criteria_size">Bestandsgrootte</string>
+    <string name="sort_criteria_seeders">Seeders</string>
+    <string name="sort_criteria_date_added">Datum toegevoegd</string>
+    <string name="sort_criteria_date_accessed">Laatst bekeken</string>
+    <string name="sort_criteria_az">A-Z (Alfabetisch)</string>
+    <string name="sort_criteria_rating">Beoordeling</string>
+    <string name="sort_criteria_fav_actors">Favoriete acteurs</string>
+    <string name="sort_criteria_date">Releasedatum</string>
+    <string name="sort_criteria_default">Standaardvolgorde</string>
+
+    <!-- Settings Panels & Options Details -->
+    <string name="panel_web">Web- &amp; advertentieblokkeringinstellingen</string>
+    <string name="setting_silent_block">Pop-ups geruisloos blokkeren</string>
+    <string name="setting_clickjack">Clickjacking voorkomen</string>
+    <string name="setting_custom_adblock_url">Aangepaste AdBlock-URL (EasyList-formaat)</string>
+    <string name="btn_update_rules_now">Filterregels nu bijwerken</string>
+    <string name="status_rules_loaded">Actieve regels: ~%1$d geladen</string>
+    <string name="status_rules_updating">Filterlijsten worden bijgewerkt...</string>
+    <string name="toast_rules_updated">Filter lists updated!</string>
+    <string name="toast_rules_update_failed">Update failed</string>
+    <string name="status_checking_updates">Zoeken naar updates...</string>
+    <string name="btn_check_updates">Controleren op updates (v%1$s)</string>
+    <string name="setting_current">Huidig</string>
+    <string name="label_profile_name">Profielnaam</string>
+    <string name="label_url_patterns">URL-patronen</string>
+    <string name="label_action_mode">Action Mode</string>
+    <string name="opt_custom_script">Custom Script</string>
+    <string name="opt_simple_selectors">Simple Element List</string>
+    <string name="label_js_action">JavaScript Action</string>
+    <string name="label_click_selectors">Klik-selectoren</string>
+    <string name="btn_add_selector">+ Selector toevoegen</string>
+    <string name="dialog_edit_autoplay_title">Edit Autoplay Profile</string>
+    <string name="dialog_add_autoplay_title">Add New Autoplay Profile</string>
+    <string name="dialog_custom_sub_limit_title">Aangepaste downloadlimiet ondertitels</string>
+    <string name="dialog_custom_sub_limit_msg">Voer numerieke limiet in:</string>
+    <string name="label_opensubtitles_username">OpenSubtitles Username</string>
+    <string name="label_opensubtitles_password">OpenSubtitles Password</string>
+    <string name="label_opensubtitles_org_username">OpenSubtitles.org Username</string>
+    <string name="label_opensubtitles_org_password">OpenSubtitles.org Password</string>
+    <string name="label_subdl_apikey">SubDL API Key</string>
+    <string name="label_subsource_apikey">SubSource API Key</string>
+    <string name="label_rule_name">Regelnaam</string>
+    <string name="label_css_selectors">CSS-selectoren (één per regel)</string>
+    <string name="dialog_edit_block_rule">Blokkeerregel bewerken</string>
+    <string name="dialog_add_block_rule">Blokkeerregel toevoegen</string>
+    <string name="dialog_auth_trakt_title">Trakt.tv autoriseren</string>
+    <string name="dialog_auth_trakt_step1">1. Ga naar verificatiepagina:</string>
+    <string name="dialog_auth_trakt_step2">2. Voer deze code in op uw apparaat:</string>
+    <string name="dialog_auth_trakt_waiting">Wachten op authenticatie van Trakt...</string>
+    <string name="btn_open_link">Link openen</string>
+    <string name="label_username">Gebruikersnaam</string>
+    <string name="label_password">Wachtwoord</string>
+    <string name="dialog_auto_clean_interval_title">Automatisch opschooninterval</string>
+    <string name="dialog_auto_clean_interval_msg">Voer aantal dagen tussen opschoonbeurten in:</string>
+    <string name="status_signed_in_as">Ingelogd als: %1$s</string>
+    <string name="status_not_signed_in">Niet ingelogd.</string>
+
+    <string name="panel_player">Voorkeuren ingebouwde speler</string>
+    <string name="setting_extract_video">Videodetectie en -onderschepping</string>
+    <string name="setting_fallback_error">Terugvallen bij afspeelfouten</string>
+    <string name="header_binge_autoplay">Binge-watching &amp; automatisch afspelen</string>
+    <string name="setting_intro_skip">Actie bij intro</string>
+    <string name="setting_recap_skip">Actie bij samenvatting</string>
+    <string name="setting_early_credits_skip">Actie bij begingeneriek</string>
+    <string name="setting_end_credits_skip">Actie bij eindgeneriek</string>
+    <string name="setting_up_next_mode">Meldingsmodus volgende aflevering</string>
+    <string name="setting_up_next_time">Seconden voor einde (terugvalwaarde)</string>
+    <string name="setting_source_selection_next">Bronselectie voor volgende aflevering</string>
+    <string name="setting_episode_focus_style">Stijl van automatisch scherpstellen</string>
+
+    <string name="panel_interface">Interface- en navigatie-instellingen</string>
+    <string name="setting_scroll_topbar">Omhoog scrollen voor navigatiebalk</string>
+    <string name="setting_nav_mode">Standaard aanwijzermodus</string>
+    <string name="setting_scrape_tab_order">Tabbladvolgorde bij zoekresultaten</string>
+    <string name="header_hardware_devices">Hardware-apparaten &amp; externe invoer</string>
+    <string name="setting_hw_keyboard_mode">Fysieke toetsenbordmodus</string>
+    <string name="setting_hw_mouse_mode">Fysieke muismodus</string>
+    <string name="setting_menu_keybind">Sneltoets menuknop</string>
+    <string name="setting_menu_rebind">Opnieuw toewijzen</string>
+    <string name="setting_menu_reset">Resetten</string>
+    <string name="setting_press_key_combo">Druk op de gewenste toetsencombinatie</string>
+    <string name="setting_listening_keys">Wachten op toetsinvoer...</string>
+
+    <string name="panel_feeds">Feeds en startpagina-beheer</string>
+    <string name="setting_card_thumbnail_style">Stijl van kaartminiaturen</string>
+    <string name="setting_prioritize_fav_cast">Favoriete acteurs prioriteren in feeds</string>
+    <string name="header_for_you_feeds">Voor jou-feeds</string>
+    <string name="header_movie_feeds">Filmfeeds</string>
+    <string name="header_movie_genres">Filmgenres</string>
+    <string name="header_tv_feeds">Seriefeeds</string>
+    <string name="header_tv_genres">Seriegenres</string>
+    <string name="header_discover_networks">Ontdekken: Streamingdiensten &amp; tijdperken</string>
+    <string name="header_discover_eras">Ontdekken: Tijdperken &amp; decennia</string>
+    <string name="header_discover_world">Ontdekken: Wereldcinema &amp; niches</string>
+    <string name="header_fav_cast_mgmt">Favoriete cast beheren</string>
+    <string name="desc_fav_cast_mgmt">Beheer acteurs uit je favoriete programma\'s of zoek handmatig om acteurs toe te voegen.</string>
+    <string name="setting_auto_sync_fav_cast">Cast uit favorieten automatisch synchroniseren</string>
+    <string name="prompt_search_actor">Zoek acteur om toe te voegen (bijv. Cillian Murphy)...</string>
+    <string name="label_live_results">Directe resultaten (Selecteer om toe te voegen):</string>
+    <string name="label_cast_pool">Acteurspool (%1$d)</string>
+    <string name="label_add_actor">+ Toevoegen</string>
+    <string name="desc_no_fav_actors">Nog geen acteurs gevonden. Voeg favoriete titels toe of zoek hierboven.</string>
+    <string name="label_added_via_fav">Toegevoegd via favoriet: %1$s</string>
+    <string name="label_added_via_search">Toegevoegd via zoekopdracht</string>
+
+    <string name="panel_streaming">Streaming- &amp; scraperconfiguratie</string>
+    <string name="setting_timeout_logic">Time-outlogica</string>
+    <string name="setting_enforce_whitelist">Witte lijst voor hosts afdwingen</string>
+    <string name="setting_global_timeout">Algemene time-out (seconden)</string>
+    <string name="setting_source_timeout">Time-outlimiet per bron (seconden)</string>
+    <string name="setting_scraper_workers">Scraper-threads (standaard: 3)</string>
+    <string name="header_provider_packages">Providerpakketten</string>
+    <string name="header_host_whitelists">Witte lijsten van hosts</string>
+    <string name="prompt_search_whitelists">Witte lijsten doorzoeken...</string>
+    <string name="label_provider_whitelist">Witte lijst providerpakket</string>
+    <string name="label_resolveurl_whitelist">Witte lijst ResolveURL</string>
+
+    <string name="panel_autoplay">Automatisch afspelen-profielen</string>
+    <string name="setting_autoplay_global">Video\'s wereldwijd automatisch afspelen</string>
+    <string name="btn_add_autoplay_profile">Nieuw profiel toevoegen</string>
+
+    <string name="panel_subtitles">Ondertitelzoekvoorkeuren</string>
+    <string name="setting_sub_rendering_engine">Ondertitel-weergave-engine</string>
+    <string name="setting_sub_auto_search">Automatisch zoeken</string>
+    <string name="setting_subs_to_download">Aantal te downloaden ondertitels</string>
+    <string name="setting_sub_video_launches">Wanneer video start</string>
+    <string name="setting_sub_retention">Bewaartermijn ondertitelbestanden</string>
+    <string name="setting_sub_limit">Zoeklimiet ondertitels</string>
+    <string name="header_sub_accounts">Ondertitelaccounts &amp; API-sleutels</string>
+    <string name="header_sub_engines">Ondertitel-scrapers</string>
+
+    <string name="panel_sorting">Sorteerprioriteiten voor resultaten en feeds</string>
+    <string name="panel_blocked">Regels voor geblokkeerde elementen</string>
+    <string name="btn_add_css_rule">Nieuwe CSS-blokkeerregel toevoegen</string>
+
+    <string name="panel_trakt">Trakt.tv-synchronisatie-integratie</string>
+    <string name="status_trakt_authed">Geautoriseerd account: %1$s</string>
+    <string name="btn_logout_trakt">Trakt afmelden</string>
+    <string name="status_trakt_unlinked">Geen Trakt-account gekoppeld.</string>
+    <string name="btn_auth_trakt">Trakt-account autoriseren</string>
+
+    <string name="panel_tmdb">TMDb-accountgegevens</string>
+    <string name="status_tmdb_active">Geautoriseerde TMDb-sessie actief</string>
+    <string name="btn_login">Inloggen</string>
+    <string name="btn_logout">Uitloggen</string>
+
+    <string name="panel_torrents">Torrent-streamingconfiguratie</string>
+    <string name="setting_prebuffer_size">Buffergrootte vooraf</string>
+    <string name="setting_torrent_cache_clean">Automatisch opschonen van torrentcache</string>
+    <string name="header_storage_cache_mgmt">Opslagcachebeheer</string>
+    <string name="label_total_cached_p2p">Totale gecachte P2P-opslag</string>
+    <string name="label_cached_subfolders">Gecachte submappen</string>
+    <string name="label_clean_interval">Opschooninterval</string>
+    <string name="format_every_x_days">Elke %1$d dagen</string>
+    <string name="label_disabled_set">Uitgeschakeld / Tik om in te stellen</string>
+    <string name="btn_clear">Wissen</string>
+
+    <string name="panel_sync">Lokale back-up en herstel</string>
+    <string name="desc_local_backup">Exporteer of herstel instellingen en bladwijzers naar een offline JSON-bestand in de map Downloads zonder Google-account.</string>
+    <string name="btn_save_backup">Back-up opslaan</string>
+    <string name="btn_restore_backup">Back-up herstellen</string>
+    <string name="header_drive_sync">Google Drive cloud-synchronisatie</string>
+    <string name="desc_drive_sync">Synchroniseer instellingen en geschiedenis tussen apparaten via de privégegevensmap op Google Drive.</string>
+    <string name="status_sync">Status: %1$s</string>
+    <string name="btn_sign_in_google">Inloggen met Google</string>
+    <string name="btn_force_sync">Nu synchroniseren</string>
+
+    <!-- Option values for Dropdowns -->
+    <string name="opt_restore_ask">Vragen bij herstellen</string>
+    <string name="opt_restore_always_load">Altijd herstellen &amp; laden</string>
+    <string name="opt_restore_always">Altijd herstellen</string>
+    <string name="opt_restore_never">Nooit herstellen</string>
+
+    <string name="opt_hist_10">10 items</string>
+    <string name="opt_hist_20">20 items</string>
+    <string name="opt_hist_50">50 items</string>
+    <string name="opt_hist_unlimited">Onbeperkt</string>
+
+    <string name="opt_icons_snapshots">Momentopnamen (Miniatuur)</string>
+    <string name="opt_icons_favicons">Favicons</string>
+
+    <string name="opt_extract_ask">Vragen bij afspelen</string>
+    <string name="opt_extract_always">Altijd in ingebouwde speler</string>
+    <string name="opt_extract_never">Nooit (websitebrowser gebruiken)</string>
+
+    <string name="opt_fallback_ask">Gebruiker vragen</string>
+    <string name="opt_fallback_always">Altijd terugvallen op browser</string>
+    <string name="opt_fallback_never">Nooit terugvallen</string>
+
+    <string name="opt_skip_skip">Overslaan</string>
+    <string name="opt_skip_ask">Vragen om over te slaan</string>
+    <string name="opt_skip_ignore">Negeren</string>
+
+    <string name="opt_up_next_ask">Vragen om volgende af te spelen</string>
+    <string name="opt_up_next_always">Altijd automatisch afspelen</string>
+    <string name="opt_up_next_never">Melding nooit tonen</string>
+
+    <string name="opt_autoplay_closest">Dichtstbijzijnde bron (zelfde host)</string>
+    <string name="opt_autoplay_best">Beste kwaliteitsbron</string>
+    <string name="opt_autoplay_ask">Vragen (resultaten tonen)</string>
+
+    <string name="opt_focus_next_watched">Volgende na laatst bekeken</string>
+    <string name="opt_focus_first_unwatched">Eerste niet-bekeken aflevering</string>
+
+    <string name="opt_nav_pointer">Gesimuleerde aanwijzer (Muis)</string>
+    <string name="opt_nav_dpad">Fysieke navigatie (D-pad)</string>
+
+    <string name="opt_scrape_web_torrents">Web, Torrents</string>
+    <string name="opt_scrape_torrents_web">Torrents, Web</string>
+
+    <string name="opt_hw_auto">Automatisch detecteren (Aanbevolen)</string>
+    <string name="opt_hw_always">Altijd ingeschakeld</string>
+    <string name="opt_hw_disabled">Uitgeschakeld (TV-afstandsbediening)</string>
+
+    <string name="opt_thumb_portrait">Portret (2:3) [Standaard]</string>
+    <string name="opt_thumb_landscape">Landschap (16:9)</string>
+
+    <string name="opt_timeout_global">Alleen algemene time-out</string>
+    <string name="opt_timeout_source">Alleen time-out per bron</string>
+    <string name="opt_timeout_both">Beide time-outs actief</string>
+
+    <string name="opt_sub_engine_native">Standaard (Opnieuw laden vereist)</string>
+    <string name="opt_sub_engine_overlay">Aangepaste overlay (Geen vertraging)</string>
+
+    <string name="opt_sub_behavior_ask">Vragen om te zoeken</string>
+    <string name="opt_sub_behavior_auto">Automatisch zoeken</string>
+    <string name="opt_sub_behavior_never">Nooit zoeken</string>
+
+    <string name="opt_sub_count_other">Anders</string>
+    <string name="opt_sub_count_all">Alles</string>
+
+    <string name="opt_sub_launch_stop">Download onmiddellijk stoppen</string>
+    <string name="opt_sub_launch_ask">Vragen of ik wil wachten</string>
+    <string name="opt_sub_launch_background">Doorgaan op de achtergrond</string>
+
+    <string name="opt_retention_indefinite">Voor altijd bewaren</string>
+    <string name="opt_retention_1d">1 dag</string>
+    <string name="opt_retention_3d">3 dagen</string>
+    <string name="opt_retention_7d">7 dagen</string>
+    <string name="opt_retention_14d">14 dagen</string>
+    <string name="opt_retention_30d">30 dagen</string>
+
+    <string name="opt_prebuffer_1">1 deel (Snelst / Standaard)</string>
+    <string name="opt_prebuffer_2">2 delen</string>
+    <string name="opt_prebuffer_4">4 delen (Standaard)</string>
+    <string name="opt_prebuffer_8">8 delen (Meest stabiel)</string>
+
+    <string name="opt_clean_manual">Alleen handmatig</string>
+    <string name="opt_clean_new_torrent">Bij elke nieuwe torrent</string>
+    <string name="opt_clean_exit">Bij afsluiten van video</string>
+    <string name="opt_clean_days">Elke X dagen</string>
+
+    <!-- TMDb Genres -->
+    <string name="genre_action">Actie</string>
+    <string name="genre_adventure">Avontuur</string>
+    <string name="genre_animation">Animatie</string>
+    <string name="genre_comedy">Komedie</string>
+    <string name="genre_crime">Misdaad</string>
+    <string name="genre_documentary">Documentaire</string>
+    <string name="genre_drama">Drama</string>
+    <string name="genre_family">Familie</string>
+    <string name="genre_fantasy">Fantasy</string>
+    <string name="genre_history">Geschiedenis</string>
+    <string name="genre_horror">Horror</string>
+    <string name="genre_music">Muziek</string>
+    <string name="genre_mystery">Mysterie</string>
+    <string name="genre_romance">Romantiek</string>
+    <string name="genre_scifi">Sciencefiction</string>
+    <string name="genre_tv_movie">Televisiefilm</string>
+    <string name="genre_thriller">Thriller</string>
+    <string name="genre_war">Oorlog</string>
+    <string name="genre_western">Western</string>
+    <string name="genre_action_adventure">Actie &amp; Avontuur</string>
+    <string name="genre_kids">Kinderen</string>
+    <string name="genre_news">Nieuws</string>
+    <string name="genre_reality">Reality</string>
+    <string name="genre_scifi_fantasy">Sci-Fi &amp; Fantasy</string>
+    <string name="genre_soap">Soap</string>
+    <string name="genre_talk">Talkshow</string>
+    <string name="genre_war_politics">Oorlog &amp; Politiek</string>
+
+    <string name="opt_system_default">Systeemstandaard</string>
+    <string name="opt_follow_app_language">App-taal volgen (Standaard)</string>
+    <string name="setting_action_mode">Actiemodus</string>
+    <string name="opt_action_custom_script">Aangepast script</string>
+    <string name="opt_action_simple_elements">Eenvoudige elementenlijst</string>
+    <string name="label_javascript_action">JavaScript-actie</string>
+</resources>

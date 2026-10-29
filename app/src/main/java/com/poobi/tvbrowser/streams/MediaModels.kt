@@ -1,10 +1,9 @@
 package com.poobi.tvbrowser.streams
 
 import androidx.compose.runtime.Immutable
+import com.poobi.tvbrowser.shared.LanguageHelper
 import com.poobi.tvbrowser.shared.TmdbGenres
 import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Immutable
 data class SpotlightActor(
@@ -53,20 +52,6 @@ data class MediaItem(
         get() = getImageUrl(isLandscape = false)
 
     companion object {
-        private fun formatReleaseDate(dateStr: String): String {
-            if (dateStr.length < 10 || !dateStr.contains("-")) {
-                return if (dateStr.length >= 4 && dateStr != "0000") dateStr.take(4) else ""
-            }
-            return try {
-                val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                val formatter = SimpleDateFormat("d/M/yyyy", Locale.US)
-                val d = parser.parse(dateStr)
-                if (d != null) formatter.format(d) else dateStr
-            } catch (_: Exception) {
-                dateStr.take(4)
-            }
-        }
-
         fun fromJson(json: JSONObject, season: Int? = null, episode: Int? = null): MediaItem {
             val itm = if (json.has("item")) json.optJSONObject("item") ?: json else json
             val id = itm.optString("id").ifEmpty { itm.optString("imdb", "") }
@@ -78,7 +63,7 @@ data class MediaItem(
                 ?: itm.optString("first_air_date").takeIf { !it.isNullOrEmpty() }
                 ?: "0000"
             val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else "0000"
-            val formattedDate = formatReleaseDate(releaseDate)
+            val formattedDate = LanguageHelper.formatDate(null, releaseDate)
             val mediaType = itm.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
                 ?: if (itm.has("name") || itm.has("first_air_date")) "tv" else "movie"
             val rating = itm.optDouble("vote_average", 0.0)
