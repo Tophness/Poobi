@@ -1508,9 +1508,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     } catch (_: Exception) {}
                 }
 
-                val cast = details?.optJSONObject("credits")?.optJSONArray("cast")
+                val cast = details?.optJSONObject("aggregate_credits")?.optJSONArray("cast")
+                    ?: details?.optJSONObject("credits")?.optJSONArray("cast")
                 if (cast != null) {
-                    for (cIdx in 0 until cast.length().coerceAtMost(5)) {
+                    for (cIdx in 0 until cast.length().coerceAtMost(10)) {
                         val actorObj = cast.getJSONObject(cIdx)
                         val actorId = actorObj.optInt("id")
                         val actorName = actorObj.optString("name")
@@ -2334,7 +2335,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         if (cached != null) {
             _itemDetails.value = cached
             _itemRecommendations.value = cached.optJSONObject("recommendations")?.optJSONArray("results")
-            _itemCast.value = cached.optJSONObject("credits")?.optJSONArray("cast")
+            _itemCast.value = cached.optJSONObject("aggregate_credits")?.optJSONArray("cast")
+                ?: cached.optJSONObject("credits")?.optJSONArray("cast")
 
             if (mediaType == "tv") {
                 val seasons = cached.optJSONArray("seasons")
@@ -2372,7 +2374,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 withContext(Dispatchers.Main) {
                     _itemDetails.value = details
                     _itemRecommendations.value = details.optJSONObject("recommendations")?.optJSONArray("results")
-                    _itemCast.value = details.optJSONObject("credits")?.optJSONArray("cast")
+                    _itemCast.value = details.optJSONObject("aggregate_credits")?.optJSONArray("cast")
+                        ?: details.optJSONObject("credits")?.optJSONArray("cast")
 
                     if (mediaType == "tv") {
                         val seasons = details.optJSONArray("seasons")
@@ -2686,6 +2689,45 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun loadSeasonCast(showId: Int, seasonNumber: Int) {
+        if (showId <= 0) return
+
+        val cachedCast = com.poobi.tvbrowser.shared.AppCacheManager.getSeasonCredits(context, showId.toString(), seasonNumber)
+        if (cachedCast != null && cachedCast.length() > 0) {
+            _itemCast.value = cachedCast
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val py = getPythonInstance()
+                val tmdb = py.getModule("tmdb.tmdb_utils")
+                val creditsObj = tmdb.callAttr("get_season_credits", showId, seasonNumber).toString()
+                val castArray = JSONObject(creditsObj).optJSONArray("cast")
+                if (castArray != null && castArray.length() > 0) {
+                    com.poobi.tvbrowser.shared.AppCacheManager.saveSeasonCredits(context, showId.toString(), seasonNumber, castArray)
+                    withContext(Dispatchers.Main) {
+                        if (isActive && _selectedItem.value?.optInt("id") == showId) {
+                            _itemCast.value = castArray
+                        }
+                    }
+                } else {
+                    val fallbackCast = _itemDetails.value?.optJSONObject("aggregate_credits")?.optJSONArray("cast")
+                        ?: _itemDetails.value?.optJSONObject("credits")?.optJSONArray("cast")
+                    if (fallbackCast != null && fallbackCast.length() > 0) {
+                        withContext(Dispatchers.Main) {
+                            if (isActive && _selectedItem.value?.optInt("id") == showId && (_itemCast.value == null || _itemCast.value!!.length() == 0)) {
+                                _itemCast.value = fallbackCast
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("StreamsViewModel", "Failed to load season credits for $showId S$seasonNumber: ${e.message}")
+            }
+        }
+    }
+
     fun loadEpisodes(item: JSONObject, seasonNumber: Int, isAutoSelect: Boolean = false, targetEpFromTrakt: Int? = null) {
         val id = item.optInt("id")
         _itemEpisodes.value = null
@@ -2695,6 +2737,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         } else {
             _lastWatchedEpisode.value = null
         }
+
+        loadSeasonCast(id, seasonNumber)
 
         val cached = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, id.toString(), seasonNumber)
         if (cached != null && cached.length() > 0) {

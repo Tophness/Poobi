@@ -842,6 +842,14 @@ def get_tv_episodes(tv_id, season_number):
     except:
         return json.dumps([])
 
+def get_tv_season_credits(tv_id, season_number):
+    try:
+        import tmdb.tmdb_utils as tmdb_utils
+        res = tmdb_utils.get_season_credits(tv_id, season_number).get('cast', [])
+        return json.dumps(res)
+    except:
+        return json.dumps([])
+
 def get_landscape_image(tmdb_id, media_type='movie', season=None, episode=None):
     try:
         import tmdb.tmdb_utils as tmdb_utils

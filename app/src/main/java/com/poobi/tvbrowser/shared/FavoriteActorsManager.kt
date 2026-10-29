@@ -146,9 +146,10 @@ object FavoriteActorsManager {
                 } catch (_: Exception) {}
             }
 
-            val cast = details?.optJSONObject("credits")?.optJSONArray("cast")
+            val cast = details?.optJSONObject("aggregate_credits")?.optJSONArray("cast")
+                ?: details?.optJSONObject("credits")?.optJSONArray("cast")
             if (cast != null) {
-                for (cIdx in 0 until cast.length().coerceAtMost(6)) {
+                for (cIdx in 0 until cast.length().coerceAtMost(10)) {
                     val actorObj = cast.getJSONObject(cIdx)
                     val actorId = actorObj.optInt("id")
                     val actorName = actorObj.optString("name")

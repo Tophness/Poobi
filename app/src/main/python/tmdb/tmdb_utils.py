@@ -92,7 +92,28 @@ def get_recommendations(tmdb_id, media_type='movie', page=1):
     return _session.get(url, headers=get_headers()).json()
 
 def get_details(tmdb_id, media_type='movie'):
-    url = f"{API_URL}/{media_type}/{tmdb_id}?append_to_response=credits,videos,images,external_ids,recommendations,release_dates,content_ratings"
+    if media_type in ['tv', 'tvshow']:
+        url = f"{API_URL}/tv/{tmdb_id}?append_to_response=aggregate_credits,credits,videos,images,external_ids,recommendations,content_ratings"
+    else:
+        url = f"{API_URL}/movie/{tmdb_id}?append_to_response=credits,videos,images,external_ids,recommendations,release_dates"
+    res = _session.get(url, headers=get_headers()).json()
+    if media_type in ['tv', 'tvshow']:
+        agg = res.get('aggregate_credits')
+        if agg and 'cast' in agg:
+            for actor in agg['cast']:
+                if 'character' not in actor and 'roles' in actor and actor['roles']:
+                    actor['character'] = " / ".join([r.get('character', '') for r in actor['roles'] if r.get('character')])
+            if 'credits' not in res:
+                res['credits'] = {}
+            res['credits']['cast'] = agg['cast']
+    return res
+
+def get_season_credits(tv_id, season_number):
+    url = f"{API_URL}/tv/{tv_id}/season/{season_number}/credits"
+    return _session.get(url, headers=get_headers()).json()
+
+def get_episode_credits(tv_id, season_number, episode_number):
+    url = f"{API_URL}/tv/{tv_id}/season/{season_number}/episode/{episode_number}/credits"
     return _session.get(url, headers=get_headers()).json()
 
 def get_tv_next_episode(tmdb_id):

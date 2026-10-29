@@ -202,6 +202,14 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     val leftColumnScrollState = rememberScrollState()
     val lazyListState = rememberLazyListState()
 
+    LaunchedEffect(cast, selectedSeasonIndex) {
+        lastFocusedCastIndex = 0
+        castItemFocusRequesters.clear()
+        try {
+            castListState.scrollToItem(0)
+        } catch (_: Exception) {}
+    }
+
     val targetEpisodeToFocus = remember(localEpisodes, lastWatchedEpisode, viewModel.lastScrapedSeason, viewModel.lastScrapedEpisode) {
         if (localEpisodes != null && localEpisodes.length() > 0) {
             val activeSeasonNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number")
@@ -637,21 +645,36 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                         coroutineScope.launch {
                                             val castItemIdx = localEpisodes.length()
                                             lazyListState.scrollToItem(castItemIdx)
-                                            val targetCastIdx = lastFocusedCastIndex.coerceAtLeast(0)
+
+                                            val currentTotalCast = cast?.length() ?: 0
+                                            val targetCastIdx = if (currentTotalCast > 0) {
+                                                lastFocusedCastIndex.coerceIn(0, currentTotalCast - 1)
+                                            } else 0
+
                                             try {
                                                 castListState.scrollToItem((targetCastIdx - 1).coerceAtLeast(0))
                                             } catch (_: Exception) {}
-                                            delay(30)
+
+                                            delay(40)
                                             var attempts = 0
-                                            while (attempts < 15) {
+                                            var focused = false
+                                            while (attempts < 15 && !focused) {
                                                 try {
                                                     val targetReq = castItemFocusRequesters[targetCastIdx] ?: firstCastFocusRequester
                                                     targetReq.requestFocus()
-                                                    break
+                                                    focused = true
                                                 } catch (_: Exception) {
                                                     attempts++
                                                     delay(30)
                                                 }
+                                            }
+
+                                            if (!focused) {
+                                                try {
+                                                    castListState.scrollToItem(0)
+                                                    delay(40)
+                                                    firstCastFocusRequester.requestFocus()
+                                                } catch (_: Exception) {}
                                             }
                                         }
                                         true
@@ -858,7 +881,13 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     }
 
                     item {
-                        Text("Top Cast", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp, 20.dp, 0.dp, 10.dp))
+                        val castHeader = if (mediaType == "tv" && seasons != null && selectedSeasonIndex in 0 until seasons!!.length()) {
+                            val sName = seasons!!.getJSONObject(selectedSeasonIndex).optString("name", "")
+                            if (sName.isNotBlank()) "$sName Cast" else "Season ${selectedSeasonIndex + 1} Cast"
+                        } else {
+                            "Top Cast"
+                        }
+                        Text(castHeader, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp, 20.dp, 0.dp, 10.dp))
                         if (cast != null) {
                             if (cast!!.length() > 0) {
                                 var visibleCastCount by remember(cast) { mutableStateOf(15) }
@@ -881,7 +910,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                         val isFirstCast = idx == 0
                                         val isLastCast = idx == currentCount - 1 && currentCount >= totalCast
 
-                                        val castRequester = remember(idx) { FocusRequester() }
+                                        val castRequester = remember(cId, idx) { FocusRequester() }
                                         castItemFocusRequesters[idx] = castRequester
 
                                         TvFocusableBox(
