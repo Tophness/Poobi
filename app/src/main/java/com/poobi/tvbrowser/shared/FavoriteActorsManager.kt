@@ -182,7 +182,6 @@ object FavoriteActorsManager {
 
         if (hasNewActors) {
             saveActors(context, existingMap.values.toList())
-            AppCacheManager.clearFeedCaches(context)
         }
     }
 }

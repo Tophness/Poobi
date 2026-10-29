@@ -865,6 +865,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     )
 
     private val globalMediaToActorMap = java.util.concurrent.ConcurrentHashMap<String, MutableList<SpotlightActorInfo>>()
+    @Volatile private var isActorMappingBuilt = false
+    @Volatile private var lastActorMappingSignature = 0
+
     private var currentFeedLoader: (suspend (page: Int) -> JSONArray?)? = null
     private var currentFeedPage = 1
     private var isFeedLoadingMore = false
@@ -874,64 +877,97 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private var discoverRegularPage = 1
     private var discoverSeenIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
-    private fun cancelLibraryJobs() {
+    private fun cancelLibraryJobs(clearCurrentItems: Boolean = true) {
         libraryLoadJob?.cancel()
-        _libraryItems.value = null
+        if (clearCurrentItems) {
+            _libraryItems.value = null
+        }
         currentFeedLoader = null
         currentFeedPage = 1
         hasMoreFeedPages = true
         isFeedLoadingMore = false
     }
 
-    private suspend fun ensureActorMapping(): List<com.poobi.tvbrowser.shared.FavoriteActor> = withContext(Dispatchers.IO) {
-        val allActors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(context)
-        val selectedActors = allActors.filter { it.isEnabled }
-        if (selectedActors.isEmpty()) {
-            globalMediaToActorMap.clear()
-            return@withContext emptyList()
-        }
-
-        val py = getPythonInstance()
-        val tmdb = py.getModule("tmdb.tmdb_utils")
-
-        globalMediaToActorMap.clear()
-
-        for (act in selectedActors) {
-            var cachedCredits = com.poobi.tvbrowser.shared.AppCacheManager.getActorCredits(context, act.id)
-            var detailsObj: JSONObject? = null
-            if (cachedCredits == null) {
-                try {
-                    val detailsJson = tmdb.callAttr("get_person_details", act.id).toString()
-                    detailsObj = JSONObject(detailsJson)
-                    val combinedCredits = detailsObj.optJSONObject("combined_credits")
-                    val castArr = combinedCredits?.optJSONArray("cast") ?: JSONArray()
-                    com.poobi.tvbrowser.shared.AppCacheManager.saveActorCredits(context, act.id, castArr)
-                    cachedCredits = castArr
-                } catch (e: Exception) {
-                    Log.e("StreamsViewModel", "Failed fetching credits for ${act.name}: ${e.message}")
-                }
-            }
-            if (cachedCredits != null) {
-                val pPath = if (act.profilePath.isNotBlank()) act.profilePath else detailsObj?.optString("profile_path", "") ?: ""
-                for (j in 0 until cachedCredits.length()) {
-                    val cObj = cachedCredits.getJSONObject(j)
-                    val cId = cObj.optString("id")
-                    val mType = cObj.optString("media_type")
-                    if (cId.isNotEmpty()) {
-                        val keys = mutableListOf(cId)
-                        if (mType.isNotEmpty()) keys.add("${mType}_$cId")
-                        for (k in keys) {
-                            val list = globalMediaToActorMap.getOrPut(k) { java.util.Collections.synchronizedList(mutableListOf()) }
-                            synchronized(list) {
-                                if (list.none { it.id == act.id }) {
-                                    list.add(SpotlightActorInfo(act.name, pPath, act.id))
-                                }
-                            }
+    private fun populateActorCreditsToMap(act: com.poobi.tvbrowser.shared.FavoriteActor, credits: JSONArray, overrideProfilePath: String? = null) {
+        val pPath = overrideProfilePath?.takeIf { it.isNotBlank() } ?: act.profilePath
+        for (j in 0 until credits.length()) {
+            val cObj = credits.optJSONObject(j) ?: continue
+            val cId = cObj.optString("id")
+            val mType = cObj.optString("media_type")
+            if (cId.isNotEmpty()) {
+                val keys = mutableListOf(cId)
+                if (mType.isNotEmpty()) keys.add("${mType}_$cId")
+                for (k in keys) {
+                    val list = globalMediaToActorMap.getOrPut(k) { java.util.Collections.synchronizedList(mutableListOf()) }
+                    synchronized(list) {
+                        if (list.none { it.id == act.id }) {
+                            list.add(SpotlightActorInfo(act.name, pPath, act.id))
                         }
                     }
                 }
             }
         }
+    }
+
+    private suspend fun ensureActorMapping(forceRefresh: Boolean = false): List<com.poobi.tvbrowser.shared.FavoriteActor> = withContext(Dispatchers.IO) {
+        val allActors = com.poobi.tvbrowser.shared.FavoriteActorsManager.getActors(context)
+        val selectedActors = allActors.filter { it.isEnabled }
+        val signature = selectedActors.map { it.id }.hashCode()
+
+        if (!forceRefresh && isActorMappingBuilt && signature == lastActorMappingSignature && globalMediaToActorMap.isNotEmpty()) {
+            return@withContext selectedActors
+        }
+
+        if (selectedActors.isEmpty()) {
+            globalMediaToActorMap.clear()
+            isActorMappingBuilt = true
+            lastActorMappingSignature = signature
+            return@withContext emptyList()
+        }
+
+        globalMediaToActorMap.clear()
+
+        val uncachedActors = mutableListOf<com.poobi.tvbrowser.shared.FavoriteActor>()
+        for (act in selectedActors) {
+            val cachedCredits = com.poobi.tvbrowser.shared.AppCacheManager.getActorCredits(context, act.id)
+            if (cachedCredits != null) {
+                populateActorCreditsToMap(act, cachedCredits)
+            } else {
+                uncachedActors.add(act)
+            }
+        }
+
+        isActorMappingBuilt = true
+        lastActorMappingSignature = signature
+
+        // Fetch any uncached actors in parallel in the background without blocking feed display
+        if (uncachedActors.isNotEmpty()) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val py = getPythonInstance()
+                    val tmdb = py.getModule("tmdb.tmdb_utils")
+                    coroutineScope {
+                        uncachedActors.chunked(4).forEach { chunk ->
+                            chunk.map { act ->
+                                async {
+                                    try {
+                                        val detailsJson = tmdb.callAttr("get_person_details", act.id).toString()
+                                        val detailsObj = JSONObject(detailsJson)
+                                        val combinedCredits = detailsObj.optJSONObject("combined_credits")
+                                        val castArr = combinedCredits?.optJSONArray("cast") ?: JSONArray()
+                                        com.poobi.tvbrowser.shared.AppCacheManager.saveActorCredits(context, act.id, castArr)
+                                        populateActorCreditsToMap(act, castArr, detailsObj.optString("profile_path", ""))
+                                    } catch (e: Exception) {
+                                        Log.e("StreamsViewModel", "Failed fetching credits for ${act.name}: ${e.message}")
+                                    }
+                                }
+                            }.awaitAll()
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
         selectedActors
     }
 
@@ -1003,34 +1039,20 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val cacheKey = "${method}_${arg ?: ""}"
         val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, cacheKey)
         if (cached != null) {
-            cancelLibraryJobs()
-            if (prioritizeFavCast) {
-                libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
-                    ensureActorMapping()
-                    val refreshed = processFeedItems(cached, prioritizeFavCast = true)
-                    withContext(Dispatchers.Main) {
-                        _libraryItems.value = refreshed
-                        setupLibraryFeedPagination(method, arg)
-                    }
-                }
-            } else {
-                _libraryItems.value = cached
-                setupLibraryFeedPagination(method, arg)
-            }
+            cancelLibraryJobs(clearCurrentItems = false)
+            _libraryItems.value = cached
+            setupLibraryFeedPagination(method, arg)
             return
         }
 
-        cancelLibraryJobs()
+        cancelLibraryJobs(clearCurrentItems = true)
         libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                delay(80)
-                if (!isActive) return@launch
-
                 if (prioritizeFavCast) {
                     ensureActorMapping()
                 }
 
-                val py = com.chaquo.python.Python.getInstance()
+                val py = getPythonInstance()
                 val tmdb = py.getModule("tmdb.tmdb_utils")
                 val resultJson = if (arg != null) {
                     tmdb.callAttr(method, arg, 1).toString()
@@ -1080,39 +1102,20 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val fullCacheKey = if (prioritizeFavCast) "${cacheKey}_pfc" else cacheKey
         val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, fullCacheKey)
         if (cached != null) {
-            cancelLibraryJobs()
-            if (prioritizeFavCast) {
-                libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
-                    ensureActorMapping()
-                    val refreshed = processFeedItems(cached, prioritizeFavCast = true)
-                    discoverSeenIds.clear()
-                    for (i in 0 until refreshed.length()) {
-                        val cid = refreshed.getJSONObject(i).optString("id")
-                        if (cid.isNotEmpty()) discoverSeenIds.add(cid)
-                    }
-                    withContext(Dispatchers.Main) {
-                        _libraryItems.value = refreshed
-                        setupDiscoverFeedPagination(isMovie, params, prioritizeFavCast)
-                    }
-                }
-            } else {
-                discoverSeenIds.clear()
-                for (i in 0 until cached.length()) {
-                    val cid = cached.getJSONObject(i).optString("id")
-                    if (cid.isNotEmpty()) discoverSeenIds.add(cid)
-                }
-                _libraryItems.value = cached
-                setupDiscoverFeedPagination(isMovie, params, prioritizeFavCast)
+            cancelLibraryJobs(clearCurrentItems = false)
+            discoverSeenIds.clear()
+            for (i in 0 until cached.length()) {
+                val cid = cached.getJSONObject(i).optString("id")
+                if (cid.isNotEmpty()) discoverSeenIds.add(cid)
             }
+            _libraryItems.value = cached
+            setupDiscoverFeedPagination(isMovie, params, prioritizeFavCast)
             return
         }
 
-        cancelLibraryJobs()
+        cancelLibraryJobs(clearCurrentItems = true)
         libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                delay(80)
-                if (!isActive) return@launch
-
                 val selectedActors = if (prioritizeFavCast) ensureActorMapping() else emptyList()
                 val py = com.chaquo.python.Python.getInstance()
                 val tmdb = py.getModule("tmdb.tmdb_utils")
@@ -1271,12 +1274,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     fun loadTraktFeed(cacheKey: String, feedType: String) {
         val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, cacheKey)
         if (cached != null) {
-            cancelLibraryJobs()
+            cancelLibraryJobs(clearCurrentItems = false)
             _libraryItems.value = cached
             return
         }
 
-        cancelLibraryJobs()
+        cancelLibraryJobs(clearCurrentItems = true)
         libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 delay(100)
@@ -1377,7 +1380,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
             val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, cacheKey)
             if (cached != null) {
-                withContext(Dispatchers.Main) { _libraryItems.value = cached }
+                withContext(Dispatchers.Main) { 
+                    cancelLibraryJobs(clearCurrentItems = false)
+                    _libraryItems.value = cached 
+                }
                 return@launch
             }
 
@@ -1455,7 +1461,14 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun loadCastInSpotlight() {
-        cancelLibraryJobs()
+        val cached = com.poobi.tvbrowser.shared.AppCacheManager.getLibraryCategory(context, "cast_in_spotlight")
+        if (cached != null) {
+            cancelLibraryJobs(clearCurrentItems = false)
+            _libraryItems.value = cached
+            return
+        }
+
+        cancelLibraryJobs(clearCurrentItems = true)
         viewModelScope.launch(Dispatchers.IO) {
             val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
             val recentsJson = prefs.getString("streams_recently_played", "[]") ?: "[]"
@@ -1602,6 +1615,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             starredList.sortByDescending { it.second }
             starredList.forEach { combinedResult.put(it.first) }
 
+            if (combinedResult.length() > 0) {
+                com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, "cast_in_spotlight", combinedResult)
+            }
+
             withContext(Dispatchers.Main) {
                 _libraryItems.value = combinedResult
                 setupSpotlightPagination()
@@ -1685,24 +1702,16 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun loadFavorites() { 
-        cancelLibraryJobs()
+        cancelLibraryJobs(clearCurrentItems = false)
+        val list = try { JSONArray(prefs.getString("streams_favorites", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
+        _libraryItems.value = list
         loadProgressCounts()
-        viewModelScope.launch(Dispatchers.IO) {
-            val list = JSONArray(prefs.getString("streams_favorites", "[]") ?: "[]")
-            withContext(Dispatchers.Main) {
-                _libraryItems.value = list
-            }
-        }
     }
     
     fun loadRecentlyPlayed() { 
-        cancelLibraryJobs()
-        viewModelScope.launch(Dispatchers.IO) {
-            val list = JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
-            withContext(Dispatchers.Main) {
-                _libraryItems.value = list
-            }
-        }
+        cancelLibraryJobs(clearCurrentItems = false)
+        val list = try { JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
+        _libraryItems.value = list
     }
     
     fun removeFromRecentlyPlayed(entryToRemove: JSONObject) {
