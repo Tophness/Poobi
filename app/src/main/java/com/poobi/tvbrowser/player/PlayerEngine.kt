@@ -1576,9 +1576,11 @@ class PlayerEngine(
                         lastScrapedItem?.let { sItem ->
                             playerScope.launch {
                                 try {
-                                    val py = Python.getInstance()
-                                    val scrobbler = py.getModule("trakt.trakt_scrobble")
-                                    scrobbler.callAttr("scrobble", sItem.toString(), lastScrapedSeason, lastScrapedEpisode, 100.0)
+                                    if (Python.isStarted()) {
+                                        val py = Python.getInstance()
+                                        val scrobbler = py.getModule("trakt.trakt_scrobble")
+                                        scrobbler.callAttr("scrobble", sItem.toString(), lastScrapedSeason, lastScrapedEpisode, 100.0)
+                                    }
                                 } catch (e: Exception) {
                                     Log.e("TVBrowser", "Scrobble failed: ${e.message}")
                                 }

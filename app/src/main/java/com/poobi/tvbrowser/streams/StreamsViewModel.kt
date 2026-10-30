@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import com.poobi.tvbrowser.shared.StreamResumeManager
 import com.poobi.tvbrowser.shared.SubtitleData
 import com.poobi.tvbrowser.torrent.TorrentSortCriteria
@@ -259,7 +260,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     fun getTraktNextEpisode(item: JSONObject): Pair<Int, Int>? {
         if (!isTraktAuthorized()) return null
         return try {
-            val py = Python.getInstance()
+            val py = getPython()
             val traktModule = py.getModule("modules.trakt")
             val watchedShows = traktModule.callAttr("cachesyncTVShows")?.asList() ?: return null
             val showId = item.optString("id")
@@ -648,22 +649,24 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
-    private suspend fun getPythonInstance(): Python = withContext(Dispatchers.IO) {
+    fun getPython(): Python {
         if (!Python.isStarted()) {
-            try {
-                Python.start(com.chaquo.python.android.AndroidPlatform(context))
-            } catch (_: Exception) {}
+            synchronized(Python::class.java) {
+                if (!Python.isStarted()) {
+                    Python.start(AndroidPlatform(context))
+                }
+            }
         }
-        while (!Python.isStarted()) {
-            delay(50)
-        }
-        Python.getInstance()
+        return Python.getInstance()
+    }
+
+    private suspend fun getPythonInstance(): Python = withContext(Dispatchers.IO) {
+        getPython()
     }
 
     private fun isTraktAuthorized(): Boolean {
         return try {
-            if (!Python.isStarted()) return false
-            val py = Python.getInstance()
+            val py = getPython()
             val control = py.getModule("modules.control")
             control.callAttr("setting", "trakt.authed").toString() == "yes"
         } catch (e: Exception) {
@@ -749,7 +752,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val resultsArray = if (cached != null) {
                     cached
                 } else {
-                    val py = Python.getInstance()
+                    val py = getPythonInstance()
                     val scraper = py.getModule("main")
                     val resultsJson = scraper.callAttr("search", clean, 1).toString()
                     val arr = JSONArray(resultsJson)
@@ -829,7 +832,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val scraper = py.getModule("main")
                 val resultsJson = scraper.callAttr("search", query, 1).toString()
                 val results = JSONArray(resultsJson)
@@ -1101,7 +1104,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             withContext(Dispatchers.IO) {
                 try {
                     val prioritizeFavCast = prefs.getBoolean("genres_prioritize_fav_cast", true)
-                    val py = com.chaquo.python.Python.getInstance()
+                    val py = getPythonInstance()
                     val tmdb = py.getModule("tmdb.tmdb_utils")
                     val resultJson = if (arg != null) {
                         tmdb.callAttr(method, arg, page).toString()
@@ -1142,7 +1145,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         libraryLoadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 val selectedActors = if (prioritizeFavCast) ensureActorMapping() else emptyList()
-                val py = com.chaquo.python.Python.getInstance()
+                val py = getPythonInstance()
                 val tmdb = py.getModule("tmdb.tmdb_utils")
                 val method = if (isMovie) "discover_movies" else "discover_tv"
 
@@ -1217,7 +1220,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         currentFeedLoader = { _ ->
             withContext(Dispatchers.IO) {
                 try {
-                    val py = com.chaquo.python.Python.getInstance()
+                    val py = getPythonInstance()
                     val tmdb = py.getModule("tmdb.tmdb_utils")
                     val method = if (isMovie) "discover_movies" else "discover_tv"
 
@@ -1320,7 +1323,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 delay(100)
                 if (!isActive) return@launch
 
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val main = py.getModule("main")
                 val resultJson = main.callAttr("get_trakt_feed", feedType).toString()
                 val results = JSONArray(resultJson)
@@ -1423,7 +1426,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
 
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val tmdb = py.getModule("tmdb.tmdb_utils")
                 val resJson = tmdb.callAttr("get_recommendations", id, mediaType).toString()
                 val results = JSONObject(resJson).optJSONArray("results") ?: JSONArray()
@@ -1464,7 +1467,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
 
         try {
-            val py = com.chaquo.python.Python.getInstance()
+            val py = getPythonInstance()
             val tmdb = py.getModule("tmdb.tmdb_utils")
             val detailsJson = tmdb.callAttr("get_person_details", actor.id).toString()
             val combinedCredits = JSONObject(detailsJson).optJSONObject("combined_credits")
@@ -1548,7 +1551,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 var details = com.poobi.tvbrowser.shared.AppCacheManager.getDetails(context, mediaType, id)
                 if (details == null && id.isNotEmpty() && id != "0") {
                     try {
-                        val py = com.chaquo.python.Python.getInstance()
+                        val py = getPythonInstance()
                         val tmdb = py.getModule("tmdb.tmdb_utils")
                         val dStr = tmdb.callAttr("get_details", id, mediaType).toString()
                         details = JSONObject(dStr)
@@ -2455,7 +2458,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 return@launch
             }
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val checker = py.getModule("trakt.movie_check")
                 val watched = checker.callAttr("is_movie_watched", item.toString()).toBoolean()
                 withContext(Dispatchers.Main) {
@@ -2482,7 +2485,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
 
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val scrobbler = py.getModule("trakt.trakt_scrobble")
                 val success = if (currentStatus) {
                     scrobbler.callAttr("remove_from_history", item.toString()).toBoolean()
@@ -2538,7 +2541,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
 
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val scrobbler = py.getModule("trakt.trakt_scrobble")
                 val success = if (isCurrentlyWatched) {
                     scrobbler.callAttr("remove_from_history", item.toString(), season, episode).toBoolean()
@@ -2849,11 +2852,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _scrapeProgress.value = 0
         _scrapeTotal.value = 0
         
-        runBlocking(Dispatchers.IO) {
-            try { 
-                Python.getInstance().getModule("main").callAttr("stop_scrape") 
-            } catch (e: Exception) {
-                Log.e("StreamsViewModel", "Failed stopping Python scraper cleanly: ${e.message}")
+        if (Python.isStarted()) {
+            runBlocking(Dispatchers.IO) {
+                try { 
+                    getPython().getModule("main").callAttr("stop_scrape") 
+                } catch (e: Exception) {
+                    Log.e("StreamsViewModel", "Failed stopping Python scraper cleanly: ${e.message}")
+                }
             }
         }
         
@@ -2898,7 +2903,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         isInteractingWithSources = true
 
         viewModelScope.launch(Dispatchers.IO) {
-            try { Python.getInstance().getModule("main").callAttr("pause_scrape") } catch (e: Exception) {}
+            try { getPythonInstance().getModule("main").callAttr("pause_scrape") } catch (e: Exception) {}
         }
 
         tryNextSource()
@@ -2939,7 +2944,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         tryAllJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val scraper = py.getModule("main")
                 val resolveResult = scraper.callAttr("resolve", sourceDataJson).toString()
 
@@ -3328,7 +3333,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val tmdb = py.getModule("tmdb.tmdb_utils")
                 
                 val id = item.optString("id")
@@ -3393,9 +3398,10 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
 
         scrapePollingJob = viewModelScope.launch(Dispatchers.IO) {
+            val py = getPythonInstance()
             while (isActive) {
                 try {
-                    val statusStr = Python.getInstance().getModule("main").callAttr("get_scrape_status").toString()
+                    val statusStr = py.getModule("main").callAttr("get_scrape_status").toString()
                     val status = JSONObject(statusStr)
                     val current = status.optInt("current", 0)
                     val total = status.optInt("total", 0)
@@ -3448,7 +3454,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         scrapeJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                val sourcesJson = Python.getInstance().getModule("main").callAttr("scrape", item.toString(), season, episode).toString()
+                val py = getPythonInstance()
+                val sourcesJson = py.getModule("main").callAttr("scrape", item.toString(), season, episode).toString()
                 val sources = JSONArray(sourcesJson)
                 withContext(Dispatchers.Main) {
                     onScrapeFinished(item, season, episode, sources)
@@ -3473,7 +3480,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val scraper = py.getModule("main")
                 val subsJson = scraper.callAttr("search_subtitles", item.toString(), season, episode).toString()
                 
@@ -3503,7 +3510,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             val newlyDownloadedSubs = java.util.Collections.synchronizedList(mutableListOf<SubtitleData>())
             val completedCount = java.util.concurrent.atomic.AtomicInteger(0)
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val scraper = py.getModule("main")
 
                 coroutineScope {
@@ -3644,7 +3651,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val scraper = py.getModule("main")
                 val subsJson = scraper.callAttr("search_subtitles", item.toString(), season, episode).toString()
                 val subs = JSONArray(subsJson)
@@ -3894,7 +3901,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val scraper = py.getModule("main")
                 try { scraper.callAttr("pause_scrape") } catch (e: Exception) {}
                 val resolveResult = scraper.callAttr("resolve", sourceDataJson).toString()
@@ -3968,7 +3975,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
             viewModelScope.launch(Dispatchers.IO) {
                 try { 
-                    Python.getInstance().getModule("main").callAttr("resume_scrape") 
+                    getPythonInstance().getModule("main").callAttr("resume_scrape") 
                 } catch (e: Exception) {}
             }
         }
@@ -4039,7 +4046,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         scrapePollingJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val scraper = py.getModule("main")
 
                 val finalSourcesDeferred = CompletableDeferred<JSONArray?>()
@@ -4369,7 +4376,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = Python.getInstance()
+                val py = getPythonInstance()
                 val scraper = py.getModule("main")
 
                 val resultStr = scraper.callAttr("get_trailer", mediaType, id, season, episode).toString()

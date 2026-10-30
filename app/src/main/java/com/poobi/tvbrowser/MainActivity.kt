@@ -240,6 +240,9 @@ class MainActivity : AppCompatActivity() {
         setTheme(androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
         super.onCreate(savedInstanceState)
+        if (!Python.isStarted()) {
+            Python.start(AndroidPlatform(applicationContext))
+        }
         HardwareInputManager.init(this)
         AdBlockManager.init(this)
         startTorrentServer()
@@ -539,8 +542,8 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null) {
             checkStartupTabs()
         }
-        handleIncomingIntent(intent)
         initPythonAsync()
+        handleIncomingIntent(intent)
     }
 
     private fun handleMenuButton(): Boolean {
@@ -726,9 +729,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun initPythonAsync() {
         lifecycleScope.launch(Dispatchers.IO) {
-            delay(1500)
             if (!Python.isStarted()) {
-                Python.start(AndroidPlatform(this@MainActivity))
+                Python.start(AndroidPlatform(applicationContext))
             }
             try {
                 val py = Python.getInstance()
