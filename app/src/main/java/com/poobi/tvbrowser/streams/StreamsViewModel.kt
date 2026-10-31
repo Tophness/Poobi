@@ -1966,6 +1966,17 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
 
+            val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, season, episode)
+            val cachedOffset = if (itemKey.isNotEmpty()) {
+                com.poobi.tvbrowser.shared.SubtitleCacheManager.getSelectedSubtitle(context, itemKey)?.offsetMs ?: 0L
+            } else 0L
+
+            val finalOffset = if (existing != null && existing.has("subtitle_offset_ms")) {
+                existing.optLong("subtitle_offset_ms", 0L)
+            } else {
+                cachedOffset
+            }
+
             val newEntry = JSONObject().apply {
                 put("display_title", displayTitle)
                 put("item", savedItem)
@@ -1990,6 +2001,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val finalAudioLabel = existing?.optString("audio_label")
                 if (!finalAudioLabel.isNullOrEmpty()) put("audio_label", finalAudioLabel)
                 if (existing != null && existing.has("audio_index")) put("audio_index", existing.getInt("audio_index"))
+                if (finalOffset != 0L) put("subtitle_offset_ms", finalOffset)
             }
             newList.add(0, newEntry)
             if (newList.size > 20) newList.removeAt(newList.size - 1)

@@ -226,11 +226,13 @@ class PlayerEngine(
 
     init {
         engineScope.launch {
+            var wasVisible = false
             subtitleAlignmentManager.isUIVisible.collect { isVisible ->
                 withContext(Dispatchers.Main) {
-                    if (!isVisible) {
+                    if (!isVisible && wasVisible) {
                         applySubtitleOffset(subtitleAlignmentManager.baselineOffsetMs)
                     }
+                    wasVisible = isVisible
                     updateNativeSubtitleViewVisibility()
                 }
             }
@@ -319,6 +321,7 @@ class PlayerEngine(
 
         val itemKey = SubtitleCacheManager.getItemKey(lastScrapedItem, lastScrapedSeason, lastScrapedEpisode)
         if (itemKey.isNotEmpty()) {
+            val currentOffset = subtitleAlignmentManager.baselineOffsetMs
             SubtitleCacheManager.setSelectedSubtitle(
                 context,
                 itemKey,
@@ -326,7 +329,8 @@ class PlayerEngine(
                     isOff = false,
                     url = matchedUrl ?: "",
                     label = label,
-                    lang = matchedLang
+                    lang = matchedLang,
+                    offsetMs = currentOffset
                 )
             )
         }
@@ -339,10 +343,14 @@ class PlayerEngine(
 
         val itemKey = SubtitleCacheManager.getItemKey(lastScrapedItem, lastScrapedSeason, lastScrapedEpisode)
         if (itemKey.isNotEmpty()) {
+            val currentOffset = subtitleAlignmentManager.baselineOffsetMs
             SubtitleCacheManager.setSelectedSubtitle(
                 context,
                 itemKey,
-                SelectedSubtitleInfo(isOff = true)
+                SelectedSubtitleInfo(
+                    isOff = true,
+                    offsetMs = currentOffset
+                )
             )
         }
     }
@@ -378,6 +386,7 @@ class PlayerEngine(
             pendingSelectedSubtitleLabel = label
 
             if (itemKey.isNotEmpty()) {
+                val currentOffset = subtitleAlignmentManager.baselineOffsetMs
                 SubtitleCacheManager.setSelectedSubtitle(
                     context,
                     itemKey,
@@ -385,7 +394,8 @@ class PlayerEngine(
                         isOff = false,
                         url = singleUri,
                         label = label,
-                        lang = lang
+                        lang = lang,
+                        offsetMs = currentOffset
                     )
                 )
             }
@@ -411,6 +421,8 @@ class PlayerEngine(
         val renderingMode = prefs.getInt("subtitle_rendering_mode", 0)
         val offsetChanged = subtitleOffsetUs != newOffsetUs
         subtitleOffsetUs = newOffsetUs
+
+        saveSubtitleOffset(offsetMs)
 
         if (renderingMode == 0) {
             if (offsetChanged) {
@@ -824,6 +836,94 @@ class PlayerEngine(
         }
     }
 
+    fun loadSavedSubtitleOffset(): Long {
+        val title = lastVideoTitle
+        val item = lastScrapedItem
+        val season = lastScrapedSeason
+        val episode = lastScrapedEpisode
+        val currentId = item?.optString("id")
+        val currentImdb = item?.optString("imdb")
+
+        try {
+            val recentArray = org.json.JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
+            for (i in 0 until recentArray.length()) {
+                val entry = recentArray.getJSONObject(i)
+                val itm = entry.optJSONObject("item")
+                val itmId = itm?.optString("id")
+                val itmImdb = itm?.optString("imdb")
+                val sameId = (itmId != null && currentId != null && itmId.isNotEmpty() && itmId == currentId) ||
+                             (itmImdb != null && currentImdb != null && itmImdb.isNotEmpty() && itmImdb == currentImdb)
+                val sameSeason = if (entry.has("season")) entry.optInt("season") == (season ?: -1) else season == null
+                val sameEpisode = if (entry.has("episode")) entry.optInt("episode") == (episode ?: -1) else episode == null
+                val sameTitle = !title.isNullOrEmpty() && entry.optString("display_title") == title
+
+                if ((sameId && sameSeason && sameEpisode) || sameTitle) {
+                    if (entry.has("subtitle_offset_ms")) {
+                        return entry.getLong("subtitle_offset_ms")
+                    }
+                    break
+                }
+            }
+        } catch (_: Exception) {}
+
+        val itemKey = SubtitleCacheManager.getItemKey(item, season, episode)
+        if (itemKey.isNotEmpty()) {
+            val pref = SubtitleCacheManager.getSelectedSubtitle(context, itemKey)
+            if (pref != null && pref.offsetMs != 0L) {
+                return pref.offsetMs
+            }
+        }
+        return 0L
+    }
+
+    fun saveSubtitleOffset(offsetMs: Long) {
+        val title = lastVideoTitle
+        val item = lastScrapedItem
+        val season = lastScrapedSeason
+        val episode = lastScrapedEpisode
+        val currentId = item?.optString("id")
+        val currentImdb = item?.optString("imdb")
+
+        try {
+            val recentArray = org.json.JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
+            var modified = false
+            for (i in 0 until recentArray.length()) {
+                val entry = recentArray.getJSONObject(i)
+                val itm = entry.optJSONObject("item")
+                val itmId = itm?.optString("id")
+                val itmImdb = itm?.optString("imdb")
+                val sameId = (itmId != null && currentId != null && itmId.isNotEmpty() && itmId == currentId) ||
+                             (itmImdb != null && currentImdb != null && itmImdb.isNotEmpty() && itmImdb == currentImdb)
+                val sameSeason = if (entry.has("season")) entry.optInt("season") == (season ?: -1) else season == null
+                val sameEpisode = if (entry.has("episode")) entry.optInt("episode") == (episode ?: -1) else episode == null
+                val sameTitle = !title.isNullOrEmpty() && entry.optString("display_title") == title
+
+                if ((sameId && sameSeason && sameEpisode) || sameTitle) {
+                    if (offsetMs != 0L) {
+                        entry.put("subtitle_offset_ms", offsetMs)
+                    } else {
+                        entry.remove("subtitle_offset_ms")
+                    }
+                    modified = true
+                    break
+                }
+            }
+            if (modified) {
+                prefs.edit().putString("streams_recently_played", recentArray.toString()).apply()
+            }
+        } catch (e: Exception) {
+            Log.e("PlayerEngine", "Error saving subtitle offset to recently played", e)
+        }
+
+        val itemKey = SubtitleCacheManager.getItemKey(item, season, episode)
+        if (itemKey.isNotEmpty()) {
+            val currentInfo = SubtitleCacheManager.getSelectedSubtitle(context, itemKey)
+            val updatedInfo = currentInfo?.copy(offsetMs = offsetMs)
+                ?: SelectedSubtitleInfo(isOff = false, offsetMs = offsetMs)
+            SubtitleCacheManager.setSelectedSubtitle(context, itemKey, updatedInfo)
+        }
+    }
+
     private fun handleAudioTrackChange(tracks: Tracks) {
         val audioTracks = getAudioTracks(tracks)
         if (audioTracks.isEmpty()) return
@@ -998,8 +1098,9 @@ class PlayerEngine(
         isReleasing = false
         (context as? android.app.Activity)?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        subtitleOffsetUs = 0L
-        subtitleAlignmentManager.setOffset(0L)
+        val initialOffsetMs = loadSavedSubtitleOffset()
+        subtitleOffsetUs = initialOffsetMs * 1000L
+        subtitleAlignmentManager.setOffset(initialOffsetMs)
         introDbManager.reset()
 
         exoPlayer?.release()
@@ -1553,6 +1654,12 @@ class PlayerEngine(
                                     if (selectedAudio.language != null) entry.put("audio_language", selectedAudio.language) else entry.remove("audio_language")
                                     if (selectedAudio.label != null) entry.put("audio_label", selectedAudio.label) else entry.remove("audio_label")
                                     entry.put("audio_index", selectedAudio.overallIndex)
+                                }
+                                val currentOffsetMs = subtitleAlignmentManager.baselineOffsetMs
+                                if (currentOffsetMs != 0L) {
+                                    entry.put("subtitle_offset_ms", currentOffsetMs)
+                                } else {
+                                    entry.remove("subtitle_offset_ms")
                                 }
                                 prefs.edit().putString("streams_recently_played", recentArray.toString()).commit()
                                 break

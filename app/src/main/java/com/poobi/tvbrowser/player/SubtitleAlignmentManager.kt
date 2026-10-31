@@ -44,7 +44,7 @@ class SubtitleAlignmentManager(private val context: Context) {
         if (url == activeSubtitleUrl) return
         activeSubtitleUrl = url
         _cues.value = emptyList()
-        _offsetMs.value = 0L
+        _offsetMs.value = baselineOffsetMs
         lastAdjustmentMsg = ""
         showDottedFromLine = false
 

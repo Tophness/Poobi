@@ -11,7 +11,8 @@ data class SelectedSubtitleInfo(
     val isOff: Boolean = false,
     val url: String = "",
     val label: String = "",
-    val lang: String = ""
+    val lang: String = "",
+    val offsetMs: Long = 0L
 )
 
 object SubtitleCacheManager {
@@ -42,14 +43,17 @@ object SubtitleCacheManager {
         val jsonStr = prefs.getString(PREFS_SELECTED_SUBS, "{}") ?: "{}"
         try {
             val root = JSONObject(jsonStr)
-            val obj = root.optJSONObject(itemKey) 
-                ?: (if (itemKey.contains("_")) root.optJSONObject("show_${itemKey.substringBefore("_")}") else null)
-                ?: return null
+            val specificObj = root.optJSONObject(itemKey)
+            val fallbackObj = if (specificObj == null && itemKey.contains("_")) {
+                root.optJSONObject("show_${itemKey.substringBefore("_")}")
+            } else null
+            val obj = specificObj ?: fallbackObj ?: return null
             return SelectedSubtitleInfo(
                 isOff = obj.optBoolean("is_off", false),
                 url = obj.optString("url", ""),
                 label = obj.optString("label", ""),
-                lang = obj.optString("lang", "")
+                lang = obj.optString("lang", ""),
+                offsetMs = specificObj?.optLong("offset_ms", 0L) ?: 0L
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed reading selected subtitle preference: ${e.message}")
@@ -68,6 +72,7 @@ object SubtitleCacheManager {
                 put("url", info.url)
                 put("label", info.label)
                 put("lang", info.lang)
+                put("offset_ms", info.offsetMs)
             }
             root.put(itemKey, obj)
             if (itemKey.contains("_")) {
