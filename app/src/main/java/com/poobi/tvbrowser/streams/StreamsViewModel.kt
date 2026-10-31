@@ -2125,6 +2125,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 headers.keys().forEach { headersMap[it] = headers.getString(it) }
             }
             
+            interceptedSubtitleUrls.clear()
             val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, season, episode)
             val subtitleUrls = mutableMapOf<String, Map<String, String>>()
             if (itemKey.isNotEmpty()) {
@@ -2133,10 +2134,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     subtitleUrls[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
                 }
             }
-            interceptedSubtitleUrls.forEach { (u, info) ->
-                subtitleUrls[u] = info
-            }
-            interceptedSubtitleUrls.clear()
             interceptedSubtitleUrls.putAll(subtitleUrls)
 
             isPlayingFromSavedLink = true
