@@ -93,7 +93,17 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _favoriteActorsSet = MutableStateFlow<Set<Int>>(emptySet())
     val favoriteActorsSet: StateFlow<Set<Int>> = _favoriteActorsSet.asStateFlow()
 
-    private val mediaNavigationStack = mutableListOf<JSONObject>()
+    data class MediaNavState(
+        val item: JSONObject,
+        val details: JSONObject?,
+        val seasons: JSONArray?,
+        val episodes: JSONArray?,
+        val lastWatchedEpisode: Int?,
+        val scrapedSeason: Int?,
+        val scrapedEpisode: Int?
+    )
+
+    private val mediaNavigationStack = mutableListOf<MediaNavState>()
 
     private val _personDetails = MutableStateFlow<JSONObject?>(null)
     val personDetails: StateFlow<JSONObject?> = _personDetails.asStateFlow()
@@ -1808,6 +1818,24 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         }
                         com.poobi.tvbrowser.shared.SubtitleCacheManager.removeSubtitles(context, itemKey)
                     }
+
+                    // Delete the unused stream playlist
+                    val targetId = item.optString("id").ifEmpty { item.optString("imdb") }
+                    val streamFile = File(context.filesDir, "stream_${targetId}_${season}_${episode}.m3u8")
+                    if (streamFile.exists() && streamFile.isFile) {
+                        try { streamFile.delete() } catch (_: Exception) {}
+                    }
+                }
+
+                val savedVideoUrl = entry.optString("video_url")
+                if (savedVideoUrl.startsWith("file://")) {
+                    try {
+                        val path = android.net.Uri.parse(savedVideoUrl).path
+                        if (path != null) {
+                            val f = File(path)
+                            if (f.exists() && f.isFile) f.delete()
+                        }
+                    } catch (_: Exception) {}
                 }
 
                 val newList = JSONArray()
@@ -1826,6 +1854,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     TvHomeSyncManager.removeWatchNext(context, item, s, e)
                 }
                 TvHomeSyncManager.syncWatchNext(context)
+
+                prefs.edit().putString("streams_recently_played", newList.toString()).apply()
 
                 withContext(Dispatchers.Main) {
                     loadRecentlyPlayed()
@@ -2004,7 +2034,29 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 if (finalOffset != 0L) put("subtitle_offset_ms", finalOffset)
             }
             newList.add(0, newEntry)
-            if (newList.size > 20) newList.removeAt(newList.size - 1)
+            if (newList.size > 20) {
+                val evicted = newList.removeAt(newList.size - 1)
+                val evictedUrl = evicted.optString("video_url")
+                if (evictedUrl.startsWith("file://")) {
+                    try {
+                        val path = android.net.Uri.parse(evictedUrl).path
+                        if (path != null) {
+                            val f = File(path)
+                            if (f.exists() && f.isFile) f.delete()
+                        }
+                    } catch (_: Exception) {}
+                }
+                val evictedItem = evicted.optJSONObject("item")
+                if (evictedItem != null) {
+                    val eId = evictedItem.optString("id").ifEmpty { evictedItem.optString("imdb") }
+                    val s = evicted.optInt("season", 0)
+                    val e = evicted.optInt("episode", 0)
+                    val streamFile = File(context.filesDir, "stream_${eId}_${s}_${e}.m3u8")
+                    if (streamFile.exists() && streamFile.isFile) {
+                        try { streamFile.delete() } catch (_: Exception) {}
+                    }
+                }
+            }
 
             prefs.edit().putString("streams_recently_played", newList.toString()).apply()
             TvHomeSyncManager.syncWatchNext(context)
@@ -2257,8 +2309,14 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun navigateBackFromMediaDetails(): Boolean {
         if (mediaNavigationStack.isNotEmpty()) {
-            val previousItem = mediaNavigationStack.removeAt(mediaNavigationStack.size - 1)
-            selectMediaItemInternal(previousItem, pushToStack = false)
+            val previousState = mediaNavigationStack.removeAt(mediaNavigationStack.size - 1)
+            _selectedItem.value = previousState.item
+            _itemDetails.value = previousState.details
+            _itemSeasons.value = previousState.seasons
+            _itemEpisodes.value = previousState.episodes
+            _lastWatchedEpisode.value = previousState.lastWatchedEpisode
+            lastScrapedSeason = previousState.scrapedSeason
+            lastScrapedEpisode = previousState.scrapedEpisode
             return true
         } else {
             clearSelectedMedia()
@@ -2355,7 +2413,17 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val currId = current.optString("id")
                 val newId = item.optString("id")
                 if (currId != newId) {
-                    mediaNavigationStack.add(current)
+                    mediaNavigationStack.add(
+                        MediaNavState(
+                            item = current,
+                            details = _itemDetails.value,
+                            seasons = _itemSeasons.value,
+                            episodes = _itemEpisodes.value,
+                            lastWatchedEpisode = _lastWatchedEpisode.value,
+                            scrapedSeason = lastScrapedSeason,
+                            scrapedEpisode = lastScrapedEpisode
+                        )
+                    )
                 }
             }
         }
@@ -2862,7 +2930,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _scrapeTotal.value = 0
         
         if (Python.isStarted()) {
-            runBlocking(Dispatchers.IO) {
+            viewModelScope.launch(Dispatchers.IO) {
                 try { 
                     getPython().getModule("main").callAttr("stop_scrape") 
                 } catch (e: Exception) {
@@ -4301,6 +4369,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 							}
 							
 							withContext(Dispatchers.Main) {
+								refreshFavoritesSet()
 								loadProgressCounts()
 								
 								val currentList = _activeNotifications.value.toMutableList()
@@ -4308,6 +4377,11 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 								_activeNotifications.value = currentList
 								saveNotifications(currentList)
 								TvHomeSyncManager.syncNewEpisodesChannel(context, currentList)
+							}
+						} else {
+							withContext(Dispatchers.Main) {
+								refreshFavoritesSet()
+								loadProgressCounts()
 							}
 						}
 					}

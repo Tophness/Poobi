@@ -484,17 +484,29 @@ object AdBlockManager {
 
     fun injectCosmeticCss(view: WebView?, domain: String) {
         if (view == null) return
-        val css = getCosmeticCss(domain).replace("\n", " ").replace("'", "\\'")
+        val css = getCosmeticCss(domain)
+        val quotedCss = org.json.JSONObject.quote(css)
         val js = """
             (function() {
                 var elId = 'poobi-cosmetic-adblock';
-                var style = document.getElementById(elId);
-                if (!style) {
-                    style = document.createElement('style');
-                    style.id = elId;
-                    (document.head || document.documentElement).appendChild(style);
+                function ensureCosmeticStyle() {
+                    var style = document.getElementById(elId);
+                    if (!style) {
+                        style = document.createElement('style');
+                        style.id = elId;
+                        style.textContent = $quotedCss;
+                        (document.head || document.documentElement).appendChild(style);
+                    }
                 }
-                style.textContent = '$css';
+                ensureCosmeticStyle();
+                if (!window.__poobiCosmeticObserver) {
+                    window.__poobiCosmeticObserver = new MutationObserver(function() {
+                        ensureCosmeticStyle();
+                    });
+                    try {
+                        window.__poobiCosmeticObserver.observe(document.documentElement, { childList: true, subtree: true });
+                    } catch(e) {}
+                }
             })();
         """.trimIndent()
         view.evaluateJavascript(js, null)

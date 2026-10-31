@@ -240,30 +240,11 @@ class PlayerEngine(
     }
 
     fun getResumePosition(title: String?): Long {
-        if (title.isNullOrBlank()) return 0L
-        return try {
-            val jsonStr = prefs.getString("stream_resume_points", "{}") ?: "{}"
-            val jsonObj = JSONObject(jsonStr)
-            jsonObj.optLong(title, 0L)
-        } catch (_: Exception) {
-            0L
-        }
+        return StreamResumeManager.getPosition(prefs, title)
     }
 
     fun saveResumePosition(title: String?, positionMs: Long, isCompleted: Boolean) {
-        if (title.isNullOrBlank()) return
-        try {
-            val jsonStr = prefs.getString("stream_resume_points", "{}") ?: "{}"
-            val jsonObj = JSONObject(jsonStr)
-            if (isCompleted) {
-                jsonObj.remove(title)
-            } else if (positionMs > 5000L) {
-                jsonObj.put(title, positionMs)
-            }
-            prefs.edit().putString("stream_resume_points", jsonObj.toString()).apply()
-        } catch (e: Exception) {
-            Log.e("PlayerEngine", "Error saving resume position for $title", e)
-        }
+        StreamResumeManager.savePosition(prefs, title, positionMs, isCompleted)
     }
 
     fun showDiskSubtitlePicker() {
@@ -1495,30 +1476,41 @@ class PlayerEngine(
 
     private fun playVideoInAlternateQuality(currentPos: Long, wasPlaying: Boolean, alternateUrl: String) {
         saveProgress()
-        
+
         hasInitialQualitySelected = true
         val targetOption = _qualityOptions.value.firstOrNull { it is QualityOption.DistinctUrl && it.url == alternateUrl }
         _currentQuality.value = targetOption
-        
-        launchVideo(
-            videoUrl = alternateUrl,
-            title = lastVideoTitle,
-            headers = lastHeaders,
-            subtitles = lastSubtitles,
-            item = lastScrapedItem,
-            season = lastScrapedSeason,
-            episode = lastScrapedEpisode,
-            fromStreams = lastFromStreams,
-            alternativeUrls = lastAlternativeUrls,
-            alternativeNames = lastAlternativeNames,
-            initialPositionMs = currentPos,
-            isTrailer = lastIsTrailer
-        )
-        
-        playerView?.post {
-            playerView?.player = exoPlayer
+
+        val player = exoPlayer
+        if (player != null) {
+            lastVideoUrl = alternateUrl
+            val mediaItemBuilder = MediaItem.Builder().setUri(Uri.parse(alternateUrl))
+            if (isHlsUrl(alternateUrl)) {
+                mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
+            } else if (isDashUrl(alternateUrl)) {
+                mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
+            }
+            player.setMediaItem(mediaItemBuilder.build(), currentPos)
+            player.prepare()
+            player.playWhenReady = wasPlaying
+            val displayName = targetOption?.name?.uppercase() ?: "AUTO"
+            updateQualityButtonText(displayName)
+        } else {
+            launchVideo(
+                videoUrl = alternateUrl,
+                title = lastVideoTitle,
+                headers = lastHeaders,
+                subtitles = lastSubtitles,
+                item = lastScrapedItem,
+                season = lastScrapedSeason,
+                episode = lastScrapedEpisode,
+                fromStreams = lastFromStreams,
+                alternativeUrls = lastAlternativeUrls,
+                alternativeNames = lastAlternativeNames,
+                initialPositionMs = currentPos,
+                isTrailer = lastIsTrailer
+            )
         }
-        exoPlayer?.playWhenReady = wasPlaying
     }
 
     fun seekVideo(direction: Int, repeatCount: Int) {
@@ -1661,7 +1653,7 @@ class PlayerEngine(
                                 } else {
                                     entry.remove("subtitle_offset_ms")
                                 }
-                                prefs.edit().putString("streams_recently_played", recentArray.toString()).commit()
+                                prefs.edit().putString("streams_recently_played", recentArray.toString()).apply()
                                 break
                             }
                         }

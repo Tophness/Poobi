@@ -21,6 +21,11 @@ data class SubtitleCue(
 
 object SubtitleFormatter {
 
+    private val BR_TAG_REGEX = Regex("(?i)<br\\s*/?>")
+    private val FONT_COLOR_REGEX = Regex("color=[\"']?([^\"'\\s>]+)[\"']?", RegexOption.IGNORE_CASE)
+    private val WHITESPACE_REGEX = Regex("\\s+")
+    private val ASS_BOLD_MATCH_REGEX = Regex("\\\\b[1-9]\\d*")
+
     fun format(rawText: String): Pair<String, AnnotatedString> {
         if (rawText.isBlank()) {
             return Pair("", AnnotatedString(""))
@@ -32,7 +37,7 @@ object SubtitleFormatter {
             .replace("\\N", "\n")
             .replace("\\n", "\n")
             .replace("\\h", " ")
-            .replace(Regex("(?i)<br\\s*/?>"), "\n")
+            .replace(BR_TAG_REGEX, "\n")
 
         val plainBuilder = StringBuilder()
         val italicRanges = mutableListOf<Pair<Int, Int>>()
@@ -269,7 +274,7 @@ object SubtitleFormatter {
                     strikeStack.add(currentPos)
                 }
                 lower.startsWith("font") -> {
-                    val colorMatch = Regex("color=[\"']?([^\"'\\s>]+)[\"']?", RegexOption.IGNORE_CASE).find(tag)
+                    val colorMatch = FONT_COLOR_REGEX.find(tag)
                     if (colorMatch != null) {
                         val parsed = parseColorString(colorMatch.groupValues[1])
                         if (parsed != null) {
@@ -312,13 +317,13 @@ object SubtitleFormatter {
         colorRanges: MutableList<Triple<Int, Int, Color>>
     ) {
         val clean = tag.replace("\\", " \\")
-        val parts = clean.split("\\s+".toRegex()).map { it.trim() }.filter { it.isNotEmpty() }
+        val parts = clean.split(WHITESPACE_REGEX).map { it.trim() }.filter { it.isNotEmpty() }
 
         for (part in parts) {
             when {
                 part.startsWith("\\i1") -> italicStack.add(currentPos)
                 part.startsWith("\\i0") -> if (italicStack.isNotEmpty()) italicRanges.add(Pair(italicStack.removeAt(italicStack.lastIndex), currentPos))
-                part.matches(Regex("\\\\b[1-9]\\d*")) -> boldStack.add(currentPos)
+                part.matches(ASS_BOLD_MATCH_REGEX) -> boldStack.add(currentPos)
                 part.startsWith("\\b0") -> if (boldStack.isNotEmpty()) boldRanges.add(Pair(boldStack.removeAt(boldStack.lastIndex), currentPos))
                 part.startsWith("\\u1") -> underlineStack.add(currentPos)
                 part.startsWith("\\u0") -> if (underlineStack.isNotEmpty()) underlineRanges.add(Pair(underlineStack.removeAt(underlineStack.lastIndex), currentPos))
@@ -472,6 +477,8 @@ object SubtitleFormatter {
 
 object SubtitleParser {
 
+    private val WHITESPACE_REGEX = Regex("\\s+")
+
     fun parse(content: String): List<SubtitleCue> {
         val cleanContent = content.removePrefix("\uFEFF")
         val cues = mutableListOf<SubtitleCue>()
@@ -588,8 +595,8 @@ object SubtitleParser {
     private fun parseTimeLine(line: String): Pair<Long, Long>? {
         val parts = line.split("-->")
         if (parts.size != 2) return null
-        val startStr = parts[0].trim().split("\\s+".toRegex())[0]
-        val endStr = parts[1].trim().split("\\s+".toRegex())[0]
+        val startStr = parts[0].trim().split(WHITESPACE_REGEX)[0]
+        val endStr = parts[1].trim().split(WHITESPACE_REGEX)[0]
         val start = parseTimestamp(startStr) ?: return null
         val end = parseTimestamp(endStr) ?: return null
         return Pair(start, end)

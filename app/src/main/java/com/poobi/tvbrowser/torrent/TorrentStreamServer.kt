@@ -17,6 +17,7 @@ import com.frostwire.jlibtorrent.swig.settings_pack
 import fi.iki.elonen.NanoHTTPD
 import java.io.File
 import java.io.RandomAccessFile
+import java.net.SocketException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.logging.Filter
@@ -32,6 +33,7 @@ class TorrentStreamServer private constructor(
     private val sessionManager = SessionManager()
     private val torrentStorageDir: File = File(context.cacheDir, "torrent_temp").apply { mkdirs() }
     private var activeTorrentHandle: TorrentHandle? = null
+    private val torrentLock = Any()
 
     @Volatile
     var forcePlayTriggered: Boolean = false
@@ -44,7 +46,7 @@ class TorrentStreamServer private constructor(
                 val nanoLogger = Logger.getLogger(NanoHTTPD::class.java.name)
                 nanoLogger.filter = Filter { record ->
                     val thrown = record.thrown
-                    if (thrown is java.net.SocketException || thrown?.cause is java.net.SocketException) {
+                    if (thrown is SocketException || thrown?.cause is SocketException) {
                         return@Filter false
                     }
                     true
@@ -125,16 +127,18 @@ class TorrentStreamServer private constructor(
     }
 
     fun stopActiveStreams() {
-        activeTorrentHandle?.let { handle ->
-            try {
-                if (handle.isValid) {
-                    sessionManager.remove(handle)
+        synchronized(torrentLock) {
+            activeTorrentHandle?.let { handle ->
+                try {
+                    if (handle.isValid) {
+                        sessionManager.remove(handle)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Exception removing active handle", e)
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Exception removing active handle", e)
             }
+            activeTorrentHandle = null
         }
-        activeTorrentHandle = null
     }
 
     fun getCacheSize(): Long {
@@ -365,139 +369,131 @@ class TorrentStreamServer private constructor(
         val infoHash = parts[0].lowercase()
         val fileIdx = parts[1].toIntOrNull() ?: 0
 
+        val handle = getOrAddTorrent(infoHash)
+        if (handle == null || !handle.isValid) {
+            return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Torrent handle is invalid")
+        }
+
+        var torrentInfo = handle.torrentFile()
+        var metaAttempts = 0
+        while (torrentInfo == null && metaAttempts < 125) {
+            Thread.sleep(200)
+            torrentInfo = handle.torrentFile()
+            metaAttempts++
+        }
+
+        if (torrentInfo == null) {
+            return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Metadata unavailable")
+        }
+
+        val numFiles = torrentInfo.files().numFiles()
+        if (fileIdx >= numFiles) {
+            return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Invalid file index")
+        }
+
+        val filePath = torrentInfo.files().filePath(fileIdx)
+        val fileOffset = torrentInfo.files().fileOffset(fileIdx)
+        val fileSize = torrentInfo.files().fileSize(fileIdx)
+        val pieceLength = torrentInfo.pieceLength()
+
         try {
-            val handle = getOrAddTorrent(infoHash) 
-            if (handle == null || !handle.isValid) {
-                return newFixedLengthResponse(
-                    Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Torrent handle is invalid"
-                )
-            }
-
-            var torrentInfo = handle.torrentFile() 
-            var metaAttempts = 0
-            while (torrentInfo == null && metaAttempts < 125) {
-                Thread.sleep(200)
-                torrentInfo = handle.torrentFile()
-                metaAttempts++
-            }
-
-            if (torrentInfo == null) {
-                return newFixedLengthResponse(
-                    Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Metadata unavailable"
-                )
-            }
-
-            val numFiles = torrentInfo.files().numFiles()
-            if (fileIdx >= numFiles) {
-                return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Invalid file index")
-            }
-
-            val filePath = torrentInfo.files().filePath(fileIdx)
-            val fileOffset = torrentInfo.files().fileOffset(fileIdx)
-            val fileSize = torrentInfo.files().fileSize(fileIdx)
-
-            val filePriorities = Array(numFiles) { Priority.IGNORE }
-            filePriorities[fileIdx] = Priority.FOUR
-            handle.prioritizeFiles(filePriorities)
             handle.setFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD, TorrentFlags.SEQUENTIAL_DOWNLOAD)
+        } catch (_: Exception) {}
 
-            val targetFile = File(torrentStorageDir, filePath)
-
-            var randomAccessFile: RandomAccessFile? = null
-            var fileOpenAttempts = 0
-            while (randomAccessFile == null && fileOpenAttempts < 20) {
-                try {
-                    if (targetFile.exists()) {
-                        randomAccessFile = RandomAccessFile(targetFile, "r")
-                    } else {
-                        Thread.sleep(100)
-                    }
-                } catch (e: Exception) {
+        val targetFile = File(torrentStorageDir, filePath)
+        var randomAccessFile: RandomAccessFile? = null
+        var fileOpenAttempts = 0
+        while (randomAccessFile == null && fileOpenAttempts < 25) {
+            try {
+                if (targetFile.exists()) {
+                    randomAccessFile = RandomAccessFile(targetFile, "r")
+                } else {
                     Thread.sleep(100)
                 }
-                fileOpenAttempts++
+            } catch (_: Exception) {
+                Thread.sleep(100)
             }
+            fileOpenAttempts++
+        }
 
-            if (randomAccessFile == null) {
-                return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "File allocation on-disk failed")
+        if (randomAccessFile == null) {
+            return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "File allocation on-disk failed")
+        }
+
+        val rangeHeader = session.headers["range"]
+        var rangeStart = 0L
+        var rangeEnd = fileSize - 1
+
+        if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+            val ranges = rangeHeader.substring(6).split("-")
+            try {
+                if (ranges[0].isNotEmpty()) rangeStart = ranges[0].toLong()
+                if (ranges.size > 1 && ranges[1].isNotEmpty()) rangeEnd = ranges[1].toLong()
+            } catch (e: NumberFormatException) {
+                Log.e(TAG, "Range parsing error: $rangeHeader", e)
             }
+        }
 
-            val rangeHeader = session.headers["range"]
-            var rangeStart = 0L
-            var rangeEnd = fileSize - 1
+        val contentLength = rangeEnd - rangeStart + 1
+        val raf = randomAccessFile
 
-            if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
-                val ranges = rangeHeader.substring(6).split("-")
-                try {
-                    if (ranges[0].isNotEmpty()) rangeStart = ranges[0].toLong()
-                    if (ranges.size > 1 && ranges[1].isNotEmpty()) rangeEnd = ranges[1].toLong()
-                } catch (e: NumberFormatException) {
-                    Log.e(TAG, "Range parsing error from string: $rangeHeader", e)
-                }
-            }
+        val inputStream = object : java.io.InputStream() {
+            private var remainingBytes = contentLength
+            private var currentFilePos = fileOffset + rangeStart
 
-            val contentLength = rangeEnd - rangeStart + 1
-            
-            val inputStream = object : java.io.InputStream() {
-                private var remainingBytes = contentLength
-                private var currentFilePos = fileOffset + rangeStart
-
-                override fun read(): Int {
-                    if (remainingBytes <= 0) return -1
-                    try {
-                        waitForBytes(handle, currentFilePos, 1, torrentInfo.pieceLength())
-                        randomAccessFile.seek(currentFilePos - fileOffset)
-                        val b = randomAccessFile.read()
+            override fun read(): Int {
+                if (remainingBytes <= 0) return -1
+                return try {
+                    if (!waitForBytes(handle, currentFilePos, 1, pieceLength)) return -1
+                    synchronized(raf) {
+                        raf.seek(currentFilePos - fileOffset)
+                        val b = raf.read()
                         if (b != -1) {
                             remainingBytes--
                             currentFilePos++
                         }
-                        return b
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error reading stream byte. Pos: $currentFilePos", e)
-                        return -1
+                        b
                     }
+                } catch (e: Exception) {
+                    -1
                 }
+            }
 
-                override fun read(b: ByteArray, off: Int, len: Int): Int {
-                    if (remainingBytes <= 0) return -1
-                    val maxToRead = if (len.toLong() < remainingBytes) len else remainingBytes.toInt()
-                    try {
-                        waitForBytes(handle, currentFilePos, maxToRead.toLong(), torrentInfo.pieceLength())
-                        randomAccessFile.seek(currentFilePos - fileOffset)
-                        val bytesRead = randomAccessFile.read(b, off, maxToRead)
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (remainingBytes <= 0) return -1
+                val maxToRead = if (len.toLong() < remainingBytes) len else remainingBytes.toInt()
+                return try {
+                    if (!waitForBytes(handle, currentFilePos, maxToRead.toLong(), pieceLength)) return -1
+                    synchronized(raf) {
+                        raf.seek(currentFilePos - fileOffset)
+                        val bytesRead = raf.read(b, off, maxToRead)
                         if (bytesRead > 0) {
                             remainingBytes -= bytesRead
                             currentFilePos += bytesRead
                         }
-                        return bytesRead
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error reading stream block. Pos: $currentFilePos, Len: $maxToRead", e)
-                        return -1
+                        bytesRead
                     }
-                }
-
-                override fun close() {
-                    try {
-                        randomAccessFile.close()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Exception during close", e)
-                    }
+                } catch (e: Exception) {
+                    -1
                 }
             }
 
-            val status = if (rangeHeader != null) Response.Status.PARTIAL_CONTENT else Response.Status.OK
-            val response = newFixedLengthResponse(status, "video/mp4", inputStream, contentLength)
-            if (rangeHeader != null) {
-                response.addHeader("Content-Range", "bytes $rangeStart-$rangeEnd/$fileSize")
+            override fun close() {
+                try {
+                    synchronized(raf) {
+                        raf.close()
+                    }
+                } catch (_: Exception) {}
             }
-            response.addHeader("Accept-Ranges", "bytes")
-            return response
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to stream torrent", e)
-            return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, e.message)
         }
+
+        val status = if (rangeHeader != null) Response.Status.PARTIAL_CONTENT else Response.Status.OK
+        val response = newFixedLengthResponse(status, "video/mp4", inputStream, contentLength)
+        if (rangeHeader != null) {
+            response.addHeader("Content-Range", "bytes $rangeStart-$rangeEnd/$fileSize")
+        }
+        response.addHeader("Accept-Ranges", "bytes")
+        return response
     }
 
     private fun getOrAddTorrent(
@@ -506,90 +502,82 @@ class TorrentStreamServer private constructor(
         cancellationToken: CountDownLatch? = null
     ): TorrentHandle? {
         val cleanHash = infoHash.lowercase().trim()
-        activeTorrentHandle?.let {
-            val existingHash = it.infoHash()?.toString()?.lowercase()
-            val isValid = it.isValid
-            if (existingHash == cleanHash && isValid) {
-                return it
-            }
-            try {
-                sessionManager.remove(it)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed removing previous handle", e)
-            }
-        }
-
-        val sha1 = Sha1Hash(cleanHash)
-        var handle = sessionManager.find(sha1)
-        if (handle != null && handle.isValid && handle.torrentFile() != null) {
-            activeTorrentHandle = handle
-            return handle
-        }
-
-        val allTrackers = (customTrackers + DEFAULT_TRACKERS).distinct()
-        val magnetBuilder = StringBuilder("magnet:?xt=urn:btih:").append(cleanHash)
-        for (tr in allTrackers) {
-            val cleanTr = tr.trim().removePrefix("tracker:")
-            if (cleanTr.isNotEmpty()) {
-                magnetBuilder.append("&tr=").append(Uri.encode(cleanTr))
-            }
-        }
-        val magnetUri = magnetBuilder.toString()
-
-        val latch = CountDownLatch(1)
-        val listener = object : AlertListener {
-            override fun types(): IntArray? = intArrayOf(AlertType.METADATA_RECEIVED.swig())
-            override fun alert(alert: Alert<*>?) {
-                if (alert?.type() == AlertType.METADATA_RECEIVED) {
-                    latch.countDown()
+        synchronized(torrentLock) {
+            activeTorrentHandle?.let {
+                val existingHash = it.infoHash()?.toString()?.lowercase()
+                if (existingHash == cleanHash && it.isValid) {
+                    return it
+                }
+                try {
+                    sessionManager.remove(it)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed removing previous handle", e)
                 }
             }
-        }
 
-        sessionManager.addListener(listener)
-
-        if (handle == null || !handle.isValid) {
-            sessionManager.download(magnetUri, torrentStorageDir, TorrentFlags.AUTO_MANAGED)
-            for (attempt in 0..10) {
-                handle = sessionManager.find(sha1)
-                if (handle != null && handle.isValid) break
-                try { Thread.sleep(50) } catch (_: Exception) {}
+            val sha1 = Sha1Hash(cleanHash)
+            var handle = sessionManager.find(sha1)
+            if (handle != null && handle.isValid && handle.torrentFile() != null) {
+                activeTorrentHandle = handle
+                return handle
             }
-            activeTorrentHandle = handle
-        } else {
+
+            val allTrackers = (customTrackers + DEFAULT_TRACKERS).distinct()
+            val magnetBuilder = StringBuilder("magnet:?xt=urn:btih:").append(cleanHash)
             for (tr in allTrackers) {
                 val cleanTr = tr.trim().removePrefix("tracker:")
                 if (cleanTr.isNotEmpty()) {
-                    try {
-                        handle.addTracker(com.frostwire.jlibtorrent.AnnounceEntry(cleanTr))
-                    } catch (_: Exception) {}
+                    magnetBuilder.append("&tr=").append(Uri.encode(cleanTr))
                 }
             }
-        }
+            val magnetUri = magnetBuilder.toString()
 
-        val maxWaitMs = 30000L
-        val startWait = System.currentTimeMillis()
-        while (latch.count > 0L && (System.currentTimeMillis() - startWait < maxWaitMs)) {
-            if (cancellationToken != null && cancellationToken.count == 0L) {
-                sessionManager.removeListener(listener)
-                return null
+            val latch = CountDownLatch(1)
+            val listener = object : AlertListener {
+                override fun types(): IntArray? = intArrayOf(AlertType.METADATA_RECEIVED.swig())
+                override fun alert(alert: Alert<*>?) {
+                    if (alert?.type() == AlertType.METADATA_RECEIVED) {
+                        latch.countDown()
+                    }
+                }
             }
-            if (handle != null && handle.isValid && handle.torrentFile() != null) {
-                break
-            }
-            latch.await(200, TimeUnit.MILLISECONDS)
-        }
 
-        sessionManager.removeListener(listener)
-        return handle
+            sessionManager.addListener(listener)
+
+            if (handle == null || !handle.isValid) {
+                sessionManager.download(magnetUri, torrentStorageDir, TorrentFlags.AUTO_MANAGED)
+                for (attempt in 0..10) {
+                    handle = sessionManager.find(sha1)
+                    if (handle != null && handle.isValid) break
+                    try { Thread.sleep(50) } catch (_: Exception) {}
+                }
+                activeTorrentHandle = handle
+            }
+
+            val maxWaitMs = 30000L
+            val startWait = System.currentTimeMillis()
+            while (latch.count > 0L && (System.currentTimeMillis() - startWait < maxWaitMs)) {
+                if (cancellationToken != null && cancellationToken.count == 0L) {
+                    sessionManager.removeListener(listener)
+                    return null
+                }
+                if (handle != null && handle.isValid && handle.torrentFile() != null) {
+                    break
+                }
+                latch.await(200, TimeUnit.MILLISECONDS)
+            }
+
+            sessionManager.removeListener(listener)
+            return handle
+        }
     }
 
-    private fun waitForBytes(handle: TorrentHandle, absoluteOffset: Long, length: Long, pieceSize: Int) {
+    private fun waitForBytes(handle: TorrentHandle, absoluteOffset: Long, length: Long, pieceSize: Int): Boolean {
+        if (!handle.isValid) return false
         val startPiece = (absoluteOffset / pieceSize).toInt()
         val endPiece = ((absoluteOffset + length - 1) / pieceSize).toInt().coerceAtLeast(startPiece)
 
         try {
-            if (!handle.isValid) return
             for (piece in startPiece..endPiece) {
                 if (handle.piecePriority(piece) != Priority.SEVEN) {
                     handle.piecePriority(piece, Priority.SEVEN)
@@ -600,51 +588,37 @@ class TorrentStreamServer private constructor(
             }
 
             val totalPieces = handle.torrentFile()?.numPieces() ?: 0
-            for (ahead in 1..10) {
+            for (ahead in 1..8) {
                 val nextPiece = endPiece + ahead
                 if (nextPiece < totalPieces && handle.isValid && !handle.havePiece(nextPiece)) {
-                    handle.piecePriority(nextPiece, Priority.SEVEN)
-                    try {
-                        handle.setPieceDeadline(nextPiece, ahead * 1000)
-                    } catch (_: Exception) {}
+                    handle.piecePriority(nextPiece, Priority.SIX)
                 }
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Exception setting piece priorities/deadlines", e)
-            return
+        } catch (_: Exception) {
+            return false
         }
 
-        for (piece in startPiece..endPiece) {
-            var iterations = 0
-            val maxIterations = 600
-            while (true) {
-                try {
-                    if (!handle.isValid) return
-                    if (handle.havePiece(piece)) break
+        var iterations = 0
+        val maxIterations = 500
+        while (iterations < maxIterations) {
+            if (!handle.isValid) return false
 
-                    iterations++
-                    if (iterations > maxIterations) {
-                        throw java.io.IOException("Torrent piece $piece timed out waiting for swarm")
-                    }
-
-                    if (iterations % 20 == 0) {
-                        val status = handle.status()
-                        val speed = (status?.downloadPayloadRate() ?: 0) / (1024f * 1024f)
-                        Log.d(TAG, "Waiting on piece $piece ($iterations/$maxIterations). Speed: %.2f MB/s, Seeds: ${status?.numSeeds() ?: 0}".format(speed))
-                        
-                        if (handle.isValid) {
-                            handle.piecePriority(piece, Priority.SEVEN)
-                            try {
-                                handle.setPieceDeadline(piece, 0)
-                            } catch (_: Exception) {}
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Exception inside piece check loop", e)
-                    return
+            var allReady = true
+            for (p in startPiece..endPiece) {
+                if (!handle.havePiece(p)) {
+                    allReady = false
+                    break
                 }
-                Thread.sleep(50)
+            }
+            if (allReady) return true
+
+            iterations++
+            try {
+                Thread.sleep(60)
+            } catch (_: InterruptedException) {
+                return false
             }
         }
+        return false
     }
 }

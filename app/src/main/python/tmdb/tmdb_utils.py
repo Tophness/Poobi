@@ -16,6 +16,7 @@ API_KEY = control.setting('tmdb.api') or '55d4ea0acb04a10053c2be637eb707a9'
 READ_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1NWQ0ZWEwYWNiMDRhMTAwNTNjMmJlNjM3ZWI3MDdhOSIsIm5iZiI6MTc2NTAzMzYyMi4yNzgsInN1YiI6IjY5MzQ0Njk2MGY0YjhlN2QwODA1Y2U3MCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.phA7fC-bjtOcl_BHzESyOU4L__3eAhM1c5Nb4A2VK2A'
 
 API_URL = 'https://api.themoviedb.org/3'
+_GENRE_CACHE = {}
 
 _session = requests.Session()
 _adapter = HTTPAdapter(pool_connections=15, pool_maxsize=30, max_retries=Retry(total=2, backoff_factor=0.3))
@@ -209,15 +210,25 @@ def get_landscape_image(tmdb_id, media_type='movie', season=None, episode=None):
 
 def parse_genres(genres, line=True):
     new_genres = []
+    if not genres:
+        return '' if line else []
     try:
         lang = get_language()
-        movie_genres = _session.get(f"{API_URL}/genre/movie/list?language={lang}", headers=get_headers()).json().get('genres', [])
-        tv_genres = _session.get(f"{API_URL}/genre/tv/list?language={lang}", headers=get_headers()).json().get('genres', [])
-        all_genres = {str(g['id']): g['name'] for g in movie_genres + tv_genres}
-        for genre_id in genres:
-            name = all_genres.get(str(genre_id))
-            if name: 
-                new_genres.append(name)
+        if lang not in _GENRE_CACHE:
+            m_res = _session.get(f"{API_URL}/genre/movie/list?language={lang}", headers=get_headers()).json().get('genres', [])
+            t_res = _session.get(f"{API_URL}/genre/tv/list?language={lang}", headers=get_headers()).json().get('genres', [])
+            _GENRE_CACHE[lang] = {str(g['id']): g['name'] for g in m_res + t_res}
+
+        all_genres = _GENRE_CACHE[lang]
+        for genre_item in genres:
+            if isinstance(genre_item, dict):
+                name = genre_item.get('name')
+                if name:
+                    new_genres.append(name)
+            else:
+                name = all_genres.get(str(genre_item))
+                if name:
+                    new_genres.append(name)
         return ', '.join(new_genres) if line else new_genres
     except:
         return new_genres

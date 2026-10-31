@@ -771,52 +771,6 @@ fun StreamsDashboardScreen(
                         map
                     }
 
-                    val getItemTitle = { wrapper: JSONObject ->
-                        val itm = if (wrapper.has("item")) wrapper.optJSONObject("item") ?: wrapper else wrapper
-                        val raw = itm.optString("title").ifEmpty {
-                            itm.optString("name", "")
-                        }.ifEmpty {
-                            wrapper.optString("display_title", "")
-                        }
-                        raw.replace(Regex("\\s\\(\\d{4}\\)$"), "").trim()
-                    }
-
-                    val getAccessScore = { wrapper: JSONObject ->
-                        val itm = if (wrapper.has("item")) wrapper.optJSONObject("item") ?: wrapper else wrapper
-                        val id = itm.optString("id")
-                        val imdb = itm.optString("imdb")
-
-                        val t1 = accessTimeMap[id] ?: 0L
-                        val t2 = if (imdb.isNotEmpty()) accessTimeMap[imdb] ?: 0L else 0L
-                        val directTimestamp = maxOf(t1, t2)
-                        if (directTimestamp > 0L) {
-                            directTimestamp
-                        } else {
-                            val r1 = recentRankMap[id]
-                            val r2 = if (imdb.isNotEmpty()) recentRankMap[imdb] else null
-                            val rank = when {
-                                r1 != null && r2 != null -> minOf(r1, r2)
-                                r1 != null -> r1
-                                r2 != null -> r2
-                                else -> null
-                            }
-                            if (rank != null) {
-                                1_000_000L - rank
-                            } else {
-                                0L
-                            }
-                        }
-                    }
-
-                    val getItemRating = { wrapper: JSONObject ->
-                        val itm = if (wrapper.has("item")) wrapper.optJSONObject("item") ?: wrapper else wrapper
-                        itm.optDouble("vote_average", 0.0)
-                    }
-
-                    val getItemAddedIndex = { wrapper: JSONObject ->
-                        baseList.indexOf(wrapper)
-                    }
-
                     val defaultFavPriorities = listOf("DATE_ADDED", "DATE_ACCESSED", "A_Z", "RATING")
                     val favoritesPriorities = remember(feedSortVersion) {
                         viewModel.prefs.getString("favorites_sort_priorities", null)?.let {
@@ -853,73 +807,85 @@ fun StreamsDashboardScreen(
                         else -> feedPriorities
                     }
 
-                    val getItemDate = { wrapper: JSONObject ->
-                        val itm = if (wrapper.has("item")) wrapper.optJSONObject("item") ?: wrapper else wrapper
-                        itm.optString("release_date").ifEmpty { itm.optString("first_air_date", "") }
-                    }
-
-                    val compareByCriteria = { criteria: String, a: JSONObject, b: JSONObject ->
-                        when (criteria) {
-                            "FAV_ACTORS" -> {
-                                val cA = viewModel.getFavActorCount(a)
-                                val cB = viewModel.getFavActorCount(b)
-                                cB.compareTo(cA)
-                            }
-                            "RATING" -> {
-                                val rA = getItemRating(a)
-                                val rB = getItemRating(b)
-                                rB.compareTo(rA)
-                            }
-                            "DATE_ACCESSED", "LAST_ACCESSED" -> {
-                                if (isRecentlyWatched) {
-                                    val iA = getItemAddedIndex(a)
-                                    val iB = getItemAddedIndex(b)
-                                    iA.compareTo(iB)
-                                } else {
-                                    val sA = getAccessScore(a)
-                                    val sB = getAccessScore(b)
-                                    sB.compareTo(sA)
-                                }
-                            }
-                            "DATE_ADDED", "LAST_ADDED" -> {
-                                val iA = getItemAddedIndex(a)
-                                val iB = getItemAddedIndex(b)
-                                iA.compareTo(iB)
-                            }
-                            "DATE" -> {
-                                val dA = getItemDate(a)
-                                val dB = getItemDate(b)
-                                if (dA.isEmpty() && dB.isEmpty()) 0
-                                else if (dA.isEmpty()) 1
-                                else if (dB.isEmpty()) -1
-                                else dB.compareTo(dA)
-                            }
-                            "A_Z", "A-Z" -> {
-                                val tA = getItemTitle(a).lowercase()
-                                val tB = getItemTitle(b).lowercase()
-                                tA.compareTo(tB)
-                            }
-                            "DEFAULT" -> {
-                                val iA = getItemAddedIndex(a)
-                                val iB = getItemAddedIndex(b)
-                                iA.compareTo(iB)
-                            }
-                            else -> 0
-                        }
-                    }
-
                     val objList = remember(baseList, activePriorities, feedSortVersion) {
                         if (isRecentlyWatched && activePriorities.firstOrNull() in listOf("DATE_ACCESSED", "LAST_ACCESSED")) {
                             baseList
                         } else {
-                            baseList.sortedWith { a, b ->
+                            val titleRegex = Regex("\\s\\(\\d{4}\\)$")
+                            class PrecomputedSortEntry(
+                                val wrapper: JSONObject,
+                                val addedIndex: Int,
+                                val favActorCount: Int,
+                                val rating: Double,
+                                val accessScore: Long,
+                                val date: String,
+                                val titleLower: String
+                            )
+
+                            val entries = baseList.mapIndexed { idx, wrapper ->
+                                val itm = if (wrapper.has("item")) wrapper.optJSONObject("item") ?: wrapper else wrapper
+                                val id = itm.optString("id")
+                                val imdb = itm.optString("imdb")
+                                val t1 = accessTimeMap[id] ?: 0L
+                                val t2 = if (imdb.isNotEmpty()) accessTimeMap[imdb] ?: 0L else 0L
+                                val directTimestamp = maxOf(t1, t2)
+                                val score = if (directTimestamp > 0L) {
+                                    directTimestamp
+                                } else {
+                                    val r1 = recentRankMap[id]
+                                    val r2 = if (imdb.isNotEmpty()) recentRankMap[imdb] else null
+                                    val rank = when {
+                                        r1 != null && r2 != null -> minOf(r1, r2)
+                                        r1 != null -> r1
+                                        r2 != null -> r2
+                                        else -> null
+                                    }
+                                    if (rank != null) 1_000_000L - rank else 0L
+                                }
+
+                                val rawTitle = itm.optString("title").ifEmpty {
+                                    itm.optString("name", "")
+                                }.ifEmpty {
+                                    wrapper.optString("display_title", "")
+                                }
+                                val cleanTitle = rawTitle.replace(titleRegex, "").trim().lowercase()
+
+                                PrecomputedSortEntry(
+                                    wrapper = wrapper,
+                                    addedIndex = idx,
+                                    favActorCount = viewModel.getFavActorCount(wrapper),
+                                    rating = itm.optDouble("vote_average", 0.0),
+                                    accessScore = score,
+                                    date = itm.optString("release_date").ifEmpty { itm.optString("first_air_date", "") },
+                                    titleLower = cleanTitle
+                                )
+                            }
+
+                            entries.sortedWith { a, b ->
                                 var result = 0
                                 for (criteria in activePriorities) {
-                                    result = compareByCriteria(criteria, a, b)
+                                    result = when (criteria) {
+                                        "FAV_ACTORS" -> b.favActorCount.compareTo(a.favActorCount)
+                                        "RATING" -> b.rating.compareTo(a.rating)
+                                        "DATE_ACCESSED", "LAST_ACCESSED" -> {
+                                            if (isRecentlyWatched) a.addedIndex.compareTo(b.addedIndex)
+                                            else b.accessScore.compareTo(a.accessScore)
+                                        }
+                                        "DATE_ADDED", "LAST_ADDED" -> a.addedIndex.compareTo(b.addedIndex)
+                                        "DATE" -> {
+                                            if (a.date.isEmpty() && b.date.isEmpty()) 0
+                                            else if (a.date.isEmpty()) 1
+                                            else if (b.date.isEmpty()) -1
+                                            else b.date.compareTo(a.date)
+                                        }
+                                        "A_Z", "A-Z" -> a.titleLower.compareTo(b.titleLower)
+                                        "DEFAULT" -> a.addedIndex.compareTo(b.addedIndex)
+                                        else -> 0
+                                    }
                                     if (result != 0) break
                                 }
                                 result
-                            }
+                            }.map { it.wrapper }
                         }
                     }
 

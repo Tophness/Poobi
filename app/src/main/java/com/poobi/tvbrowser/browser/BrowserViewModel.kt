@@ -199,7 +199,8 @@ data class TabMetadata(
     val episode: Int? = null,
     var isIdle: Boolean = false,
     var isDesktopMode: Boolean = false,
-    var zoomLevel: Int = 100
+    var zoomLevel: Int = 100,
+    val cachedPlaylistFiles: MutableList<File> = mutableListOf()
 )
 
 sealed class BrowserDialogState {
@@ -519,6 +520,19 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     init {
         refreshLists()
         seedDefaultAutoplayProfiles()
+        cleanupOrphanedBrowserPlaylists()
+    }
+
+    private fun cleanupOrphanedBrowserPlaylists() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                appContext.cacheDir.listFiles()?.forEach { file ->
+                    if (file.isFile && file.name.startsWith("cached_playlist_") && file.name.endsWith(".m3u8")) {
+                        file.delete()
+                    }
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     private fun seedDefaultAutoplayProfiles() {
@@ -793,6 +807,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val wv = _webViews[index]
         val wasBrowsing = _isBrowsing.value
         val wasActiveTab = (index == _currentTabIndex.value)
+
+        (wv.tag as? TabMetadata)?.cachedPlaylistFiles?.forEach { file ->
+            try { if (file.exists()) file.delete() } catch (_: Exception) {}
+        }
 
         (wv.parent as? android.view.ViewGroup)?.removeView(wv)
 
@@ -1237,7 +1255,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private fun downloadAndCacheHlsPlaylist(
         playlistUrl: String, 
-        headers: Map<String, String>
+        headers: Map<String, String>,
+        view: WebView? = null
     ): Triple<String, ByteArray, Map<String, String>>? {
         try {
             val connection = URL(playlistUrl).openConnection() as HttpURLConnection
@@ -1290,6 +1309,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val uniqueFilename = "cached_playlist_${playlistUrl.hashCode()}.m3u8"
                 val localFile = File(appContext.cacheDir, uniqueFilename)
                 localFile.writeText(resolvedContent)
+                (view?.tag as? TabMetadata)?.cachedPlaylistFiles?.add(localFile)
                 val responseHeaders = mutableMapOf<String, String>()
                 connection.headerFields.forEach { (key, values) ->
                     if (key != null && values.isNotEmpty()) {
@@ -1418,6 +1438,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 super.onPageStarted(view, url, favicon)
                 interceptedMediaUrls.clear()
                 interceptedSubtitleUrls.clear()
+                (view?.tag as? TabMetadata)?.let { meta ->
+                    meta.cachedPlaylistFiles.forEach { file ->
+                        try { if (file.exists()) file.delete() } catch (_: Exception) {}
+                    }
+                    meta.cachedPlaylistFiles.clear()
+                }
                 view?.evaluateJavascript(LEXICAL_FIX_SCRIPT, null)
                 view?.evaluateJavascript(scrollGuardScript, null)
                 if (url != null && view != null) {
@@ -1522,7 +1548,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         }
 
                         if (urlLower.contains("m3u8") && !urlLower.contains(".ts")) {
-                            val cachedData = downloadAndCacheHlsPlaylist(requestedUrl, headers)
+                            val cachedData = downloadAndCacheHlsPlaylist(requestedUrl, headers, view)
                             if (cachedData != null) {
                                 val (localFileUrl, contentBytes, responseHeaders) = cachedData
                                 

@@ -65,6 +65,14 @@ object PythonMessageBridge {
             Log.e("PythonMessageBridge", "Failed to send response for $requestId", e)
         }
     }
+
+    fun clearAll(defaultResponse: Any = false) {
+        val iterator = pendingResponses.keys().asIterator()
+        while (iterator.hasNext()) {
+            val key = iterator.next()
+            sendResponse(key, defaultResponse)
+        }
+    }
 }
 
 class MainActivity : AppCompatActivity() {
@@ -592,6 +600,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        PythonMessageBridge.clearAll(false)
         if (::playerEngine.isInitialized && playerEngine.isPlayerActive.value) {
             playerEngine.saveProgress()
         }
@@ -599,6 +608,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        PythonMessageBridge.clearAll(false)
         if (::playerEngine.isInitialized && playerEngine.isPlayerActive.value) {
             playerEngine.saveProgress()
         }
