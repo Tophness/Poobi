@@ -156,6 +156,7 @@ class SubtitleAlignmentManager(private val context: Context) {
 
     fun setOffset(offset: Long) {
         _offsetMs.value = offset
+        baselineOffsetMs = offset
         lastAdjustmentMsg = ""
         showDottedFromLine = false
     }

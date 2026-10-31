@@ -97,6 +97,7 @@ class PlayerEngine(
     private val onVideoWatched: (Int, Int) -> Unit = { _, _ -> }
 ) {
     private var isReleasing = false
+    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     var exoPlayer: ExoPlayer? = null
@@ -133,7 +134,7 @@ class PlayerEngine(
                     output: Consumer<CuesWithTiming>
                 ) {
                     val shiftingOutput = Consumer<CuesWithTiming> { cuesWithTiming ->
-                        val shiftedStart = cuesWithTiming.startTimeUs + subtitleOffsetUs
+                        val shiftedStart = (cuesWithTiming.startTimeUs + subtitleOffsetUs).coerceAtLeast(0L)
                         val shiftedCuesWithTiming = CuesWithTiming(
                             cuesWithTiming.cues,
                             shiftedStart,
@@ -224,7 +225,7 @@ class PlayerEngine(
     private var lastAudioTrackKey: String? = null
 
     init {
-        playerScope.launch {
+        engineScope.launch {
             subtitleAlignmentManager.isUIVisible.collect { isVisible ->
                 withContext(Dispatchers.Main) {
                     if (!isVisible) {
@@ -419,7 +420,7 @@ class PlayerEngine(
                         if (currentMediaItem != null) {
                             val currentPosition = player.currentPosition
                             val wasPlaying = player.playWhenReady
-                            player.setMediaItem(currentMediaItem, false)
+                            player.setMediaItem(currentMediaItem, true)
                             player.seekTo(currentPosition)
                             player.prepare()
                             player.playWhenReady = wasPlaying
