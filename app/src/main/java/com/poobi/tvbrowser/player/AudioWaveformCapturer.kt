@@ -89,9 +89,8 @@ class AudioWaveformCapturer : AudioProcessor {
 
             if (amplitudeCache.size > 3600) {
                 val minBucket = currentBucket - 2500
-                val iterator = amplitudeCache.keys().asIterator()
-                while (iterator.hasNext()) {
-                    val key = iterator.next()
+                val keys = amplitudeCache.keys.toList()
+                for (key in keys) {
                     if (key < minBucket || key > currentBucket + 500) {
                         amplitudeCache.remove(key)
                     }

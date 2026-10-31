@@ -67,9 +67,8 @@ object PythonMessageBridge {
     }
 
     fun clearAll(defaultResponse: Any = false) {
-        val iterator = pendingResponses.keys().asIterator()
-        while (iterator.hasNext()) {
-            val key = iterator.next()
+        val keys = pendingResponses.keys.toList()
+        for (key in keys) {
             sendResponse(key, defaultResponse)
         }
     }
@@ -1144,7 +1143,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+            if (event.action == KeyEvent.ACTION_DOWN && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
                 val isControllerVisible = pView?.isControllerFullyVisible() == true
                 val focusedView = pView?.findFocus()
                 val idName = try {
@@ -1203,6 +1202,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
+                playerEngine.flushPendingSeek()
                 if (pView != null && !isPromptFocused) {
                     return pView.dispatchKeyEvent(event)
                 }

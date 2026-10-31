@@ -512,7 +512,7 @@ fun MainApp(
                 AndroidView(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
-                            player = playerEngine.exoPlayer
+                            player = playerEngine.player ?: playerEngine.exoPlayer
                             keepScreenOn = true
                             useController = true
                             setShowSubtitleButton(true)
@@ -724,8 +724,9 @@ fun MainApp(
                     },
                     update = { view ->
                         view.keepScreenOn = true
-                        if (view.player != playerEngine.exoPlayer) {
-                            view.player = playerEngine.exoPlayer
+                        val targetPlayer = playerEngine.player ?: playerEngine.exoPlayer
+                        if (view.player != targetPlayer) {
+                            view.player = targetPlayer
                         }
                         playerEngine.playerView = view
                         playerEngine.updateNativeSubtitleViewVisibility()

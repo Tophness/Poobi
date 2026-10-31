@@ -1873,6 +1873,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         headers: Map<String, String>,
         subtitles: Map<String, Map<String, String>>
     ) {
+        isPlayingFromSavedLink = false
         commitPendingSearchQuery()
         val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, season, episode)
         if (subtitles.isNotEmpty()) {

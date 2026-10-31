@@ -9,6 +9,7 @@ import android.util.Log
 import android.widget.Toast
 import java.io.File
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -31,6 +32,7 @@ import androidx.media3.extractor.text.CuesWithTiming
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.extractor.text.SubtitleParser
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.TimeBar
 import com.chaquo.python.Python
 import com.poobi.tvbrowser.shared.SelectedSubtitleInfo
 import com.poobi.tvbrowser.shared.StreamResumeManager
@@ -101,6 +103,9 @@ class PlayerEngine(
     private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     var exoPlayer: ExoPlayer? = null
+        private set
+
+    var player: Player? = null
         private set
 
     val audioWaveformCapturer = AudioWaveformCapturer()
@@ -203,8 +208,27 @@ class PlayerEngine(
     var playerView: PlayerView? = null
         set(value) {
             field = value
-            value?.let {
+            cachedTimeBar = null
+            cachedPositionView = null
+            value?.let { pView ->
                 updateNativeSubtitleViewVisibility()
+                val timeBarId = try {
+                    androidx.media3.ui.R.id.exo_progress
+                } catch (_: Throwable) {
+                    pView.resources.getIdentifier("exo_progress", "id", "androidx.media3.ui")
+                }
+                if (timeBarId != 0) {
+                    cachedTimeBar = pView.findViewById<android.view.View>(timeBarId) as? TimeBar
+                }
+
+                val posTextId = try {
+                    androidx.media3.ui.R.id.exo_position
+                } catch (_: Throwable) {
+                    pView.resources.getIdentifier("exo_position", "id", "androidx.media3.ui")
+                }
+                if (posTextId != 0) {
+                    cachedPositionView = pView.findViewById<android.widget.TextView>(posTextId)
+                }
             }
         }
 
@@ -214,6 +238,32 @@ class PlayerEngine(
 
     private var lastSeekTime = 0L
     private var seekIncrement = 5000L
+    private var pendingSeekPosition: Long? = null
+    private var wasPlayingBeforeSeek = false
+    private val seekDebounceHandler = Handler(Looper.getMainLooper())
+    private var cachedTimeBar: TimeBar? = null
+    private var cachedPositionView: android.widget.TextView? = null
+
+    private val performSeekRunnable = Runnable {
+        val target = pendingSeekPosition ?: return@Runnable
+        pendingSeekPosition = null
+        exoPlayer?.let { p ->
+            val duration = if (p.duration > 0) p.duration else 0L
+            val clamped = target.coerceIn(0, duration)
+            p.seekTo(clamped)
+            if (wasPlayingBeforeSeek) {
+                p.playWhenReady = true
+            }
+        }
+    }
+
+    fun flushPendingSeek() {
+        if (pendingSeekPosition != null) {
+            seekDebounceHandler.removeCallbacks(performSeekRunnable)
+            performSeekRunnable.run()
+        }
+    }
+
     private val checkUpNextHandler = Handler(Looper.getMainLooper())
     var isUpNextDismissed = false
     var isSkipPromptDismissed = false
@@ -1127,15 +1177,38 @@ class PlayerEngine(
             }
         }.setEnableDecoderFallback(true)
 
+        val loadErrorHandlingPolicy = object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(4) {
+            override fun getRetryDelayMsFor(loadErrorInfo: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+                val cause = loadErrorInfo.exception
+                if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException && cause.responseCode == 429) {
+                    return (loadErrorInfo.errorCount * 1000L).coerceAtMost(3000L)
+                }
+                return super.getRetryDelayMsFor(loadErrorInfo)
+            }
+        }
+
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory(dataSourceFactory)
             .setSubtitleParserFactory(subtitleParserFactory)
+            .setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
 
-        exoPlayer = ExoPlayer.Builder(context, renderersFactory)
+        val rawPlayer = ExoPlayer.Builder(context, renderersFactory)
             .setBandwidthMeter(bandwidthMeter)
             .setTrackSelector(trackSelector)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
+
+        exoPlayer = rawPlayer
+
+        player = object : ForwardingPlayer(rawPlayer) {
+            override fun getCurrentPosition(): Long {
+                return pendingSeekPosition ?: super.getCurrentPosition()
+            }
+
+            override fun getContentPosition(): Long {
+                return pendingSeekPosition ?: super.getContentPosition()
+            }
+        }
 
         exoPlayer?.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
@@ -1292,6 +1365,7 @@ class PlayerEngine(
                 .createMediaSource(videoMediaItemBuilder.build())
 
             val audioSource = ProgressiveMediaSource.Factory(dataSourceFactory)
+                .setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
                 .createMediaSource(MediaItem.fromUri(audioUri))
 
             val mergedSource = MergingMediaSource(videoSource, audioSource)
@@ -1514,16 +1588,43 @@ class PlayerEngine(
     }
 
     fun seekVideo(direction: Int, repeatCount: Int) {
-        val player = exoPlayer ?: return
+        val p = exoPlayer ?: return
         val currentTime = System.currentTimeMillis()
-        if (currentTime - lastSeekTime < 150) return 
+        if (currentTime - lastSeekTime < 120) return 
 
         lastSeekTime = currentTime
         seekIncrement = (5000L + (repeatCount * repeatCount) * 100L).coerceAtMost(300000L)
 
-        val newPos = player.currentPosition + (direction * seekIncrement)
-        val duration = if (player.duration > 0) player.duration else 0L
-        player.seekTo(newPos.coerceIn(0, duration))
+        val duration = if (p.duration > 0) p.duration else 0L
+        if (pendingSeekPosition == null) {
+            wasPlayingBeforeSeek = p.playWhenReady
+            if (wasPlayingBeforeSeek) {
+                p.playWhenReady = false
+            }
+        }
+
+        val currentBase = pendingSeekPosition ?: p.currentPosition
+        val newPos = (currentBase + (direction * seekIncrement)).coerceIn(0, duration)
+        pendingSeekPosition = newPos
+
+        playerView?.showController()
+        cachedTimeBar?.setPosition(newPos)
+        cachedPositionView?.text = formatSeekTime(newPos)
+
+        seekDebounceHandler.removeCallbacks(performSeekRunnable)
+        seekDebounceHandler.postDelayed(performSeekRunnable, 350L)
+    }
+
+    private fun formatSeekTime(ms: Long): String {
+        val totalSeconds = (ms.coerceAtLeast(0) + 500) / 1000
+        val seconds = totalSeconds % 60
+        val minutes = (totalSeconds / 60) % 60
+        val hours = totalSeconds / 3600
+        return if (hours > 0) {
+            String.format("%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format("%02d:%02d", minutes, seconds)
+        }
     }
 
     fun addSubtitlesBatch(newSubs: List<SubtitleData>) {
@@ -1588,6 +1689,11 @@ class PlayerEngine(
         saveProgress()
         checkUpNextHandler.removeCallbacks(checkUpNextRunnable)
         playerScope.coroutineContext.cancelChildren()
+        seekDebounceHandler.removeCallbacks(performSeekRunnable)
+        pendingSeekPosition = null
+        wasPlayingBeforeSeek = false
+        cachedTimeBar = null
+        cachedPositionView = null
         try {
             exoPlayer?.stop()
             exoPlayer?.release()
@@ -1595,6 +1701,7 @@ class PlayerEngine(
             Log.e("PlayerEngine", "Error releasing player", e)
         }
         exoPlayer = null
+        player = null
         (context as? android.app.Activity)?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         _isPlayerActive.value = false
         _isControllerVisible.value = false
