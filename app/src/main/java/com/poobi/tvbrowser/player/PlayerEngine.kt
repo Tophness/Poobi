@@ -23,6 +23,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -240,16 +241,28 @@ class PlayerEngine(
     private var seekIncrement = 5000L
     private var pendingSeekPosition: Long? = null
     private var wasPlayingBeforeSeek = false
+    private var isScrubbing = false
+    private var isScrubSeekInProgress = false
+    private var lastScrubSeekTime = 0L
     private val seekDebounceHandler = Handler(Looper.getMainLooper())
     private var cachedTimeBar: TimeBar? = null
     private var cachedPositionView: android.widget.TextView? = null
 
+    @OptIn(UnstableApi::class)
     private val performSeekRunnable = Runnable {
         val target = pendingSeekPosition ?: return@Runnable
         pendingSeekPosition = null
+        isScrubSeekInProgress = false
         exoPlayer?.let { p ->
             val duration = if (p.duration > 0) p.duration else 0L
             val clamped = target.coerceIn(0, duration)
+            if (isScrubbing) {
+                isScrubbing = false
+                try {
+                    p.setScrubbingModeEnabled(false)
+                    p.setSeekParameters(SeekParameters.DEFAULT)
+                } catch (_: Throwable) {}
+            }
             p.seekTo(clamped)
             if (wasPlayingBeforeSeek) {
                 p.playWhenReady = true
@@ -1211,9 +1224,18 @@ class PlayerEngine(
         }
 
         exoPlayer?.addListener(object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                if (isScrubSeekInProgress) {
+                    isScrubSeekInProgress = false
+                }
+            }
+
             override fun onPlaybackStateChanged(state: Int) {
                 if (isReleasing || !_isPlayerActive.value) return
                 if (state == Player.STATE_READY) {
+                    if (isScrubSeekInProgress) {
+                        isScrubSeekInProgress = false
+                    }
                     hasReachedReady = true
                     checkUpNextHandler.post(checkUpNextRunnable)
                     
@@ -1299,8 +1321,26 @@ class PlayerEngine(
                 }
             }
 
+            @OptIn(UnstableApi::class)
             override fun onPlayerError(error: PlaybackException) {
                 if (isReleasing || !_isPlayerActive.value) return
+                if (isScrubbing || isScrubSeekInProgress) {
+                    Log.w("PlayerEngine", "Transient error during scrub seek (${error.errorCodeName}). Recovering smoothly.")
+                    isScrubbing = false
+                    isScrubSeekInProgress = false
+                    try {
+                        exoPlayer?.setScrubbingModeEnabled(false)
+                        exoPlayer?.setSeekParameters(SeekParameters.DEFAULT)
+                    } catch (_: Throwable) {}
+                    val pos = pendingSeekPosition ?: (exoPlayer?.currentPosition ?: 0L)
+                    pendingSeekPosition = null
+                    exoPlayer?.prepare()
+                    exoPlayer?.seekTo(pos)
+                    if (wasPlayingBeforeSeek) {
+                        exoPlayer?.playWhenReady = true
+                    }
+                    return
+                }
                 if (error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED) {
                     Log.w("PlayerEngine", "Transient decoding error. Re-preparing without error dialog.")
                     exoPlayer?.let { player ->
@@ -1587,6 +1627,7 @@ class PlayerEngine(
         }
     }
 
+    @OptIn(UnstableApi::class)
     fun seekVideo(direction: Int, repeatCount: Int) {
         val p = exoPlayer ?: return
         val currentTime = System.currentTimeMillis()
@@ -1601,6 +1642,13 @@ class PlayerEngine(
             if (wasPlayingBeforeSeek) {
                 p.playWhenReady = false
             }
+            if (!isScrubbing) {
+                isScrubbing = true
+                try {
+                    p.setScrubbingModeEnabled(true)
+                    p.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+                } catch (_: Throwable) {}
+            }
         }
 
         val currentBase = pendingSeekPosition ?: p.currentPosition
@@ -1611,8 +1659,14 @@ class PlayerEngine(
         cachedTimeBar?.setPosition(newPos)
         cachedPositionView?.text = formatSeekTime(newPos)
 
+        if (!isScrubSeekInProgress && (currentTime - lastScrubSeekTime >= 500L)) {
+            isScrubSeekInProgress = true
+            lastScrubSeekTime = currentTime
+            p.seekTo(newPos)
+        }
+
         seekDebounceHandler.removeCallbacks(performSeekRunnable)
-        seekDebounceHandler.postDelayed(performSeekRunnable, 350L)
+        seekDebounceHandler.postDelayed(performSeekRunnable, 400L)
     }
 
     private fun formatSeekTime(ms: Long): String {
@@ -1683,6 +1737,7 @@ class PlayerEngine(
         player.playWhenReady = wasPlaying
     }
 
+    @OptIn(UnstableApi::class)
     fun stopAndRelease() {
         if (!_isPlayerActive.value || isReleasing) return
         isReleasing = true
@@ -1690,6 +1745,14 @@ class PlayerEngine(
         checkUpNextHandler.removeCallbacks(checkUpNextRunnable)
         playerScope.coroutineContext.cancelChildren()
         seekDebounceHandler.removeCallbacks(performSeekRunnable)
+        if (isScrubbing) {
+            isScrubbing = false
+            isScrubSeekInProgress = false
+            try {
+                exoPlayer?.setScrubbingModeEnabled(false)
+                exoPlayer?.setSeekParameters(SeekParameters.DEFAULT)
+            } catch (_: Throwable) {}
+        }
         pendingSeekPosition = null
         wasPlayingBeforeSeek = false
         cachedTimeBar = null
