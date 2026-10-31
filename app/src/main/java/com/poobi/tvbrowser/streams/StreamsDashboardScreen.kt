@@ -871,9 +871,15 @@ fun StreamsDashboardScreen(
                                 rB.compareTo(rA)
                             }
                             "DATE_ACCESSED", "LAST_ACCESSED" -> {
-                                val sA = getAccessScore(a)
-                                val sB = getAccessScore(b)
-                                sB.compareTo(sA)
+                                if (isRecentlyWatched) {
+                                    val iA = getItemAddedIndex(a)
+                                    val iB = getItemAddedIndex(b)
+                                    iA.compareTo(iB)
+                                } else {
+                                    val sA = getAccessScore(a)
+                                    val sB = getAccessScore(b)
+                                    sB.compareTo(sA)
+                                }
                             }
                             "DATE_ADDED", "LAST_ADDED" -> {
                                 val iA = getItemAddedIndex(a)
@@ -902,14 +908,18 @@ fun StreamsDashboardScreen(
                         }
                     }
 
-                    val objList = remember(baseList, activePriorities, recentRankMap, accessTimeMap, feedSortVersion) {
-                        baseList.sortedWith { a, b ->
-                            var result = 0
-                            for (criteria in activePriorities) {
-                                result = compareByCriteria(criteria, a, b)
-                                if (result != 0) break
+                    val objList = remember(baseList, activePriorities, feedSortVersion) {
+                        if (isRecentlyWatched && activePriorities.firstOrNull() in listOf("DATE_ACCESSED", "LAST_ACCESSED")) {
+                            baseList
+                        } else {
+                            baseList.sortedWith { a, b ->
+                                var result = 0
+                                for (criteria in activePriorities) {
+                                    result = compareByCriteria(criteria, a, b)
+                                    if (result != 0) break
+                                }
+                                result
                             }
-                            result
                         }
                     }
 
@@ -1207,7 +1217,7 @@ fun StreamsDashboardScreen(
             )
         }
 
-        var prioritiesList by remember(prefsKey) {
+        var prioritiesList by remember(prefsKey, showSortDialog) {
             mutableStateOf(
                 viewModel.prefs.getString(prefsKey, null)?.let {
                     val arr = JSONArray(it)
@@ -1310,7 +1320,11 @@ fun StreamsDashboardScreen(
                     modifier = Modifier.height(40.dp).width(90.dp),
                     defaultColor = Color(0xFF4CAF50),
                     shape = RoundedCornerShape(20.dp),
-                    onClick = { showSortDialog = false }
+                    onClick = { 
+                        viewModel.prefs.edit().putString(prefsKey, JSONArray(prioritiesList).toString()).apply()
+                        feedSortVersion++
+                        showSortDialog = false 
+                    }
                 ) { isFocused ->
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(androidx.compose.ui.res.stringResource(R.string.btn_apply), color = if (isFocused) Color.Black else Color.White, fontWeight = FontWeight.Bold)
