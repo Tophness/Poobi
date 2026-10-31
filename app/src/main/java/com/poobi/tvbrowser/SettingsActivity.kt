@@ -103,6 +103,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private var extractPref by mutableStateOf(0)
     private var fallbackPref by mutableStateOf(0)
+    private var liveSeekPreview by mutableStateOf(false)
     private var upNextMode by mutableStateOf("Ask")
     private var upNextTime by mutableStateOf(20)
     private var upNextTimeStr by mutableStateOf("20")
@@ -368,6 +369,7 @@ class SettingsActivity : AppCompatActivity() {
 
         extractPref = prefs.getInt("extract_video_pref", 0)
         fallbackPref = prefs.getInt("exo_fallback_pref", 0)
+        liveSeekPreview = prefs.getBoolean("live_seek_preview", false)
         val legacyAutoSkip = prefs.getBoolean("auto_skip_intros", true)
         skipIntroPref = prefs.getString("skip_intro_pref", if (legacyAutoSkip) "Skip" else "Ignore") ?: "Skip"
         skipRecapPref = prefs.getString("skip_recap_pref", if (legacyAutoSkip) "Skip" else "Ignore") ?: "Skip"
@@ -1029,6 +1031,7 @@ class SettingsActivity : AppCompatActivity() {
                 item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_player)) }
                 item { DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_extract_video), extractOptions, extractPref) { extractPref = it } }
                 item { DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_fallback_error), fallbackOptions, fallbackPref) { fallbackPref = it } }
+                item { ToggleSettingRow("Live Seek Preview", liveSeekPreview) { liveSeekPreview = it } }
 
                 item { Spacer(modifier = Modifier.height(8.dp)) }
                 item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.header_binge_autoplay)) }
@@ -3782,6 +3785,7 @@ class SettingsActivity : AppCompatActivity() {
 
                     putInt("extract_video_pref", extractPref)
                     putInt("exo_fallback_pref", fallbackPref)
+                    putBoolean("live_seek_preview", liveSeekPreview)
                     putString("skip_intro_pref", skipIntroPref)
                     putString("skip_recap_pref", skipRecapPref)
                     putString("skip_early_credits_pref", skipEarlyCreditsPref)

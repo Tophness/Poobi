@@ -1637,12 +1637,14 @@ class PlayerEngine(
         seekIncrement = (5000L + (repeatCount * repeatCount) * 100L).coerceAtMost(300000L)
 
         val duration = if (p.duration > 0) p.duration else 0L
+        val isPreviewEnabled = prefs.getBoolean("live_seek_preview", false)
+
         if (pendingSeekPosition == null) {
             wasPlayingBeforeSeek = p.playWhenReady
             if (wasPlayingBeforeSeek) {
                 p.playWhenReady = false
             }
-            if (!isScrubbing) {
+            if (isPreviewEnabled && !isScrubbing) {
                 isScrubbing = true
                 try {
                     p.setScrubbingModeEnabled(true)
@@ -1659,14 +1661,16 @@ class PlayerEngine(
         cachedTimeBar?.setPosition(newPos)
         cachedPositionView?.text = formatSeekTime(newPos)
 
-        if (!isScrubSeekInProgress && (currentTime - lastScrubSeekTime >= 500L)) {
-            isScrubSeekInProgress = true
-            lastScrubSeekTime = currentTime
-            p.seekTo(newPos)
+        if (isPreviewEnabled) {
+            if (!isScrubSeekInProgress && (currentTime - lastScrubSeekTime >= 500L)) {
+                isScrubSeekInProgress = true
+                lastScrubSeekTime = currentTime
+                p.seekTo(newPos)
+            }
         }
 
         seekDebounceHandler.removeCallbacks(performSeekRunnable)
-        seekDebounceHandler.postDelayed(performSeekRunnable, 400L)
+        seekDebounceHandler.postDelayed(performSeekRunnable, if (isPreviewEnabled) 400L else 350L)
     }
 
     private fun formatSeekTime(ms: Long): String {
