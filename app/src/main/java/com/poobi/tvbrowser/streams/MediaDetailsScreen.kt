@@ -49,6 +49,7 @@ import com.poobi.tvbrowser.shared.TvMarqueeText
 import com.poobi.tvbrowser.shared.isFutureDate
 import com.poobi.tvbrowser.shared.KeyTracker
 import com.poobi.tvbrowser.shared.HardwareInputManager
+import com.poobi.tvbrowser.streams.StreamsViewModel.NavFocusType
 import org.json.JSONObject
 
 private fun formatDateToDMY(dateStr: String?): String {
@@ -109,9 +110,17 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
     if (mediaType == "person" && item != null) {
         ActorDetailsContent(viewModel = viewModel, item = item!!)
-        return
+    } else if (item != null) {
+        MediaItemDetailsContent(viewModel = viewModel, item = item!!, mediaType = mediaType)
     }
+}
 
+@Composable
+private fun MediaItemDetailsContent(
+    viewModel: StreamsViewModel,
+    item: JSONObject,
+    mediaType: String
+) {
     val details by viewModel.itemDetails.collectAsState()
     val seasons by viewModel.itemSeasons.collectAsState()
     val episodes by viewModel.itemEpisodes.collectAsState()
@@ -130,40 +139,54 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     val castListState = rememberLazyListState()
     var lastFocusedCastIndex by remember { mutableStateOf(0) }
     val castItemFocusRequesters = remember { mutableMapOf<Int, FocusRequester>() }
+    val recItemFocusRequesters = remember { mutableMapOf<Int, FocusRequester>() }
+    val recsListState = rememberLazyListState()
+    val pendingNavFocus by viewModel.pendingNavFocus.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
     val titleRaw = details?.optString("title")?.takeIf { it.isNotBlank() } 
-        ?: item?.optString("title")?.takeIf { it.isNotBlank() } 
+        ?: item.optString("title").takeIf { it.isNotBlank() } 
         ?: details?.optString("name")?.takeIf { it.isNotBlank() } 
-        ?: item?.optString("name") ?: "Unknown"
+        ?: item.optString("name", "Unknown")
     val title = titleRaw.replace(Regex("\\s\\(\\d{4}\\)$"), "")
     val noOverviewStr = androidx.compose.ui.res.stringResource(R.string.media_no_overview)
     val overview = details?.optString("overview")?.takeIf { it.isNotBlank() } 
-        ?: item?.optString("overview") ?: noOverviewStr
-    val hasBackdrop = (details?.optString("backdrop_path")?.isNotBlank() == true && details?.optString("backdrop_path") != "null") || 
-                      (item?.optString("backdrop_path")?.isNotBlank() == true && item?.optString("backdrop_path") != "null")
-    val imagePath = if (hasBackdrop) {
-        details?.optString("backdrop_path")?.takeIf { it.isNotBlank() && it != "null" }
-            ?: item?.optString("backdrop_path") ?: ""
-    } else {
-        details?.optString("poster_path")?.takeIf { it.isNotBlank() && it != "null" }
-            ?: item?.optString("poster_path") ?: ""
+        ?: item.optString("overview").ifEmpty { noOverviewStr }
+    val hasBackdrop = remember(details, item) {
+        (details?.optString("backdrop_path")?.isNotBlank() == true && details?.optString("backdrop_path") != "null") || 
+        (item.optString("backdrop_path").isNotBlank() && item.optString("backdrop_path") != "null")
     }
-    val imageUrl = "https://image.tmdb.org/t/p/w780$imagePath"
+    val imagePath = remember(details, item, hasBackdrop) {
+        if (hasBackdrop) {
+            details?.optString("backdrop_path")?.takeIf { it.isNotBlank() && it != "null" }
+                ?: item.optString("backdrop_path", "")
+        } else {
+            details?.optString("poster_path")?.takeIf { it.isNotBlank() && it != "null" }
+                ?: item.optString("poster_path", "")
+        }
+    }
+    val imageUrl = remember(imagePath, hasBackdrop) {
+        if (imagePath.isBlank()) ""
+        else if (imagePath.startsWith("http")) imagePath
+        else if (hasBackdrop) "https://image.tmdb.org/t/p/w780$imagePath"
+        else "https://image.tmdb.org/t/p/w342$imagePath"
+    }
     val imageAspectRatio = if (hasBackdrop) 16f/9f else 2f/3f
-    val releaseDate = item?.optString("release_date").takeIf { !it.isNullOrEmpty() } ?: item?.optString("first_air_date") ?: "0000"
+    val releaseDate = item.optString("release_date").takeIf { !it.isNullOrEmpty() } ?: item.optString("first_air_date", "0000")
     val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else "0000"
-    val rating = details?.optDouble("vote_average", item?.optDouble("vote_average", 0.0) ?: 0.0) ?: 0.0
+    val rating = details?.optDouble("vote_average", item.optDouble("vote_average", 0.0)) ?: 0.0
 
-    val genresArr = item?.optJSONArray("genre_ids") ?: details?.optJSONArray("genres")
+    val genresArr = item.optJSONArray("genre_ids") ?: details?.optJSONArray("genres")
     val genresStr = remember(genresArr) { TmdbGenres.formatGenres(genresArr) }
 
     var selectedSeasonIndex by remember(seasons) { mutableStateOf(0) }
     var spinnerExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(localEpisodes, seasons) {
-        if (seasons != null && localEpisodes != null && localEpisodes.length() > 0) {
-            val currentSeasonNum = localEpisodes.getJSONObject(0).optInt("season_number", -1)
-            for (i in 0 until seasons!!.length()) {
-                if (seasons!!.getJSONObject(i).optInt("season_number") == currentSeasonNum) {
+        val curSeasons = seasons
+        val curEps = localEpisodes
+        if (curSeasons != null && curEps != null && curEps.length() > 0) {
+            val currentSeasonNum = curEps.optJSONObject(0)?.optInt("season_number", -1) ?: -1
+            for (i in 0 until curSeasons.length()) {
+                if (curSeasons.optJSONObject(i)?.optInt("season_number") == currentSeasonNum) {
                     selectedSeasonIndex = i
                     break
                 }
@@ -174,6 +197,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     val lazyListState = rememberLazyListState()
 
     LaunchedEffect(cast, selectedSeasonIndex) {
+        if (viewModel.pendingNavFocus.value != null) return@LaunchedEffect
         lastFocusedCastIndex = 0
         castItemFocusRequesters.clear()
         try {
@@ -181,15 +205,87 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
         } catch (_: Exception) {}
     }
 
+    LaunchedEffect(recs) {
+        recItemFocusRequesters.clear()
+    }
+
+    LaunchedEffect(pendingNavFocus) {
+        val target = pendingNavFocus ?: return@LaunchedEffect
+        when (target.type) {
+            NavFocusType.CAST -> {
+                autoFocusCancelled = true
+                val episodeCount = if (mediaType == "tv") (localEpisodes?.length() ?: 5) else 0
+                val castSectionIndex = episodeCount
+                val targetIndex = target.index
+                try {
+                    lazyListState.scrollToItem(castSectionIndex)
+                    castListState.scrollToItem((targetIndex - 1).coerceAtLeast(0))
+                } catch (_: Exception) {}
+
+                var attempts = 0
+                var focused = false
+                while (attempts < 25 && !focused) {
+                    delay(30)
+                    try {
+                        val req = castItemFocusRequesters[targetIndex]
+                        if (req != null) {
+                            req.requestFocus()
+                            focused = true
+                        } else {
+                            attempts++
+                        }
+                    } catch (_: Exception) {
+                        attempts++
+                    }
+                }
+                if (focused || attempts >= 25) {
+                    viewModel.consumePendingNavFocus()
+                }
+            }
+            NavFocusType.RECOMMENDATION -> {
+                autoFocusCancelled = true
+                val episodeCount = if (mediaType == "tv") (localEpisodes?.length() ?: 5) else 0
+                val recsSectionIndex = episodeCount + 1
+                val targetIndex = target.index
+                try {
+                    lazyListState.scrollToItem(recsSectionIndex)
+                    recsListState.scrollToItem((targetIndex - 1).coerceAtLeast(0))
+                } catch (_: Exception) {}
+
+                var attempts = 0
+                var focused = false
+                while (attempts < 25 && !focused) {
+                    delay(30)
+                    try {
+                        val req = recItemFocusRequesters[targetIndex]
+                        if (req != null) {
+                            req.requestFocus()
+                            focused = true
+                        } else {
+                            attempts++
+                        }
+                    } catch (_: Exception) {
+                        attempts++
+                    }
+                }
+                if (focused || attempts >= 25) {
+                    viewModel.consumePendingNavFocus()
+                }
+            }
+            else -> {}
+        }
+    }
+
     val targetEpisodeToFocus = remember(localEpisodes, lastWatchedEpisode, viewModel.lastScrapedSeason, viewModel.lastScrapedEpisode) {
-        if (localEpisodes != null && localEpisodes.length() > 0) {
+        val curEps = localEpisodes
+        if (curEps != null && curEps.length() > 0) {
             val activeSeasonNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number")
 
             if (viewModel.lastScrapedSeason != null && viewModel.lastScrapedEpisode != null && activeSeasonNum == viewModel.lastScrapedSeason) {
                 val showTitle = details?.optString("title")?.takeIf { it.isNotBlank() } 
-                    ?: item?.optString("title")?.takeIf { it.isNotBlank() } 
+                    ?: item.optString("title").takeIf { it.isNotBlank() } 
                     ?: details?.optString("name")?.takeIf { it.isNotBlank() } 
-                    ?: item?.optString("name") ?: ""
+                    ?: item.optString("name", "")
                 val displayTitle = "$showTitle S${viewModel.lastScrapedSeason}E${viewModel.lastScrapedEpisode}"
                 val savedPos = StreamResumeManager.getPosition(viewModel.prefs, displayTitle)
                 if (savedPos > 0L) {
@@ -209,8 +305,8 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
             }
             if (focusMode == 0) {
                 var maxWatchedEp = -1
-                for (i in 0 until localEpisodes.length()) {
-                    val ep = localEpisodes.getJSONObject(i)
+                for (i in 0 until curEps.length()) {
+                    val ep = curEps.optJSONObject(i) ?: continue
                     val num = ep.optInt("episode_number")
                     if (isWatched(ep)) {
                         if (num > maxWatchedEp) maxWatchedEp = num
@@ -219,8 +315,8 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                 if (maxWatchedEp != -1) {
                     val nextEp = maxWatchedEp + 1
                     var nextExistsAndAired = false
-                    for (i in 0 until localEpisodes.length()) {
-                        val ep = localEpisodes.getJSONObject(i)
+                    for (i in 0 until curEps.length()) {
+                        val ep = curEps.optJSONObject(i) ?: continue
                         if (ep.optInt("episode_number") == nextEp) {
                             if (isEpisodeAired(ep)) nextExistsAndAired = true
                             break
@@ -233,8 +329,8 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
             } else {
                 var targetEp = 1
                 var found = false
-                for (i in 0 until localEpisodes.length()) {
-                    val ep = localEpisodes.getJSONObject(i)
+                for (i in 0 until curEps.length()) {
+                    val ep = curEps.optJSONObject(i) ?: continue
                     if (!isWatched(ep) && isEpisodeAired(ep)) {
                         targetEp = ep.optInt("episode_number", 1)
                         found = true
@@ -243,8 +339,8 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                 }
                 if (!found) {
                     var lastWatched = 1
-                    for (i in 0 until localEpisodes.length()) {
-                        val ep = localEpisodes.getJSONObject(i)
+                    for (i in 0 until curEps.length()) {
+                        val ep = curEps.optJSONObject(i) ?: continue
                         if (isWatched(ep)) lastWatched = ep.optInt("episode_number", 1)
                     }
                     targetEp = lastWatched
@@ -255,6 +351,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     }
 
     LaunchedEffect(item) {
+        if (viewModel.pendingNavFocus.value != null) return@LaunchedEffect
         autoFocusCancelled = false
         val startTime = System.currentTimeMillis()
         delay(500)
@@ -268,10 +365,12 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
     }
 
     LaunchedEffect(targetEpisodeToFocus, autoFocusCancelled) {
-        if (!autoFocusCancelled && mediaType == "tv" && targetEpisodeToFocus != null && localEpisodes != null) {
+        if (viewModel.pendingNavFocus.value != null) return@LaunchedEffect
+        val curEps = localEpisodes
+        if (!autoFocusCancelled && mediaType == "tv" && targetEpisodeToFocus != null && curEps != null) {
             var targetIndex = -1
-            for (i in 0 until localEpisodes.length()) {
-                if (localEpisodes.getJSONObject(i).optInt("episode_number") == targetEpisodeToFocus) {
+            for (i in 0 until curEps.length()) {
+                if (curEps.optJSONObject(i)?.optInt("episode_number") == targetEpisodeToFocus) {
                     targetIndex = i
                     break
                 }
@@ -406,7 +505,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                     .clickable(
                                         interactionSource = playInteractionSource,
                                         indication = null,
-                                        onClick = { viewModel.performScrape(item!!) }
+                                        onClick = { viewModel.performScrape(item) }
                                     )
                                     .focusable(interactionSource = playInteractionSource),
                                 contentAlignment = Alignment.Center
@@ -450,7 +549,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                     .clickable(
                                         interactionSource = trailerInteractionSource,
                                         indication = null,
-                                        onClick = { viewModel.playTrailer(item!!) }
+                                        onClick = { viewModel.playTrailer(item) }
                                     )
                                     .focusable(interactionSource = trailerInteractionSource),
                                 contentAlignment = Alignment.Center
@@ -502,7 +601,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                     },
                                 onClick = { spinnerExpanded = true }
                             ) { isFocused ->
-                                val activeSeasonName = seasons!!.getJSONObject(selectedSeasonIndex).optString("name", "Season ${selectedSeasonIndex + 1}")
+                                val activeSeasonName = seasons!!.optJSONObject(selectedSeasonIndex)?.optString("name", "Season ${selectedSeasonIndex + 1}") ?: "Season 1"
                                 Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
                                     Text(
                                         text = activeSeasonName, 
@@ -518,7 +617,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                 modifier = Modifier
                                     .width(130.dp)
                                     .height(50.dp),
-                                onClick = { viewModel.playTrailer(item!!) }
+                                onClick = { viewModel.playTrailer(item) }
                             ) { isFocused ->
                                 Row(
                                     modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
@@ -544,11 +643,11 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
                     Spacer(modifier = Modifier.width(15.dp))
                     val favorites by viewModel.favoritesSet.collectAsState()
-                    val isFav = favorites.contains(item?.optString("id")) || (item?.optString("imdb")?.isNotEmpty() == true && favorites.contains(item!!.optString("imdb")))
+                    val isFav = favorites.contains(item.optString("id")) || (item.optString("imdb").isNotEmpty() && favorites.contains(item.optString("imdb")))
                     
                     TvFocusableBox(
                         modifier = Modifier.size(50.dp),
-                        onClick = { item?.let { viewModel.toggleFavorite(it) } }
+                        onClick = { viewModel.toggleFavorite(item) }
                     ) { isFocused ->
                         Icon(
                             painter = painterResource(id = if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart_empty),
@@ -563,7 +662,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                         val isMovieWatched by viewModel.isMovieWatched.collectAsState()
                         TvFocusableBox(
                             modifier = Modifier.size(50.dp),
-                            onClick = { item?.let { viewModel.toggleMovieWatched(it) } }
+                            onClick = { viewModel.toggleMovieWatched(item) }
                         ) { isFocused ->
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_watched),
@@ -585,12 +684,13 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                     contentPadding = PaddingValues(top = 8.dp, bottom = 60.dp, start = 8.dp, end = 8.dp)
                 ) {
                     if (mediaType == "tv") {
-                        if (localEpisodes != null) {
+                        val currentEpisodes = localEpisodes
+                        if (currentEpisodes != null) {
                             items(
-                                count = localEpisodes.length(),
-                                key = { idx -> localEpisodes.getJSONObject(idx).optInt("episode_number", idx) }
+                                count = currentEpisodes.length(),
+                                key = { idx -> currentEpisodes.optJSONObject(idx)?.optInt("episode_number") ?: idx }
                             ) { idx ->
-                                val ep = localEpisodes.getJSONObject(idx)
+                                val ep = currentEpisodes.optJSONObject(idx) ?: return@items
                                 val num = ep.optInt("episode_number")
                                 val isWatched = ep.optBoolean("is_watched", false)
                                 val isTarget = (num == targetEpisodeToFocus)
@@ -627,11 +727,11 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                 val textColor = if (isHighlighted) Color.Black else Color.White
                                 val descColor = if (isHighlighted) Color(0xFF333333) else Color(0xFFAAAAAA)
 
-                                val isLastEpisode = idx == localEpisodes.length() - 1
+                                val isLastEpisode = idx == currentEpisodes.length() - 1
                                 val handleDownOnLastEpisode: () -> Boolean = {
                                     if (isLastEpisode) {
                                         coroutineScope.launch {
-                                            val castItemIdx = localEpisodes.length()
+                                            val castItemIdx = currentEpisodes.length()
                                             lazyListState.scrollToItem(castItemIdx)
 
                                             val currentTotalCast = cast?.length() ?: 0
@@ -713,9 +813,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                                 onClick = {
                                                     val epStill = ep.optString("still_path")
                                                     if (epStill.isNotBlank() && epStill != "null") {
-                                                        item?.put("still_path", epStill)
+                                                        item.put("still_path", epStill)
                                                     }
-                                                    viewModel.performScrape(item!!, seasons!!.getJSONObject(selectedSeasonIndex).optInt("season_number"), num)
+                                                    val sNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number") ?: 1
+                                                    viewModel.performScrape(item, sNum, num)
                                                 }
                                             )
                                             .focusable(interactionSource = playInteractionSource)
@@ -782,9 +883,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                                 interactionSource = trailerInteractionSource,
                                                 indication = null,
                                                 onClick = { 
+                                                    val sNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number") ?: 1
                                                     viewModel.playTrailer(
-                                                        item = item!!,
-                                                        season = seasons!!.getJSONObject(selectedSeasonIndex).optInt("season_number"),
+                                                        item = item,
+                                                        season = sNum,
                                                         episode = num
                                                     )
                                                 }
@@ -828,13 +930,12 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                                 interactionSource = watchedInteractionSource,
                                                 indication = null,
                                                 onClick = {
-                                                    item?.let {
-                                                        viewModel.toggleEpisodeWatched(
-                                                            item = it,
-                                                            season = seasons!!.getJSONObject(selectedSeasonIndex).optInt("season_number"),
-                                                            episode = num
-                                                        )
-                                                    }
+                                                    val sNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number") ?: 1
+                                                    viewModel.toggleEpisodeWatched(
+                                                        item = item,
+                                                        season = sNum,
+                                                        episode = num
+                                                    )
                                                 }
                                             )
                                             .focusable(interactionSource = watchedInteractionSource),
@@ -858,7 +959,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                             }
                         } else {
                             val expectedCount = if (seasons != null && selectedSeasonIndex in 0 until seasons!!.length()) {
-                                seasons!!.getJSONObject(selectedSeasonIndex).optInt("episode_count", 5)
+                                seasons!!.optJSONObject(selectedSeasonIndex)?.optInt("episode_count", 5) ?: 5
                             } else {
                                 5
                             }
@@ -870,17 +971,18 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
                     item {
                         val castHeader = if (mediaType == "tv" && seasons != null && selectedSeasonIndex in 0 until seasons!!.length()) {
-                            val sName = seasons!!.getJSONObject(selectedSeasonIndex).optString("name", "")
+                            val sName = seasons!!.optJSONObject(selectedSeasonIndex)?.optString("name", "") ?: ""
                             val seasonLabel = if (sName.isNotBlank()) sName else androidx.compose.ui.res.stringResource(R.string.media_season_num, selectedSeasonIndex + 1)
                             androidx.compose.ui.res.stringResource(R.string.media_season_cast, seasonLabel)
                         } else {
                             androidx.compose.ui.res.stringResource(R.string.media_top_cast)
                         }
                         Text(castHeader, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp, 20.dp, 0.dp, 10.dp))
-                        if (cast != null) {
-                            if (cast!!.length() > 0) {
-                                var visibleCastCount by remember(cast) { mutableStateOf(15) }
-                                val totalCast = cast!!.length()
+                        val currentCast = cast
+                        if (currentCast != null) {
+                            if (currentCast.length() > 0) {
+                                var visibleCastCount by remember(currentCast) { mutableStateOf(15) }
+                                val totalCast = currentCast.length()
                                 val currentCount = totalCast.coerceAtMost(visibleCastCount)
 
                                 LazyRow(
@@ -892,7 +994,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                         if (idx >= currentCount - 4 && currentCount < totalCast) {
                                             visibleCastCount = (visibleCastCount + 15).coerceAtMost(totalCast)
                                         }
-                                        val c = cast!!.getJSONObject(idx)
+                                        val c = currentCast.optJSONObject(idx) ?: return@items
                                         val cPath = c.optString("profile_path")
                                         val cName = c.optString("name")
                                         val cId = c.optInt("id")
@@ -949,7 +1051,10 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                                             onFocus = {
                                                 lastFocusedCastIndex = idx
                                             },
-                                            onClick = { viewModel.selectCastMember(cId, cName, cPath) }
+                                            onClick = {
+                                                viewModel.recordNavSource(NavFocusType.CAST, idx, cId.toString())
+                                                viewModel.selectCastMember(cId, cName, cPath)
+                                            }
                                         ) { isFocused ->
                                             Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
                                                 RemoteImage(
@@ -984,27 +1089,38 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
 
                     item {
                         Text(androidx.compose.ui.res.stringResource(R.string.media_more_like_this), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp, 20.dp, 0.dp, 10.dp))
-                        if (recs != null) {
-                            if (recs!!.length() > 0) {
+                        val currentRecs = recs
+                        if (currentRecs != null) {
+                            if (currentRecs.length() > 0) {
                                 LazyRow(
+                                    state = recsListState,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp)
+                                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp),
+                                    modifier = Modifier.mouseWheelHorizontalScroll(recsListState)
                                 ) {
-                                    items(recs!!.length()) { idx ->
-                                        if (idx >= recs!!.length() - 4) {
+                                    items(currentRecs.length()) { idx ->
+                                        if (idx >= currentRecs.length() - 4) {
                                             viewModel.loadMoreRecommendations()
                                         }
-                                        val rItem = recs!!.getJSONObject(idx)
-                                        val isLastRec = idx == recs!!.length() - 1
+                                        val rItem = currentRecs.optJSONObject(idx) ?: return@items
+                                        val rId = rItem.optString("id")
+                                        val isLastRec = idx == currentRecs.length() - 1
+                                        val recRequester = remember(rId, idx) { FocusRequester() }
+                                        recItemFocusRequesters[idx] = recRequester
+
                                         TvFocusableBox(
                                             modifier = Modifier
                                                 .wrapContentSize()
+                                                .focusRequester(recRequester)
                                                 .focusProperties {
                                                     if (isLastRec) {
                                                         right = FocusRequester.Cancel
                                                     }
                                                 },
-                                            onClick = { viewModel.selectMediaItem(rItem) }
+                                            onClick = {
+                                                viewModel.recordNavSource(NavFocusType.RECOMMENDATION, idx, rId)
+                                                viewModel.selectMediaItem(rItem)
+                                            }
                                         ) { isFocused ->
                                             RichMediaCard(
                                                 item = rItem,
@@ -1054,15 +1170,16 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
         }
     }
 
-    if (spinnerExpanded && seasons != null) {
+    val currentSeasons = seasons
+    if (spinnerExpanded && currentSeasons != null) {
         AlertDialog(
             onDismissRequest = { spinnerExpanded = false },
             title = { Text(androidx.compose.ui.res.stringResource(R.string.media_select_season), color = Color.White) },
             containerColor = Color(0xFF222225),
             text = {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(seasons!!.length()) { i ->
-                        val s = seasons!!.getJSONObject(i)
+                    items(currentSeasons.length()) { i ->
+                        val s = currentSeasons.optJSONObject(i) ?: return@items
                         val sNum = s.optInt("season_number")
                         val defaultSeasonName = androidx.compose.ui.res.stringResource(R.string.media_season_num, sNum)
                         TvFocusableBox(
@@ -1070,7 +1187,7 @@ fun MediaDetailsScreen(viewModel: StreamsViewModel) {
                             onClick = {
                                 selectedSeasonIndex = i
                                 spinnerExpanded = false
-                                viewModel.loadEpisodes(item!!, sNum)
+                                viewModel.loadEpisodes(item, sNum)
                             }
                         ) {
                             Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
@@ -1214,12 +1331,18 @@ fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
     val actorName = personDetails?.optString("name")
         ?: item.optString("title").ifEmpty { item.optString("name", "Unknown") }
     val personId = item.optInt("id")
-    val profilePath = personDetails?.optString("profile_path")
-        ?.takeIf { it.isNotBlank() && it != "null" }
-        ?: item.optString("poster_path").takeIf { it.isNotBlank() && it != "null" }
-        ?: item.optString("profile_path").takeIf { it.isNotBlank() && it != "null" }
-        ?: ""
-    val imageUrl = "https://image.tmdb.org/t/p/w780$profilePath"
+    val profilePath = remember(personDetails, item) {
+        personDetails?.optString("profile_path")
+            ?.takeIf { it.isNotBlank() && it != "null" }
+            ?: item.optString("poster_path").takeIf { it.isNotBlank() && it != "null" }
+            ?: item.optString("profile_path").takeIf { it.isNotBlank() && it != "null" }
+            ?: ""
+    }
+    val imageUrl = remember(profilePath) {
+        if (profilePath.isBlank()) ""
+        else if (profilePath.startsWith("http")) profilePath
+        else "https://image.tmdb.org/t/p/h632$profilePath"
+    }
 
     val birthday = personDetails?.optString("birthday")
     val deathday = personDetails?.optString("deathday")
@@ -1232,13 +1355,51 @@ fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
     val isFavActor = favoriteActors.contains(personId)
     val leftColumnScrollState = rememberScrollState()
     val firstCardFocusRequester = remember { FocusRequester() }
+    val filmItemFocusRequesters = remember { mutableMapOf<Int, FocusRequester>() }
+    val filmographyListState = rememberLazyListState()
+    val pendingNavFocus by viewModel.pendingNavFocus.collectAsState()
 
     LaunchedEffect(personDetails) {
+        if (viewModel.pendingNavFocus.value != null) return@LaunchedEffect
         if (personDetails != null) {
             delay(300)
             try {
                 firstCardFocusRequester.requestFocus()
             } catch (_: Exception) {}
+        }
+    }
+
+    LaunchedEffect(pendingNavFocus) {
+        val target = pendingNavFocus ?: return@LaunchedEffect
+        if (target.type == NavFocusType.FILMOGRAPHY) {
+            val targetIndex = target.index
+            while (targetIndex >= displayedCredits.size && displayedCredits.size < allCredits.size) {
+                viewModel.loadMorePersonCredits()
+                delay(20)
+            }
+            try {
+                filmographyListState.scrollToItem((targetIndex - 1).coerceAtLeast(0))
+            } catch (_: Exception) {}
+
+            var attempts = 0
+            var focused = false
+            while (attempts < 25 && !focused) {
+                delay(30)
+                try {
+                    val req = filmItemFocusRequesters[targetIndex]
+                    if (req != null) {
+                        req.requestFocus()
+                        focused = true
+                    } else {
+                        attempts++
+                    }
+                } catch (_: Exception) {
+                    attempts++
+                }
+            }
+            if (focused || attempts >= 25) {
+                viewModel.consumePendingNavFocus()
+            }
         }
     }
 
@@ -1387,7 +1548,6 @@ fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
                         Text(androidx.compose.ui.res.stringResource(R.string.media_no_titles_category), color = Color.Gray, fontSize = 16.sp)
                     }
                 } else {
-                    val filmographyListState = rememberLazyListState()
                     LazyRow(
                         state = filmographyListState,
                         modifier = Modifier
@@ -1406,12 +1566,20 @@ fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
                             if (index >= totalCredits - 4) {
                                 viewModel.loadMorePersonCredits()
                             }
+                            val creditId = creditItem.optString("id")
+                            val filmRequester = remember(creditId, index) { FocusRequester() }
+                            filmItemFocusRequesters[index] = filmRequester
+
                             val isFirst = index == 0
                             TvFocusableBox(
                                 modifier = Modifier
                                     .wrapContentSize()
+                                    .focusRequester(filmRequester)
                                     .then(if (isFirst) Modifier.focusRequester(firstCardFocusRequester) else Modifier),
-                                onClick = { viewModel.selectMediaItem(creditItem) }
+                                onClick = {
+                                    viewModel.recordNavSource(NavFocusType.FILMOGRAPHY, index, creditId)
+                                    viewModel.selectMediaItem(creditItem)
+                                }
                             ) { isCardFocused ->
                                 RichMediaCard(
                                     item = creditItem,

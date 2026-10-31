@@ -93,17 +93,57 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _favoriteActorsSet = MutableStateFlow<Set<Int>>(emptySet())
     val favoriteActorsSet: StateFlow<Set<Int>> = _favoriteActorsSet.asStateFlow()
 
+    enum class NavFocusType {
+        DEFAULT,
+        CAST,
+        RECOMMENDATION,
+        FILMOGRAPHY
+    }
+
+    data class NavFocusTarget(
+        val type: NavFocusType,
+        val index: Int,
+        val id: String
+    )
+
     data class MediaNavState(
         val item: JSONObject,
         val details: JSONObject?,
         val seasons: JSONArray?,
         val episodes: JSONArray?,
+        val cast: JSONArray?,
+        val recommendations: JSONArray?,
+        val recsPage: Int,
+        val hasMoreRecs: Boolean,
         val lastWatchedEpisode: Int?,
         val scrapedSeason: Int?,
-        val scrapedEpisode: Int?
+        val scrapedEpisode: Int?,
+        val isMovieWatched: Boolean,
+        val personDetails: JSONObject?,
+        val personCredits: List<JSONObject>,
+        val personDisplayedCredits: List<JSONObject>,
+        val personFilterMode: String,
+        val fullPersonCreditsList: List<JSONObject>,
+        val focusType: NavFocusType = NavFocusType.DEFAULT,
+        val focusIndex: Int = 0,
+        val focusId: String = ""
     )
 
     private val mediaNavigationStack = mutableListOf<MediaNavState>()
+    private var pendingNavSource: NavFocusTarget? = null
+
+    private val _pendingNavFocus = MutableStateFlow<NavFocusTarget?>(null)
+    val pendingNavFocus: StateFlow<NavFocusTarget?> = _pendingNavFocus.asStateFlow()
+
+    fun recordNavSource(type: NavFocusType, index: Int, id: String) {
+        pendingNavSource = NavFocusTarget(type, index, id)
+    }
+
+    fun consumePendingNavFocus(): NavFocusTarget? {
+        val target = _pendingNavFocus.value
+        _pendingNavFocus.value = null
+        return target
+    }
 
     private val _personDetails = MutableStateFlow<JSONObject?>(null)
     val personDetails: StateFlow<JSONObject?> = _personDetails.asStateFlow()
@@ -577,11 +617,21 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
     fun clearSelectedMedia() {
         mediaNavigationStack.clear()
+        pendingNavSource = null
+        _pendingNavFocus.value = null
         _selectedItem.value = null
+        _itemDetails.value = null
+        _itemEpisodes.value = null
+        _itemSeasons.value = null
+        _itemCast.value = null
+        _itemRecommendations.value = null
         _personDetails.value = null
         _personCredits.value = emptyList()
         _personDisplayedCredits.value = emptyList()
+        personFilterMode.value = "All"
+        fullPersonCreditsList = emptyList()
     }
+
     fun clearSearchResults() {
         _searchResults.value = null
         currentSearchQuery = ""
@@ -2315,9 +2365,25 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             _itemDetails.value = previousState.details
             _itemSeasons.value = previousState.seasons
             _itemEpisodes.value = previousState.episodes
+            _itemCast.value = previousState.cast
+            _itemRecommendations.value = previousState.recommendations
+            this.recsPage = previousState.recsPage
+            this.hasMoreRecs = previousState.hasMoreRecs
             _lastWatchedEpisode.value = previousState.lastWatchedEpisode
             lastScrapedSeason = previousState.scrapedSeason
             lastScrapedEpisode = previousState.scrapedEpisode
+            _isMovieWatched.value = previousState.isMovieWatched
+            _personDetails.value = previousState.personDetails
+            _personCredits.value = previousState.personCredits
+            _personDisplayedCredits.value = previousState.personDisplayedCredits
+            personFilterMode.value = previousState.personFilterMode
+            fullPersonCreditsList = previousState.fullPersonCreditsList
+
+            _pendingNavFocus.value = NavFocusTarget(
+                type = previousState.focusType,
+                index = previousState.focusIndex,
+                id = previousState.focusId
+            )
             return true
         } else {
             clearSelectedMedia()
@@ -2411,18 +2477,33 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         if (pushToStack) {
             val current = _selectedItem.value
             if (current != null) {
-                val currId = current.optString("id")
-                val newId = item.optString("id")
-                if (currId != newId) {
+                val currId = current.optString("id").ifEmpty { current.optString("imdb") }
+                val newId = item.optString("id").ifEmpty { item.optString("imdb") }
+                if (currId.isNotEmpty() && currId != newId) {
+                    val navSource = pendingNavSource ?: NavFocusTarget(NavFocusType.DEFAULT, 0, "")
+                    pendingNavSource = null
                     mediaNavigationStack.add(
                         MediaNavState(
                             item = current,
                             details = _itemDetails.value,
                             seasons = _itemSeasons.value,
                             episodes = _itemEpisodes.value,
+                            cast = _itemCast.value,
+                            recommendations = _itemRecommendations.value,
+                            recsPage = this.recsPage,
+                            hasMoreRecs = this.hasMoreRecs,
                             lastWatchedEpisode = _lastWatchedEpisode.value,
                             scrapedSeason = lastScrapedSeason,
-                            scrapedEpisode = lastScrapedEpisode
+                            scrapedEpisode = lastScrapedEpisode,
+                            isMovieWatched = _isMovieWatched.value,
+                            personDetails = _personDetails.value,
+                            personCredits = _personCredits.value,
+                            personDisplayedCredits = _personDisplayedCredits.value,
+                            personFilterMode = this.personFilterMode.value,
+                            fullPersonCreditsList = this.fullPersonCreditsList,
+                            focusType = navSource.type,
+                            focusIndex = navSource.index,
+                            focusId = navSource.id
                         )
                     )
                 }
@@ -2436,8 +2517,15 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _itemDetails.value = null
         _itemEpisodes.value = null
         _itemSeasons.value = null
+        _itemCast.value = null
+        _itemRecommendations.value = null
         _lastWatchedEpisode.value = null
         _isMovieWatched.value = false
+        _personDetails.value = null
+        _personCredits.value = emptyList()
+        _personDisplayedCredits.value = emptyList()
+        personFilterMode.value = "All"
+        fullPersonCreditsList = emptyList()
         recsPage = 1
         hasMoreRecs = true
         isLoadingMoreRecs = false
