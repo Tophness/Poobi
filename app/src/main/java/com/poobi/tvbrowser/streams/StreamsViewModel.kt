@@ -3928,6 +3928,24 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         val streamUrl = json.optString("url")
                         val isVideo = json.optBoolean("is_video", false)
 
+                        var finalStreamUrl = streamUrl
+                        if (streamUrl.startsWith("file://") && streamUrl.contains("stream_playlist")) {
+                            try {
+                                val srcPath = android.net.Uri.parse(streamUrl).path
+                                if (srcPath != null) {
+                                    val srcFile = File(srcPath)
+                                    if (srcFile.exists()) {
+                                        val mId = _selectedItem.value?.optInt("id", 0).let { if (it != 0) it.toString() else _selectedItem.value?.optString("id") ?: "0" }
+                                        val s = lastScrapedSeason ?: 0
+                                        val e = lastScrapedEpisode ?: 0
+                                        val uniqueFile = File(context.filesDir, "stream_${mId}_${s}_${e}.m3u8")
+                                        srcFile.copyTo(uniqueFile, overwrite = true)
+                                        finalStreamUrl = android.net.Uri.fromFile(uniqueFile).toString()
+                                    }
+                                }
+                            } catch (_: Exception) {}
+                        }
+
                         val parsedHeaders = mutableMapOf<String, String>()
                         val headersJson = json.optJSONObject("headers")
                         if (headersJson != null) {
@@ -3938,8 +3956,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }
 
-                        if (streamUrl.isNotEmpty() && (streamUrl.startsWith("http") || streamUrl.startsWith("file://"))) {
-                            playStream(streamUrl, isVideo, sourceDataJson, parsedHeaders)
+                        if (finalStreamUrl.isNotEmpty() && (finalStreamUrl.startsWith("http") || finalStreamUrl.startsWith("file://"))) {
+                            playStream(finalStreamUrl, isVideo, sourceDataJson, parsedHeaders)
                         } else {
                             _isBufferingTorrent.value = false
                             resumeScrape()
