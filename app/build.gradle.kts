@@ -251,6 +251,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.10.1")
     implementation("androidx.media3:media3-ui:1.10.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.10.1")
+    implementation("io.github.anilbeesetti:nextlib-media3ext:1.10.1-0.13.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("androidx.tvprovider:tvprovider:1.1.0")
     implementation("androidx.work:work-runtime-ktx:2.10.0")

@@ -1178,17 +1178,22 @@ class PlayerEngine(
             .setPreferredAudioLanguages(preferredLang.code, preferredLang.iso3)
             .setPreferredTextLanguage(preferredSubLang.code)
             .build()
-        val renderersFactory = object : androidx.media3.exoplayer.DefaultRenderersFactory(context) {
+        val renderersFactory = object : io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory(context) {
             override fun buildAudioSink(
                 context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .setAudioProcessors(arrayOf(audioWaveformCapturer))
                     .build()
             }
-        }.setEnableDecoderFallback(true)
+        }.apply {
+            setEnableDecoderFallback(true)
+            setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        }
 
         val loadErrorHandlingPolicy = object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(4) {
             override fun getRetryDelayMsFor(loadErrorInfo: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo): Long {
