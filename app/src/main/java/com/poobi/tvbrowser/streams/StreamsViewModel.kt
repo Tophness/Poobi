@@ -286,7 +286,27 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         purgeOldSubtitles()
         loadProgressCounts()
         loadSavedNotifications()
-        startBackgroundTraktCheck()
+        enqueueTraktSyncWorker()
+    }
+
+    private fun enqueueTraktSyncWorker() {
+        try {
+            val workRequest = androidx.work.PeriodicWorkRequestBuilder<com.poobi.tvbrowser.shared.TraktSyncWorker>(
+                15, java.util.concurrent.TimeUnit.MINUTES
+            ).setConstraints(
+                androidx.work.Constraints.Builder()
+                    .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                    .build()
+            ).build()
+
+            androidx.work.WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                "TraktEpisodeCheck",
+                androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+                workRequest
+            )
+        } catch (e: Exception) {
+            Log.e("StreamsViewModel", "Failed to enqueue TraktSyncWorker", e)
+        }
     }
 
     private fun loadSavedNotifications() {
@@ -1135,15 +1155,25 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     ensureActorMapping()
                 }
 
-                val py = getPythonInstance()
-                val tmdb = py.getModule("tmdb.tmdb_utils")
-                val resultJson = if (arg != null) {
-                    tmdb.callAttr(method, arg, 1).toString()
-                } else {
-                    tmdb.callAttr(method, 1).toString()
+                val results: JSONArray = when (method) {
+                    "get_movies_in_cinemas" -> com.poobi.tvbrowser.shared.TmdbClient.getMoviesInCinemas(context, 1)
+                    "get_trending" -> com.poobi.tvbrowser.shared.TmdbClient.getTrending(context, arg ?: "all", "day", 1)
+                    "get_trending_week" -> com.poobi.tvbrowser.shared.TmdbClient.getTrendingWeek(context, arg ?: "all", 1)
+                    "get_popular" -> com.poobi.tvbrowser.shared.TmdbClient.getPopular(context, arg ?: "movie", 1)
+                    "get_top_rated" -> com.poobi.tvbrowser.shared.TmdbClient.getTopRated(context, arg ?: "movie", 1)
+                    "get_top_rated_tv" -> com.poobi.tvbrowser.shared.TmdbClient.getTopRatedTv(context, 1)
+                    "get_upcoming_movies" -> com.poobi.tvbrowser.shared.TmdbClient.getUpcomingMovies(context, 1)
+                    "get_airing_today" -> com.poobi.tvbrowser.shared.TmdbClient.getAiringToday(context, 1)
+                    "get_on_the_air" -> com.poobi.tvbrowser.shared.TmdbClient.getOnTheAir(context, 1)
+                    else -> {
+                        val py = getPythonInstance()
+                        val tmdb = py.getModule("tmdb.tmdb_utils")
+                        val resultJson = if (arg != null) tmdb.callAttr(method, arg, 1).toString() else tmdb.callAttr(method, 1).toString()
+                        JSONObject(resultJson).optJSONArray("results") ?: JSONArray()
+                    }
                 }
-                val results = JSONObject(resultJson).optJSONArray("results")
-                if (results != null) {
+
+                if (results.length() > 0) {
                     val processed = processFeedItems(results, prioritizeFavCast)
                     com.poobi.tvbrowser.shared.AppCacheManager.saveLibraryCategory(context, cacheKey, processed)
                     withContext(Dispatchers.Main) { 
@@ -1164,15 +1194,24 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             withContext(Dispatchers.IO) {
                 try {
                     val prioritizeFavCast = prefs.getBoolean("genres_prioritize_fav_cast", true)
-                    val py = getPythonInstance()
-                    val tmdb = py.getModule("tmdb.tmdb_utils")
-                    val resultJson = if (arg != null) {
-                        tmdb.callAttr(method, arg, page).toString()
-                    } else {
-                        tmdb.callAttr(method, page).toString()
+                    val results: JSONArray = when (method) {
+                        "get_movies_in_cinemas" -> com.poobi.tvbrowser.shared.TmdbClient.getMoviesInCinemas(context, page)
+                        "get_trending" -> com.poobi.tvbrowser.shared.TmdbClient.getTrending(context, arg ?: "all", "day", page)
+                        "get_trending_week" -> com.poobi.tvbrowser.shared.TmdbClient.getTrendingWeek(context, arg ?: "all", page)
+                        "get_popular" -> com.poobi.tvbrowser.shared.TmdbClient.getPopular(context, arg ?: "movie", page)
+                        "get_top_rated" -> com.poobi.tvbrowser.shared.TmdbClient.getTopRated(context, arg ?: "movie", page)
+                        "get_top_rated_tv" -> com.poobi.tvbrowser.shared.TmdbClient.getTopRatedTv(context, page)
+                        "get_upcoming_movies" -> com.poobi.tvbrowser.shared.TmdbClient.getUpcomingMovies(context, page)
+                        "get_airing_today" -> com.poobi.tvbrowser.shared.TmdbClient.getAiringToday(context, page)
+                        "get_on_the_air" -> com.poobi.tvbrowser.shared.TmdbClient.getOnTheAir(context, page)
+                        else -> {
+                            val py = getPythonInstance()
+                            val tmdb = py.getModule("tmdb.tmdb_utils")
+                            val resultJson = if (arg != null) tmdb.callAttr(method, arg, page).toString() else tmdb.callAttr(method, page).toString()
+                            JSONObject(resultJson).optJSONArray("results") ?: JSONArray()
+                        }
                     }
-                    val results = JSONObject(resultJson).optJSONArray("results")
-                    if (results != null) processFeedItems(results, prioritizeFavCast) else null
+                    if (results.length() > 0) processFeedItems(results, prioritizeFavCast) else null
                 } catch (_: Exception) {
                     null
                 }

@@ -192,7 +192,7 @@ open class WebAppView(context: Context) : WebView(context) {
 }
 
 data class TabMetadata(
-    val defaultTitle: String?,
+    var defaultTitle: String? = null,
     val defaultUrl: String? = null, 
     val streamItemJson: String? = null,
     val season: Int? = null,
@@ -271,6 +271,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val clickjackPref = MutableStateFlow(prefs.getBoolean("clickjack_prevention", true))
     val navigationModePref = MutableStateFlow(prefs.getInt("navigation_mode_pref", 0))
     val scrollTopbarEnabled = MutableStateFlow(prefs.getBoolean("scroll_topbar_enabled", true))
+    val activeTabOnlyPref = MutableStateFlow(prefs.getBoolean("active_tab_only", false))
 
     private val _historyList = MutableStateFlow<JSONArray>(JSONArray())
     val historyList: StateFlow<JSONArray> = _historyList.asStateFlow()
@@ -393,6 +394,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         clickjackPref.value = prefs.getBoolean("clickjack_prevention", true)
         navigationModePref.value = prefs.getInt("navigation_mode_pref", 0)
         scrollTopbarEnabled.value = prefs.getBoolean("scroll_topbar_enabled", true)
+        activeTabOnlyPref.value = prefs.getBoolean("active_tab_only", false)
     }
 
     companion object {
@@ -771,6 +773,16 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val oldWebView = currentWebView
         oldWebView?.visibility = View.INVISIBLE
         oldWebView?.onPause()
+
+        if (activeTabOnlyPref.value && oldWebView != null) {
+            val oldMeta = oldWebView.tag as? TabMetadata
+            if (oldMeta != null && !oldWebView.url.isNullOrBlank() && oldWebView.url != "about:blank") {
+                oldMeta.defaultTitle = oldWebView.title ?: oldMeta.defaultTitle
+                oldMeta.isIdle = true
+                oldWebView.stopLoading()
+                oldWebView.loadUrl("about:blank")
+            }
+        }
 
         _currentTabIndex.value = index
         _isBrowsing.value = true
@@ -1548,23 +1560,22 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         }
 
                         if (urlLower.contains("m3u8") && !urlLower.contains(".ts")) {
-                            val cachedData = downloadAndCacheHlsPlaylist(requestedUrl, headers, view)
-                            if (cachedData != null) {
-                                val (localFileUrl, contentBytes, responseHeaders) = cachedData
-                                
-                                interceptedMediaUrls[localFileUrl] = headers
-                                
-                                return WebResourceResponse(
-                                    "application/x-mpegURL",
-                                    "UTF-8",
-                                    200,
-                                    "OK",
-                                    responseHeaders,
-                                    ByteArrayInputStream(contentBytes)
-                                )
+                            interceptedMediaUrls[requestedUrl] = headers
+
+                            val uniqueFilename = "cached_playlist_${requestedUrl.hashCode()}.m3u8"
+                            val localFile = File(appContext.cacheDir, uniqueFilename)
+                            if (localFile.exists() && localFile.length() > 0) {
+                                val localUrl = Uri.fromFile(localFile).toString()
+                                interceptedMediaUrls[localUrl] = headers
                             } else {
-                                return super.shouldInterceptRequest(view, request)
+                                viewModelScope.launch(Dispatchers.IO) {
+                                    val cachedData = downloadAndCacheHlsPlaylist(requestedUrl, headers, view)
+                                    if (cachedData != null) {
+                                        interceptedMediaUrls[cachedData.first] = headers
+                                    }
+                                }
                             }
+                            return super.shouldInterceptRequest(view, request)
                         }
                         interceptedMediaUrls[requestedUrl] = headers
                     }

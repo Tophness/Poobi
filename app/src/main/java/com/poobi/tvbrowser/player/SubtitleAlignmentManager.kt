@@ -80,7 +80,9 @@ class SubtitleAlignmentManager(private val context: Context) {
         val adjustedPos = positionMs - _offsetMs.value
         val currentCues = _cues.value
         val match = currentCues.find { adjustedPos in it.startTimeMs..it.endTimeMs }
-        _activeCue.value = match
+        if (_activeCue.value != match) {
+            _activeCue.value = match
+        }
     }
 
     fun findAndJumpToCue(player: ExoPlayer, query: String) {
@@ -119,7 +121,7 @@ class SubtitleAlignmentManager(private val context: Context) {
 
     fun startLoop(player: ExoPlayer, targetCue: SubtitleCue) {
         loopStartMs = targetCue.startTimeMs + _offsetMs.value
-        
+
         val nextCue = _cues.value.find { it.startTimeMs > targetCue.endTimeMs }
         val dynamicEnd = if (nextCue != null && (nextCue.startTimeMs - targetCue.endTimeMs) > 1000) {
             nextCue.startTimeMs
@@ -132,14 +134,23 @@ class SubtitleAlignmentManager(private val context: Context) {
         player.playWhenReady = true
         _isLooping.value = true
         loopMonitoringJob?.cancel()
-        loopMonitoringJob = coroutineScope.launch(Dispatchers.Main) {
+
+        loopMonitoringJob = coroutineScope.launch(Dispatchers.Default) {
+            var lastCue: SubtitleCue? = null
             while (_isLooping.value) {
-                val pos = player.currentPosition
-                updateActiveCue(pos)
-                if (pos >= loopEndMs) {
-                    player.seekTo(loopStartMs)
+                val pos = withContext(Dispatchers.Main) { player.currentPosition }
+                val adjustedPos = pos - _offsetMs.value
+                val match = _cues.value.find { adjustedPos in it.startTimeMs..it.endTimeMs }
+                if (match != lastCue) {
+                    lastCue = match
+                    _activeCue.value = match
                 }
-                delay(20)
+                if (pos >= loopEndMs) {
+                    withContext(Dispatchers.Main) {
+                        player.seekTo(loopStartMs)
+                    }
+                }
+                delay(40)
             }
         }
     }

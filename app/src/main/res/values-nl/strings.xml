@@ -534,4 +534,8 @@
     <string name="opt_action_custom_script">Aangepast script</string>
     <string name="opt_action_simple_elements">Eenvoudige elementenlijst</string>
     <string name="label_javascript_action">JavaScript-actie</string>
+    <string name="setting_active_tab_only">Alleen actief tabblad (Lage RAM-modus)</string>
+    <string name="dialog_adblock_setup_title">AdBlock-engine instellen</string>
+    <string name="dialog_adblock_setup_desc">De nieuwste advertentieblokkeringsregels worden gedownload. Dit gebeurt slechts eenmalig.</string>
+    <string name="btn_run_background">Op achtergrond uitvoeren</string>
 </resources>

@@ -534,4 +534,8 @@
     <string name="opt_action_custom_script">自定义脚本</string>
     <string name="opt_action_simple_elements">元素选择器列表</string>
     <string name="label_javascript_action">JavaScript 执行动作</string>
+    <string name="setting_active_tab_only">仅保留活动标签页 (低内存模式)</string>
+    <string name="dialog_adblock_setup_title">正在设置广告拦截引擎</string>
+    <string name="dialog_adblock_setup_desc">正在下载最新的广告拦截规则。此操作仅需执行一次。</string>
+    <string name="btn_run_background">后台运行</string>
 </resources>

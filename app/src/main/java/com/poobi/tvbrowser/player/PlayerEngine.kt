@@ -1580,6 +1580,11 @@ class PlayerEngine(
                 updateQualityButtonText(displayName)
             }
             is QualityOption.DistinctUrl -> {
+                if (option.url == lastVideoUrl) {
+                    _currentQuality.value = option
+                    updateQualityButtonText(option.name.uppercase())
+                    return
+                }
                 val currentPos = player.currentPosition
                 val wasPlaying = player.playWhenReady
                 

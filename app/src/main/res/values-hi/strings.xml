@@ -534,4 +534,8 @@
     <string name="opt_action_custom_script">कस्टम स्क्रिप्ट</string>
     <string name="opt_action_simple_elements">सरल तत्व सूची</string>
     <string name="label_javascript_action">जावास्क्रिप्ट एक्शन</string>
+    <string name="setting_active_tab_only">केवल सक्रिय टैब (कम रैम मोड)</string>
+    <string name="dialog_adblock_setup_title">एड-ब्लॉक इंजन सेट किया जा रहा है</string>
+    <string name="dialog_adblock_setup_desc">नवीनतम एड-ब्लॉक नियम डाउनलोड किए जा रहे हैं। यह केवल एक बार होता है।</string>
+    <string name="btn_run_background">पृष्ठभूमि में चलाएं</string>
 </resources>

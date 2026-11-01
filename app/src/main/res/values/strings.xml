@@ -534,4 +534,8 @@
     <string name="opt_action_custom_script">Custom Script</string>
     <string name="opt_action_simple_elements">Simple Element List</string>
     <string name="label_javascript_action">JavaScript Action</string>
+    <string name="setting_active_tab_only">Active Tab Only (Low RAM Mode)</string>
+    <string name="dialog_adblock_setup_title">Setting up AdBlock Engine</string>
+    <string name="dialog_adblock_setup_desc">Downloading the latest adblock rules. This only happens once.</string>
+    <string name="btn_run_background">Run in Background</string>
 </resources>

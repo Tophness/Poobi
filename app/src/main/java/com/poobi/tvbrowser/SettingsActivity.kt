@@ -96,6 +96,7 @@ class SettingsActivity : AppCompatActivity() {
     private var silentBlock by mutableStateOf(true)
     private var clickjack by mutableStateOf(true)
     private var adblockUrl by mutableStateOf("")
+    private var activeTabOnly by mutableStateOf(false)
 
     private var menuShortcut by mutableStateOf(KeyShortcut.DEFAULT)
     private var isBindingMenuShortcut by mutableStateOf(false)
@@ -364,6 +365,7 @@ class SettingsActivity : AppCompatActivity() {
         silentBlock = prefs.getBoolean("silent_popup_block", true)
         clickjack = prefs.getBoolean("clickjack_prevention", true)
         adblockUrl = prefs.getString("custom_adblock_url", "https://easylist.to/easylist/easylist.txt") ?: ""
+        activeTabOnly = prefs.getBoolean("active_tab_only", false)
 
         menuShortcut = KeyShortcut.loadFromPrefs(prefs)
 
@@ -949,6 +951,7 @@ class SettingsActivity : AppCompatActivity() {
             item { PanelHeader(androidx.compose.ui.res.stringResource(R.string.panel_web)) }
             item { ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_silent_block), silentBlock) { silentBlock = it } }
             item { ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_clickjack), clickjack) { clickjack = it } }
+            item { ToggleSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_active_tab_only), activeTabOnly) { activeTabOnly = it } }
 
             item {
                 TvInputField(
@@ -3782,6 +3785,7 @@ class SettingsActivity : AppCompatActivity() {
                     putBoolean("silent_popup_block", silentBlock)
                     putBoolean("clickjack_prevention", clickjack)
                     putString("custom_adblock_url", adblockUrl)
+                    putBoolean("active_tab_only", activeTabOnly)
 
                     putInt("extract_video_pref", extractPref)
                     putInt("exo_fallback_pref", fallbackPref)

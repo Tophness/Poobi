@@ -534,4 +534,8 @@
     <string name="opt_action_custom_script">Пользовательский скрипт</string>
     <string name="opt_action_simple_elements">Простой список элементов</string>
     <string name="label_javascript_action">Действие JavaScript</string>
+    <string name="setting_active_tab_only">Только активная вкладка (Экономия памяти)</string>
+    <string name="dialog_adblock_setup_title">Настройка блокировщика рекламы</string>
+    <string name="dialog_adblock_setup_desc">Загрузка актуальных правил блокировки рекламы. Это происходит только один раз.</string>
+    <string name="btn_run_background">В фоновом режиме</string>
 </resources>

@@ -80,14 +80,14 @@ fun RichMediaCard(
                 .fillMaxWidth()
                 .height(imageHeight)
                 .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF222222))
+                .background(Color(0xFF222226))
         ) {
             RemoteImage(url = imageUrl, contentDescription = model.title, modifier = Modifier.fillMaxSize())
 
             if (model.rating > 0.0) {
                 Box(
                     modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(32.dp)
-                        .background(Color(0xCC000000), shape = CircleShape),
+                        .background(Color(0xE6141416), shape = CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("⭐", fontSize = 16.sp, modifier = Modifier.offset(y = (-2).dp))
@@ -114,7 +114,7 @@ fun RichMediaCard(
                             modifier = Modifier
                                 .size(30.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xCC000000))
+                                .background(Color(0xFF141416))
                                 .border(1.5.dp, Color(0xFF00BCD4), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
@@ -139,7 +139,7 @@ fun RichMediaCard(
                             modifier = Modifier
                                 .size(30.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xCC000000))
+                                .background(Color(0xFF141416))
                                 .border(1.5.dp, Color(0xFF00BCD4), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
@@ -159,7 +159,7 @@ fun RichMediaCard(
                         .padding(6.dp)
                         .size(30.dp)
                         .clip(CircleShape)
-                        .background(Color(0xCC000000))
+                        .background(Color(0xFF141416))
                         .border(1.5.dp, Color(0xFF00BCD4), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
@@ -208,7 +208,7 @@ fun RichMediaCard(
                     }
                 }
                 if (isFav) {
-                    Box(modifier = Modifier.size(24.dp).background(Color(0xCC000000), shape = CircleShape), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(24.dp).background(Color(0xFF141416), shape = CircleShape), contentAlignment = Alignment.Center) {
                         Icon(painter = painterResource(id = R.drawable.ic_heart_filled), contentDescription = null, tint = Color(0xFF40C4FF), modifier = Modifier.size(14.dp))
                     }
                 }

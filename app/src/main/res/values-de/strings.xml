@@ -534,4 +534,8 @@
     <string name="opt_action_custom_script">Benutzerdefiniertes Skript</string>
     <string name="opt_action_simple_elements">Einfache Elementliste</string>
     <string name="label_javascript_action">JavaScript-Aktion</string>
+    <string name="setting_active_tab_only">Nur aktiver Tab (Wenig-RAM-Modus)</string>
+    <string name="dialog_adblock_setup_title">AdBlock-Engine wird eingerichtet</string>
+    <string name="dialog_adblock_setup_desc">Lade die neuesten Werbeblocker-Regeln herunter. Dies geschieht nur einmal.</string>
+    <string name="btn_run_background">Im Hintergrund ausführen</string>
 </resources>

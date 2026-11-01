@@ -138,14 +138,37 @@ object AdBlockManager {
     fun checkAndPromptInitialSetup(context: Context) {
         if (showSetupDialog.value || _isUpdating.value || hasDismissedThisSession) return
 
-        val adblockFile = File(context.filesDir, "adblock_rules.txt")
         val datFile = File(context.filesDir, "adblock_compiled.dat")
-        val needsRules = (!adblockFile.exists() || adblockFile.length() < 1000) && (!datFile.exists() || datFile.length() < 1000)
+        val adblockFile = File(context.filesDir, "adblock_rules.txt")
 
+        if (!datFile.exists() || datFile.length() < 1000) {
+            val copied = copyBundledAsset(context, "adblock_compiled.dat")
+            copyBundledAsset(context, "cosmetic_rules.txt")
+            if (copied) {
+                loadAllRules(context)
+                return
+            }
+        }
+
+        val needsRules = (!adblockFile.exists() || adblockFile.length() < 1000) && (!datFile.exists() || datFile.length() < 1000)
         if (needsRules) {
             val prefs = context.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
             val customUrl = prefs.getString("custom_adblock_url", DEFAULT_EASYLIST_URL) ?: DEFAULT_EASYLIST_URL
             startInitialDownloadFlow(context, customUrl)
+        }
+    }
+
+    private fun copyBundledAsset(context: Context, fileName: String): Boolean {
+        return try {
+            context.assets.open(fileName).use { input ->
+                val target = File(context.filesDir, fileName)
+                FileOutputStream(target).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -583,7 +606,7 @@ fun AdBlockSetupDialog() {
             onDismissRequest = { AdBlockManager.cancelSetup() },
             title = {
                 Text(
-                    text = "Setting up AdBlock Engine",
+                    text = androidx.compose.ui.res.stringResource(com.poobi.tvbrowser.R.string.dialog_adblock_setup_title),
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
@@ -598,7 +621,7 @@ fun AdBlockSetupDialog() {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Downloading the latest adblock rules. This only happens once.",
+                        text = androidx.compose.ui.res.stringResource(com.poobi.tvbrowser.R.string.dialog_adblock_setup_desc),
                         color = Color.LightGray,
                         fontSize = 13.sp
                     )
@@ -674,7 +697,7 @@ fun AdBlockSetupDialog() {
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = if (progress >= 1f) "Done" else "Run in Background",
+                                text = if (progress >= 1f) androidx.compose.ui.res.stringResource(com.poobi.tvbrowser.R.string.btn_done) else androidx.compose.ui.res.stringResource(com.poobi.tvbrowser.R.string.btn_run_background),
                                 color = if (isFocused) Color.Black else Color.White,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold

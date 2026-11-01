@@ -733,37 +733,10 @@ private fun MediaItemDetailsContent(
                                         coroutineScope.launch {
                                             val castItemIdx = currentEpisodes.length()
                                             lazyListState.scrollToItem(castItemIdx)
-
-                                            val currentTotalCast = cast?.length() ?: 0
-                                            val targetCastIdx = if (currentTotalCast > 0) {
-                                                lastFocusedCastIndex.coerceIn(0, currentTotalCast - 1)
-                                            } else 0
-
                                             try {
-                                                castListState.scrollToItem((targetCastIdx - 1).coerceAtLeast(0))
+                                                castListState.scrollToItem(0)
                                             } catch (_: Exception) {}
-
-                                            delay(40)
-                                            var attempts = 0
-                                            var focused = false
-                                            while (attempts < 15 && !focused) {
-                                                try {
-                                                    val targetReq = castItemFocusRequesters[targetCastIdx] ?: firstCastFocusRequester
-                                                    targetReq.requestFocus()
-                                                    focused = true
-                                                } catch (_: Exception) {
-                                                    attempts++
-                                                    delay(30)
-                                                }
-                                            }
-
-                                            if (!focused) {
-                                                try {
-                                                    castListState.scrollToItem(0)
-                                                    delay(40)
-                                                    firstCastFocusRequester.requestFocus()
-                                                } catch (_: Exception) {}
-                                            }
+                                            firstCastFocusRequester.requestFocus()
                                         }
                                         true
                                     } else false

@@ -534,4 +534,8 @@
     <string name="opt_action_custom_script">カスタムスクリプト</string>
     <string name="opt_action_simple_elements">シンプル要素リスト</string>
     <string name="label_javascript_action">JavaScriptアクション</string>
+    <string name="setting_active_tab_only">アクティブなタブのみ (低メモリモード)</string>
+    <string name="dialog_adblock_setup_title">AdBlockエンジンの設定中</string>
+    <string name="dialog_adblock_setup_desc">最新の広告ブロックルールをダウンロードしています。この処理は初回のみ実行されます。</string>
+    <string name="btn_run_background">バックグラウンドで実行</string>
 </resources>

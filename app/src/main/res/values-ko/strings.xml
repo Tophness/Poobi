@@ -534,4 +534,8 @@
     <string name="opt_action_custom_script">사용자 지정 스크립트</string>
     <string name="opt_action_simple_elements">단순 요소 목록</string>
     <string name="label_javascript_action">자바스크립트 동작</string>
+    <string name="setting_active_tab_only">활성 탭만 유지 (저용량 RAM 모드)</string>
+    <string name="dialog_adblock_setup_title">광고 차단 엔진 설정 중</string>
+    <string name="dialog_adblock_setup_desc">최신 광고 차단 규칙을 다운로드하는 중입니다. 이 작업은 최초 1회만 실행됩니다.</string>
+    <string name="btn_run_background">백그라운드에서 실행</string>
 </resources>

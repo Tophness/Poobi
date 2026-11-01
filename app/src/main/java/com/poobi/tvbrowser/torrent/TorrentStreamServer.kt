@@ -247,7 +247,7 @@ class TorrentStreamServer private constructor(
             var metaAttempts = 0
             while (torrentInfo == null && metaAttempts < 125) {
                 if (cancellationToken.count == 0L) return
-                Thread.sleep(200)
+                Thread.sleep(150)
                 torrentInfo = handle.torrentFile()
                 metaAttempts++
             }
@@ -348,7 +348,7 @@ class TorrentStreamServer private constructor(
                         "Connecting to swarm peers... (0 seeds found yet)"
                     }
                     onStatusUpdate(statusMsg, byteProgress, numSeeds)
-                    Thread.sleep(200)
+                    Thread.sleep(150)
                 }
             }
 
@@ -377,7 +377,7 @@ class TorrentStreamServer private constructor(
         var torrentInfo = handle.torrentFile()
         var metaAttempts = 0
         while (torrentInfo == null && metaAttempts < 125) {
-            Thread.sleep(200)
+            Thread.sleep(150)
             torrentInfo = handle.torrentFile()
             metaAttempts++
         }
@@ -440,28 +440,16 @@ class TorrentStreamServer private constructor(
         val inputStream = object : java.io.InputStream() {
             private var remainingBytes = contentLength
             private var currentFilePos = fileOffset + rangeStart
+            private val singleBuffer = ByteArray(1)
 
             override fun read(): Int {
-                if (remainingBytes <= 0) return -1
-                return try {
-                    if (!waitForBytes(handle, currentFilePos, 1, pieceLength)) return -1
-                    synchronized(raf) {
-                        raf.seek(currentFilePos - fileOffset)
-                        val b = raf.read()
-                        if (b != -1) {
-                            remainingBytes--
-                            currentFilePos++
-                        }
-                        b
-                    }
-                } catch (e: Exception) {
-                    -1
-                }
+                val r = read(singleBuffer, 0, 1)
+                return if (r == 1) singleBuffer[0].toInt() and 0xFF else -1
             }
 
             override fun read(b: ByteArray, off: Int, len: Int): Int {
                 if (remainingBytes <= 0) return -1
-                val maxToRead = if (len.toLong() < remainingBytes) len else remainingBytes.toInt()
+                val maxToRead = minOf(len.toLong(), remainingBytes).toInt()
                 return try {
                     if (!waitForBytes(handle, currentFilePos, maxToRead.toLong(), pieceLength)) return -1
                     synchronized(raf) {
@@ -564,7 +552,7 @@ class TorrentStreamServer private constructor(
                 if (handle != null && handle.isValid && handle.torrentFile() != null) {
                     break
                 }
-                latch.await(200, TimeUnit.MILLISECONDS)
+                latch.await(150, TimeUnit.MILLISECONDS)
             }
 
             sessionManager.removeListener(listener)
@@ -614,7 +602,7 @@ class TorrentStreamServer private constructor(
 
             iterations++
             try {
-                Thread.sleep(60)
+                Thread.sleep(25)
             } catch (_: InterruptedException) {
                 return false
             }

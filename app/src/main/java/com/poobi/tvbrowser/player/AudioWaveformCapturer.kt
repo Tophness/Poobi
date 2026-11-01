@@ -5,13 +5,36 @@ import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.concurrent.ConcurrentHashMap
+
+class LongFloatRingCache(private val capacity: Int = 4096) {
+    private val keys = LongArray(capacity) { -1L }
+    private val values = FloatArray(capacity)
+
+    @Synchronized
+    operator fun get(key: Long): Float? {
+        val idx = (key.hashCode() and 0x7FFFFFFF) % capacity
+        return if (keys[idx] == key) values[idx] else null
+    }
+
+    @Synchronized
+    operator fun set(key: Long, value: Float) {
+        val idx = (key.hashCode() and 0x7FFFFFFF) % capacity
+        keys[idx] = key
+        values[idx] = value
+    }
+
+    @Synchronized
+    fun clear() {
+        keys.fill(-1L)
+        values.fill(0f)
+    }
+}
 
 class AudioWaveformCapturer : AudioProcessor {
     private var isProcessorActive = true
     private var inputFormat = AudioFormat.NOT_SET
 
-    val amplitudeCache = ConcurrentHashMap<Long, Float>()
+    val amplitudeCache = LongFloatRingCache(4096)
     @Volatile var currentPositionMs: Long = 0L
 
     override fun configure(inputAudioFormat: AudioFormat): AudioFormat {
@@ -44,7 +67,8 @@ class AudioWaveformCapturer : AudioProcessor {
             when (inputFormat.encoding) {
                 C.ENCODING_PCM_16BIT -> {
                     while (buffer.remaining() >= 2) {
-                        val sample = Math.abs(buffer.short.toInt())
+                        val rawSample = buffer.short.toInt()
+                        val sample = if (rawSample == Short.MIN_VALUE.toInt()) 32767 else Math.abs(rawSample)
                         if (sample > maxVal) maxVal = sample
                     }
                 }
@@ -60,19 +84,20 @@ class AudioWaveformCapturer : AudioProcessor {
                         val b1 = buffer.get().toInt() and 0xFF
                         val b2 = buffer.get().toInt()
                         val sample24 = (b2 shl 16) or (b1 shl 8) or b0
-                        val sample = Math.abs(sample24 shr 8)
+                        val sample = Math.abs(sample24 shr 8).coerceIn(0, 32767)
                         if (sample > maxVal) maxVal = sample
                     }
                 }
                 C.ENCODING_PCM_32BIT -> {
                     while (buffer.remaining() >= 4) {
-                        val sample = Math.abs(buffer.int shr 16)
+                        val sample = Math.abs(buffer.int shr 16).coerceIn(0, 32767)
                         if (sample > maxVal) maxVal = sample
                     }
                 }
                 else -> {
                     while (buffer.remaining() >= 2) {
-                        val sample = Math.abs(buffer.short.toInt())
+                        val rawSample = buffer.short.toInt()
+                        val sample = if (rawSample == Short.MIN_VALUE.toInt()) 32767 else Math.abs(rawSample)
                         if (sample > maxVal) maxVal = sample
                     }
                 }
@@ -85,16 +110,6 @@ class AudioWaveformCapturer : AudioProcessor {
             val existing = amplitudeCache[currentBucket] ?: 0f
             if (normAmplitude > existing) {
                 amplitudeCache[currentBucket] = normAmplitude
-            }
-
-            if (amplitudeCache.size > 3600) {
-                val minBucket = currentBucket - 2500
-                val keys = amplitudeCache.keys.toList()
-                for (key in keys) {
-                    if (key < minBucket || key > currentBucket + 500) {
-                        amplitudeCache.remove(key)
-                    }
-                }
             }
         }
 

@@ -534,4 +534,8 @@
     <string name="opt_action_custom_script">Script personalizzato</string>
     <string name="opt_action_simple_elements">Elenco elementi semplice</string>
     <string name="label_javascript_action">Azione JavaScript</string>
+    <string name="setting_active_tab_only">Solo scheda attiva (Modalità poca RAM)</string>
+    <string name="dialog_adblock_setup_title">Configurazione motore AdBlock</string>
+    <string name="dialog_adblock_setup_desc">Download delle ultime regole di blocco pubblicitario. Questa operazione viene eseguita solo una volta.</string>
+    <string name="btn_run_background">Esegui in background</string>
 </resources>

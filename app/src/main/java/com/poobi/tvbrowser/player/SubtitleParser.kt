@@ -31,7 +31,7 @@ object SubtitleFormatter {
             return Pair("", AnnotatedString(""))
         }
 
-        var normalized = rawText
+        val normalized = rawText
             .replace("\r\n", "\n")
             .replace("\r", "\n")
             .replace("\\N", "\n")
@@ -140,85 +140,33 @@ object SubtitleFormatter {
             return Pair("", AnnotatedString(""))
         }
 
-        val charItalic = BooleanArray(plainText.length)
-        val charBold = BooleanArray(plainText.length)
-        val charUnderline = BooleanArray(plainText.length)
-        val charStrike = BooleanArray(plainText.length)
-        val charColor = arrayOfNulls<Color>(plainText.length)
+        val builder = AnnotatedString.Builder(plainText)
+        val plainLen = plainText.length
 
         for ((start, end) in italicRanges) {
-            val s = start.coerceIn(0, plainText.length)
-            val e = end.coerceIn(0, plainText.length)
-            for (idx in s until e) charItalic[idx] = true
+            val s = start.coerceIn(0, plainLen)
+            val e = end.coerceIn(0, plainLen)
+            if (e > s) builder.addStyle(SpanStyle(fontStyle = FontStyle.Italic), s, e)
         }
-
         for ((start, end) in boldRanges) {
-            val s = start.coerceIn(0, plainText.length)
-            val e = end.coerceIn(0, plainText.length)
-            for (idx in s until e) charBold[idx] = true
+            val s = start.coerceIn(0, plainLen)
+            val e = end.coerceIn(0, plainLen)
+            if (e > s) builder.addStyle(SpanStyle(fontWeight = FontWeight.Bold), s, e)
         }
-
         for ((start, end) in underlineRanges) {
-            val s = start.coerceIn(0, plainText.length)
-            val e = end.coerceIn(0, plainText.length)
-            for (idx in s until e) charUnderline[idx] = true
+            val s = start.coerceIn(0, plainLen)
+            val e = end.coerceIn(0, plainLen)
+            if (e > s) builder.addStyle(SpanStyle(textDecoration = TextDecoration.Underline), s, e)
         }
-
         for ((start, end) in strikeRanges) {
-            val s = start.coerceIn(0, plainText.length)
-            val e = end.coerceIn(0, plainText.length)
-            for (idx in s until e) charStrike[idx] = true
+            val s = start.coerceIn(0, plainLen)
+            val e = end.coerceIn(0, plainLen)
+            if (e > s) builder.addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), s, e)
         }
-
         for ((start, end, color) in colorRanges) {
-            val s = start.coerceIn(0, plainText.length)
-            val e = end.coerceIn(0, plainText.length)
-            for (idx in s until e) charColor[idx] = color
-        }
-
-        val builder = AnnotatedString.Builder(plainText)
-
-        var runStart = 0
-        while (runStart < plainText.length) {
-            val it = charItalic[runStart]
-            val b = charBold[runStart]
-            val u = charUnderline[runStart]
-            val s = charStrike[runStart]
-            val c = charColor[runStart]
-
-            var runEnd = runStart + 1
-            while (runEnd < plainText.length &&
-                charItalic[runEnd] == it &&
-                charBold[runEnd] == b &&
-                charUnderline[runEnd] == u &&
-                charStrike[runEnd] == s &&
-                charColor[runEnd] == c
-            ) {
-                runEnd++
-            }
-
-            val decorations = mutableListOf<TextDecoration>()
-            if (u) decorations.add(TextDecoration.Underline)
-            if (s) decorations.add(TextDecoration.LineThrough)
-
-            val textDecoration = when {
-                decorations.size > 1 -> TextDecoration.combine(decorations)
-                decorations.size == 1 -> decorations[0]
-                else -> null
-            }
-
-            val spanStyle = SpanStyle(
-                fontStyle = if (it) FontStyle.Italic else null,
-                fontWeight = if (b) FontWeight.Bold else null,
-                textDecoration = textDecoration,
-                color = c ?: Color.Unspecified
-            )
-
-            if (it || b || textDecoration != null || c != null) {
-                builder.addStyle(spanStyle, runStart, runEnd)
-            }
-
-            runStart = runEnd
+            val s = start.coerceIn(0, plainLen)
+            val e = end.coerceIn(0, plainLen)
+            if (e > s) builder.addStyle(SpanStyle(color = color), s, e)
         }
 
         return Pair(plainText, builder.toAnnotatedString())
@@ -477,8 +425,6 @@ object SubtitleFormatter {
 
 object SubtitleParser {
 
-    private val WHITESPACE_REGEX = Regex("\\s+")
-
     fun parse(content: String): List<SubtitleCue> {
         val cleanContent = content.removePrefix("\uFEFF")
         val cues = mutableListOf<SubtitleCue>()
@@ -593,10 +539,10 @@ object SubtitleParser {
     }
 
     private fun parseTimeLine(line: String): Pair<Long, Long>? {
-        val parts = line.split("-->")
-        if (parts.size != 2) return null
-        val startStr = parts[0].trim().split(WHITESPACE_REGEX)[0]
-        val endStr = parts[1].trim().split(WHITESPACE_REGEX)[0]
+        val sep = line.indexOf("-->")
+        if (sep == -1) return null
+        val startStr = line.substring(0, sep).trim().substringBefore(' ')
+        val endStr = line.substring(sep + 3).trim().substringBefore(' ')
         val start = parseTimestamp(startStr) ?: return null
         val end = parseTimestamp(endStr) ?: return null
         return Pair(start, end)

@@ -410,6 +410,7 @@ fun StreamsDashboardScreen(
     val searchDownTarget = when {
         hasCardsInCenter -> lastCardFocusRequester
         searchHistory.isNotEmpty() -> lastHistoryFocusRequester
+        activeCategoryIndex != 0 && currentPills.isNotEmpty() -> bottomSubPillFocusRequester
         else -> currentTabFocusTarget
     }
 

@@ -534,4 +534,8 @@
     <string name="opt_action_custom_script">Özel Betik</string>
     <string name="opt_action_simple_elements">Basit Öğe Listesi</string>
     <string name="label_javascript_action">JavaScript Eylemi</string>
+    <string name="setting_active_tab_only">Yalnızca Etkin Sekme (Düşük RAM Modu)</string>
+    <string name="dialog_adblock_setup_title">AdBlock Motoru Ayarlanıyor</string>
+    <string name="dialog_adblock_setup_desc">En son reklam engelleme kuralları indiriliyor. Bu işlem yalnızca bir kez gerçekleşir.</string>
+    <string name="btn_run_background">Arka Planda Çalıştır</string>
 </resources>

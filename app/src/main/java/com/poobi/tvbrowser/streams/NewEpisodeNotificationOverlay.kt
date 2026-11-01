@@ -246,7 +246,7 @@ fun NewEpisodeNotificationOverlay(
                                             modifier = Modifier
                                                 .size(110.dp, 150.dp)
                                                 .clip(RoundedCornerShape(6.dp))
-                                                .background(Color.Gray.copy(alpha = 0.2f)),
+                                                .background(Color(0xFF24242A)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(

@@ -534,4 +534,8 @@
     <string name="opt_action_custom_script">سكريبت مخصص</string>
     <string name="opt_action_simple_elements">قائمة عناصر بسيطة</string>
     <string name="label_javascript_action">إجراء JavaScript</string>
+    <string name="setting_active_tab_only">علامة التبويب النشطة فقط (وضع الذاكرة المنخفضة)</string>
+    <string name="dialog_adblock_setup_title">إعداد محرك حظر الإعلانات</string>
+    <string name="dialog_adblock_setup_desc">جارٍ تنزيل أحدث قواعد حظر الإعلانات. يحدث هذا لمرة واحدة فقط.</string>
+    <string name="btn_run_background">التشغيل في الخلفية</string>
 </resources>
