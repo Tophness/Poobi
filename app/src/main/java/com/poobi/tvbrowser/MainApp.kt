@@ -997,7 +997,7 @@ fun MainApp(
                     ) {
                         TvFocusableBox(
                             modifier = Modifier.height(40.dp),
-                            defaultColor = Color(0xFF4CAF50),
+                            defaultColor = Color(0xFF333338),
                             shape = RoundedCornerShape(20.dp),
                             onClick = {
                                 browserViewModel.startDownload(context, download.url, download.fileName)
@@ -1071,25 +1071,46 @@ fun MainApp(
                     }
                 },
                 confirmButton = {
-                    Button(
-                        onClick = {
-                            browserViewModel.allowPopup(context, popup.resultMsg, rememberDecision)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(androidx.compose.ui.res.stringResource(R.string.btn_allow), color = Color.White)
+                        TvFocusableBox(
+                            modifier = Modifier.height(40.dp),
+                            defaultColor = Color(0xFF333338),
+                            shape = RoundedCornerShape(20.dp),
+                            onClick = {
+                                browserViewModel.allowPopup(context, popup.resultMsg, rememberDecision)
+                            }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(R.string.btn_allow),
+                                    color = if (isFocused) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        TvFocusableBox(
+                            modifier = Modifier.height(40.dp),
+                            defaultColor = Color(0xFF333338),
+                            shape = RoundedCornerShape(20.dp),
+                            onClick = {
+                                browserViewModel.denyPopup(rememberDecision)
+                            }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(R.string.btn_block),
+                                    color = if (isFocused) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 },
-                dismissButton = {
-                    Button(
-                        onClick = {
-                            browserViewModel.denyPopup(rememberDecision)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                    ) {
-                        Text(androidx.compose.ui.res.stringResource(R.string.btn_block), color = Color.White)
-                    }
-                }
+                dismissButton = null
             )
         }
 
@@ -1265,25 +1286,46 @@ fun MainApp(
                     }
                 },
                 confirmButton = {
-                    Button(
-                        onClick = {
-                            browserViewModel.handleHijackChoice(useNative = true, remember = rememberDecision, ask = ask)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(androidx.compose.ui.res.stringResource(R.string.btn_play_native), color = Color.White)
+                        TvFocusableBox(
+                            modifier = Modifier.height(40.dp),
+                            defaultColor = Color(0xFF333338),
+                            shape = RoundedCornerShape(20.dp),
+                            onClick = {
+                                browserViewModel.handleHijackChoice(useNative = true, remember = rememberDecision, ask = ask)
+                            }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(R.string.btn_play_native),
+                                    color = if (isFocused) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        TvFocusableBox(
+                            modifier = Modifier.height(40.dp),
+                            defaultColor = Color(0xFF333338),
+                            shape = RoundedCornerShape(20.dp),
+                            onClick = {
+                                browserViewModel.handleHijackChoice(useNative = false, remember = rememberDecision, ask = ask)
+                            }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(R.string.btn_website_player),
+                                    color = if (isFocused) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 },
-                dismissButton = {
-                    Button(
-                        onClick = {
-                            browserViewModel.handleHijackChoice(useNative = false, remember = rememberDecision, ask = ask)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                    ) {
-                        Text(androidx.compose.ui.res.stringResource(R.string.btn_website_player), color = Color.White)
-                    }
-                }
+                dismissButton = null
             )
         }
 
@@ -1356,7 +1398,7 @@ fun MainApp(
                     ) {
                         TvFocusableBox(
                             modifier = Modifier.height(40.dp),
-                            defaultColor = Color(0xFF4CAF50),
+                            defaultColor = Color(0xFF333338),
                             shape = RoundedCornerShape(20.dp),
                             onClick = { streamsViewModel.forcePlayTorrentNow() }
                         ) { isFocused ->
@@ -1367,7 +1409,7 @@ fun MainApp(
                         
                         TvFocusableBox(
                             modifier = Modifier.height(40.dp),
-                            defaultColor = Color(0xFFE53935),
+                            defaultColor = Color(0xFF333338),
                             shape = RoundedCornerShape(20.dp),
                             onClick = { streamsViewModel.cancelTorrentBuffering() }
                         ) { isFocused ->
@@ -1594,28 +1636,50 @@ fun DiskSubtitleMultiPickerDialog(
             }
         },
         confirmButton = {
-            if (currentStep == DiskPickerStep.SubtitleList) {
-                val chosenFiles = selectedFiles.filter { it.value }.keys.toList()
-                Button(
-                    enabled = chosenFiles.isNotEmpty(),
-                    onClick = {
-                        playerEngine.addSubtitlesFromDisk(chosenFiles, autoSelectSingle = true)
-                        onDismiss()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (currentStep == DiskPickerStep.SubtitleList) {
+                    val chosenFiles = selectedFiles.filter { it.value }.keys.toList()
                     val count = chosenFiles.size
-                    Text(if (count > 0) "Add ($count)" else "Add", color = Color.White, fontWeight = FontWeight.Bold)
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF333338),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = {
+                            if (chosenFiles.isNotEmpty()) {
+                                playerEngine.addSubtitlesFromDisk(chosenFiles, autoSelectSingle = true)
+                                onDismiss()
+                            }
+                        }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = if (count > 0) "Add ($count)" else "Add",
+                                color = if (isFocused) Color.Black else Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                TvFocusableBox(
+                    modifier = Modifier.height(40.dp),
+                    defaultColor = Color(0xFF333338),
+                    shape = RoundedCornerShape(20.dp),
+                    onClick = handleBack
+                ) { isFocused ->
+                    Box(Modifier.fillMaxHeight().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = if (currentStep == DiskPickerStep.SubtitleList) "Back" else "Cancel",
+                            color = if (isFocused) Color.Black else Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         },
-        dismissButton = {
-            Button(
-                onClick = handleBack,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-            ) {
-                Text(if (currentStep == DiskPickerStep.SubtitleList) "Back" else "Cancel", color = Color.White)
-            }
-        }
+        dismissButton = null
     )
 }

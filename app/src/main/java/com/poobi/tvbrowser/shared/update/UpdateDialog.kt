@@ -177,7 +177,7 @@ fun UpdateDialog() {
                             modifier = Modifier
                                 .height(40.dp)
                                 .focusRequester(installFocusRequester),
-                            defaultColor = Color(0xFF4CAF50),
+                            defaultColor = Color(0xFF333338),
                             shape = RoundedCornerShape(20.dp),
                             onClick = {
                                 if (activity != null) {

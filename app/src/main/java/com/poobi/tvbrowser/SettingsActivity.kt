@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -27,9 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -243,20 +245,35 @@ class SettingsActivity : AppCompatActivity() {
                     } ?: Category.General
                 ) 
             }
-            val firstCategoryFocusRequester = remember { FocusRequester() }
+            val selectedCategoryFocusRequester = remember { FocusRequester() }
+            val categoryListState = rememberLazyListState()
+            val coroutineScope = rememberCoroutineScope()
 
             LaunchedEffect(Unit) {
                 delay(60)
                 try {
-                    firstCategoryFocusRequester.requestFocus()
+                    selectedCategoryFocusRequester.requestFocus()
                 } catch (_: Exception) {}
+            }
+
+            LaunchedEffect(selectedCategory) {
+                val idx = Category.values().indexOf(selectedCategory)
+                if (idx != -1) {
+                    try {
+                        categoryListState.animateScrollToItem(idx)
+                    } catch (_: Exception) {}
+                }
             }
 
             Row(
                 modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A1D))
             ) {
                 Column(
-                    modifier = Modifier.width(260.dp).fillMaxHeight().background(Color(0xFF222225)).padding(16.dp),
+                    modifier = Modifier
+                        .width(260.dp)
+                        .fillMaxHeight()
+                        .background(Color(0xFF222225))
+                        .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
@@ -267,12 +284,17 @@ class SettingsActivity : AppCompatActivity() {
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LazyColumn(
+                        state = categoryListState,
+                        modifier = Modifier.weight(1f), 
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         itemsIndexed(Category.values()) { index, category ->
+                            val isSelected = selectedCategory == category
                             SidebarCategoryItem(
                                 category = category, 
-                                isSelected = selectedCategory == category, 
-                                itemFocusRequester = if (index == 0) firstCategoryFocusRequester else null,
+                                isSelected = isSelected, 
+                                itemFocusRequester = if (isSelected) selectedCategoryFocusRequester else null,
                                 onSelect = { selectedCategory = category }
                             )
                         }
@@ -282,7 +304,7 @@ class SettingsActivity : AppCompatActivity() {
 
                     TvFocusableBox(
                         modifier = Modifier.fillMaxWidth().height(48.dp),
-                        defaultColor = Color(0xFF4CAF50),
+                        defaultColor = Color(0xFF333338),
                         shape = RoundedCornerShape(20.dp),
                         onClick = { saveAndExit() }
                     ) { isFocused ->
@@ -297,7 +319,32 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 Box(modifier = Modifier.fillMaxHeight().width(1.dp).background(Color(0xFF333338)))
-                Box(modifier = Modifier.weight(1f).fillMaxHeight().padding(24.dp)) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(24.dp)
+                        .onPreviewKeyEvent { keyEvent ->
+                            val native = keyEvent.nativeKeyEvent
+                            if (native.action == KeyEvent.ACTION_DOWN &&
+                                native.keyCode == KeyEvent.KEYCODE_DPAD_LEFT &&
+                                !com.poobi.tvbrowser.shared.InputFieldState.isEditing) {
+                                coroutineScope.launch {
+                                    val idx = Category.values().indexOf(selectedCategory)
+                                    if (idx != -1) {
+                                        try {
+                                            categoryListState.scrollToItem(idx)
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                                try {
+                                    selectedCategoryFocusRequester.requestFocus()
+                                    return@onPreviewKeyEvent true
+                                } catch (_: Exception) {}
+                            }
+                            false
+                        }
+                ) {
                     when (selectedCategory) {
                         Category.General -> GeneralPanel()
                         Category.Language -> LanguagePanel()
@@ -721,6 +768,8 @@ class SettingsActivity : AppCompatActivity() {
                 .fillMaxWidth()
                 .then(if (itemFocusRequester != null) Modifier.focusRequester(itemFocusRequester) else Modifier),
             isSelected = isSelected,
+            defaultColor = if (isSelected) Color(0xFF00BCD4).copy(alpha = 0.25f) else Color.Transparent,
+            shape = RoundedCornerShape(8.dp),
             onClick = onSelect,
             onFocus = onSelect
         ) { isFocused ->
@@ -732,7 +781,7 @@ class SettingsActivity : AppCompatActivity() {
             ) {
                 Text(
                     text = androidx.compose.ui.res.stringResource(category.titleRes), 
-                    color = if (isFocused) Color.Black else if (isSelected) Color.White else Color.LightGray, 
+                    color = if (isFocused) Color.Black else if (isSelected) Color(0xFF00BCD4) else Color.LightGray, 
                     fontSize = 16.sp, 
                     fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal
                 )
@@ -920,7 +969,7 @@ class SettingsActivity : AppCompatActivity() {
                 
                 TvFocusableBox(
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    defaultColor = Color(0xFF00BCD4),
+                    defaultColor = Color(0xFF333338),
                     shape = RoundedCornerShape(20.dp),
                     onClick = { UpdateManager.checkForUpdates(this@SettingsActivity, isManual = true) }
                 ) { isFocused ->
@@ -1210,7 +1259,7 @@ class SettingsActivity : AppCompatActivity() {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         TvFocusableBox(
                             modifier = Modifier.height(40.dp),
-                            defaultColor = if (isBindingMenuShortcut) Color(0xFFE53935) else Color(0xFF00BCD4),
+                            defaultColor = Color(0xFF333338),
                             shape = RoundedCornerShape(20.dp),
                             onClick = {
                                 if (isBindingMenuShortcut) {
@@ -2179,7 +2228,7 @@ class SettingsActivity : AppCompatActivity() {
                             Spacer(modifier = Modifier.width(4.dp))
                             TvFocusableBox(
                                 modifier = Modifier.height(36.dp),
-                                defaultColor = Color(0xFFE53935),
+                                defaultColor = Color(0xFF333338),
                                 shape = RoundedCornerShape(20.dp),
                                 onClick = { 
                                     val arr = JSONArray()
@@ -2205,7 +2254,7 @@ class SettingsActivity : AppCompatActivity() {
                     Spacer(modifier = Modifier.height(10.dp))
                     TvFocusableBox(
                         modifier = Modifier.height(44.dp),
-                        defaultColor = Color(0xFF00BCD4),
+                        defaultColor = Color(0xFF333338),
                         shape = RoundedCornerShape(20.dp),
                         onClick = { editProfileIndex = -1; editProfileData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New Profile"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("script", ""); put("use_script", true); put("selectors", JSONArray()) }; showEditDialog = true }
                     ) { isFocused ->
@@ -2288,7 +2337,7 @@ class SettingsActivity : AppCompatActivity() {
                 confirmButton = {
                     TvFocusableBox(
                         modifier = Modifier.height(40.dp),
-                        defaultColor = Color(0xFF4CAF50),
+                        defaultColor = Color(0xFF333338),
                         shape = RoundedCornerShape(20.dp),
                         onClick = {
                             editProfileData.put("name", name)
@@ -2563,7 +2612,7 @@ class SettingsActivity : AppCompatActivity() {
                 confirmButton = {
                     TvFocusableBox(
                         modifier = Modifier.height(40.dp),
-                        defaultColor = Color(0xFF4CAF50),
+                        defaultColor = Color(0xFF333338),
                         shape = RoundedCornerShape(20.dp),
                         onClick = {
                             val intValue = customSubCountInput.toIntOrNull() ?: 5
@@ -2890,7 +2939,7 @@ class SettingsActivity : AppCompatActivity() {
                             Spacer(modifier = Modifier.width(8.dp))
                             TvFocusableBox(
                                 modifier = Modifier.height(36.dp),
-                                defaultColor = Color(0xFFE53935),
+                                defaultColor = Color(0xFF333338),
                                 shape = RoundedCornerShape(20.dp),
                                 onClick = {
                                     val arr = JSONArray()
@@ -2914,7 +2963,7 @@ class SettingsActivity : AppCompatActivity() {
             }
             TvFocusableBox(
                 modifier = Modifier.height(44.dp),
-                defaultColor = Color(0xFF00BCD4),
+                defaultColor = Color(0xFF333338),
                 shape = RoundedCornerShape(20.dp),
                 onClick = { editRuleIndex = -1; editRuleData = JSONObject().apply { put("id", UUID.randomUUID().toString()); put("name", "New CSS Rule"); put("enabled", true); put("urlPatterns", JSONArray().put("*")); put("selectors", JSONArray()) }; showEditDialog = true }
             ) { isFocused ->
@@ -2942,7 +2991,7 @@ class SettingsActivity : AppCompatActivity() {
                 confirmButton = {
                     TvFocusableBox(
                         modifier = Modifier.height(40.dp),
-                        defaultColor = Color(0xFF4CAF50),
+                        defaultColor = Color(0xFF333338),
                         shape = RoundedCornerShape(20.dp),
                         onClick = {
                             editRuleData.put("name", name)
@@ -3072,7 +3121,7 @@ class SettingsActivity : AppCompatActivity() {
                 Text(androidx.compose.ui.res.stringResource(R.string.status_trakt_authed, traktUser), color = Color(0xFF4CAF50), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp),
-                    defaultColor = Color(0xFFE53935),
+                    defaultColor = Color(0xFF333338),
                     shape = RoundedCornerShape(20.dp),
                     onClick = {
                         lifecycleScope.launch(Dispatchers.IO) {
@@ -3094,7 +3143,7 @@ class SettingsActivity : AppCompatActivity() {
                 Text(androidx.compose.ui.res.stringResource(R.string.status_trakt_unlinked), color = Color.Gray)
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp),
-                    defaultColor = Color(0xFF00BCD4),
+                    defaultColor = Color(0xFF333338),
                     shape = RoundedCornerShape(20.dp),
                     onClick = { startTraktAuthFlow() }
                 ) { isFocused ->
@@ -3122,7 +3171,7 @@ class SettingsActivity : AppCompatActivity() {
                 confirmButton = {
                     TvFocusableBox(
                         modifier = Modifier.height(40.dp),
-                        defaultColor = Color(0xFF00BCD4),
+                        defaultColor = Color(0xFF333338),
                         shape = RoundedCornerShape(20.dp),
                         onClick = {
                             val intent = Intent(this@SettingsActivity, MainActivity::class.java).apply {
@@ -3181,7 +3230,7 @@ class SettingsActivity : AppCompatActivity() {
                 Text(androidx.compose.ui.res.stringResource(R.string.status_tmdb_active), color = Color(0xFF4CAF50), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp),
-                    defaultColor = Color(0xFFE53935),
+                    defaultColor = Color(0xFF333338),
                     shape = RoundedCornerShape(20.dp),
                     onClick = {
                         lifecycleScope.launch(Dispatchers.IO) {
@@ -3206,7 +3255,7 @@ class SettingsActivity : AppCompatActivity() {
 
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp),
-                    defaultColor = Color(0xFF00BCD4),
+                    defaultColor = Color(0xFF333338),
                     shape = RoundedCornerShape(20.dp),
                     onClick = {
                         lifecycleScope.launch(Dispatchers.IO) {
@@ -3387,7 +3436,7 @@ class SettingsActivity : AppCompatActivity() {
                             }
                             TvFocusableBox(
                                 modifier = Modifier.height(40.dp),
-                                defaultColor = Color(0xFFE53935),
+                                defaultColor = Color(0xFF333338),
                                 shape = RoundedCornerShape(20.dp),
                                 onClick = {
                                     val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(this@SettingsActivity)
@@ -3461,7 +3510,7 @@ class SettingsActivity : AppCompatActivity() {
                 confirmButton = {
                     TvFocusableBox(
                         modifier = Modifier.height(40.dp),
-                        defaultColor = Color(0xFF4CAF50),
+                        defaultColor = Color(0xFF333338),
                         shape = RoundedCornerShape(20.dp),
                         onClick = { showDaysPickerDialog = false }
                     ) { isFocused ->
@@ -3508,7 +3557,7 @@ class SettingsActivity : AppCompatActivity() {
             item {
                 TvFocusableBox(
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    defaultColor = Color(0xFF4CAF50),
+                    defaultColor = Color(0xFF333338),
                     shape = RoundedCornerShape(20.dp),
                     onClick = {
                         ensureStoragePermission {
@@ -3534,7 +3583,7 @@ class SettingsActivity : AppCompatActivity() {
             item {
                 TvFocusableBox(
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    defaultColor = Color(0xFF00BCD4),
+                    defaultColor = Color(0xFF333338),
                     shape = RoundedCornerShape(20.dp),
                     onClick = {
                         ensureStoragePermission {
@@ -3582,7 +3631,7 @@ class SettingsActivity : AppCompatActivity() {
                 item {
                     TvFocusableBox(
                         modifier = Modifier.fillMaxWidth().height(48.dp),
-                        defaultColor = Color(0xFFE53935),
+                        defaultColor = Color(0xFF333338),
                         shape = RoundedCornerShape(20.dp),
                         onClick = {
                             onSignOutRequested?.invoke {
@@ -3601,7 +3650,7 @@ class SettingsActivity : AppCompatActivity() {
                 item {
                     TvFocusableBox(
                         modifier = Modifier.fillMaxWidth().height(48.dp),
-                        defaultColor = Color(0xFF00BCD4),
+                        defaultColor = Color(0xFF333338),
                         shape = RoundedCornerShape(20.dp),
                         onClick = { onSignInRequested?.invoke() }
                     ) { isFocused ->
@@ -3623,7 +3672,7 @@ class SettingsActivity : AppCompatActivity() {
             item {
                 TvFocusableBox(
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    defaultColor = Color(0xFF00BCD4),
+                    defaultColor = Color(0xFF333338),
                     shape = RoundedCornerShape(20.dp),
                     onClick = {
                         val account = GoogleSignIn.getLastSignedInAccount(this@SettingsActivity)

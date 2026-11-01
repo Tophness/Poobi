@@ -97,7 +97,7 @@ fun SubtitleWaitOverlay(
             ) {
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp),
-                    defaultColor = Color(0xFF4CAF50),
+                    defaultColor = Color(0xFF333338),
                     shape = RoundedCornerShape(20.dp),
                     onClick = {
                         viewModel.cancelSubtitleDownloads()
@@ -112,7 +112,7 @@ fun SubtitleWaitOverlay(
 
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp),
-                    defaultColor = Color(0xFFE53935),
+                    defaultColor = Color(0xFF333338),
                     shape = RoundedCornerShape(20.dp),
                     onClick = {
                         viewModel.cancelSubtitleDownloads()

@@ -450,13 +450,14 @@ fun StreamsDashboardScreen(
 
                 TvFocusableBox(
                     modifier = Modifier
-                        .height(38.dp)
+                        .height(34.dp)
                         .focusRequester(tabFocusRequester)
                         .then(if (isActive) Modifier.focusRequester(mainCategoryTargetRequester) else Modifier)
                         .focusProperties {
                             up = topTabFocusRequester ?: FocusRequester.Default
                             down = if (activeCategoryIndex == 0) searchFieldFocusRequester else (if (hasCardsInCenter) lastCardFocusRequester else bottomSubPillFocusRequester)
                         },
+                    defaultColor = if (isActive) Color(0xFF00BCD4).copy(alpha = 0.25f) else Color(0xFF222225),
                     onClick = { 
                         if (activeCategoryIndex != index) {
                             viewModel.setActiveCategoryIndex(index)
@@ -474,39 +475,16 @@ fun StreamsDashboardScreen(
                         }
                     }
                 ) { isFocused ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                when {
-                                    isFocused -> Color.Transparent
-                                    isActive -> Color(0xFF2E2E35)
-                                    else -> Color(0xFF1F1F23)
-                                },
-                                shape = RoundedCornerShape(8.dp)
-                            ),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.fillMaxHeight().padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = pair.first,
-                            color = when {
-                                isFocused -> Color.Black
-                                isActive -> Color(0xFFFFB74D)
-                                else -> Color.LightGray
-                            },
-                            fontSize = 14.sp,
-                            fontWeight = if (isActive || isFocused) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp)
+                            color = if (isFocused) Color.Black else if (isActive) Color(0xFF00BCD4) else Color.LightGray,
+                            fontSize = 13.sp,
+                            fontWeight = if (isActive || isFocused) FontWeight.Bold else FontWeight.Normal
                         )
-                        if (isActive && !isFocused) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth(0.6f)
-                                    .height(3.dp)
-                                    .background(Color(0xFFFFB74D), shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
-                            )
-                        }
                     }
                 }
             }
@@ -1336,7 +1314,7 @@ fun StreamsDashboardScreen(
             confirmButton = {
                 TvFocusableBox(
                     modifier = Modifier.height(40.dp).width(90.dp),
-                    defaultColor = Color(0xFF4CAF50),
+                    defaultColor = Color(0xFF333338),
                     shape = RoundedCornerShape(20.dp),
                     onClick = { 
                         viewModel.prefs.edit().putString(prefsKey, JSONArray(prioritiesList).toString()).apply()

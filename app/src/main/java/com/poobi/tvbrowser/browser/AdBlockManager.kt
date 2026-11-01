@@ -665,7 +665,7 @@ fun AdBlockSetupDialog() {
                         modifier = Modifier
                             .height(38.dp)
                             .focusRequester(cancelFocusRequester),
-                        defaultColor = Color(0xFFE53935),
+                        defaultColor = Color(0xFF333338),
                         shape = RoundedCornerShape(19.dp),
                         onClick = { AdBlockManager.cancelSetup() }
                     ) { isFocused ->

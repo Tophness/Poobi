@@ -489,91 +489,54 @@ private fun MediaItemDetailsContent(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val playInteractionSource = remember { MutableInteractionSource() }
-                            val isPlayFocused by playInteractionSource.collectIsFocusedAsState()
-                            val playScale by androidx.compose.animation.core.animateFloatAsState(
-                                targetValue = if (isPlayFocused) 1.03f else 1.0f,
-                                animationSpec = androidx.compose.animation.core.tween(durationMillis = 150),
-                                label = "PlayFocusScale"
-                            )
-                            val playBgColor = if (isPlayFocused) Color(0xFF40C4FF) else Color(0xFF4CAF50)
-                            val playContentColor = if (isPlayFocused) Color.Black else Color.White
-
-                            Box(
+                            TvFocusableBox(
                                 modifier = Modifier
                                     .width(180.dp)
-                                    .height(55.dp)
-                                    .scale(playScale)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(playBgColor)
-                                    .border(if (isPlayFocused) 2.dp else 0.dp, Color.White, RoundedCornerShape(8.dp))
-                                    .focusRequester(playButtonFocusRequester)
-                                    .clickable(
-                                        interactionSource = playInteractionSource,
-                                        indication = null,
-                                        onClick = { viewModel.performScrape(item) }
-                                    )
-                                    .focusable(interactionSource = playInteractionSource),
-                                contentAlignment = Alignment.Center
-                            ) {
+                                    .height(50.dp)
+                                    .focusRequester(playButtonFocusRequester),
+                                onClick = { viewModel.performScrape(item) }
+                            ) { isFocused ->
                                 Row(
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_auto_play),
                                         contentDescription = null,
-                                        tint = playContentColor
+                                        tint = if (isFocused) Color.Black else Color.White,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                     Text(
                                         text = androidx.compose.ui.res.stringResource(R.string.media_play_movie),
-                                        color = playContentColor,
-                                        fontSize = 16.sp,
+                                        color = if (isFocused) Color.Black else Color.White,
+                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
 
-                            val trailerInteractionSource = remember { MutableInteractionSource() }
-                            val isTrailerFocused by trailerInteractionSource.collectIsFocusedAsState()
-                            val trailerScale by androidx.compose.animation.core.animateFloatAsState(
-                                targetValue = if (isTrailerFocused) 1.03f else 1.0f,
-                                animationSpec = androidx.compose.animation.core.tween(durationMillis = 150),
-                                label = "TrailerFocusScale"
-                            )
-                            val trailerBgColor = if (isTrailerFocused) Color(0xFF40C4FF) else Color(0xFFE53935)
-                            val trailerContentColor = if (isTrailerFocused) Color.Black else Color.White
-
-                            Box(
+                            TvFocusableBox(
                                 modifier = Modifier
-                                    .width(140.dp)
-                                    .height(55.dp)
-                                    .scale(trailerScale)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(trailerBgColor)
-                                    .border(if (isTrailerFocused) 2.dp else 0.dp, Color.White, RoundedCornerShape(8.dp))
-                                    .clickable(
-                                        interactionSource = trailerInteractionSource,
-                                        indication = null,
-                                        onClick = { viewModel.playTrailer(item) }
-                                    )
-                                    .focusable(interactionSource = trailerInteractionSource),
-                                contentAlignment = Alignment.Center
-                            ) {
+                                    .width(130.dp)
+                                    .height(50.dp),
+                                onClick = { viewModel.playTrailer(item) }
+                            ) { isFocused ->
                                 Row(
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         imageVector = MovieIcon,
                                         contentDescription = null,
-                                        tint = trailerContentColor,
+                                        tint = if (isFocused) Color.Black else Color.White,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Text(
                                         text = androidx.compose.ui.res.stringResource(R.string.media_trailer),
-                                        color = trailerContentColor,
-                                        fontSize = 16.sp,
+                                        color = if (isFocused) Color.Black else Color.White,
+                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -626,12 +589,12 @@ private fun MediaItemDetailsContent(
                                 onClick = { viewModel.playTrailer(item) }
                             ) { isFocused ->
                                 Row(
-                                    modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        painter = painterResource(id = R.drawable.ic_auto_play),
+                                        imageVector = MovieIcon,
                                         contentDescription = "Show Trailer",
                                         tint = if (isFocused) Color.Black else Color.White,
                                         modifier = Modifier.size(20.dp)
@@ -639,7 +602,7 @@ private fun MediaItemDetailsContent(
                                     Text(
                                         text = androidx.compose.ui.res.stringResource(R.string.media_trailer),
                                         color = if (isFocused) Color.Black else Color.White,
-                                        fontSize = 14.sp,
+                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -713,8 +676,7 @@ private fun MediaItemDetailsContent(
                                 val isMouseActive by HardwareInputManager.lastInputWasMouse.collectAsState()
                                 var isPointerHovered by remember { mutableStateOf(false) }
 
-                                val isCardFocused = isPlayFocused || isTrailerFocused || isWatchedFocused
-                                val isHighlighted = if (isMouseActive) isPointerHovered else isCardFocused
+                                val isHighlighted = if (isMouseActive) isPointerHovered else isPlayFocused
 
                                 val isTrailerActive = if (isMouseActive) false else isTrailerFocused
                                 val isWatchedActive = if (isMouseActive) false else isWatchedFocused
@@ -844,13 +806,8 @@ private fun MediaItemDetailsContent(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(
-                                                when {
-                                                    isTrailerActive && isHighlighted -> Color.Black.copy(alpha = 0.15f)
-                                                    isTrailerActive -> Color.White.copy(alpha = 0.15f)
-                                                    else -> Color.Transparent
-                                                }
-                                            )
+                                            .background(if (isTrailerActive) Color(0xFF40C4FF) else Color.Transparent)
+                                            .border(if (isTrailerActive) 2.dp else 0.dp, if (isTrailerActive) Color.White else Color.Transparent, RoundedCornerShape(8.dp))
                                             .onPreviewKeyEvent { keyEvent ->
                                                 val nativeEvent = keyEvent.nativeKeyEvent
                                                 if (nativeEvent.action == KeyEvent.ACTION_DOWN && nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
@@ -876,11 +833,7 @@ private fun MediaItemDetailsContent(
                                         Icon(
                                             imageVector = MovieIcon,
                                             contentDescription = "Trailer",
-                                            tint = when {
-                                                isTrailerActive -> Color(0xFFE53935)
-                                                isHighlighted -> Color.Black
-                                                else -> Color(0xFF00BCD4)
-                                            },
+                                            tint = if (isTrailerActive) Color.Black else Color.White,
                                             modifier = Modifier.size(24.dp)
                                         )
                                     }
@@ -891,13 +844,8 @@ private fun MediaItemDetailsContent(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(
-                                                when {
-                                                    isWatchedActive && isHighlighted -> Color.Black.copy(alpha = 0.15f)
-                                                    isWatchedActive -> Color.White.copy(alpha = 0.15f)
-                                                    else -> Color.Transparent
-                                                }
-                                            )
+                                            .background(if (isWatchedActive) Color(0xFF40C4FF) else Color.Transparent)
+                                            .border(if (isWatchedActive) 2.dp else 0.dp, if (isWatchedActive) Color.White else Color.Transparent, RoundedCornerShape(8.dp))
                                             .onPreviewKeyEvent { keyEvent ->
                                                 val nativeEvent = keyEvent.nativeKeyEvent
                                                 if (nativeEvent.action == KeyEvent.ACTION_DOWN && nativeEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
@@ -924,10 +872,9 @@ private fun MediaItemDetailsContent(
                                             painter = painterResource(id = R.drawable.ic_watched),
                                             contentDescription = "Toggle Watched Status",
                                             tint = when {
+                                                isWatchedActive -> Color.Black
                                                 isWatched -> Color(0xFF00BCD4)
-                                                isWatchedActive -> Color.White
-                                                isHighlighted -> Color.Black.copy(alpha = 0.4f)
-                                                else -> Color.White.copy(alpha = 0.2f)
+                                                else -> Color.White.copy(alpha = 0.4f)
                                             },
                                             modifier = Modifier.size(24.dp)
                                         )

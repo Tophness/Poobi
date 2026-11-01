@@ -298,7 +298,7 @@ fun BrowserHomeScreen(
                                         .focusProperties { 
                                             up = tabsLazyRowFocusRequester 
                                         },
-                                    defaultColor = if (isLoadOnly) Color(0xFF00BCD4) else Color(0xFFE53935),
+                                    defaultColor = Color(0xFF333338),
                                     shape = RoundedCornerShape(20.dp),
                                     onClick = { 
                                         if (isLoadOnly) {
@@ -406,7 +406,7 @@ fun BrowserHomeScreen(
                             ) {
                                 TvFocusableBox(
                                     modifier = Modifier.height(40.dp),
-                                    defaultColor = Color(0xFFE53935),
+                                    defaultColor = Color(0xFF333338),
                                     shape = RoundedCornerShape(20.dp),
                                     onClick = {
                                         viewModel.prefs.edit().putString("favorites", "[]").apply()
@@ -476,7 +476,7 @@ fun BrowserHomeScreen(
                             ) {
                                 TvFocusableBox(
                                     modifier = Modifier.height(40.dp),
-                                    defaultColor = Color(0xFFE53935),
+                                    defaultColor = Color(0xFF333338),
                                     shape = RoundedCornerShape(20.dp),
                                     onClick = {
                                         viewModel.prefs.edit().putString("history", "[]").apply()
@@ -559,7 +559,7 @@ fun BrowserHomeScreen(
                             ) {
                                 TvFocusableBox(
                                     modifier = Modifier.height(40.dp),
-                                    defaultColor = Color(0xFFE53935),
+                                    defaultColor = Color(0xFF333338),
                                     shape = RoundedCornerShape(20.dp),
                                     onClick = {
                                         viewModel.prefs.edit().putString("downloads", "[]").apply()
