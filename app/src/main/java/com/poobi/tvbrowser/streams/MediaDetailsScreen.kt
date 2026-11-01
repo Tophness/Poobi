@@ -100,8 +100,14 @@ private val MovieIcon: ImageVector = ImageVector.Builder(
 
 @Composable
 fun MediaDetailsScreen(viewModel: StreamsViewModel) {
+    val trailerPickerData by viewModel.trailerPickerData.collectAsState()
+
     BackHandler {
-        viewModel.navigateBackFromMediaDetails()
+        if (trailerPickerData != null) {
+            viewModel.dismissTrailerPicker()
+        } else {
+            viewModel.navigateBackFromMediaDetails()
+        }
     }
 
     val item by viewModel.selectedItem.collectAsState()
@@ -1141,6 +1147,8 @@ private fun MediaItemDetailsContent(
                 }
             }
         }
+
+        TrailerSearchPickerDialog(viewModel = viewModel)
     }
 
     val currentSeasons = seasons
@@ -1567,4 +1575,158 @@ fun ActorDetailsContent(viewModel: StreamsViewModel, item: JSONObject) {
             }
         }
     }
+}
+
+@Composable
+fun TrailerSearchPickerDialog(viewModel: StreamsViewModel) {
+    val pickerData by viewModel.trailerPickerData.collectAsState()
+    val isResolving by viewModel.isResolvingTrailerCandidate.collectAsState()
+    val data = pickerData ?: return
+
+    val firstFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(120)
+        try {
+            firstFocusRequester.requestFocus()
+        } catch (_: Exception) {}
+    }
+
+    AlertDialog(
+        onDismissRequest = {
+            if (!isResolving) viewModel.dismissTrailerPicker()
+        },
+        title = {
+            Column {
+                Text(
+                    text = "Select a Trailer",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+                Text(
+                    text = "Automatic trailer was unavailable. Choose from search results:",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        },
+        containerColor = Color(0xFF222225),
+        text = {
+            Box(modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(data.results) { index, candidate ->
+                        TvFocusableBox(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(72.dp)
+                                .then(if (index == 0) Modifier.focusRequester(firstFocusRequester) else Modifier),
+                            onClick = {
+                                if (!isResolving) {
+                                    viewModel.playSelectedTrailer(candidate)
+                                }
+                            }
+                        ) { isFocused ->
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(105.dp, 60.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color.Black)
+                                ) {
+                                    RemoteImage(
+                                        url = candidate.thumbnail,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    if (candidate.length.isNotEmpty()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .padding(2.dp)
+                                                .background(Color.Black.copy(alpha = 0.8f), RoundedCornerShape(2.dp))
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(
+                                                text = candidate.length,
+                                                color = Color.White,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = candidate.title,
+                                        color = if (isFocused) Color.Black else Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (candidate.channel.isNotEmpty()) {
+                                        Text(
+                                            text = candidate.channel,
+                                            color = if (isFocused) Color(0xFF004D40) else Color(0xFF00BCD4),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (isResolving) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.7f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = Color(0xFF00BCD4))
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Resolving selected trailer...",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TvFocusableBox(
+                modifier = Modifier.height(40.dp).width(90.dp),
+                defaultColor = Color(0xFF333338),
+                shape = RoundedCornerShape(20.dp),
+                onClick = { viewModel.dismissTrailerPicker() }
+            ) { isFocused ->
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Cancel", color = if (isFocused) Color.Black else Color.White)
+                }
+            }
+        }
+    )
 }

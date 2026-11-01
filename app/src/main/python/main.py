@@ -125,36 +125,249 @@ def localize_hls_stream(stream_url_with_headers):
 
     return stream_url_with_headers
 
-def get_trailer(content, tmdb, season=None, episode=None):
+def score_trailer_candidate(candidate):
+    title = (candidate.get("title") or "").lower()
+    channel = (candidate.get("channel") or "").lower()
+    length_str = candidate.get("length") or ""
+
+    duration_sec = 0
+    if length_str:
+        parts = length_str.split(":")
+        try:
+            if len(parts) == 3:
+                duration_sec = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            elif len(parts) == 2:
+                duration_sec = int(parts[0]) * 60 + int(parts[1])
+            elif len(parts) == 1:
+                duration_sec = int(parts[0])
+        except:
+            pass
+
+    if duration_sec > 600:
+        return -1000
+    if duration_sec > 360:
+        return -200
+
+    score = 0
+    if "official trailer" in title:
+        score += 90
+    elif "trailer" in title or "bande annonce" in title or "трейлер" in title or "予告編" in title:
+        score += 60
+    elif "teaser" in title:
+        score += 45
+    elif "promo" in title or "preview" in title:
+        score += 35
+
+    disqualifiers = [
+        "review", "reaction", "breakdown", "ending explained", "explained",
+        "easter eggs", "full movie", "soundtrack", "ost", "theme song",
+        "interview", "behind the scenes", "blooper", "parody", "pitch meeting",
+        "everything wrong with", "movie recap", "recap"
+    ]
+    for d in disqualifiers:
+        if d in title:
+            score -= 200
+
+    reputable = [
+        "trailer", "movieclips", "warner", "universal", "paramount", "sony",
+        "netflix", "hbo", "a24", "disney", "marvel", "ign", "kinocheck",
+        "mgm", "lionsgate", "studiocanal", "filmspot", "apple tv", "prime video"
+    ]
+    if any(r in channel for r in reputable):
+        score += 30
+
+    return score
+
+def _fetch_youtube_search_candidates(query, lang='en', max_results=20):
+    candidates = []
+    seen_ids = set()
+
     try:
-        import tmdb.tmdb_utils as tu
-        import json
-        import requests
-        import os
-        
-        tmdb_id = str(tmdb)
-        videos = []
+        url = "https://www.youtube.com/youtubei/v1/search?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": f"{lang},en;q=0.9"
+        }
+        payload = {
+            "context": {
+                "client": {
+                    "clientName": "WEB",
+                    "clientVersion": "2.20240101.00.00",
+                    "hl": lang if lang else "en",
+                    "gl": "US"
+                }
+            },
+            "query": query,
+            "params": "EgIQAQ=="
+        }
 
-        if content == 'movie':
-            videos = tu.get_movie_trailers(tmdb_id)
-        elif content in ['tvshow', 'tv']:
-            if season is not None and episode is not None:
-                videos = tu.get_episode_trailers(tmdb_id, str(season), str(episode))
-            elif season is not None:
-                videos = tu.get_season_trailers(tmdb_id, str(season))
-            else:
-                videos = tu.get_tvshow_trailers(tmdb_id)
+        resp = requests.post(url, headers=headers, json=payload, timeout=6)
+        if resp.status_code == 200:
+            data = resp.json()
 
-        youtube_key = None
-        for v in videos:
-            if v.get('site') == 'YouTube':
-                youtube_key = v.get('key')
-                if v.get('type') == 'Trailer':
+            def find_renderers(obj):
+                if isinstance(obj, dict):
+                    if "videoRenderer" in obj:
+                        yield obj["videoRenderer"]
+                    for v in obj.values():
+                        yield from find_renderers(v)
+                elif isinstance(obj, list):
+                    for item in obj:
+                        yield from find_renderers(item)
+
+            for vr in find_renderers(data):
+                vid = vr.get("videoId")
+                if not vid or len(vid) != 11 or vid in seen_ids:
+                    continue
+
+                title_obj = vr.get("title", {})
+                title_text = ""
+                if "runs" in title_obj and title_obj["runs"]:
+                    title_text = "".join([r.get("text", "") for r in title_obj["runs"]])
+                elif "simpleText" in title_obj:
+                    title_text = title_obj["simpleText"]
+
+                length_text = vr.get("lengthText", {}).get("simpleText", "")
+                owner_runs = vr.get("ownerText", {}).get("runs", [])
+                channel_name = owner_runs[0].get("text", "") if owner_runs else ""
+
+                seen_ids.add(vid)
+                candidates.append({
+                    "id": vid,
+                    "title": title_text,
+                    "length": length_text,
+                    "channel": channel_name,
+                    "thumbnail": f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"
+                })
+                if len(candidates) >= max_results:
                     break
-                    
-        if not youtube_key:
-            return json.dumps({"error": "No YouTube trailer found."})
+    except Exception as e:
+        print(f"[DEBUG] YouTube Innertube search failed: {e}")
 
+    if not candidates:
+        try:
+            from urllib.parse import quote_plus
+            url = f"https://www.youtube.com/results?search_query={quote_plus(query)}&sp=EgIQAQ%253D%253D"
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            html_resp = requests.get(url, headers=headers, timeout=6)
+            if html_resp.status_code == 200:
+                matches = re.findall(r'"videoId":"([a-zA-Z0-9_-]{11})"', html_resp.text)
+                for m in matches:
+                    if m not in seen_ids:
+                        seen_ids.add(m)
+                        candidates.append({
+                            "id": m,
+                            "title": query,
+                            "length": "",
+                            "channel": "",
+                            "thumbnail": f"https://i.ytimg.com/vi/{m}/mqdefault.jpg"
+                        })
+                    if len(candidates) >= max_results:
+                        break
+        except Exception as e:
+            print(f"[DEBUG] YouTube HTML search failed: {e}")
+
+    return candidates
+
+def search_youtube_trailer_candidates(title, year=None, season=None, episode=None, lang='en'):
+    if not title:
+        return []
+
+    queries = []
+    if season is not None and episode is not None:
+        queries.append(f"{title} S{int(season):02d}E{int(episode):02d} Trailer")
+        queries.append(f"{title} Season {int(season)} Episode {int(episode)} Promo")
+        queries.append(f"{title} Season {int(season)} Trailer")
+        queries.append(f"{title} Official Trailer")
+    elif season is not None:
+        queries.append(f"{title} Season {int(season)} Trailer")
+        queries.append(f"{title} Official Trailer")
+    else:
+        if lang and lang != 'en':
+            lang_suffixes = {
+                'es': 'Trailer Oficial Español',
+                'fr': 'Bande Annonce VF',
+                'de': 'Deutscher Trailer',
+                'it': 'Trailer Italiano',
+                'pt': 'Trailer Dublado',
+                'ru': 'трейлер',
+                'ja': '予告編',
+                'ko': '예고편',
+                'hi': 'Trailer'
+            }
+            if lang in lang_suffixes:
+                if year and str(year) not in ['0000', '', '0']:
+                    queries.append(f"{title} {year} {lang_suffixes[lang]}")
+                queries.append(f"{title} {lang_suffixes[lang]}")
+
+        if year and str(year) not in ['0000', '', '0']:
+            queries.append(f"{title} {year} Official Trailer")
+            queries.append(f"{title} {year} Trailer")
+        else:
+            queries.append(f"{title} Official Trailer")
+            queries.append(f"{title} Trailer")
+
+    all_candidates = []
+    seen_ids = set()
+
+    for q in queries:
+        found = _fetch_youtube_search_candidates(q, lang, max_results=10)
+        for c in found:
+            vid = c["id"]
+            if vid not in seen_ids:
+                seen_ids.add(vid)
+                all_candidates.append(c)
+        if len(all_candidates) >= 12:
+            break
+
+    scored = []
+    for c in all_candidates:
+        s = score_trailer_candidate(c)
+        if s > -500:
+            scored.append((s, c["id"]))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [vid for _, vid in scored[:8]]
+
+def get_youtube_trailer_fallback_list(title, year=None, season=None, episode=None, lang='en'):
+    if not title:
+        return []
+
+    queries = []
+    if season is not None and episode is not None:
+        queries.append(f"{title} S{int(season):02d}E{int(episode):02d} Trailer")
+        queries.append(f"{title} Season {int(season)} Trailer")
+        queries.append(f"{title} Official Trailer")
+    elif season is not None:
+        queries.append(f"{title} Season {int(season)} Trailer")
+        queries.append(f"{title} Official Trailer")
+    else:
+        if year and str(year) not in ['0000', '', '0']:
+            queries.append(f"{title} {year} Trailer")
+        queries.append(f"{title} Trailer")
+
+    results = []
+    seen_ids = set()
+
+    for q in queries:
+        candidates = _fetch_youtube_search_candidates(q, lang, max_results=20)
+        for c in candidates:
+            if c["id"] not in seen_ids:
+                seen_ids.add(c["id"])
+                len_str = c.get("length", "")
+                if len_str and len_str.count(":") >= 2:
+                    continue
+                results.append(c)
+        if len(results) >= 15:
+            break
+
+    return results[:20]
+
+def resolve_youtube_stream(youtube_key):
+    try:
         url = "https://www.youtube.com/youtubei/v1/player?key=AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w"
         headers = {
             "Content-Type": "application/json",
@@ -190,15 +403,75 @@ def get_trailer(content, tmdb, season=None, episode=None):
             "racyCheckOk": True,
             "contentCheckOk": True
         }
-        
-        res = requests.post(url, headers=headers, json=payload, timeout=8).json()
+
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=8).json()
+        except Exception:
+            res = {}
 
         playability = res.get("playabilityStatus", {})
         status = playability.get("status", "ERROR").upper()
+
         if status != "OK":
-            reason = playability.get("reason", "YouTube playability error")
-            return json.dumps({"error": reason})
-            
+            try:
+                embed_payload = {
+                    "context": {
+                        "client": {
+                            "clientName": "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+                            "clientVersion": "2.0"
+                        },
+                        "thirdParty": {
+                            "embedUrl": "https://www.youtube.com/"
+                        }
+                    },
+                    "videoId": youtube_key,
+                    "racyCheckOk": True,
+                    "contentCheckOk": True
+                }
+                res_embed = requests.post(
+                    "https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+                    headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+                    json=embed_payload,
+                    timeout=8
+                ).json()
+                if res_embed.get("playabilityStatus", {}).get("status", "").upper() == "OK":
+                    res = res_embed
+                    status = "OK"
+            except Exception:
+                pass
+
+        if status != "OK":
+            try:
+                ios_payload = {
+                    "context": {
+                        "client": {
+                            "clientName": "IOS",
+                            "clientVersion": "20.10.4",
+                            "deviceModel": "iPhone16,2",
+                            "userAgent": "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)",
+                            "hl": "en",
+                            "gl": "US"
+                        }
+                    },
+                    "videoId": youtube_key,
+                    "contentCheckOk": True,
+                    "racyCheckOk": True
+                }
+                res_ios = requests.post(
+                    "https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+                    headers={"Content-Type": "application/json", "User-Agent": "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)"},
+                    json=ios_payload,
+                    timeout=8
+                ).json()
+                if res_ios.get("playabilityStatus", {}).get("status", "").upper() == "OK":
+                    res = res_ios
+                    status = "OK"
+            except Exception:
+                pass
+
+        if status != "OK":
+            return None
+
         streaming_data = res.get("streamingData", {})
         adaptive_formats = streaming_data.get("adaptiveFormats", [])
 
@@ -215,12 +488,12 @@ def get_trailer(content, tmdb, season=None, episode=None):
             index_r = vf.get("indexRange")
             if not init_r or not index_r:
                 continue
-                
+
             mime_type = vf.get("mimeType", "")
             codecs = ""
             if 'codecs="' in mime_type:
                 codecs = mime_type.split('codecs="')[1].split('"')[0]
-            
+
             escaped_url = xml_escape(vf['url'])
             rep_xml = f"""      <Representation id="{vf.get('itag')}" codecs="{codecs}" bandwidth="{vf.get('bitrate', 0)}" width="{vf.get('width', 0)}" height="{vf.get('height', 0)}">
         <BaseURL>{escaped_url}</BaseURL>
@@ -370,26 +643,147 @@ def get_trailer(content, tmdb, season=None, episode=None):
 
             if video_reps_mp4:
                 xml_content += f"""\n    <AdaptationSet mimeType="video/mp4" contentType="video" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{video_reps_mp4_joined}\n    </AdaptationSet>"""
-                
+
             if video_reps_webm:
                 xml_content += f"""\n    <AdaptationSet mimeType="video/webm" contentType="video" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">\n{video_reps_webm_joined}\n    </AdaptationSet>"""
-                
+
             xml_content += f"""\n{audio_sets_joined}"""
 
             xml_content += "\n  </Period>\n</MPD>"
             mpd_path = os.path.realpath(os.path.join(FILES_DIR, "trailer.mpd"))
             with open(mpd_path, "w", encoding="utf-8") as f:
                 f.write(xml_content)
-                
-            return json.dumps({"url": f"file://{mpd_path}", "is_video": True})
+
+            return {"url": f"file://{mpd_path}", "is_video": True}
 
         formats = streaming_data.get("formats", [])
         for f in formats:
             if "url" in f:
-                return json.dumps({"url": f["url"], "is_video": True})
-                
-        return json.dumps({"error": "Failed to compile adaptive XML trailer manifest."})
-            
+                return {"url": f["url"], "is_video": True}
+
+        return None
+    except Exception as e:
+        print(f"[DEBUG] resolve_youtube_stream error: {e}")
+        return None
+
+def resolve_youtube_trailer(youtube_id):
+    try:
+        res = resolve_youtube_stream(str(youtube_id))
+        if res:
+            return json.dumps(res)
+        return json.dumps({"error": "Failed to resolve playable stream for this video."})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+def get_trailer(content, tmdb, season=None, episode=None, title=None, year=None):
+    try:
+        import tmdb.tmdb_utils as tu
+        import json
+        import requests
+        import os
+
+        tmdb_id = str(tmdb)
+        media_type = 'movie' if content == 'movie' else 'tv'
+        lang = tu.get_language()
+
+        s_num = int(season) if season is not None and str(season).isdigit() else None
+        e_num = int(episode) if episode is not None and str(episode).isdigit() else None
+
+        details = None
+        imdb_id = None
+        if not title:
+            try:
+                details = tu.get_details(tmdb_id, media_type)
+                if details and 'id' in details:
+                    title = details.get('title') or details.get('name') or details.get('original_title') or details.get('original_name')
+                    rel_date = details.get('release_date') or details.get('first_air_date') or ''
+                    year = rel_date[:4] if len(rel_date) >= 4 else ''
+                    imdb_id = details.get('external_ids', {}).get('imdb_id')
+            except Exception:
+                pass
+
+        if not imdb_id and details:
+            imdb_id = details.get('imdb_id')
+
+        if title:
+            title = re.sub(r'\s\(\d{4}\)$', '', title).strip()
+
+        videos = []
+        if media_type == 'movie':
+            videos = tu.get_movie_trailers(tmdb_id)
+        else:
+            if s_num is not None and e_num is not None:
+                videos = tu.get_episode_trailers(tmdb_id, str(s_num), str(e_num))
+                if not videos:
+                    videos = tu.get_season_trailers(tmdb_id, str(s_num))
+                if not videos:
+                    videos = tu.get_tvshow_trailers(tmdb_id)
+            elif s_num is not None:
+                videos = tu.get_season_trailers(tmdb_id, str(s_num))
+                if not videos:
+                    videos = tu.get_tvshow_trailers(tmdb_id)
+            else:
+                videos = tu.get_tvshow_trailers(tmdb_id)
+
+        if not videos and details and isinstance(details.get('videos'), dict):
+            videos = details['videos'].get('results', [])
+
+        candidate_keys = []
+
+        if videos:
+            scored_tmdb = []
+            for v in videos:
+                if v.get('site') != 'YouTube' or not v.get('key'):
+                    continue
+                v_type = (v.get('type') or '').lower()
+                v_lang = (v.get('iso_639_1') or '').lower()
+                v_official = bool(v.get('official', False))
+
+                v_score = 0
+                if v_lang == lang:
+                    v_score += 100
+                elif v_lang in ['en', 'null', '']:
+                    v_score += 40
+
+                if v_type == 'trailer':
+                    v_score += 80 if v_official else 60
+                elif v_type == 'teaser':
+                    v_score += 50 if v_official else 35
+                elif v_type in ['clip', 'featurette']:
+                    v_score += 15
+
+                scored_tmdb.append((v_score, v.get('key')))
+
+            scored_tmdb.sort(key=lambda x: x[0], reverse=True)
+            for sc, k in scored_tmdb:
+                if k not in candidate_keys:
+                    candidate_keys.append(k)
+
+        if not candidate_keys:
+            try:
+                kc_key = tu.get_kinocheck_trailer(tmdb_id, imdb_id, media_type)
+                if kc_key and kc_key not in candidate_keys:
+                    candidate_keys.append(kc_key)
+            except Exception:
+                pass
+
+        if title:
+            yt_keys = search_youtube_trailer_candidates(title, year=year, season=s_num, episode=e_num, lang=lang)
+            for yk in yt_keys:
+                if yk not in candidate_keys:
+                    candidate_keys.append(yk)
+
+        for key in candidate_keys:
+            stream_result = resolve_youtube_stream(key)
+            if stream_result:
+                return json.dumps(stream_result)
+
+        fallback_list = get_youtube_trailer_fallback_list(title, year=year, season=s_num, episode=e_num, lang=lang)
+        if fallback_list:
+            return json.dumps({"fallback_search_results": fallback_list})
+
+        return json.dumps({"error": "Failed to resolve playable trailer stream."})
+
     except Exception as e:
         traceback.print_exc()
         return json.dumps({"error": str(e)})

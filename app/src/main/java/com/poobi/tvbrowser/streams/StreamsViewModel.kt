@@ -4595,6 +4595,28 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    data class TrailerPickerItem(
+        val id: String,
+        val title: String,
+        val channel: String,
+        val length: String,
+        val thumbnail: String
+    )
+
+    data class TrailerPickerData(
+        val results: List<TrailerPickerItem>,
+        val item: JSONObject,
+        val season: Int?,
+        val episode: Int?,
+        val fullTitle: String
+    )
+
+    private val _trailerPickerData = MutableStateFlow<TrailerPickerData?>(null)
+    val trailerPickerData: StateFlow<TrailerPickerData?> = _trailerPickerData.asStateFlow()
+
+    private val _isResolvingTrailerCandidate = MutableStateFlow(false)
+    val isResolvingTrailerCandidate: StateFlow<Boolean> = _isResolvingTrailerCandidate.asStateFlow()
+
     fun playTrailer(item: JSONObject, season: Int? = null, episode: Int? = null) {
         commitPendingSearchQuery()
         val id = item.optString("id")
@@ -4608,11 +4630,51 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 val py = getPythonInstance()
                 val scraper = py.getModule("main")
 
-                val resultStr = scraper.callAttr("get_trailer", mediaType, id, season, episode).toString()
+                val titleRaw = item.optString("title").takeIf { it.isNotEmpty() } ?: item.optString("name", "Unknown")
+                val cleanTitle = titleRaw.replace(Regex("\\s\\(\\d{4}\\)$"), "")
+                val releaseDate = item.optString("release_date").ifEmpty { item.optString("first_air_date") }
+                val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else ""
+
+                val resultStr = scraper.callAttr("get_trailer", mediaType, id, season, episode, cleanTitle, year).toString()
                 val json = JSONObject(resultStr)
 
                 withContext(Dispatchers.Main) {
                     _isFetchingTrailer.value = false
+
+                    val fullTitle = when {
+                        season != null && episode != null -> "$cleanTitle S${season}E${episode} Trailer"
+                        season != null -> "$cleanTitle S$season Trailer"
+                        else -> "$cleanTitle Trailer"
+                    }
+
+                    if (json.has("fallback_search_results")) {
+                        val arr = json.getJSONArray("fallback_search_results")
+                        val list = mutableListOf<TrailerPickerItem>()
+                        for (i in 0 until arr.length()) {
+                            val obj = arr.getJSONObject(i)
+                            list.add(
+                                TrailerPickerItem(
+                                    id = obj.optString("id"),
+                                    title = obj.optString("title"),
+                                    channel = obj.optString("channel"),
+                                    length = obj.optString("length"),
+                                    thumbnail = obj.optString("thumbnail")
+                                )
+                            )
+                        }
+                        if (list.isNotEmpty()) {
+                            _trailerPickerData.value = TrailerPickerData(
+                                results = list,
+                                item = item,
+                                season = season,
+                                episode = episode,
+                                fullTitle = fullTitle
+                            )
+                        } else {
+                            _events.value = StreamsEvent.ShowToast("No trailers found.")
+                        }
+                        return@withContext
+                    }
 
                     if (json.has("error")) {
                         _events.value = StreamsEvent.ShowToast(json.getString("error"))
@@ -4621,14 +4683,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                     val url = json.getString("url")
                     val isVideo = json.getBoolean("is_video")
-
-                    val titleRaw = item.optString("title").takeIf { it.isNotEmpty() } ?: item.optString("name", "Unknown")
-                    val cleanTitle = titleRaw.replace(Regex("\\s\\(\\d{4}\\)$"), "")
-                    val fullTitle = when {
-                        season != null && episode != null -> "$cleanTitle S${season}E${episode} Trailer"
-                        season != null -> "$cleanTitle S$season Trailer"
-                        else -> "$cleanTitle Trailer"
-                    }
 
                     _events.value = StreamsEvent.PlayVideo(
                         url = url,
@@ -4650,5 +4704,56 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
+    }
+
+    fun playSelectedTrailer(candidate: TrailerPickerItem) {
+        val pickerData = _trailerPickerData.value ?: return
+        _isResolvingTrailerCandidate.value = true
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val py = getPythonInstance()
+                val scraper = py.getModule("main")
+                val resStr = scraper.callAttr("resolve_youtube_trailer", candidate.id).toString()
+                val json = JSONObject(resStr)
+
+                withContext(Dispatchers.Main) {
+                    _isResolvingTrailerCandidate.value = false
+
+                    if (json.has("error")) {
+                        _events.value = StreamsEvent.ShowToast("Could not play video: ${json.getString("error")}")
+                        return@withContext
+                    }
+
+                    val url = json.getString("url")
+                    val isVideo = json.getBoolean("is_video")
+
+                    _trailerPickerData.value = null
+
+                    _events.value = StreamsEvent.PlayVideo(
+                        url = url,
+                        title = "${pickerData.fullTitle} (${candidate.title})",
+                        headers = emptyMap(),
+                        subtitles = emptyMap(),
+                        item = pickerData.item,
+                        season = null,
+                        episode = null,
+                        nextEpisode = null,
+                        isWebpage = false,
+                        isTrailer = true
+                    )
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _isResolvingTrailerCandidate.value = false
+                    _events.value = StreamsEvent.ShowToast("Failed to resolve trailer video.")
+                }
+            }
+        }
+    }
+
+    fun dismissTrailerPicker() {
+        _trailerPickerData.value = null
+        _isResolvingTrailerCandidate.value = false
     }
 }

@@ -126,9 +126,9 @@ def get_recommendations(tmdb_id, media_type='movie', page=1):
 def get_details(tmdb_id, media_type='movie'):
     lang = get_language()
     if media_type in ['tv', 'tvshow']:
-        url = f"{API_URL}/tv/{tmdb_id}?append_to_response=aggregate_credits,credits,videos,images,external_ids,recommendations,content_ratings&language={lang}&include_image_language={lang},en,null"
+        url = f"{API_URL}/tv/{tmdb_id}?append_to_response=aggregate_credits,credits,videos,images,external_ids,recommendations,content_ratings&language={lang}&include_image_language={lang},en,null&include_video_language={lang},en,null"
     else:
-        url = f"{API_URL}/movie/{tmdb_id}?append_to_response=credits,videos,images,external_ids,recommendations,release_dates&language={lang}&include_image_language={lang},en,null"
+        url = f"{API_URL}/movie/{tmdb_id}?append_to_response=credits,videos,images,external_ids,recommendations,release_dates&language={lang}&include_image_language={lang},en,null&include_video_language={lang},en,null"
     res = _session.get(url, headers=get_headers()).json()
     if media_type in ['tv', 'tvshow']:
         agg = res.get('aggregate_credits')
@@ -340,27 +340,76 @@ def get_account_details(session_id, show_dialog=True):
 
 def get_movie_trailers(tmdb):
     try:
-        url = f"{API_URL}/movie/{tmdb}/videos"
-        return _session.get(url, headers=get_headers()).json().get('results', [])
+        lang = get_language()
+        url = f"{API_URL}/movie/{tmdb}/videos?language={lang}&include_video_language={lang},en,null"
+        results = _session.get(url, headers=get_headers()).json().get('results', [])
+        if not results:
+            url_fallback = f"{API_URL}/movie/{tmdb}/videos"
+            results = _session.get(url_fallback, headers=get_headers()).json().get('results', [])
+        return results
     except: return []
 
 def get_tvshow_trailers(tmdb):
     try:
-        url = f"{API_URL}/tv/{tmdb}/videos"
-        return _session.get(url, headers=get_headers()).json().get('results', [])
+        lang = get_language()
+        url = f"{API_URL}/tv/{tmdb}/videos?language={lang}&include_video_language={lang},en,null"
+        results = _session.get(url, headers=get_headers()).json().get('results', [])
+        if not results:
+            url_fallback = f"{API_URL}/tv/{tmdb}/videos"
+            results = _session.get(url_fallback, headers=get_headers()).json().get('results', [])
+        return results
     except: return []
 
 def get_season_trailers(tmdb, season):
     try:
-        url = f"{API_URL}/tv/{tmdb}/season/{season}/videos"
-        return _session.get(url, headers=get_headers()).json().get('results', [])
+        lang = get_language()
+        url = f"{API_URL}/tv/{tmdb}/season/{season}/videos?language={lang}&include_video_language={lang},en,null"
+        results = _session.get(url, headers=get_headers()).json().get('results', [])
+        if not results:
+            url_fallback = f"{API_URL}/tv/{tmdb}/season/{season}/videos"
+            results = _session.get(url_fallback, headers=get_headers()).json().get('results', [])
+        return results
     except: return []
 
 def get_episode_trailers(tmdb, season, episode):
     try:
-        url = f"{API_URL}/tv/{tmdb}/season/{season}/episode/{episode}/videos"
-        return _session.get(url, headers=get_headers()).json().get('results', [])
+        lang = get_language()
+        url = f"{API_URL}/tv/{tmdb}/season/{season}/episode/{episode}/videos?language={lang}&include_video_language={lang},en,null"
+        results = _session.get(url, headers=get_headers()).json().get('results', [])
+        if not results:
+            url_fallback = f"{API_URL}/tv/{tmdb}/season/{season}/episode/{episode}/videos"
+            results = _session.get(url_fallback, headers=get_headers()).json().get('results', [])
+        return results
     except: return []
+
+def get_kinocheck_trailer(tmdb_id, imdb_id=None, media_type='movie'):
+    try:
+        endpoint = "movies" if media_type == 'movie' else "shows"
+        params = {}
+        if tmdb_id and str(tmdb_id) not in ["0", "", "None"]:
+            params["tmdb_id"] = str(tmdb_id)
+        elif imdb_id and str(imdb_id) not in ["0", "", "None"]:
+            params["imdb_id"] = str(imdb_id)
+        else:
+            return None
+
+        lang = get_language()
+        if lang in ['de', 'en']:
+            params['language'] = lang
+
+        url = f"https://api.kinocheck.com/{endpoint}"
+        r = _session.get(url, params=params, timeout=4)
+        if r.status_code == 200:
+            data = r.json()
+            trailer = data.get("trailer")
+            if trailer and trailer.get("youtube_video_id"):
+                return trailer.get("youtube_video_id")
+            for v in data.get("videos", []):
+                if v.get("youtube_video_id"):
+                    return v.get("youtube_video_id")
+    except Exception:
+        pass
+    return None
 
 def get_tmdb_artwork(tmdb, content, season=None, episode=None):
     try:
