@@ -358,6 +358,9 @@ fun StreamsDashboardScreen(
     val lastCardFocusRequester = cardFocusRequester ?: remember { FocusRequester() }
     val sortButtonFocusRequester = remember { FocusRequester() }
 
+    var pendingDeleteFocus by remember(activeCategoryIndex, currentActivePillIndex) { mutableStateOf(false) }
+    var pendingHistoryDeleteFocus by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
         if (viewModel.isReturningFromDetails) {
             var attempts = 0
@@ -605,6 +608,18 @@ fun StreamsDashboardScreen(
                 
                 val targetHistoryIndex = lastFocusedHistoryIndex.coerceIn(0, (searchHistory.size - 1).coerceAtLeast(0))
                 val searchHistoryListState = rememberLazyListState()
+
+                LaunchedEffect(searchHistory) {
+                    if (pendingHistoryDeleteFocus) {
+                        pendingHistoryDeleteFocus = false
+                        if (searchHistory.isNotEmpty()) {
+                            try {
+                                lastHistoryFocusRequester.requestFocus()
+                            } catch (_: Exception) {}
+                        }
+                    }
+                }
+
                 LazyRow(
                     state = searchHistoryListState,
                     modifier = Modifier
@@ -626,6 +641,15 @@ fun StreamsDashboardScreen(
                                 },
                             onFocus = { lastFocusedHistoryIndex = index },
                             onTriggerDelete = {
+                                val remaining = searchHistory.size - 1
+                                if (remaining > 0) {
+                                    val nextIdx = if (index >= searchHistory.size - 1) index - 1 else index
+                                    lastFocusedHistoryIndex = nextIdx
+                                    pendingHistoryDeleteFocus = true
+                                } else {
+                                    lastFocusedHistoryIndex = 0
+                                    pendingHistoryDeleteFocus = false
+                                }
                                 val list = searchHistory.toMutableList()
                                 list.removeAt(index)
                                 viewModel.prefs.edit().putString("streams_search_history", JSONArray(list).toString()).apply()
@@ -910,6 +934,24 @@ fun StreamsDashboardScreen(
                         rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIdx) 
                     }
 
+                    LaunchedEffect(objList) {
+                        if (pendingDeleteFocus) {
+                            pendingDeleteFocus = false
+                            if (objList.isNotEmpty()) {
+                                val targetIdx = lastFocusedCardIndex.coerceIn(0, objList.size - 1)
+                                val visibleInfo = mainCardsListState.layoutInfo.visibleItemsInfo
+                                if (visibleInfo.none { it.index == targetIdx }) {
+                                    try {
+                                        mainCardsListState.scrollToItem(targetIdx)
+                                    } catch (_: Exception) {}
+                                }
+                                try {
+                                    lastCardFocusRequester.requestFocus()
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+
                     if (objList.isEmpty()) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             Text(androidx.compose.ui.res.stringResource(R.string.dashboard_no_items), color = Color.Gray, fontSize = 16.sp)
@@ -968,6 +1010,15 @@ fun StreamsDashboardScreen(
                                             modifier = Modifier.wrapContentSize().then(itemFocusModifier),
                                             onFocus = { lastFocusedCardIndex = index },
                                             onTriggerDelete = {
+                                                val remainingCount = objList.size - 1
+                                                if (remainingCount > 0) {
+                                                    val nextIndex = if (index >= objList.size - 1) index - 1 else index
+                                                    lastFocusedCardIndex = nextIndex
+                                                    pendingDeleteFocus = true
+                                                } else {
+                                                    lastFocusedCardIndex = 0
+                                                    pendingDeleteFocus = false
+                                                }
                                                 if (isFavorites) {
                                                     viewModel.toggleFavorite(item, isCurrentlyViewingFavorites = true)
                                                 } else if (isRecentlyWatched) {
