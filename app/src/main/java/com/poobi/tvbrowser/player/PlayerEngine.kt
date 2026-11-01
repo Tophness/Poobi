@@ -1178,6 +1178,31 @@ class PlayerEngine(
             .setPreferredAudioLanguages(preferredLang.code, preferredLang.iso3)
             .setPreferredTextLanguage(preferredSubLang.code)
             .build()
+
+        val mediaCodecSelector = androidx.media3.exoplayer.mediacodec.MediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+            var decoders = androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT.getDecoderInfos(
+                mimeType, requiresSecureDecoder, requiresTunnelingDecoder
+            )
+            if (decoders.isEmpty()) {
+                if (mimeType.equals("audio/vnd.dts.hd", ignoreCase = true)) {
+                    for (fallbackMime in listOf("audio/vnd.dts", "audio/dts", "audio/x-dts")) {
+                        val d = androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT.getDecoderInfos(
+                            fallbackMime, requiresSecureDecoder, requiresTunnelingDecoder
+                        )
+                        if (d.isNotEmpty()) {
+                            decoders = d
+                            break
+                        }
+                    }
+                } else if (mimeType.equals("video/dolby-vision", ignoreCase = true)) {
+                    decoders = androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT.getDecoderInfos(
+                        "video/hevc", requiresSecureDecoder, requiresTunnelingDecoder
+                    )
+                }
+            }
+            decoders
+        }
+
         val renderersFactory = object : io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory(context) {
             override fun buildAudioSink(
                 context: Context,
@@ -1193,6 +1218,7 @@ class PlayerEngine(
         }.apply {
             setEnableDecoderFallback(true)
             setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            setMediaCodecSelector(mediaCodecSelector)
         }
 
         val loadErrorHandlingPolicy = object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(4) {
