@@ -3932,10 +3932,42 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                                         if (checkUrlValidity(streamUrl, headersMap)) {
                                             resolvedSuccess = true
+                                            lastSelectedSource = rawData
+
+                                            val autoSubPref = prefs.getInt("auto_sub_pref", 0)
+                                            val autoSubTiming = prefs.getInt("auto_sub_timing_pref", 0)
+
+                                            if (autoSubPref == 1 && autoSubTiming == 1) {
+                                                withContext(Dispatchers.Main) {
+                                                    _silentFavoriteStatusMsg.value = context.getString(R.string.status_playing_fav_source, fav.name)
+                                                }
+                                                performAutoSubtitleSearch(item, season, episode)
+                                            }
+
+                                            val waitPref = prefs.getInt("auto_sub_wait_pref", 1)
+                                            if (_isDownloadingSubs.value && autoSubPref == 1) {
+                                                when (waitPref) {
+                                                    0 -> {
+                                                        cancelSubtitleDownloads()
+                                                    }
+                                                    1 -> {
+                                                        withContext(Dispatchers.Main) {
+                                                            _silentFavoriteStatusMsg.value = context.getString(R.string.status_playing_fav_source, fav.name)
+                                                        }
+                                                        while (_isDownloadingSubs.value && isActive && _isSilentFavoriteScrape.value) {
+                                                            delay(100)
+                                                        }
+                                                    }
+                                                    2 -> {
+                                                    }
+                                                }
+                                            }
+
                                             withContext(Dispatchers.Main) {
-                                                _isSilentFavoriteScrape.value = false
-                                                _silentFavoriteStatusMsg.value = context.getString(R.string.status_playing_fav_source, fav.name)
-                                                resolveAndPlay(sourceDataStr, matchingSource)
+                                                if (_isSilentFavoriteScrape.value) {
+                                                    _isSilentFavoriteScrape.value = false
+                                                    playStream(streamUrl, json.optBoolean("is_video", false), sourceDataStr, parsedHeaders)
+                                                }
                                             }
                                             break
                                         }
