@@ -1501,6 +1501,76 @@ def search(query, page=1):
     except Exception as e:
         return json.dumps([{"title": f"Error: {str(e)}", "url": ""}])
 
+def scrape_single_provider(provider_key_or_name, item_json, season=None, episode=None):
+    try:
+        import tmdb.tmdb_utils as tmdb_utils
+        item = json.loads(item_json)
+        tmdb_id = str(item['id'])
+        media_type = item.get('media_type', 'movie')
+        
+        ext_ids = tmdb_utils.get_external_ids(tmdb_id, media_type)
+        imdb_id = ext_ids.get('imdb_id', '0')
+
+        title = item.get('orig_title') or item.get('title')
+        year = item.get('year') or '0000'
+
+        clean_key = provider_key_or_name.strip().lower()
+        clean_key = clean_key.replace('[', '').replace('] ', '_').replace(']', '_')
+
+        target_provider = None
+        target_pack = None
+        target_name = None
+
+        if os.path.exists(SOURCES_PATH):
+            for pack in os.listdir(SOURCES_PATH):
+                pack_dir = os.path.join(SOURCES_PATH, pack)
+                if not os.path.isdir(pack_dir): continue
+                for file in os.listdir(pack_dir):
+                    if file.endswith('.py') and not file.startswith('__'):
+                        name = file[:-3]
+                        key1 = f"{pack}_{name}".lower()
+                        key2 = name.lower()
+                        if key1 == clean_key or key2 == clean_key or key1 in clean_key or clean_key in key1:
+                            target_pack = pack
+                            target_name = name
+                            mod_name = f"sources.{pack}.{name}"
+                            file_path = os.path.join(pack_dir, file)
+                            spec = importlib.util.spec_from_file_location(mod_name, file_path)
+                            mod = importlib.util.module_from_spec(spec)
+                            sys.modules[mod_name] = mod
+                            spec.loader.exec_module(mod)
+                            if hasattr(mod, 'source'):
+                                target_provider = mod.source()
+                            break
+                if target_provider: break
+
+        if not target_provider:
+            return json.dumps([])
+
+        scraper = UniversalScraper([target_pack] if target_pack else [])
+        content = 'movie' if media_type == 'movie' else 'episode'
+
+        args = (
+            target_provider, content, title, title, "[]", year, imdb_id, tmdb_id, 
+            '0' if content == 'movie' else None, 
+            season, episode, '0', target_name, target_pack
+        )
+        scraper.worker(*args)
+
+        results = []
+        for s in scraper.sources:
+            results.append({
+                "title": s.get('title') or s.get('source') or '',
+                "quality": s.get('quality', 'SD'),
+                "source": s.get('source', 'Unknown'),
+                "provider": s.get('provider', 'Unknown'),
+                "source_data": json.dumps(s)
+            })
+        return json.dumps(results)
+    except Exception as e:
+        traceback.print_exc()
+        return json.dumps([])
+
 def scrape(item_json, season=None, episode=None):
     global active_scraper
     stop_scrape()

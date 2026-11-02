@@ -887,7 +887,8 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                                 source = sourceName,
                                                 provider = providerName,
                                                 displayName = displayTitle,
-                                                isTorrent = (selectedTab == "Torrents")
+                                                isTorrent = (selectedTab == "Torrents"),
+                                                providerKey = rawData.optString("provider_key", "")
                                             )
                                         }
                                     )

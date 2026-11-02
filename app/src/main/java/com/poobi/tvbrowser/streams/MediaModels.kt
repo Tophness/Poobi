@@ -11,7 +11,8 @@ data class FavoriteSource(
     val source: String,
     val provider: String,
     val name: String,
-    val isTorrent: Boolean = false
+    val isTorrent: Boolean = false,
+    val providerKey: String = ""
 )
 
 @Immutable
