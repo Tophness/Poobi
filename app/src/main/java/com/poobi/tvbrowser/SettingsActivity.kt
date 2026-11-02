@@ -143,6 +143,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private var subRenderingMode by mutableStateOf(0)
     private var autoSubPref by mutableStateOf(0)
+    private var autoSubTimingPref by mutableStateOf(0)
     private var countPref by mutableStateOf(1)
     private var waitPref by mutableStateOf(1)
     private var retentionDays by mutableStateOf(3)
@@ -462,6 +463,7 @@ class SettingsActivity : AppCompatActivity() {
 
         subRenderingMode = prefs.getInt("subtitle_rendering_mode", 0)
         autoSubPref = prefs.getInt("auto_sub_pref", 0)
+        autoSubTimingPref = prefs.getInt("auto_sub_timing_pref", 0)
         countPref = prefs.getInt("auto_sub_count", 1)
         waitPref = prefs.getInt("auto_sub_wait_pref", 1)
         retentionDays = prefs.getInt("sub_retention_days", 3)
@@ -2437,6 +2439,20 @@ class SettingsActivity : AppCompatActivity() {
             } }
             if (autoSubPref == 1) {
                 item {
+                    val timingOptions = listOf(
+                        androidx.compose.ui.res.stringResource(R.string.opt_sub_timing_async),
+                        androidx.compose.ui.res.stringResource(R.string.opt_sub_timing_sync)
+                    )
+                    DropdownSettingRow(
+                        label = androidx.compose.ui.res.stringResource(R.string.setting_sub_download_timing),
+                        options = timingOptions,
+                        selectedIndex = autoSubTimingPref
+                    ) { index ->
+                        autoSubTimingPref = index
+                        prefs.edit().putInt("auto_sub_timing_pref", index).apply()
+                    }
+                }
+                item {
                     DropdownSettingRow(androidx.compose.ui.res.stringResource(R.string.setting_subs_to_download), autoSubCountOptions, selectedSubCountIndex) { index ->
                         if (index == 5) {
                             customSubCountInput = if (countPref !in 0..5) countPref.toString() else "10"
@@ -3872,6 +3888,7 @@ class SettingsActivity : AppCompatActivity() {
 
                     putInt("subtitle_rendering_mode", subRenderingMode)
                     putInt("auto_sub_pref", autoSubPref)
+                    putInt("auto_sub_timing_pref", autoSubTimingPref)
                     putInt("auto_sub_count", countPref)
                     putInt("auto_sub_wait_pref", waitPref)
                     putInt("sub_retention_days", retentionDays)

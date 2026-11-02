@@ -556,4 +556,9 @@
     <string name="toast_removed_fav_source">%1$s удалён из любимых источников</string>
     <string name="toast_added_fav_source">%1$s добавлен в любимые источники</string>
     <string name="toast_fav_sources_unavailable">Любимые источники недоступны. Отображаются все источники.</string>
+
+    <!-- Subtitle Download Timing -->
+    <string name="setting_sub_download_timing">Время загрузки субтитров</string>
+    <string name="opt_sub_timing_async">Асинхронно (Во время поиска)</string>
+    <string name="opt_sub_timing_sync">Синхронно (После выбора источника)</string>
 </resources>

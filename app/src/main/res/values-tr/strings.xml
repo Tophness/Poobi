@@ -556,4 +556,9 @@
     <string name="toast_removed_fav_source">%1$s favori kaynaklardan kaldırıldı</string>
     <string name="toast_added_fav_source">%1$s favori kaynaklara eklendi</string>
     <string name="toast_fav_sources_unavailable">Favori kaynaklar kullanılamıyor. Tüm kaynaklar gösteriliyor.</string>
+
+    <!-- Subtitle Download Timing -->
+    <string name="setting_sub_download_timing">Altyazı İndirme Zamanlaması</string>
+    <string name="opt_sub_timing_async">Eşzamanlı Olmayan (Arama Sırasında)</string>
+    <string name="opt_sub_timing_sync">Eşzamanlı (Kaynakları Bekle)</string>
 </resources>

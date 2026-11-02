@@ -3514,7 +3514,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             _scrapedSources.value = sortSources(sources)
         }
         
-        if (prefs.getInt("auto_sub_pref", 0) == 1) { 
+        val autoSubPref = prefs.getInt("auto_sub_pref", 0)
+        val autoSubTiming = prefs.getInt("auto_sub_timing_pref", 0)
+        if (autoSubPref == 1 && autoSubTiming == 1) { 
             performAutoSubtitleSearch(item, season, episode)
         }
     }
@@ -3742,7 +3744,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
 
         val autoSubPref = prefs.getInt("auto_sub_pref", 0)
-        if (autoSubPref == 1) {
+        val autoSubTiming = prefs.getInt("auto_sub_timing_pref", 0)
+        if (autoSubPref == 1 && autoSubTiming == 0) {
             performAutoSubtitleSearch(item, season, episode)
         }
 
@@ -3977,6 +3980,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             cached.forEach { sub ->
                 interceptedSubtitleUrls[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
             }
+        }
+
+        val autoSubPref = prefs.getInt("auto_sub_pref", 0)
+        val autoSubTiming = prefs.getInt("auto_sub_timing_pref", 0)
+        if (autoSubPref == 1 && autoSubTiming == 0) {
+            performAutoSubtitleSearch(item, season, episode)
         }
 
         _isScraping.value = true

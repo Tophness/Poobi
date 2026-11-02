@@ -556,4 +556,9 @@
     <string name="toast_removed_fav_source">تمت إزالة %1$s من المصادر المفضلة</string>
     <string name="toast_added_fav_source">تمت إضافة %1$s إلى المصادر المفضلة</string>
     <string name="toast_fav_sources_unavailable">المصادر المفضلة غير متاحة. جارٍ عرض جميع المصادر.</string>
+
+    <!-- Subtitle Download Timing -->
+    <string name="setting_sub_download_timing">توقيت تنزيل الترجمات</string>
+    <string name="opt_sub_timing_async">غير متزامن (أثناء المسح)</string>
+    <string name="opt_sub_timing_sync">متزامن (الانتظار حتى انتهاء المصادر)</string>
 </resources>

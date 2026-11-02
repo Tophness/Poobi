@@ -556,4 +556,9 @@
     <string name="toast_removed_fav_source">%1$s rimossa dalle sorgenti preferite</string>
     <string name="toast_added_fav_source">%1$s aggiunta alle sorgenti preferite</string>
     <string name="toast_fav_sources_unavailable">Sorgenti preferite non disponibili. Mostro tutte le sorgenti.</string>
+
+    <!-- Subtitle Download Timing -->
+    <string name="setting_sub_download_timing">Tempistica download sottotitoli</string>
+    <string name="opt_sub_timing_async">Asincrono (Durante la scansione)</string>
+    <string name="opt_sub_timing_sync">Sincrono (Attendi le sorgenti)</string>
 </resources>

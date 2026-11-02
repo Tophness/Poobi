@@ -556,4 +556,9 @@
     <string name="toast_removed_fav_source">%1$s को पसंदीदा स्रोतों से हटा दिया गया</string>
     <string name="toast_added_fav_source">%1$s को पसंदीदा स्रोतों में जोड़ा गया</string>
     <string name="toast_fav_sources_unavailable">पसंदीदा स्रोत अनुपलब्ध हैं। सभी स्रोत दिखाए जा रहे हैं।</string>
+
+    <!-- Subtitle Download Timing -->
+    <string name="setting_sub_download_timing">सबटाइटल डाउनलोड का समय</string>
+    <string name="opt_sub_timing_async">एसिंक्रोनस (स्कैनिंग के साथ)</string>
+    <string name="opt_sub_timing_sync">सिंक्रोनस (स्रोतों की प्रतीक्षा करें)</string>
 </resources>

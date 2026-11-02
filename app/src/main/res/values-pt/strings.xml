@@ -556,4 +556,9 @@
     <string name="toast_removed_fav_source">%1$s removida das fontes favoritas</string>
     <string name="toast_added_fav_source">%1$s adicionada às fontes favoritas</string>
     <string name="toast_fav_sources_unavailable">Fontes favoritas indisponíveis. Exibindo todas as fontes.</string>
+
+    <!-- Subtitle Download Timing -->
+    <string name="setting_sub_download_timing">Momento do download de legendas</string>
+    <string name="opt_sub_timing_async">Assíncrono (Junto com a busca)</string>
+    <string name="opt_sub_timing_sync">Síncrono (Aguardar fontes)</string>
 </resources>

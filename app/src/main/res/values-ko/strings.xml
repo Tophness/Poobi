@@ -556,4 +556,9 @@
     <string name="toast_removed_fav_source">%1$s 항목이 선호 소스에서 삭제되었습니다</string>
     <string name="toast_added_fav_source">%1$s 항목이 선호 소스에 추가되었습니다</string>
     <string name="toast_fav_sources_unavailable">선호 소스를 사용할 수 없어 모든 소스를 표시합니다.</string>
+
+    <!-- Subtitle Download Timing -->
+    <string name="setting_sub_download_timing">자막 다운로드 시점</string>
+    <string name="opt_sub_timing_async">비동기 (소스 검색과 동시 진행)</string>
+    <string name="opt_sub_timing_sync">동기 (소스 완료 후 대기)</string>
 </resources>

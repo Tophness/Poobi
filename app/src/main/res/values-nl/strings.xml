@@ -556,4 +556,9 @@
     <string name="toast_removed_fav_source">%1$s verwijderd uit favoriete bronnen</string>
     <string name="toast_added_fav_source">%1$s toegevoegd aan favoriete bronnen</string>
     <string name="toast_fav_sources_unavailable">Favoriete bronnen niet beschikbaar. Alle bronnen worden getoond.</string>
+
+    <!-- Subtitle Download Timing -->
+    <string name="setting_sub_download_timing">Timing voor downloaden ondertitels</string>
+    <string name="opt_sub_timing_async">Asynchroon (Tijdens het zoeken)</string>
+    <string name="opt_sub_timing_sync">Synchroon (Wachten op bronnen)</string>
 </resources>
