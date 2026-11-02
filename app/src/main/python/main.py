@@ -1082,6 +1082,41 @@ class UniversalScraper:
                             if not raw_url:
                                 continue
 
+                            if content == 'episode' and season is not None and episode is not None:
+                                s_req = int(season)
+                                e_req = int(episode)
+
+                                def log_rejection(reason, details):
+                                    msg = f"[SCRAPE_REJECTED] [{pack_name}] {name} rejected source: {reason} | Expected: S{s_req}E{e_req} (IMDb: {imdb}) | {details} | URL={raw_url}"
+                                    try:
+                                        from android.util import Log
+                                        Log.w("ScrapeFilter", msg)
+                                    except:
+                                        pass
+                                    print(msg, flush=True)
+
+                                se_url_match = re.search(r'/(?:tv|embed|e|series)/[^/?#]+/(\d+)[/-](\d+)', raw_url)
+                                if se_url_match:
+                                    s_found, e_found = int(se_url_match.group(1)), int(se_url_match.group(2))
+                                    if s_found != s_req or e_found != e_req:
+                                        log_rejection("Wrong Season/Episode in URL", f"Found: S{s_found}E{e_found}")
+                                        continue
+
+                                res_title = res.get('title') or ''
+                                ep_title_match = re.search(r'[sS](\d+)[eE](\d+)', res_title)
+                                if ep_title_match:
+                                    s_found, e_found = int(ep_title_match.group(1)), int(ep_title_match.group(2))
+                                    if s_found != s_req or e_found != e_req:
+                                        log_rejection("Wrong Season/Episode in Title", f"Found: S{s_found}E{e_found} in Title '{res_title.strip()}'")
+                                        continue
+
+                                if imdb and imdb != '0':
+                                    clean_imdb = imdb if imdb.startswith('tt') else f"tt{imdb}"
+                                    imdb_in_url = re.search(r'(tt\d{7,8})', raw_url)
+                                    if imdb_in_url and imdb_in_url.group(1) != clean_imdb:
+                                        log_rejection("Mismatched IMDb ID in URL", f"Found: {imdb_in_url.group(1)}")
+                                        continue
+
                             clean_key = raw_url.split('|')[0].strip().rstrip('/').lower()
 
                             if clean_key in self.seen_urls:
@@ -1348,11 +1383,15 @@ def search_subtitles(item_json, season=None, episode=None):
         tmdb_id = str(item['id'])
         media_type = item.get('media_type', 'movie')
         
+        is_tv = (media_type in ['tv', 'tvshow']) or (season is not None) or ('name' in item and 'title' not in item)
+        media_type = 'tv' if is_tv else 'movie'
+
         ext_ids = tmdb_utils.get_external_ids(tmdb_id, media_type)
         imdb_id = ext_ids.get('imdb_id', '0')
         
-        title = item.get('orig_title') or item.get('title')
-        year = item.get('year') or (item.get('release_date') or '0000')[:4]
+        title = item.get('orig_title') or item.get('title') or item.get('name') or item.get('original_name') or ''
+        title = re.sub(r'\s\(\d{4}\)$', '', title).strip()
+        year = item.get('year') or (item.get('release_date') or item.get('first_air_date') or '0000')[:4]
 
         results = sub_manager.search_subtitles(
             imdb_id=imdb_id,
@@ -1505,14 +1544,19 @@ def scrape_single_provider(provider_key_or_name, item_json, season=None, episode
     try:
         import tmdb.tmdb_utils as tmdb_utils
         item = json.loads(item_json)
-        tmdb_id = str(item['id'])
-        media_type = item.get('media_type', 'movie')
+        tmdb_id = str(item.get('id', '0'))
         
-        ext_ids = tmdb_utils.get_external_ids(tmdb_id, media_type)
-        imdb_id = ext_ids.get('imdb_id', '0')
+        is_tv = (item.get('media_type') in ['tv', 'tvshow']) or (season is not None) or ('name' in item and 'title' not in item) or ('first_air_date' in item and 'release_date' not in item)
+        media_type = 'tv' if is_tv else 'movie'
+        
+        imdb_id = item.get('imdb') or item.get('imdb_id') or ''
+        if not imdb_id or imdb_id == '0' or str(imdb_id).lower() in ['none', 'null']:
+            ext_ids = tmdb_utils.get_external_ids(tmdb_id, media_type)
+            imdb_id = ext_ids.get('imdb_id', '0')
 
-        title = item.get('orig_title') or item.get('title')
-        year = item.get('year') or '0000'
+        title = item.get('orig_title') or item.get('title') or item.get('name') or item.get('original_name') or ''
+        title = re.sub(r'\s\(\d{4}\)$', '', title).strip()
+        year = item.get('year') or (item.get('release_date') or item.get('first_air_date') or '0000')[:4]
 
         clean_key = provider_key_or_name.strip().lower()
         clean_key = clean_key.replace('[', '').replace('] ', '_').replace(']', '_')
@@ -1577,11 +1621,13 @@ def scrape(item_json, season=None, episode=None):
     try:
         import tmdb.tmdb_utils as tmdb_utils
         item = json.loads(item_json)
-        tmdb_id = str(item['id'])
-        media_type = item.get('media_type', 'movie')
+        tmdb_id = str(item.get('id', '0'))
         
-        imdb_id = item.get('imdb') or ''
-        if not imdb_id or imdb_id == '0':
+        is_tv = (item.get('media_type') in ['tv', 'tvshow']) or (season is not None) or ('name' in item and 'title' not in item) or ('first_air_date' in item and 'release_date' not in item)
+        media_type = 'tv' if is_tv else 'movie'
+        
+        imdb_id = item.get('imdb') or item.get('imdb_id') or ''
+        if not imdb_id or imdb_id == '0' or str(imdb_id).lower() in ['none', 'null']:
             ext_ids = tmdb_utils.get_external_ids(tmdb_id, media_type)
             imdb_id = ext_ids.get('imdb_id', '0')
 
@@ -1596,15 +1642,16 @@ def scrape(item_json, season=None, episode=None):
         
         active_scraper = UniversalScraper(enabled_packs)
         
-        title = item.get('orig_title') or item.get('title')
-        year = item.get('year') or '0000'
+        title = item.get('orig_title') or item.get('title') or item.get('name') or item.get('original_name') or ''
+        title = re.sub(r'\s\(\d{4}\)$', '', title).strip()
+        year = item.get('year') or (item.get('release_date') or item.get('first_air_date') or '0000')[:4]
         
         sources = active_scraper.getSources(
             title=title, 
             year=year, 
             imdb=imdb_id, 
             tmdb=tmdb_id,
-            tvshowtitle=title if media_type == 'tv' else None,
+            tvshowtitle=title if is_tv else None,
             season=season,
             episode=episode
         )
