@@ -52,6 +52,7 @@ fun CustomSubtitleOverlay(
                 playerEngine.exoPlayer?.let { player ->
                     playPosition = player.currentPosition
                     isTextTrackSelected = playerEngine.isTextTrackSelected()
+                    playerEngine.updateNativeSubtitleViewVisibility()
                 }
                 delay(200)
             }

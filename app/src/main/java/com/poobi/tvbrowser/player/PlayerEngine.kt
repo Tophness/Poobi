@@ -323,33 +323,19 @@ class PlayerEngine(
         return lastSubtitles.entries.find { it.value["label"] == format.label }?.key
     }
 
-    fun isSelectedTrackExternal(): Boolean {
+    fun isSelectedTrackExternal(tracks: Tracks? = null): Boolean {
         val player = exoPlayer ?: return false
-        val tracks = player.currentTracks
-        for (group in tracks.groups) {
-            if (group.type == C.TRACK_TYPE_TEXT && group.isSelected) {
+        val currentTracks = tracks ?: player.currentTracks
+        val textGroups = currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+        if (textGroups.isEmpty()) {
+            return hasExternalSubtitles && pendingSelectedSubtitleLabel != null
+        }
+        for (group in textGroups) {
+            if (group.isSelected) {
                 for (i in 0 until group.length) {
                     if (group.isTrackSelected(i)) {
                         val format = group.getTrackFormat(i)
                         return getMatchingExternalSubUrl(format) != null
-                    }
-                }
-            }
-        }
-        return false
-    }
-
-    fun isSelectedTrackEmbedded(): Boolean {
-        val player = exoPlayer ?: return false
-        val tracks = player.currentTracks
-        for (group in tracks.groups) {
-            if (group.type == C.TRACK_TYPE_TEXT && group.isSelected) {
-                for (i in 0 until group.length) {
-                    if (group.isTrackSelected(i)) {
-                        val format = group.getTrackFormat(i)
-                        if (getMatchingExternalSubUrl(format) == null) {
-                            return true
-                        }
                     }
                 }
             }
@@ -379,10 +365,7 @@ class PlayerEngine(
         } else {
             subtitleAlignmentManager.clearSubtitles()
         }
-        updateNativeSubtitleViewVisibility()
-        playerView?.post {
-            updateNativeSubtitleViewVisibility()
-        }
+        updateNativeSubtitleViewVisibility(overrideIsExternal = (matchedUrl != null))
 
         val itemKey = SubtitleCacheManager.getItemKey(lastScrapedItem, lastScrapedSeason, lastScrapedEpisode)
         if (itemKey.isNotEmpty()) {
@@ -404,10 +387,7 @@ class PlayerEngine(
     fun disableSubtitles() {
         disableNativeSubtitles(true)
         subtitleAlignmentManager.clearSubtitles()
-        updateNativeSubtitleViewVisibility()
-        playerView?.post {
-            updateNativeSubtitleViewVisibility()
-        }
+        updateNativeSubtitleViewVisibility(overrideIsExternal = false)
 
         val itemKey = SubtitleCacheManager.getItemKey(lastScrapedItem, lastScrapedSeason, lastScrapedEpisode)
         if (itemKey.isNotEmpty()) {
@@ -515,14 +495,17 @@ class PlayerEngine(
         disableNativeSubtitles(false)
     }
 
-    fun updateNativeSubtitleViewVisibility() {
+    fun updateNativeSubtitleViewVisibility(tracks: Tracks? = null, overrideIsExternal: Boolean? = null) {
         val view = playerView ?: return
         val renderingMode = prefs.getInt("subtitle_rendering_mode", 0)
         val isSyncVisible = subtitleAlignmentManager.isUIVisible.value
+        val isExternal = overrideIsExternal ?: isSelectedTrackExternal(tracks)
 
-        val shouldHideNative = isSyncVisible || (renderingMode == 1 && (isSelectedTrackExternal() || (hasExternalSubtitles && !isSelectedTrackEmbedded())))
-        val shouldShow = !shouldHideNative
-
+        val shouldShow = when {
+            isSyncVisible -> false
+            renderingMode == 1 && isExternal -> false
+            else -> true
+        }
         view.subtitleView?.visibility = if (shouldShow) android.view.View.VISIBLE else android.view.View.INVISIBLE
         view.subtitleView?.alpha = if (shouldShow) 1.0f else 0.0f
     }
@@ -1291,9 +1274,6 @@ class PlayerEngine(
                     }
                     hasReachedReady = true
                     checkUpNextHandler.post(checkUpNextRunnable)
-                    playerView?.post {
-                        updateNativeSubtitleViewVisibility()
-                    }
                     
                     if (!introDbManager.hasFetchedTimestamps) {
                         val tmdbId = lastScrapedItem?.optInt("id") ?: 0
@@ -1366,10 +1346,7 @@ class PlayerEngine(
                     }
                 }
 
-                updateNativeSubtitleViewVisibility()
-                playerView?.post {
-                    updateNativeSubtitleViewVisibility()
-                }
+                updateNativeSubtitleViewVisibility(tracks)
 
                 val activeQuality = _currentQuality.value
                 if (activeQuality != null) {
@@ -1509,10 +1486,9 @@ class PlayerEngine(
             restoreSubtitleVisibility()
         }
 
-        updateNativeSubtitleViewVisibility()
-
         exoPlayer?.prepare()
         exoPlayer?.playWhenReady = true
+        updateNativeSubtitleViewVisibility()
     }
 
     private fun updateQualityOptions(tracks: Tracks) {
