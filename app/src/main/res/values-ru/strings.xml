@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">Настройка блокировщика рекламы</string>
     <string name="dialog_adblock_setup_desc">Загрузка актуальных правил блокировки рекламы. Это происходит только один раз.</string>
     <string name="btn_run_background">В фоновом режиме</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">Любимые источники</string>
+    <string name="setting_use_favorite_sources">Использовать любимые источники</string>
+    <string name="fav_sources_empty_title">Любимые источники ещё не добавлены</string>
+    <string name="fav_sources_empty_desc">При поиске нажмите значок ♡ рядом с источником, чтобы добавить его сюда.</string>
+    <string name="fav_sources_priority">Приоритет #%1$d</string>
+    <string name="fav_sources_torrent_source">Торрент-источник</string>
+    <string name="fav_sources_provider_prefix">Провайдер: %1$s</string>
+    <string name="fav_sources_hold_to_delete">Удерживайте OK для удаления</string>
+    <string name="dialog_resolving_fav_source_title">Обработка любимого источника</string>
+    <string name="btn_view_all_sources">Показать все источники</string>
+    <string name="status_checking_fav_sources">Проверка любимых источников...</string>
+    <string name="status_resolving_fav_source">Обработка %1$s...</string>
+    <string name="status_playing_fav_source">Воспроизведение %1$s...</string>
+    <string name="toast_removed_fav_source">%1$s удалён из любимых источников</string>
+    <string name="toast_added_fav_source">%1$s добавлен в любимые источники</string>
+    <string name="toast_fav_sources_unavailable">Любимые источники недоступны. Отображаются все источники.</string>
 </resources>

@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">Setting up AdBlock Engine</string>
     <string name="dialog_adblock_setup_desc">Downloading the latest adblock rules. This only happens once.</string>
     <string name="btn_run_background">Run in Background</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">Favourite Sources</string>
+    <string name="setting_use_favorite_sources">Use Favourite Sources</string>
+    <string name="fav_sources_empty_title">No favourite sources added yet</string>
+    <string name="fav_sources_empty_desc">When scraping for streams, click the ♡ icon on any source row to add it here.</string>
+    <string name="fav_sources_priority">#%1$d Priority</string>
+    <string name="fav_sources_torrent_source">Torrent Source</string>
+    <string name="fav_sources_provider_prefix">Provider: %1$s</string>
+    <string name="fav_sources_hold_to_delete">Hold OK to delete</string>
+    <string name="dialog_resolving_fav_source_title">Resolving Favourite Source</string>
+    <string name="btn_view_all_sources">View All Sources</string>
+    <string name="status_checking_fav_sources">Checking favourite sources...</string>
+    <string name="status_resolving_fav_source">Resolving %1$s...</string>
+    <string name="status_playing_fav_source">Playing %1$s...</string>
+    <string name="toast_removed_fav_source">Removed %1$s from Favourite Sources</string>
+    <string name="toast_added_fav_source">Added %1$s to Favourite Sources</string>
+    <string name="toast_fav_sources_unavailable">Favourite sources unavailable. Showing all sources.</string>
 </resources>

@@ -6,6 +6,15 @@ import com.poobi.tvbrowser.shared.TmdbGenres
 import org.json.JSONObject
 
 @Immutable
+data class FavoriteSource(
+    val id: String,
+    val source: String,
+    val provider: String,
+    val name: String,
+    val isTorrent: Boolean = false
+)
+
+@Immutable
 data class SpotlightActor(
     val id: Int = 0,
     val name: String = "",

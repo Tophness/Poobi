@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">إعداد محرك حظر الإعلانات</string>
     <string name="dialog_adblock_setup_desc">جارٍ تنزيل أحدث قواعد حظر الإعلانات. يحدث هذا لمرة واحدة فقط.</string>
     <string name="btn_run_background">التشغيل في الخلفية</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">المصادر المفضلة</string>
+    <string name="setting_use_favorite_sources">استخدام المصادر المفضلة</string>
+    <string name="fav_sources_empty_title">لم تتم إضافة مصادر مفضلة بعد</string>
+    <string name="fav_sources_empty_desc">عند البحث عن مصادر، اضغط على أيقونة ♡ لإضافتها هنا.</string>
+    <string name="fav_sources_priority">أولوية #%1$d</string>
+    <string name="fav_sources_torrent_source">مصدر تورنت</string>
+    <string name="fav_sources_provider_prefix">المزود: %1$s</string>
+    <string name="fav_sources_hold_to_delete">اضغط مع الاستمرار للحذف</string>
+    <string name="dialog_resolving_fav_source_title">جارٍ حل المصدر المفضل</string>
+    <string name="btn_view_all_sources">عرض جميع المصادر</string>
+    <string name="status_checking_fav_sources">جارٍ فحص المصادر المفضلة...</string>
+    <string name="status_resolving_fav_source">جارٍ حل %1$s...</string>
+    <string name="status_playing_fav_source">جارٍ تشغيل %1$s...</string>
+    <string name="toast_removed_fav_source">تمت إزالة %1$s من المصادر المفضلة</string>
+    <string name="toast_added_fav_source">تمت إضافة %1$s إلى المصادر المفضلة</string>
+    <string name="toast_fav_sources_unavailable">المصادر المفضلة غير متاحة. جارٍ عرض جميع المصادر.</string>
 </resources>

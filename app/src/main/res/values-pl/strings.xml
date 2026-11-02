@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">Konfigurowanie silnika AdBlock</string>
     <string name="dialog_adblock_setup_desc">Pobieranie najnowszych reguł blokowania reklam. Dzieje się to tylko raz.</string>
     <string name="btn_run_background">Uruchom w tle</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">Ulubione źródła</string>
+    <string name="setting_use_favorite_sources">Używaj ulubionych źródeł</string>
+    <string name="fav_sources_empty_title">Nie dodano jeszcze ulubionych źródeł</string>
+    <string name="fav_sources_empty_desc">Podczas wyszukiwania kliknij ikonę ♡ przy źródle, aby dodać je tutaj.</string>
+    <string name="fav_sources_priority">Priorytet #%1$d</string>
+    <string name="fav_sources_torrent_source">Źródło torrent</string>
+    <string name="fav_sources_provider_prefix">Dostawca: %1$s</string>
+    <string name="fav_sources_hold_to_delete">Przytrzymaj OK, aby usunąć</string>
+    <string name="dialog_resolving_fav_source_title">Rozwiązywanie ulubionego źródła</string>
+    <string name="btn_view_all_sources">Pokaż wszystkie źródła</string>
+    <string name="status_checking_fav_sources">Sprawdzanie ulubionych źródeł...</string>
+    <string name="status_resolving_fav_source">Rozwiązywanie %1$s...</string>
+    <string name="status_playing_fav_source">Odtwarzanie %1$s...</string>
+    <string name="toast_removed_fav_source">Usunięto %1$s z ulubionych źródeł</string>
+    <string name="toast_added_fav_source">Dodano %1$s do ulubionych źródeł</string>
+    <string name="toast_fav_sources_unavailable">Ulubione źródła niedostępne. Wyświetlam wszystkie źródła.</string>
 </resources>

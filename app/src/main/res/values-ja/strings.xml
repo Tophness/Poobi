@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">AdBlockエンジンの設定中</string>
     <string name="dialog_adblock_setup_desc">最新の広告ブロックルールをダウンロードしています。この処理は初回のみ実行されます。</string>
     <string name="btn_run_background">バックグラウンドで実行</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">お気に入りソース</string>
+    <string name="setting_use_favorite_sources">お気に入りソースを使用</string>
+    <string name="fav_sources_empty_title">お気に入りソースがまだありません</string>
+    <string name="fav_sources_empty_desc">ソース検索時に ♡ アイコンをクリックするとここに追加されます。</string>
+    <string name="fav_sources_priority">優先度 #%1$d</string>
+    <string name="fav_sources_torrent_source">トレントソース</string>
+    <string name="fav_sources_provider_prefix">プロバイダー: %1$s</string>
+    <string name="fav_sources_hold_to_delete">長押しで削除</string>
+    <string name="dialog_resolving_fav_source_title">お気に入りソースを解決中</string>
+    <string name="btn_view_all_sources">すべてのソースを表示</string>
+    <string name="status_checking_fav_sources">お気に入りソースを確認中...</string>
+    <string name="status_resolving_fav_source">%1$s を解決中...</string>
+    <string name="status_playing_fav_source">%1$s を再生中...</string>
+    <string name="toast_removed_fav_source">%1$s をお気に入りソースから削除しました</string>
+    <string name="toast_added_fav_source">%1$s をお気に入りソースに追加しました</string>
+    <string name="toast_fav_sources_unavailable">お気に入りソースが見つかりません。すべてのソースを表示します。</string>
 </resources>

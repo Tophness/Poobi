@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">正在设置广告拦截引擎</string>
     <string name="dialog_adblock_setup_desc">正在下载最新的广告拦截规则。此操作仅需执行一次。</string>
     <string name="btn_run_background">后台运行</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">常用播放源</string>
+    <string name="setting_use_favorite_sources">优先使用常用播放源</string>
+    <string name="fav_sources_empty_title">尚未添加常用播放源</string>
+    <string name="fav_sources_empty_desc">解析影片时，点击任意播放源右侧的 ♡ 图标即可添加到此处。</string>
+    <string name="fav_sources_priority">第 %1$d 优先级</string>
+    <string name="fav_sources_torrent_source">种子磁力源</string>
+    <string name="fav_sources_provider_prefix">来源提供站: %1$s</string>
+    <string name="fav_sources_hold_to_delete">长按 OK 键删除</string>
+    <string name="dialog_resolving_fav_source_title">正在解析常用源</string>
+    <string name="btn_view_all_sources">查看所有播放源</string>
+    <string name="status_checking_fav_sources">正在探测常用播放源...</string>
+    <string name="status_resolving_fav_source">正在解析 %1$s...</string>
+    <string name="status_playing_fav_source">即将播放 %1$s...</string>
+    <string name="toast_removed_fav_source">已从常用播放源中移除 %1$s</string>
+    <string name="toast_added_fav_source">已将 %1$s 添加到常用播放源</string>
+    <string name="toast_fav_sources_unavailable">常用源均不可用，已转为显示所有可用播放源。</string>
 </resources>

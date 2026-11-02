@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">광고 차단 엔진 설정 중</string>
     <string name="dialog_adblock_setup_desc">최신 광고 차단 규칙을 다운로드하는 중입니다. 이 작업은 최초 1회만 실행됩니다.</string>
     <string name="btn_run_background">백그라운드에서 실행</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">선호 소스</string>
+    <string name="setting_use_favorite_sources">선호 소스 사용</string>
+    <string name="fav_sources_empty_title">등록된 선호 소스가 없습니다</string>
+    <string name="fav_sources_empty_desc">스트림 검색 시 소스 행의 ♡ 아이콘을 누르면 여기에 추가됩니다.</string>
+    <string name="fav_sources_priority">#%1$d 우선순위</string>
+    <string name="fav_sources_torrent_source">토렌트 소스</string>
+    <string name="fav_sources_provider_prefix">제공자: %1$s</string>
+    <string name="fav_sources_hold_to_delete">길게 눌러 삭제</string>
+    <string name="dialog_resolving_fav_source_title">선호 소스 연결 확인 중</string>
+    <string name="btn_view_all_sources">모든 소스 보기</string>
+    <string name="status_checking_fav_sources">선호 소스 확인 중...</string>
+    <string name="status_resolving_fav_source">%1$s 연결 중...</string>
+    <string name="status_playing_fav_source">%1$s 재생 중...</string>
+    <string name="toast_removed_fav_source">%1$s 항목이 선호 소스에서 삭제되었습니다</string>
+    <string name="toast_added_fav_source">%1$s 항목이 선호 소스에 추가되었습니다</string>
+    <string name="toast_fav_sources_unavailable">선호 소스를 사용할 수 없어 모든 소스를 표시합니다.</string>
 </resources>

@@ -210,7 +210,9 @@ fun MainApp(
     val torrentBufferSeeders by streamsViewModel.torrentBufferSeeders.collectAsState()
 
     val isControllerVisible by playerEngine.isControllerVisible.collectAsState()
-    val isScrapeScreenActive = (isScraping && selectedMedia != null) || scrapedSources != null
+    val isSilentFavoriteScrape by streamsViewModel.isSilentFavoriteScrape.collectAsState()
+    val silentFavoriteStatusMsg by streamsViewModel.silentFavoriteStatusMsg.collectAsState()
+    val isScrapeScreenActive = !isSilentFavoriteScrape && ((isScraping && selectedMedia != null) || scrapedSources != null)
     val showSubtitleWaitDialog by streamsViewModel.showSubtitleWaitDialog.collectAsState()
 
     Box(
@@ -1419,6 +1421,58 @@ fun MainApp(
                         }
                     }
                 }
+            )
+        }
+
+        if (isSilentFavoriteScrape) {
+            AlertDialog(
+                onDismissRequest = { streamsViewModel.cancelSilentFavoriteScrape() },
+                title = {
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(R.string.dialog_resolving_fav_source_title),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                },
+                containerColor = Color(0xFF222225),
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            color = Color(0xFF00BCD4),
+                            modifier = Modifier.size(36.dp),
+                            strokeWidth = 3.dp
+                        )
+                        Text(
+                            text = silentFavoriteStatusMsg,
+                            color = Color.LightGray,
+                            fontSize = 14.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    TvFocusableBox(
+                        modifier = Modifier.height(40.dp),
+                        defaultColor = Color(0xFF333338),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = { streamsViewModel.cancelSilentFavoriteScrape() }
+                    ) { isFocused ->
+                        Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = androidx.compose.ui.res.stringResource(R.string.btn_view_all_sources),
+                                color = if (isFocused) Color.Black else Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                },
+                dismissButton = null
             )
         }
 

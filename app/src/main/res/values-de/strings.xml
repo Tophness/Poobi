@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">AdBlock-Engine wird eingerichtet</string>
     <string name="dialog_adblock_setup_desc">Lade die neuesten Werbeblocker-Regeln herunter. Dies geschieht nur einmal.</string>
     <string name="btn_run_background">Im Hintergrund ausführen</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">Lieblingsquellen</string>
+    <string name="setting_use_favorite_sources">Lieblingsquellen verwenden</string>
+    <string name="fav_sources_empty_title">Noch keine Lieblingsquellen hinzugefügt</string>
+    <string name="fav_sources_empty_desc">Klicke beim Suchen nach Streams auf das ♡-Symbol einer Quelle, um sie hier hinzuzufügen.</string>
+    <string name="fav_sources_priority">#%1$d Priorität</string>
+    <string name="fav_sources_torrent_source">Torrent-Quelle</string>
+    <string name="fav_sources_provider_prefix">Anbieter: %1$s</string>
+    <string name="fav_sources_hold_to_delete">OK gedrückt halten zum Löschen</string>
+    <string name="dialog_resolving_fav_source_title">Lieblingsquelle wird aufgelöst</string>
+    <string name="btn_view_all_sources">Alle Quellen anzeigen</string>
+    <string name="status_checking_fav_sources">Lieblingsquellen werden überprüft...</string>
+    <string name="status_resolving_fav_source">%1$s wird aufgelöst...</string>
+    <string name="status_playing_fav_source">%1$s wird abgespielt...</string>
+    <string name="toast_removed_fav_source">%1$s aus Lieblingsquellen entfernt</string>
+    <string name="toast_added_fav_source">%1$s zu Lieblingsquellen hinzugefügt</string>
+    <string name="toast_fav_sources_unavailable">Lieblingsquellen nicht verfügbar. Zeige alle Quellen.</string>
 </resources>

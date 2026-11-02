@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">एड-ब्लॉक इंजन सेट किया जा रहा है</string>
     <string name="dialog_adblock_setup_desc">नवीनतम एड-ब्लॉक नियम डाउनलोड किए जा रहे हैं। यह केवल एक बार होता है।</string>
     <string name="btn_run_background">पृष्ठभूमि में चलाएं</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">पसंदीदा स्रोत</string>
+    <string name="setting_use_favorite_sources">पसंदीदा स्रोत का उपयोग करें</string>
+    <string name="fav_sources_empty_title">अभी तक कोई पसंदीदा स्रोत नहीं जोड़ा गया</string>
+    <string name="fav_sources_empty_desc">स्ट्रीम खोजते समय, किसी भी स्रोत पंक्ति पर ♡ आइकन पर क्लिक करें।</string>
+    <string name="fav_sources_priority">#%1$d प्राथमिकता</string>
+    <string name="fav_sources_torrent_source">टॉरेंट स्रोत</string>
+    <string name="fav_sources_provider_prefix">प्रदाता: %1$s</string>
+    <string name="fav_sources_hold_to_delete">हटाने के लिए OK दबाए रखें</string>
+    <string name="dialog_resolving_fav_source_title">पसंदीदा स्रोत हल किया जा रहा है</string>
+    <string name="btn_view_all_sources">सभी स्रोत देखें</string>
+    <string name="status_checking_fav_sources">पसंदीदा स्रोतों की जांच हो रही है...</string>
+    <string name="status_resolving_fav_source">%1$s हल किया जा रहा है...</string>
+    <string name="status_playing_fav_source">%1$s चलाया जा रहा है...</string>
+    <string name="toast_removed_fav_source">%1$s को पसंदीदा स्रोतों से हटा दिया गया</string>
+    <string name="toast_added_fav_source">%1$s को पसंदीदा स्रोतों में जोड़ा गया</string>
+    <string name="toast_fav_sources_unavailable">पसंदीदा स्रोत अनुपलब्ध हैं। सभी स्रोत दिखाए जा रहे हैं।</string>
 </resources>

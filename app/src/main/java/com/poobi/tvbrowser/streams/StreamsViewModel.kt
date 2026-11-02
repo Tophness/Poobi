@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
+import com.poobi.tvbrowser.R
 import com.poobi.tvbrowser.shared.StreamResumeManager
 import com.poobi.tvbrowser.shared.SubtitleData
 import com.poobi.tvbrowser.torrent.TorrentSortCriteria
@@ -279,8 +280,23 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     var lastSelectedSourceIndex: Int = -1
     var lastSelectedSourceKey: String? = null
 
+    private val _favoriteSources = MutableStateFlow<List<FavoriteSource>>(emptyList())
+    val favoriteSources: StateFlow<List<FavoriteSource>> = _favoriteSources.asStateFlow()
+
+    private val _useFavoriteSources = MutableStateFlow(true)
+    val useFavoriteSources: StateFlow<Boolean> = _useFavoriteSources.asStateFlow()
+
+    private val _isSilentFavoriteScrape = MutableStateFlow(false)
+    val isSilentFavoriteScrape: StateFlow<Boolean> = _isSilentFavoriteScrape.asStateFlow()
+
+    private val _silentFavoriteStatusMsg = MutableStateFlow(context.getString(R.string.status_checking_fav_sources))
+    val silentFavoriteStatusMsg: StateFlow<String> = _silentFavoriteStatusMsg.asStateFlow()
+
+    private var silentFavoriteJob: Job? = null
+
     init {
         loadSearchHistory()
+        loadFavoriteSources()
         refreshFavoritesSet()
         refreshFavoriteActorsSet()
         purgeOldSubtitles()
@@ -3503,7 +3519,248 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun performScrape(item: JSONObject, season: Int? = null, episode: Int? = null) {
+    fun loadFavoriteSources() {
+        val json = prefs.getString("streams_favorite_sources", "[]") ?: "[]"
+        val useFav = prefs.getBoolean("use_favorite_sources", true)
+        _useFavoriteSources.value = useFav
+        try {
+            val arr = JSONArray(json)
+            val list = mutableListOf<FavoriteSource>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    FavoriteSource(
+                        id = obj.optString("id", "${obj.optString("provider")}_${obj.optString("source")}"),
+                        source = obj.optString("source", ""),
+                        provider = obj.optString("provider", ""),
+                        name = obj.optString("name", "Unknown Source"),
+                        isTorrent = obj.optBoolean("is_torrent", false)
+                    )
+                )
+            }
+            _favoriteSources.value = list
+        } catch (_: Exception) {}
+    }
+
+    fun setUseFavoriteSources(enabled: Boolean) {
+        _useFavoriteSources.value = enabled
+        prefs.edit().putBoolean("use_favorite_sources", enabled).apply()
+    }
+
+    fun saveFavoriteSources(list: List<FavoriteSource>) {
+        _favoriteSources.value = list
+        val arr = JSONArray()
+        list.forEach { item ->
+            arr.put(JSONObject().apply {
+                put("id", item.id)
+                put("source", item.source)
+                put("provider", item.provider)
+                put("name", item.name)
+                put("is_torrent", item.isTorrent)
+            })
+        }
+        prefs.edit().putString("streams_favorite_sources", arr.toString()).apply()
+    }
+
+    fun isSourceFavorite(source: String, provider: String): Boolean {
+        val sClean = source.trim().lowercase()
+        val pClean = provider.trim().lowercase()
+        return _favoriteSources.value.any {
+            it.source.trim().lowercase() == sClean && it.provider.trim().lowercase() == pClean
+        }
+    }
+
+    fun toggleFavoriteSource(source: String, provider: String, displayName: String, isTorrent: Boolean) {
+        val sClean = source.trim().lowercase()
+        val pClean = provider.trim().lowercase()
+        val current = _favoriteSources.value.toMutableList()
+        val index = current.indexOfFirst {
+            it.source.trim().lowercase() == sClean && it.provider.trim().lowercase() == pClean
+        }
+        if (index != -1) {
+            val removed = current.removeAt(index)
+            saveFavoriteSources(current)
+            _events.value = StreamsEvent.ShowToast(context.getString(R.string.toast_removed_fav_source, removed.name))
+        } else {
+            val cleanName = displayName.ifEmpty {
+                if (provider.isNotEmpty() && provider != source) "$source ($provider)" else source
+            }
+            val id = "${pClean}_${sClean}"
+            val newItem = FavoriteSource(
+                id = id,
+                source = source,
+                provider = provider,
+                name = cleanName,
+                isTorrent = isTorrent
+            )
+            current.add(newItem)
+            saveFavoriteSources(current)
+            _events.value = StreamsEvent.ShowToast(context.getString(R.string.toast_added_fav_source, cleanName))
+        }
+    }
+
+    fun moveFavoriteSource(fromIndex: Int, toIndex: Int) {
+        val current = _favoriteSources.value.toMutableList()
+        if (fromIndex in current.indices && toIndex in current.indices && fromIndex != toIndex) {
+            val item = current.removeAt(fromIndex)
+            current.add(toIndex, item)
+            saveFavoriteSources(current)
+        }
+    }
+
+    fun removeFavoriteSource(id: String) {
+        val current = _favoriteSources.value.toMutableList()
+        val index = current.indexOfFirst { it.id == id }
+        if (index != -1) {
+            val removed = current.removeAt(index)
+            saveFavoriteSources(current)
+            _events.value = StreamsEvent.ShowToast(context.getString(R.string.toast_removed_fav_source, removed.name))
+        }
+    }
+
+    fun loadFavoriteSourcesScreen() {
+        cancelLibraryJobs(clearCurrentItems = false)
+        _libraryItems.value = JSONArray()
+    }
+
+    fun cancelSilentFavoriteScrape() {
+        silentFavoriteJob?.cancel()
+        silentFavoriteJob = null
+        _isSilentFavoriteScrape.value = false
+        _isResolving.value = false
+        resumeScrape()
+    }
+
+    fun performScrape(item: JSONObject, season: Int? = null, episode: Int? = null, forceFullScrape: Boolean = false) {
+        val favs = _favoriteSources.value
+        if (!forceFullScrape && _useFavoriteSources.value && favs.isNotEmpty()) {
+            startSilentFavoriteScrape(item, season, episode, favs)
+            return
+        }
+        executeScrapeInternal(item, season, episode)
+    }
+
+    private fun startSilentFavoriteScrape(item: JSONObject, season: Int?, episode: Int?, favList: List<FavoriteSource>) {
+        cancelSilentFavoriteScrape()
+        _isSilentFavoriteScrape.value = true
+        _silentFavoriteStatusMsg.value = context.getString(R.string.status_checking_fav_sources)
+
+        executeScrapeInternal(item, season, episode)
+
+        silentFavoriteJob = viewModelScope.launch(Dispatchers.IO) {
+            val startTime = System.currentTimeMillis()
+            val maxWaitMs = 25000L
+            val triedFavoriteIds = mutableSetOf<String>()
+            var resolvedSuccess = false
+
+            while (isActive && _isSilentFavoriteScrape.value && !resolvedSuccess && (System.currentTimeMillis() - startTime < maxWaitMs)) {
+                val webSources = _scrapedSources.value
+                val torrentSources = _torrentioSources.value
+
+                var candidateToTry: Pair<FavoriteSource, Pair<JSONObject, String>>? = null
+
+                for (fav in favList) {
+                    if (triedFavoriteIds.contains(fav.id)) continue
+
+                    val fSource = fav.source.trim().lowercase()
+                    val fProvider = fav.provider.trim().lowercase()
+
+                    if (!fav.isTorrent && webSources != null) {
+                        for (i in 0 until webSources.length()) {
+                            val ws = webSources.optJSONObject(i) ?: continue
+                            val sSource = ws.optString("source", "").trim().lowercase()
+                            val sProvider = ws.optString("provider", "").trim().lowercase()
+                            if ((sSource == fSource && sProvider == fProvider) || (sSource == fSource && fProvider.isEmpty())) {
+                                candidateToTry = Pair(fav, Pair(ws, ws.optString("source_data", "{}")))
+                                break
+                            }
+                        }
+                    }
+
+                    if (candidateToTry != null) break
+
+                    // Check torrent sources
+                    if (fav.isTorrent && torrentSources != null && torrentSources.length() > 0) {
+                        val ts = torrentSources.optJSONObject(0)
+                        if (ts != null) {
+                            candidateToTry = Pair(fav, Pair(ts, ts.optString("source_data", "{}")))
+                            break
+                        }
+                    }
+                }
+
+                if (candidateToTry != null) {
+                    val (fav, sourcePair) = candidateToTry
+                    val (wrapper, sourceDataStr) = sourcePair
+                    triedFavoriteIds.add(fav.id)
+
+                    withContext(Dispatchers.Main) {
+                        _silentFavoriteStatusMsg.value = context.getString(R.string.status_resolving_fav_source, fav.name)
+                    }
+
+                    val rawData = JSONObject(sourceDataStr)
+                    val infoHash = rawData.optString("infoHash", "")
+                    val fileIdx = rawData.optInt("fileIdx", -1)
+
+                    if (infoHash.isNotEmpty() && fileIdx != -1) {
+                        withContext(Dispatchers.Main) {
+                            _isSilentFavoriteScrape.value = false
+                            resolveAndPlay(sourceDataStr, wrapper)
+                        }
+                        resolvedSuccess = true
+                        break
+                    } else {
+                        try {
+                            val py = getPythonInstance()
+                            val scraper = py.getModule("main")
+                            val resolveResult = scraper.callAttr("resolve", sourceDataStr).toString()
+                            val json = JSONObject(resolveResult)
+
+                            if (!json.has("error")) {
+                                val streamUrl = json.optString("url")
+                                if (streamUrl.isNotEmpty() && (streamUrl.startsWith("http") || streamUrl.startsWith("file://"))) {
+                                    val parsedHeaders = mutableMapOf<String, String>()
+                                    json.optJSONObject("headers")?.let { h ->
+                                        h.keys().forEach { k -> parsedHeaders[k] = h.getString(k) }
+                                    }
+                                    val headersMap = mutableMapOf<String, String>()
+                                    rawData.optJSONObject("headers")?.let { h ->
+                                        h.keys().forEach { k -> headersMap[k] = h.getString(k) }
+                                    }
+                                    headersMap.putAll(parsedHeaders)
+
+                                    if (checkUrlValidity(streamUrl, headersMap)) {
+                                        resolvedSuccess = true
+                                        withContext(Dispatchers.Main) {
+                                            _isSilentFavoriteScrape.value = false
+                                            _silentFavoriteStatusMsg.value = context.getString(R.string.status_playing_fav_source, fav.name)
+                                            playStream(streamUrl, json.optBoolean("is_video", false), sourceDataStr, parsedHeaders)
+                                        }
+                                        break
+                                    }
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+                } else {
+                    if (triedFavoriteIds.size >= favList.size && !_isScraping.value && !_isScrapingTorrents.value) {
+                        break
+                    }
+                    delay(500)
+                }
+            }
+
+            if (!resolvedSuccess && _isSilentFavoriteScrape.value) {
+                withContext(Dispatchers.Main) {
+                    _isSilentFavoriteScrape.value = false
+                    _events.value = StreamsEvent.ShowToast(context.getString(R.string.toast_fav_sources_unavailable))
+                    resumeScrape()
+                }
+            }
+        }
+    }
+
+    private fun executeScrapeInternal(item: JSONObject, season: Int? = null, episode: Int? = null) {
         commitPendingSearchQuery()
         isPlayingFromSavedLink = false
         stopScrape()

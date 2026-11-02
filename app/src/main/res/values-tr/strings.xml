@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">AdBlock Motoru Ayarlanıyor</string>
     <string name="dialog_adblock_setup_desc">En son reklam engelleme kuralları indiriliyor. Bu işlem yalnızca bir kez gerçekleşir.</string>
     <string name="btn_run_background">Arka Planda Çalıştır</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">Favori Kaynaklar</string>
+    <string name="setting_use_favorite_sources">Favori Kaynakları Kullan</string>
+    <string name="fav_sources_empty_title">Henüz favori kaynak eklenmedi</string>
+    <string name="fav_sources_empty_desc">Akış ararken herhangi bir kaynağın yanındaki ♡ simgesine dokunarak buraya ekleyin.</string>
+    <string name="fav_sources_priority">#%1$d Öncelik</string>
+    <string name="fav_sources_torrent_source">Torrent Kaynağı</string>
+    <string name="fav_sources_provider_prefix">Sağlayıcı: %1$s</string>
+    <string name="fav_sources_hold_to_delete">Silmek için OK basılı tutun</string>
+    <string name="dialog_resolving_fav_source_title">Favori Kaynak Çözülüyor</string>
+    <string name="btn_view_all_sources">Tüm Kaynakları Göster</string>
+    <string name="status_checking_fav_sources">Favori kaynaklar denetleniyor...</string>
+    <string name="status_resolving_fav_source">%1$s çözülüyor...</string>
+    <string name="status_playing_fav_source">%1$s oynatılıyor...</string>
+    <string name="toast_removed_fav_source">%1$s favori kaynaklardan kaldırıldı</string>
+    <string name="toast_added_fav_source">%1$s favori kaynaklara eklendi</string>
+    <string name="toast_fav_sources_unavailable">Favori kaynaklar kullanılamıyor. Tüm kaynaklar gösteriliyor.</string>
 </resources>

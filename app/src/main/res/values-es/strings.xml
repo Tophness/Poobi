@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">Configurando el motor de AdBlock</string>
     <string name="dialog_adblock_setup_desc">Descargando las últimas reglas de bloqueo. Esto solo ocurre una vez.</string>
     <string name="btn_run_background">Ejecutar en segundo plano</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">Fuentes favoritas</string>
+    <string name="setting_use_favorite_sources">Usar fuentes favoritas</string>
+    <string name="fav_sources_empty_title">No hay fuentes favoritas añadidas</string>
+    <string name="fav_sources_empty_desc">Al buscar streams, pulsa el icono ♡ en cualquier fuente para añadirla aquí.</string>
+    <string name="fav_sources_priority">Prioridad #%1$d</string>
+    <string name="fav_sources_torrent_source">Fuente torrent</string>
+    <string name="fav_sources_provider_prefix">Proveedor: %1$s</string>
+    <string name="fav_sources_hold_to_delete">Mantén pulsado OK para eliminar</string>
+    <string name="dialog_resolving_fav_source_title">Resolviendo fuente favorita</string>
+    <string name="btn_view_all_sources">Ver todas las fuentes</string>
+    <string name="status_checking_fav_sources">Comprobando fuentes favoritas...</string>
+    <string name="status_resolving_fav_source">Resolviendo %1$s...</string>
+    <string name="status_playing_fav_source">Reproduciendo %1$s...</string>
+    <string name="toast_removed_fav_source">%1$s eliminada de fuentes favoritas</string>
+    <string name="toast_added_fav_source">%1$s añadida a fuentes favoritas</string>
+    <string name="toast_fav_sources_unavailable">Fuentes favoritas no disponibles. Mostrando todas las fuentes.</string>
 </resources>

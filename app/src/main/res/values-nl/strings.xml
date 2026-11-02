@@ -538,4 +538,22 @@
     <string name="dialog_adblock_setup_title">AdBlock-engine instellen</string>
     <string name="dialog_adblock_setup_desc">De nieuwste advertentieblokkeringsregels worden gedownload. Dit gebeurt slechts eenmalig.</string>
     <string name="btn_run_background">Op achtergrond uitvoeren</string>
+
+    <!-- Favourite Sources -->
+    <string name="pill_favorite_sources">Favoriete bronnen</string>
+    <string name="setting_use_favorite_sources">Favoriete bronnen gebruiken</string>
+    <string name="fav_sources_empty_title">Nog geen favoriete bronnen toegevoegd</string>
+    <string name="fav_sources_empty_desc">Klik tijdens het zoeken naar streams op het ♡-pictogram om een bron hier toe te voegen.</string>
+    <string name="fav_sources_priority">#%1$d Prioriteit</string>
+    <string name="fav_sources_torrent_source">Torrent-bron</string>
+    <string name="fav_sources_provider_prefix">Provider: %1$s</string>
+    <string name="fav_sources_hold_to_delete">Houd OK ingedrukt om te verwijderen</string>
+    <string name="dialog_resolving_fav_source_title">Favoriete bron oplossen</string>
+    <string name="btn_view_all_sources">Alle bronnen weergeven</string>
+    <string name="status_checking_fav_sources">Favoriete bronnen controleren...</string>
+    <string name="status_resolving_fav_source">%1$s oplossen...</string>
+    <string name="status_playing_fav_source">%1$s afspelen...</string>
+    <string name="toast_removed_fav_source">%1$s verwijderd uit favoriete bronnen</string>
+    <string name="toast_added_fav_source">%1$s toegevoegd aan favoriete bronnen</string>
+    <string name="toast_fav_sources_unavailable">Favoriete bronnen niet beschikbaar. Alle bronnen worden getoond.</string>
 </resources>

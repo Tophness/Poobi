@@ -12,7 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poobi.tvbrowser.R
@@ -82,6 +83,7 @@ fun StreamsDashboardScreen(
         if (viewModel.prefs.getBoolean("feed_for_you_recents", true)) {
             list.add(DashboardPill("recents", context.getString(R.string.pill_recents), false) { viewModel.loadRecentlyPlayed() })
         }
+        list.add(DashboardPill("favorite_sources", context.getString(R.string.pill_favorite_sources), false) { viewModel.loadFavoriteSourcesScreen() })
         if (viewModel.prefs.getBoolean("feed_for_you_unfinished", true)) {
             list.add(DashboardPill("unfinished", context.getString(R.string.pill_unfinished), false) { viewModel.loadUnfinishedShows() })
         }
@@ -336,6 +338,7 @@ fun StreamsDashboardScreen(
     val activePillId = currentPills.getOrNull(currentActivePillIndex)?.id ?: ""
     val isFavorites = activeCategoryIndex == 1 && (activePillId == "favorites" || activePillId == "Favourites")
     val isRecentlyWatched = activeCategoryIndex == 1 && (activePillId == "recents" || activePillId == "Recently Watched")
+    val isFavoriteSources = activeCategoryIndex == 1 && (activePillId == "favorite_sources" || activePillId == "Favourite Sources")
 
     val defaultSort = when {
         isFavorites -> "Last Added"
@@ -404,6 +407,7 @@ fun StreamsDashboardScreen(
     }
 
     val hasCardsInCenter = when {
+        isFavoriteSources -> true
         activeCategoryIndex != 0 -> libraryItems != null && libraryItems!!.length() > 0
         searchResults != null -> searchResults!!.length() > 0
         liveSuggestions.isNotEmpty() -> true
@@ -678,6 +682,13 @@ fun StreamsDashboardScreen(
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     CircularProgressIndicator(color = Color(0xFF00BCD4))
                 }
+            } else if (isFavoriteSources) {
+                FavoriteSourcesManagementContent(
+                    viewModel = viewModel,
+                    centerFocusRequester = lastCardFocusRequester,
+                    upFocusTarget = currentTabFocusTarget,
+                    downFocusTarget = bottomSubPillFocusRequester
+                )
             } else if (activeCategoryIndex == 0 && searchResults == null && liveSuggestions.isNotEmpty()) {
                 val targetSuggestionIndex = lastFocusedCardIndex.coerceIn(0, (liveSuggestions.size - 1).coerceAtLeast(0))
                 LazyRow(
@@ -1062,26 +1073,28 @@ fun StreamsDashboardScreen(
                                 }
                             }
 
-                            TvFocusableBox(
-                                modifier = Modifier
-                                    .align(Alignment.CenterStart)
-                                    .offset(x = (-32).dp)
-                                    .size(40.dp)
-                                    .focusRequester(sortButtonFocusRequester)
-                                    .focusProperties {
-                                        up = if (activeCategoryIndex == 0) searchFieldFocusRequester else currentTabFocusTarget
-                                        down = if (activeCategoryIndex != 0 && currentPills.isNotEmpty()) bottomSubPillFocusRequester else FocusRequester.Cancel
-                                        right = lastCardFocusRequester
-                                    },
-                                onClick = { showSortDialog = true }
-                            ) { isFocused ->
-                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_sort),
-                                        contentDescription = "Sort Options",
-                                        tint = if (isFocused) Color.Black else Color.White,
-                                        modifier = Modifier.size(22.dp)
-                                    )
+                            if (!isFavoriteSources) {
+                                TvFocusableBox(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .offset(x = (-32).dp)
+                                        .size(40.dp)
+                                        .focusRequester(sortButtonFocusRequester)
+                                        .focusProperties {
+                                            up = if (activeCategoryIndex == 0) searchFieldFocusRequester else currentTabFocusTarget
+                                            down = if (activeCategoryIndex != 0 && currentPills.isNotEmpty()) bottomSubPillFocusRequester else FocusRequester.Cancel
+                                            right = lastCardFocusRequester
+                                        },
+                                    onClick = { showSortDialog = true }
+                                ) { isFocused ->
+                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_sort),
+                                            contentDescription = "Sort Options",
+                                            tint = if (isFocused) Color.Black else Color.White,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1340,5 +1353,305 @@ fun StreamsDashboardScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun FavoriteSourcesManagementContent(
+    viewModel: StreamsViewModel,
+    centerFocusRequester: FocusRequester,
+    upFocusTarget: FocusRequester,
+    downFocusTarget: FocusRequester
+) {
+    val favoriteSources by viewModel.favoriteSources.collectAsState()
+    val useFavoriteSources by viewModel.useFavoriteSources.collectAsState()
+    val listState = rememberLazyListState()
+    val toggleFocusRequester = remember { FocusRequester() }
+
+    var lastFocusedFavIndex by remember { mutableStateOf(0) }
+    var pendingFavDeleteFocus by remember { mutableStateOf(false) }
+
+    LaunchedEffect(favoriteSources) {
+        if (pendingFavDeleteFocus) {
+            pendingFavDeleteFocus = false
+            if (favoriteSources.isNotEmpty()) {
+                val targetIdx = lastFocusedFavIndex.coerceIn(0, favoriteSources.size - 1)
+                try {
+                    listState.scrollToItem(targetIdx)
+                } catch (_: Exception) {}
+                try {
+                    centerFocusRequester.requestFocus()
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TvFocusableBox(
+                modifier = Modifier
+                    .height(38.dp)
+                    .focusRequester(toggleFocusRequester)
+                    .then(if (favoriteSources.isEmpty()) Modifier.focusRequester(centerFocusRequester) else Modifier)
+                    .focusProperties {
+                        up = upFocusTarget
+                        down = if (favoriteSources.isNotEmpty()) centerFocusRequester else downFocusTarget
+                    },
+                defaultColor = if (useFavoriteSources) Color(0xFF00BCD4).copy(alpha = 0.25f) else Color(0xFF222225),
+                shape = RoundedCornerShape(20.dp),
+                onClick = { viewModel.setUseFavoriteSources(!useFavoriteSources) }
+            ) { isFocused ->
+                Row(
+                    modifier = Modifier.fillMaxHeight().padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(R.string.setting_use_favorite_sources),
+                        color = if (isFocused) Color.Black else if (useFavoriteSources) Color(0xFF00BCD4) else Color.LightGray,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                    Switch(
+                        checked = useFavoriteSources,
+                        onCheckedChange = { viewModel.setUseFavoriteSources(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = if (isFocused) Color.Black else Color.White,
+                            checkedTrackColor = if (isFocused) Color(0xFF004D40) else Color(0xFF00BCD4)
+                        )
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (favoriteSources.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally, 
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_heart_empty),
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(R.string.fav_sources_empty_title),
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(R.string.fav_sources_empty_desc),
+                        color = Color.Gray,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        } else {
+            val targetFavIndex = lastFocusedFavIndex.coerceIn(0, (favoriteSources.size - 1).coerceAtLeast(0))
+
+            LazyRow(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .mouseWheelHorizontalScroll(listState),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                contentPadding = PaddingValues(horizontal = 8.dp)
+            ) {
+                itemsIndexed(favoriteSources, key = { _, item -> item.id }) { index, fav ->
+                    val isFirst = index == 0
+                    val isLast = index == favoriteSources.size - 1
+                    val isTargetCard = (index == targetFavIndex)
+
+                    val cardBodyRequester = remember { FocusRequester() }
+                    val leftArrowRequester = remember { FocusRequester() }
+                    val rightArrowRequester = remember { FocusRequester() }
+
+                    Column(
+                        modifier = Modifier
+                            .width(260.dp)
+                            .height(175.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF222225))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TvFocusableHoldToDeleteBox(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .focusRequester(cardBodyRequester)
+                                .then(if (isTargetCard) Modifier.focusRequester(centerFocusRequester) else Modifier)
+                                .focusProperties {
+                                    up = toggleFocusRequester
+                                    down = leftArrowRequester
+                                },
+                            onFocus = { lastFocusedFavIndex = index },
+                            onTriggerDelete = {
+                                val remaining = favoriteSources.size - 1
+                                if (remaining > 0) {
+                                    val nextIndex = if (index >= favoriteSources.size - 1) index - 1 else index
+                                    lastFocusedFavIndex = nextIndex
+                                    pendingFavDeleteFocus = true
+                                } else {
+                                    lastFocusedFavIndex = 0
+                                    pendingFavDeleteFocus = false
+                                }
+                                viewModel.removeFavoriteSource(fav.id)
+                            },
+                            onClick = {}
+                        ) { isFocused, progress ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(8.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(if (isFocused) Color.Black else Color(0xFF00BCD4), RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = androidx.compose.ui.res.stringResource(R.string.fav_sources_priority, index + 1),
+                                            color = if (isFocused) Color(0xFF00BCD4) else Color.Black,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+
+                                    if (isFocused || progress > 0f) {
+                                        HoldToDeleteCloseButton(progress = progress)
+                                    } else {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_heart_filled),
+                                            contentDescription = null,
+                                            tint = Color(0xFFE91E63),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                Column {
+                                    Text(
+                                        text = fav.name,
+                                        color = if (isFocused) Color.Black else Color.White,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    val subtitleText = if (fav.isTorrent) {
+                                        androidx.compose.ui.res.stringResource(R.string.fav_sources_torrent_source)
+                                    } else {
+                                        androidx.compose.ui.res.stringResource(R.string.fav_sources_provider_prefix, fav.provider.ifEmpty { "Web" })
+                                    }
+                                    Text(
+                                        text = subtitleText,
+                                        color = if (isFocused) Color(0xFF333333) else Color.Gray,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(R.string.fav_sources_hold_to_delete),
+                                    color = if (isFocused) Color(0xFF333333) else Color.DarkGray,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TvFocusableBox(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(34.dp)
+                                    .focusRequester(leftArrowRequester)
+                                    .focusProperties {
+                                        up = cardBodyRequester
+                                        down = downFocusTarget
+                                        right = rightArrowRequester
+                                    },
+                                defaultColor = Color(0xFF333338),
+                                onClick = {
+                                    if (index > 0) {
+                                        lastFocusedFavIndex = index - 1
+                                        viewModel.moveFavoriteSource(index, index - 1)
+                                    }
+                                }
+                            ) { isBtnFocused ->
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "◀",
+                                        color = if (isFirst) Color.Gray.copy(alpha = 0.4f) else if (isBtnFocused) Color.Black else Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            TvFocusableBox(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(34.dp)
+                                    .focusRequester(rightArrowRequester)
+                                    .focusProperties {
+                                        up = cardBodyRequester
+                                        down = downFocusTarget
+                                        left = leftArrowRequester
+                                    },
+                                defaultColor = Color(0xFF333338),
+                                onClick = {
+                                    if (index < favoriteSources.size - 1) {
+                                        lastFocusedFavIndex = index + 1
+                                        viewModel.moveFavoriteSource(index, index + 1)
+                                    }
+                                }
+                            ) { isBtnFocused ->
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "▶",
+                                        color = if (isLast) Color.Gray.copy(alpha = 0.4f) else if (isBtnFocused) Color.Black else Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
