@@ -751,12 +751,15 @@ fun MainApp(
                         onTriggerAutoplay = {
                             val nextData = nextEpisodeData
                             playerEngine.dismissUpNext()
+                            streamsViewModel.isAutoplayStarting = true
                             playerEngine.stopAndRelease()
                             streamsViewModel.selectedItem.value?.let { item ->
                                 val season = streamsViewModel.lastScrapedSeason
                                 val episode = streamsViewModel.lastScrapedEpisode
                                 if (season != null && episode != null) {
                                     streamsViewModel.handleNextEpisodeAutoPlay(item, season, episode, nextData)
+                                } else {
+                                    streamsViewModel.isAutoplayStarting = false
                                 }
                             }
                         },

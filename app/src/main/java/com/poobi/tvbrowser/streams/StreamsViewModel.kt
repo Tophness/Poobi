@@ -253,7 +253,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private var libraryLoadJob: Job? = null
     private var isInteractingWithSources = false
     private var lastSubtitledItemKey: String? = null
-    private var isAutoplayStarting = false
+    var isAutoplayStarting = false
     
     var pendingPlayVideoSourceData: String? = null
 
@@ -3991,11 +3991,76 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    suspend fun fetchTorrentioStreams(item: JSONObject, season: Int?, episode: Int?): JSONArray? = withContext(Dispatchers.IO) {
+        try {
+            val py = getPythonInstance()
+            val tmdb = py.getModule("tmdb.tmdb_utils")
+
+            val id = item.optString("id")
+            val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
+                ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
+
+            var imdbId = item.optString("imdb")
+            if (imdbId.isNullOrEmpty() || imdbId == "null") {
+                val details = _itemDetails.value
+                if (details != null && details.optInt("id").toString() == id) {
+                    imdbId = details.optJSONObject("external_ids")?.optString("imdb_id") ?: ""
+                }
+            }
+
+            if (imdbId.isNullOrEmpty() || imdbId == "null") {
+                val extIds = JSONObject(tmdb.callAttr("get_external_ids", id, mediaType).toString())
+                imdbId = extIds.optString("imdb_id")
+            }
+
+            if (!imdbId.isNullOrEmpty() && imdbId != "null") {
+                item.put("imdb", imdbId)
+                _selectedItem.value?.put("imdb", imdbId)
+
+                val torrentio = py.getModule("torrentio.torrentio").callAttr("source")
+                val url = if (mediaType == "tv" || mediaType == "tvshow") {
+                    "$imdbId:${season ?: 1}:${episode ?: 1}"
+                } else {
+                    imdbId
+                }
+
+                val torrentLanguage = prefs.getString("torrent_language", "English") ?: "English"
+                val results = torrentio.callAttr("sources", url, emptyList<String>(), mapOf("torrent_language" to torrentLanguage))
+                val json = py.getModule("json")
+                val resultsJson = json.callAttr("dumps", results).toString()
+                val rawStreams = JSONArray(resultsJson)
+
+                val finalStreams = JSONArray()
+                for (i in 0 until rawStreams.length()) {
+                    val r = rawStreams.getJSONObject(i)
+                    finalStreams.put(JSONObject().apply {
+                        put("title", r.optString("title", ""))
+                        put("source_data", r.toString())
+                    })
+                }
+                sortTorrents(finalStreams)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("StreamsViewModel", "Torrentio scrape error: ${e.message}")
+            null
+        }
+    }
+
     private fun executeScrapeInternal(item: JSONObject, season: Int? = null, episode: Int? = null) {
         commitPendingSearchQuery()
         isPlayingFromSavedLink = false
         stopScrape()
-        selectedScrapeTabIndex.value = 0
+
+        val isLastTorrent = lastSelectedSource?.optString("infoHash")?.isNotEmpty() == true ||
+                            lastSelectedSource?.optString("source")?.equals("Torrentio", ignoreCase = true) == true
+        val tabOrder = prefs.getString("scrape_tab_order", "Web,Torrents") ?: "Web,Torrents"
+        val tabs = tabOrder.split(",")
+        val torrentTabIndex = tabs.indexOf("Torrents").takeIf { it >= 0 } ?: 1
+        val webTabIndex = tabs.indexOf("Web").takeIf { it >= 0 } ?: 0
+        selectedScrapeTabIndex.value = if (isLastTorrent) torrentTabIndex else webTabIndex
+
         lastSelectedSourceIndex = -1
         lastSelectedSourceKey = null
         
@@ -4032,63 +4097,12 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val py = getPythonInstance()
-                val tmdb = py.getModule("tmdb.tmdb_utils")
-                
-                val id = item.optString("id")
-                val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
-                    ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
-                
-                Log.d("StreamsViewModel", "Torrentio Scrape - ID: $id, MediaType: $mediaType")
-
-                var imdbId = item.optString("imdb")
-                if (imdbId.isNullOrEmpty() || imdbId == "null") {
-                    val details = _itemDetails.value
-                    if (details != null && details.optInt("id").toString() == id) {
-                        imdbId = details.optJSONObject("external_ids")?.optString("imdb_id") ?: ""
+                val sorted = fetchTorrentioStreams(item, season, episode)
+                withContext(Dispatchers.Main) {
+                    if (sorted != null) {
+                        _torrentioSources.value = sorted
                     }
                 }
-
-                if (imdbId.isNullOrEmpty() || imdbId == "null") {
-                    val extIds = JSONObject(tmdb.callAttr("get_external_ids", id, mediaType).toString())
-                    imdbId = extIds.optString("imdb_id")
-                }
-                
-                Log.d("StreamsViewModel", "Torrentio Scrape - IMDb ID: $imdbId")
-
-                if (!imdbId.isNullOrEmpty() && imdbId != "null") {
-                    val torrentio = py.getModule("torrentio.torrentio").callAttr("source")
-                    val url = if (mediaType == "tv" || mediaType == "tvshow") {
-                        "$imdbId:${season ?: 1}:${episode ?: 1}"
-                    } else {
-                        imdbId
-                    }
-                    
-                    val torrentLanguage = prefs.getString("torrent_language", "English") ?: "English"
-                    Log.d("StreamsViewModel", "Torrentio Scrape - URL Param: $url, Lang: $torrentLanguage")
-
-                    val results = torrentio.callAttr("sources", url, emptyList<String>(), mapOf("torrent_language" to torrentLanguage))
-                    Log.d("StreamsViewModel", "Torrentio Scrape - Results count: ${results.asList().size}")
-                    val json = py.getModule("json")
-                    val resultsJson = json.callAttr("dumps", results).toString()
-                    val rawStreams = JSONArray(resultsJson)
-
-                    val finalStreams = JSONArray()
-                    for (i in 0 until rawStreams.length()) {
-                        val r = rawStreams.getJSONObject(i)
-                        val obj = JSONObject().apply {
-                            put("title", r.optString("title", ""))
-                            put("source_data", r.toString())
-                        }
-                        finalStreams.put(obj)
-                    }
-
-                    withContext(Dispatchers.Main) {
-                        _torrentioSources.value = sortTorrents(finalStreams)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("StreamsViewModel", "Torrentio scrape error: ${e.message}")
             } finally {
                 withContext(Dispatchers.Main) {
                     _isScrapingTorrents.value = false
@@ -4749,14 +4763,78 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private fun matchTorrentSource(torrentSources: JSONArray, mode: String): JSONObject? {
+        if (torrentSources.length() == 0) return null
+
+        val torrentList = mutableListOf<JSONObject>()
+        for (i in 0 until torrentSources.length()) {
+            torrentList.add(torrentSources.getJSONObject(i))
+        }
+
+        if (mode == "Best Source" || lastSelectedSource == null) {
+            return torrentList.firstOrNull()
+        }
+
+        val lastHash = lastSelectedSource?.optString("infoHash", "")?.lowercase()?.trim() ?: ""
+        val lastQuality = lastSelectedSource?.optString("quality", "")?.uppercase()?.trim() ?: ""
+        val lastTorrentName = lastSelectedSource?.optString("torrent_name", "")?.lowercase() ?: ""
+
+        // 1. Same infoHash (exact same season pack!)
+        if (lastHash.isNotEmpty()) {
+            val samePack = torrentList.find {
+                val raw = JSONObject(it.optString("source_data", "{}"))
+                raw.optString("infoHash", "").lowercase().trim() == lastHash
+            }
+            if (samePack != null) return samePack
+        }
+
+        // 2. Same release group / name pattern
+        if (lastTorrentName.isNotEmpty()) {
+            val groupMatch = Regex("[-_\\[]([a-zA-Z0-9]+)\\]?$").find(lastTorrentName)?.groupValues?.get(1)?.lowercase()
+            if (!groupMatch.isNullOrEmpty()) {
+                val groupTorrent = torrentList.find {
+                    val raw = JSONObject(it.optString("source_data", "{}"))
+                    val tName = raw.optString("torrent_name", "").lowercase()
+                    val tQual = raw.optString("quality", "").uppercase()
+                    tName.contains(groupMatch) && (lastQuality.isEmpty() || tQual == lastQuality)
+                }
+                if (groupTorrent != null) return groupTorrent
+            }
+        }
+
+        // 3. Same quality with highest seeders
+        if (lastQuality.isNotEmpty()) {
+            val qualityTorrent = torrentList.filter {
+                val raw = JSONObject(it.optString("source_data", "{}"))
+                raw.optString("quality", "").uppercase() == lastQuality && raw.optInt("seeders", 0) > 0
+            }.maxByOrNull {
+                JSONObject(it.optString("source_data", "{}")).optInt("seeders", 0)
+            }
+            if (qualityTorrent != null) return qualityTorrent
+        }
+
+        // 4. Default to top sorted torrent
+        return torrentList.firstOrNull()
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun performAutoPlayScrape(item: JSONObject, season: Int, episode: Int, mode: String) {
         lastScrapedSeason = season
         lastScrapedEpisode = episode
 
+        val isLastTorrent = lastSelectedSource?.optString("infoHash")?.isNotEmpty() == true ||
+                            lastSelectedSource?.optString("source")?.equals("Torrentio", ignoreCase = true) == true
+        val tabOrder = prefs.getString("scrape_tab_order", "Web,Torrents") ?: "Web,Torrents"
+        val tabs = tabOrder.split(",")
+        val torrentTabIndex = tabs.indexOf("Torrents").takeIf { it >= 0 } ?: 1
+        val webTabIndex = tabs.indexOf("Web").takeIf { it >= 0 } ?: 0
+        selectedScrapeTabIndex.value = if (isLastTorrent) torrentTabIndex else webTabIndex
+
         _isScraping.value = true
         _isResolving.value = false
         _scrapedSources.value = null
+        _torrentioSources.value = null
+        _isScrapingTorrents.value = true
         _scrapeProgress.value = 0
         _scrapeTotal.value = 0
         _scrapeStatusMsg.value = "Starting AutoPlay Search for E$episode..."
@@ -4777,14 +4855,31 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
 
+                val torrentsDeferred = CompletableDeferred<JSONArray?>()
+                launch {
+                    try {
+                        val torrents = fetchTorrentioStreams(item, season, episode)
+                        withContext(Dispatchers.Main) {
+                            _torrentioSources.value = torrents
+                            _isScrapingTorrents.value = false
+                        }
+                        torrentsDeferred.complete(torrents)
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            _isScrapingTorrents.value = false
+                        }
+                        torrentsDeferred.complete(null)
+                    }
+                }
+
                 var foundSource: JSONObject? = null
                 val startTime = System.currentTimeMillis()
 
-                val userTimeoutSec = prefs.getInt("global_timeout", 220)
+                val userTimeoutSec = prefs.getInt("global_timeout", 30)
                 val timeout = userTimeoutSec * 1000L
                 var frameCount = 0
 
-                delay(2000)
+                delay(1500)
                 isAutoplayStarting = false
 
                 while (foundSource == null && isActive && System.currentTimeMillis() - startTime < timeout) {
@@ -4826,19 +4921,24 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
 
-                    if (isNewScrapeStarted && sources != null && sources.length() > 0) {
+                    val currentTorrents = _torrentioSources.value
+                    if (isLastTorrent && currentTorrents != null && currentTorrents.length() > 0) {
+                        foundSource = matchTorrentSource(currentTorrents, mode)
+                    }
+
+                    if (foundSource == null && isNewScrapeStarted && sources != null && sources.length() > 0) {
                         val rawSources = mutableListOf<JSONObject>()
                         for (i in 0 until sources.length()) {
                             rawSources.add(JSONObject(sources.getJSONObject(i).getString("source_data")))
                         }
 
-                        if (mode == "Closest Source" && lastSelectedSource != null) {
+                        if (!isLastTorrent && mode == "Closest Source" && lastSelectedSource != null) {
                             val targetSource = lastSelectedSource!!.optString("source")
                             val targetProvider = lastSelectedSource!!.optString("provider")
                             val targetUrl = lastSelectedSource!!.optString("url")
                             val targetHost = if (targetUrl.contains("//")) targetUrl.split("//")[1].split("/")[0] else ""
 
-                            foundSource = rawSources.find {
+                            val matchedWeb = rawSources.find {
                                 val u = it.optString("url")
                                 val h = if (u.contains("//")) u.split("//")[1].split("/")[0] else ""
                                 h == targetHost && it.optString("provider") == targetProvider && it.optString("source") == targetSource
@@ -4847,18 +4947,42 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                             } ?: rawSources.find {
                                 it.optString("source") == targetSource
                             }
+                            if (matchedWeb != null) {
+                                foundSource = JSONObject().apply {
+                                    put("title", matchedWeb.optString("title", ""))
+                                    put("source_data", matchedWeb.toString())
+                                }
+                            }
                         }
 
-                        if (foundSource == null && (isFinished || mode == "Best Source")) {
+                        if (foundSource == null && !isLastTorrent && (isFinished || mode == "Best Source")) {
                             val sorted = sortSources(sources)
                             if (sorted.length() > 0) {
-                                foundSource = JSONObject(sorted.getJSONObject(0).getString("source_data"))
+                                foundSource = sorted.getJSONObject(0)
                             }
                         }
                     }
 
-                    if (isFinished && foundSource == null) break
-                    if (foundSource == null) delay(1500)
+                    if (foundSource == null && currentTorrents != null && currentTorrents.length() > 0 && (isFinished || mode == "Best Source")) {
+                        foundSource = currentTorrents.getJSONObject(0)
+                    }
+
+                    if (foundSource != null) break
+                    if (isFinished && (torrentsDeferred.isCompleted || _torrentioSources.value != null)) break
+                    delay(1000)
+                }
+
+                if (foundSource == null && !torrentsDeferred.isCompleted) {
+                    withTimeoutOrNull(2000) {
+                        torrentsDeferred.await()
+                    }
+                }
+
+                if (foundSource == null) {
+                    val currentTorrents = _torrentioSources.value
+                    if (isLastTorrent && currentTorrents != null && currentTorrents.length() > 0) {
+                        foundSource = matchTorrentSource(currentTorrents, mode)
+                    }
                 }
 
                 if (foundSource == null && !finalSourcesDeferred.isCompleted) {
@@ -4871,31 +4995,32 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     val finalSources = finalSourcesDeferred.getCompleted()
                     if (finalSources != null && finalSources.length() > 0) {
                         val sorted = sortSources(finalSources)
-                        foundSource = JSONObject(sorted.getJSONObject(0).getString("source_data"))
+                        foundSource = sorted.getJSONObject(0)
                     }
                 }
 
                 if (foundSource == null) {
-                    val accumulated = _scrapedSources.value
-                    if (accumulated != null && accumulated.length() > 0) {
-                        foundSource = JSONObject(accumulated.getJSONObject(0).getString("source_data"))
+                    val currentTorrents = _torrentioSources.value
+                    if (currentTorrents != null && currentTorrents.length() > 0) {
+                        foundSource = currentTorrents.getJSONObject(0)
                     }
                 }
 
                 withContext(Dispatchers.Main) {
                     if (foundSource != null) {
                         stopScrape(triggerSubtitles = true)
-                        resolveAndPlay(foundSource.toString(), item)
+                        val sData = foundSource.optString("source_data", foundSource.toString())
+                        resolveAndPlay(sData, foundSource)
                     } else {
                         _isScraping.value = false
-                        performScrape(item, season, episode)
+                        performScrape(item, season, episode, forceFullScrape = true)
                     }
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 withContext(Dispatchers.Main) {
                     _isScraping.value = false
-                    performScrape(item, season, episode)
+                    performScrape(item, season, episode, forceFullScrape = true)
                 }
             }
         }

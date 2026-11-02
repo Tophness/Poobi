@@ -318,6 +318,7 @@ class MainActivity : AppCompatActivity() {
                     val episode = streamsViewModel.lastScrapedEpisode
                     if (season != null && episode != null) {
                         val nextData = playerEngine.nextEpisodeData.value
+                        streamsViewModel.isAutoplayStarting = true
                         streamsViewModel.handleNextEpisodeAutoPlay(item, season, episode, nextData)
                     }
                 }
