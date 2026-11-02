@@ -561,4 +561,10 @@
     <string name="setting_sub_download_timing">توقيت تنزيل الترجمات</string>
     <string name="opt_sub_timing_async">غير متزامن (أثناء المسح)</string>
     <string name="opt_sub_timing_sync">متزامن (الانتظار حتى انتهاء المصادر)</string>
+
+    <!-- Try All Strings -->
+    <string name="toast_try_all_none_found">تمت تجربة جميع المصادر. لم يتم العثور على أي مصدر صالح.</string>
+    <string name="status_try_all_finished">تمت تجربة جميع المصادر.</string>
+    <string name="status_try_all_progress">جارٍ تجربة المصدر %1$d/%2$d...</string>
+    <string name="status_try_all_valid_found">تم العثور على مصدر صالح! جارٍ التشغيل...</string>
 </resources>

@@ -561,4 +561,10 @@
     <string name="setting_sub_download_timing">Время загрузки субтитров</string>
     <string name="opt_sub_timing_async">Асинхронно (Во время поиска)</string>
     <string name="opt_sub_timing_sync">Синхронно (После выбора источника)</string>
+
+    <!-- Try All Strings -->
+    <string name="toast_try_all_none_found">Все источники проверены. Ничего не найдено.</string>
+    <string name="status_try_all_finished">Все источники проверены.</string>
+    <string name="status_try_all_progress">Проверка источника %1$d/%2$d...</string>
+    <string name="status_try_all_valid_found">Найден рабочий источник! Воспроизведение...</string>
 </resources>

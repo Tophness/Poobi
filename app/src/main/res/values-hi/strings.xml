@@ -561,4 +561,10 @@
     <string name="setting_sub_download_timing">सबटाइटल डाउनलोड का समय</string>
     <string name="opt_sub_timing_async">एसिंक्रोनस (स्कैनिंग के साथ)</string>
     <string name="opt_sub_timing_sync">सिंक्रोनस (स्रोतों की प्रतीक्षा करें)</string>
+
+    <!-- Try All Strings -->
+    <string name="toast_try_all_none_found">सभी स्रोतों का परीक्षण पूरा हुआ। कोई मान्य स्रोत नहीं मिला।</string>
+    <string name="status_try_all_finished">सभी स्रोतों का परीक्षण पूरा हुआ।</string>
+    <string name="status_try_all_progress">स्रोत %1$d/%2$d का परीक्षण किया जा रहा है...</string>
+    <string name="status_try_all_valid_found">मान्य स्रोत मिल गया! चलाया जा रहा है...</string>
 </resources>

@@ -561,4 +561,10 @@
     <string name="setting_sub_download_timing">Altyazı İndirme Zamanlaması</string>
     <string name="opt_sub_timing_async">Eşzamanlı Olmayan (Arama Sırasında)</string>
     <string name="opt_sub_timing_sync">Eşzamanlı (Kaynakları Bekle)</string>
+
+    <!-- Try All Strings -->
+    <string name="toast_try_all_none_found">Tüm kaynaklar denendi. Hiçbiri bulunamadı.</string>
+    <string name="status_try_all_finished">Tüm kaynaklar denendi.</string>
+    <string name="status_try_all_progress">Kaynak %1$d/%2$d deneniyor...</string>
+    <string name="status_try_all_valid_found">Geçerli kaynak bulundu! Oynatılıyor...</string>
 </resources>

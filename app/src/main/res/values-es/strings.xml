@@ -561,4 +561,10 @@
     <string name="setting_sub_download_timing">Momento de descarga de subtítulos</string>
     <string name="opt_sub_timing_async">Asíncrono (Durante el escaneo)</string>
     <string name="opt_sub_timing_sync">Síncrono (Esperar a las fuentes)</string>
+
+    <!-- Try All Strings -->
+    <string name="toast_try_all_none_found">Se probaron todas las fuentes. No se encontró ninguna.</string>
+    <string name="status_try_all_finished">Se terminaron de probar todas las fuentes.</string>
+    <string name="status_try_all_progress">Probando fuente %1$d/%2$d...</string>
+    <string name="status_try_all_valid_found">¡Fuente válida encontrada! Reproduciendo...</string>
 </resources>

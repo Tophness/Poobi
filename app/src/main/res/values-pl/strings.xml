@@ -561,4 +561,10 @@
     <string name="setting_sub_download_timing">Czas pobierania napisów</string>
     <string name="opt_sub_timing_async">Asynchronicznie (Podczas wyszukiwania)</string>
     <string name="opt_sub_timing_sync">Synchronicznie (Czekaj na źródła)</string>
+
+    <!-- Try All Strings -->
+    <string name="toast_try_all_none_found">Sprawdzono wszystkie źródła. Nie znaleziono żadnego.</string>
+    <string name="status_try_all_finished">Zakończono sprawdzanie wszystkich źródeł.</string>
+    <string name="status_try_all_progress">Sprawdzanie źródła %1$d/%2$d...</string>
+    <string name="status_try_all_valid_found">Znaleziono prawidłowe źródło! Odtwarzanie...</string>
 </resources>

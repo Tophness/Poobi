@@ -561,4 +561,10 @@
     <string name="setting_sub_download_timing">Timing voor downloaden ondertitels</string>
     <string name="opt_sub_timing_async">Asynchroon (Tijdens het zoeken)</string>
     <string name="opt_sub_timing_sync">Synchroon (Wachten op bronnen)</string>
+
+    <!-- Try All Strings -->
+    <string name="toast_try_all_none_found">Alle bronnen geprobeerd. Geen gevonden.</string>
+    <string name="status_try_all_finished">Klaar met proberen van alle bronnen.</string>
+    <string name="status_try_all_progress">Bron %1$d/%2$d proberen...</string>
+    <string name="status_try_all_valid_found">Geldige bron gevonden! Afspelen...</string>
 </resources>

@@ -3151,8 +3151,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         currentTryingIndex++
 
         if (currentTryingIndex >= sources.size) {
-            _events.value = StreamsEvent.ShowToast("Finished trying all sources. None found.")
-            _scrapeStatusMsg.value = "Finished trying all sources."
+            _events.value = StreamsEvent.ShowToast(context.getString(R.string.toast_try_all_none_found))
+            _scrapeStatusMsg.value = context.getString(R.string.status_try_all_finished)
             stopTryAll()
             return
         }
@@ -3161,7 +3161,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         val sourceDataJson = s.optString("source_data")
 
         _isResolving.value = true
-        _scrapeStatusMsg.value = "Trying source ${currentTryingIndex + 1}/${sources.size}..."
+        _scrapeStatusMsg.value = context.getString(R.string.status_try_all_progress, currentTryingIndex + 1, sources.size)
 
         tryAllJob = viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -3203,7 +3203,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 if (checkUrlValidity(streamUrl, headersMap)) {
                     withContext(Dispatchers.Main) {
                         _isResolving.value = false
-                        _scrapeStatusMsg.value = "Valid source found! Playing..."
+                        _scrapeStatusMsg.value = context.getString(R.string.status_try_all_valid_found)
                         playStream(streamUrl, json.optBoolean("is_video", false), sourceDataJson, parsedHeaders)
                     }
                 } else {

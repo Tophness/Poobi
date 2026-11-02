@@ -561,4 +561,10 @@
     <string name="setting_sub_download_timing">Untertitel-Download-Timing</string>
     <string name="opt_sub_timing_async">Asynchron (Parallel zur Suche)</string>
     <string name="opt_sub_timing_sync">Synchron (Auf Quellen warten)</string>
+
+    <!-- Try All Strings -->
+    <string name="toast_try_all_none_found">Alle Quellen getestet. Keine gefunden.</string>
+    <string name="status_try_all_finished">Alle Quellen getestet.</string>
+    <string name="status_try_all_progress">Teste Quelle %1$d/%2$d...</string>
+    <string name="status_try_all_valid_found">Gültige Quelle gefunden! Wiedergabe...</string>
 </resources>

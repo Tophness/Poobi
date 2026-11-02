@@ -561,4 +561,10 @@
     <string name="setting_sub_download_timing">Délai de téléchargement des sous-titres</string>
     <string name="opt_sub_timing_async">Asynchrone (Pendant la recherche)</string>
     <string name="opt_sub_timing_sync">Synchrone (Attendre les sources)</string>
+
+    <!-- Try All Strings -->
+    <string name="toast_try_all_none_found">Toutes les sources ont été testées. Aucune trouvée.</string>
+    <string name="status_try_all_finished">Toutes les sources ont été testées.</string>
+    <string name="status_try_all_progress">Test de la source %1$d/%2$d...</string>
+    <string name="status_try_all_valid_found">Source valide trouvée ! Lecture...</string>
 </resources>
