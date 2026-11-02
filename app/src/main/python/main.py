@@ -1580,8 +1580,10 @@ def scrape(item_json, season=None, episode=None):
         tmdb_id = str(item['id'])
         media_type = item.get('media_type', 'movie')
         
-        ext_ids = tmdb_utils.get_external_ids(tmdb_id, media_type)
-        imdb_id = ext_ids.get('imdb_id', '0')
+        imdb_id = item.get('imdb') or ''
+        if not imdb_id or imdb_id == '0':
+            ext_ids = tmdb_utils.get_external_ids(tmdb_id, media_type)
+            imdb_id = ext_ids.get('imdb_id', '0')
 
         if not os.path.exists(SOURCES_PATH):
             return json.dumps([{"title": f"Error: SOURCES_PATH not found at {SOURCES_PATH}", "source_data": ""}])

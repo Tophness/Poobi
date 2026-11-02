@@ -3535,7 +3535,13 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                         provider = obj.optString("provider", ""),
                         name = obj.optString("name", "Unknown Source"),
                         isTorrent = obj.optBoolean("is_torrent", false),
-                        providerKey = obj.optString("provider_key", "")
+                        providerKey = obj.optString("provider_key", ""),
+                        quality = obj.optString("quality", ""),
+                        audio = obj.optString("audio", ""),
+                        hdr = obj.optString("hdr", ""),
+                        codec = obj.optString("codec", ""),
+                        targetHost = obj.optString("target_host", ""),
+                        info = obj.optString("info", "")
                     )
                 )
             }
@@ -3559,46 +3565,114 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 put("name", item.name)
                 put("is_torrent", item.isTorrent)
                 put("provider_key", item.providerKey)
+                put("quality", item.quality)
+                put("audio", item.audio)
+                put("hdr", item.hdr)
+                put("codec", item.codec)
+                put("target_host", item.targetHost)
+                put("info", item.info)
             })
         }
         prefs.edit().putString("streams_favorite_sources", arr.toString()).apply()
     }
 
-    fun isSourceFavorite(source: String, provider: String): Boolean {
-        val sClean = source.trim().lowercase()
-        val pClean = provider.trim().lowercase()
-        return _favoriteSources.value.any {
-            it.source.trim().lowercase() == sClean && it.provider.trim().lowercase() == pClean
+    fun matchesFavorite(
+        fav: FavoriteSource,
+        source: String,
+        provider: String,
+        quality: String,
+        audio: String = "",
+        hdr: String = "",
+        codec: String = ""
+    ): Boolean {
+        val fSource = fav.source.trim().lowercase()
+        val fProvider = fav.provider.trim().lowercase()
+        val sSource = source.trim().lowercase()
+        val sProvider = provider.trim().lowercase()
+
+        if (fSource != sSource || fProvider != sProvider) return false
+
+        val fQ = fav.quality.trim().lowercase()
+        val sQ = quality.trim().lowercase()
+        if (fQ.isNotEmpty() && sQ.isNotEmpty() && fQ != sQ) return false
+
+        val fH = fav.hdr.trim().lowercase()
+        val sH = hdr.trim().lowercase()
+        if (fH.isNotEmpty() && sH.isNotEmpty() && fH != sH) return false
+        if (fH.isNotEmpty() && sH.isEmpty()) return false
+
+        val fC = fav.codec.trim().lowercase()
+        val sC = codec.trim().lowercase()
+        if (fC.isNotEmpty() && sC.isNotEmpty() && fC != sC) return false
+
+        val fA = fav.audio.trim().lowercase()
+        val sA = audio.trim().lowercase()
+        if (fA.isNotEmpty() && sA.isNotEmpty() && fA != sA) return false
+
+        return true
+    }
+
+    fun isSourceFavorite(
+        source: String,
+        provider: String,
+        quality: String = "",
+        audio: String = "",
+        hdr: String = "",
+        codec: String = ""
+    ): Boolean {
+        return _favoriteSources.value.any { fav ->
+            matchesFavorite(fav, source, provider, quality, audio, hdr, codec)
         }
     }
 
-    fun toggleFavoriteSource(source: String, provider: String, displayName: String, isTorrent: Boolean, providerKey: String = "") {
+    fun toggleFavoriteSource(
+        source: String,
+        provider: String,
+        displayName: String,
+        isTorrent: Boolean,
+        providerKey: String = "",
+        quality: String = "",
+        audio: String = "",
+        hdr: String = "",
+        codec: String = "",
+        targetHost: String = "",
+        info: String = ""
+    ) {
         val sClean = source.trim().lowercase()
         val pClean = provider.trim().lowercase()
+        val qClean = quality.trim().lowercase()
+        val hClean = hdr.trim().lowercase()
+        val cClean = codec.trim().lowercase()
+        val aClean = audio.trim().lowercase()
+
         val current = _favoriteSources.value.toMutableList()
-        val index = current.indexOfFirst {
-            it.source.trim().lowercase() == sClean && it.provider.trim().lowercase() == pClean
+        val index = current.indexOfFirst { fav ->
+            matchesFavorite(fav, source, provider, quality, audio, hdr, codec)
         }
+
         if (index != -1) {
             val removed = current.removeAt(index)
             saveFavoriteSources(current)
             _events.value = StreamsEvent.ShowToast(context.getString(R.string.toast_removed_fav_source, removed.name))
         } else {
-            val cleanName = displayName.ifEmpty {
-                if (provider.isNotEmpty() && provider != source) "$source ($provider)" else source
-            }
-            val id = "${pClean}_${sClean}"
+            val id = "${pClean}_${sClean}_${qClean}_${hClean}_${cClean}_${aClean}".trimEnd('_')
             val newItem = FavoriteSource(
                 id = id,
                 source = source,
                 provider = provider,
-                name = cleanName,
+                name = displayName,
                 isTorrent = isTorrent,
-                providerKey = providerKey
+                providerKey = providerKey,
+                quality = quality,
+                audio = audio,
+                hdr = hdr,
+                codec = codec,
+                targetHost = targetHost,
+                info = info
             )
             current.add(newItem)
             saveFavoriteSources(current)
-            _events.value = StreamsEvent.ShowToast(context.getString(R.string.toast_added_fav_source, cleanName))
+            _events.value = StreamsEvent.ShowToast(context.getString(R.string.toast_added_fav_source, displayName))
         }
     }
 
@@ -3658,6 +3732,8 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         silentFavoriteJob = viewModelScope.launch(Dispatchers.IO) {
             var resolvedSuccess = false
+            val providerResultsCache = mutableMapOf<String, JSONArray>()
+            var cachedTorrentioStreams: JSONArray? = null
 
             for (favIndex in favList.indices) {
                 if (!isActive || !_isSilentFavoriteScrape.value) break
@@ -3669,57 +3745,61 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
                 if (fav.isTorrent || fav.provider.contains("torrentio", ignoreCase = true) || fav.source.contains("torrentio", ignoreCase = true)) {
                     try {
-                        val id = item.optString("id")
-                        val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
-                            ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
+                        val rawStreams = cachedTorrentioStreams ?: run {
+                            val id = item.optString("id")
+                            val mediaType = item.optString("media_type").takeIf { it.isNotEmpty() && it != "null" }
+                                ?: if (item.has("name") || item.has("first_air_date")) "tv" else "movie"
 
-                        var imdbId = item.optString("imdb")
-                        if (imdbId.isNullOrEmpty() || imdbId == "null") {
-                            val details = _itemDetails.value
-                            if (details != null && details.optInt("id").toString() == id) {
-                                imdbId = details.optJSONObject("external_ids")?.optString("imdb_id") ?: ""
-                            }
-                        }
-                        if (imdbId.isNullOrEmpty() || imdbId == "null") {
-                            val py = getPythonInstance()
-                            val tmdb = py.getModule("tmdb.tmdb_utils")
-                            val extIds = JSONObject(tmdb.callAttr("get_external_ids", id, mediaType).toString())
-                            imdbId = extIds.optString("imdb_id")
-                        }
-
-                        if (!imdbId.isNullOrEmpty() && imdbId != "null") {
-                            val py = getPythonInstance()
-                            val torrentio = py.getModule("torrentio.torrentio").callAttr("source")
-                            val url = if (mediaType == "tv" || mediaType == "tvshow") {
-                                "$imdbId:${season ?: 1}:${episode ?: 1}"
-                            } else {
-                                imdbId
-                            }
-                            val torrentLang = prefs.getString("torrent_language", "English") ?: "English"
-                            val results = torrentio.callAttr("sources", url, emptyList<String>(), mapOf("torrent_language" to torrentLang))
-                            val jsonModule = py.getModule("json")
-                            val rawStreams = JSONArray(jsonModule.callAttr("dumps", results).toString())
-
-                            if (rawStreams.length() > 0) {
-                                val finalStreams = JSONArray()
-                                for (i in 0 until rawStreams.length()) {
-                                    val r = rawStreams.getJSONObject(i)
-                                    finalStreams.put(JSONObject().apply {
-                                        put("title", r.optString("title", ""))
-                                        put("source_data", r.toString())
-                                    })
+                            var imdbId = item.optString("imdb")
+                            if (imdbId.isNullOrEmpty() || imdbId == "null") {
+                                val details = _itemDetails.value
+                                if (details != null && details.optInt("id").toString() == id) {
+                                    imdbId = details.optJSONObject("external_ids")?.optString("imdb_id") ?: ""
                                 }
-                                val sorted = sortTorrents(finalStreams)
-                                if (sorted.length() > 0) {
-                                    val topTorrent = sorted.getJSONObject(0)
-                                    val sData = topTorrent.optString("source_data", "{}")
-                                    resolvedSuccess = true
-                                    withContext(Dispatchers.Main) {
-                                        _isSilentFavoriteScrape.value = false
-                                        resolveAndPlay(sData, topTorrent)
-                                    }
-                                    break
+                            }
+                            if (imdbId.isNullOrEmpty() || imdbId == "null") {
+                                val py = getPythonInstance()
+                                val tmdb = py.getModule("tmdb.tmdb_utils")
+                                val extIds = JSONObject(tmdb.callAttr("get_external_ids", id, mediaType).toString())
+                                imdbId = extIds.optString("imdb_id")
+                            }
+
+                            if (!imdbId.isNullOrEmpty() && imdbId != "null") {
+                                val py = getPythonInstance()
+                                val torrentio = py.getModule("torrentio.torrentio").callAttr("source")
+                                val url = if (mediaType == "tv" || mediaType == "tvshow") {
+                                    "$imdbId:${season ?: 1}:${episode ?: 1}"
+                                } else {
+                                    imdbId
                                 }
+                                val torrentLang = prefs.getString("torrent_language", "English") ?: "English"
+                                val results = torrentio.callAttr("sources", url, emptyList<String>(), mapOf("torrent_language" to torrentLang))
+                                val jsonModule = py.getModule("json")
+                                val streams = JSONArray(jsonModule.callAttr("dumps", results).toString())
+                                cachedTorrentioStreams = streams
+                                streams
+                            } else null
+                        }
+
+                        if (rawStreams != null && rawStreams.length() > 0) {
+                            val finalStreams = JSONArray()
+                            for (i in 0 until rawStreams.length()) {
+                                val r = rawStreams.getJSONObject(i)
+                                finalStreams.put(JSONObject().apply {
+                                    put("title", r.optString("title", ""))
+                                    put("source_data", r.toString())
+                                })
+                            }
+                            val sorted = sortTorrents(finalStreams)
+                            if (sorted.length() > 0) {
+                                val topTorrent = sorted.getJSONObject(0)
+                                val sData = topTorrent.optString("source_data", "{}")
+                                resolvedSuccess = true
+                                withContext(Dispatchers.Main) {
+                                    _isSilentFavoriteScrape.value = false
+                                    resolveAndPlay(sData, topTorrent)
+                                }
+                                break
                             }
                         }
                     } catch (e: Exception) {
@@ -3727,55 +3807,119 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                     }
                 } else {
                     try {
-                        val py = getPythonInstance()
-                        val scraper = py.getModule("main")
                         val targetKey = fav.providerKey.ifEmpty { fav.provider }
-                        val sourcesJson = scraper.callAttr("scrape_single_provider", targetKey, item.toString(), season, episode).toString()
-                        val sources = JSONArray(sourcesJson)
+
+                        val sources = providerResultsCache[targetKey] ?: run {
+                            val py = getPythonInstance()
+                            val scraper = py.getModule("main")
+                            val sourcesJson = scraper.callAttr("scrape_single_provider", targetKey, item.toString(), season, episode).toString()
+                            val fetched = JSONArray(sourcesJson)
+                            providerResultsCache[targetKey] = fetched
+                            fetched
+                        }
 
                         if (sources.length() > 0) {
                             var matchingSource: JSONObject? = null
+                            var bestScore = 0
+
                             val fSourceClean = fav.source.trim().lowercase()
+                            val fQualityClean = fav.quality.trim().lowercase()
+                            val fHdrClean = fav.hdr.trim().lowercase()
+                            val fCodecClean = fav.codec.trim().lowercase()
+                            val fAudioClean = fav.audio.trim().lowercase()
+                            val fHostClean = fav.targetHost.trim().lowercase()
 
                             for (i in 0 until sources.length()) {
                                 val s = sources.getJSONObject(i)
-                                val sSource = s.optString("source", "").trim().lowercase()
-                                if (sSource == fSourceClean || fSourceClean.isEmpty()) {
+                                val sDataStr = s.optString("source_data", "{}")
+                                val sData = JSONObject(sDataStr)
+
+                                val sSource = s.optString("source", sData.optString("source", "")).trim().lowercase()
+                                val sQuality = s.optString("quality", sData.optString("quality", "")).trim().lowercase()
+                                val sHdr = sData.optString("hdr", "").trim().lowercase()
+                                val sCodec = sData.optString("codec", "").trim().lowercase()
+                                val sAudio = sData.optString("audio", sData.optString("languages_display", "")).trim().lowercase()
+                                val sUrl = sData.optString("url", "").lowercase()
+                                val sHost = if (sUrl.contains("//")) sUrl.split("//")[1].split("/")[0] else ""
+
+                                if (fSourceClean.isNotEmpty() && sSource != fSourceClean && !sSource.contains(fSourceClean) && !fSourceClean.contains(sSource)) {
+                                    continue
+                                }
+
+                                var score = 1000
+
+                                if (fQualityClean.isNotEmpty()) {
+                                    if (sQuality == fQualityClean) {
+                                        score += 1000
+                                    } else {
+                                        continue
+                                    }
+                                }
+
+                                if (fHdrClean.isNotEmpty()) {
+                                    if (sHdr == fHdrClean) {
+                                        score += 800
+                                    } else {
+                                        continue
+                                    }
+                                }
+
+                                if (fCodecClean.isNotEmpty()) {
+                                    if (sCodec == fCodecClean) {
+                                        score += 600
+                                    } else {
+                                        continue
+                                    }
+                                }
+
+                                if (fAudioClean.isNotEmpty()) {
+                                    if (sAudio == fAudioClean) {
+                                        score += 500
+                                    } else if (sAudio.contains(fAudioClean) || fAudioClean.contains(sAudio)) {
+                                        score += 250
+                                    }
+                                }
+
+                                if (fHostClean.isNotEmpty() && (sHost.contains(fHostClean) || fHostClean.contains(sHost))) {
+                                    score += 200
+                                }
+
+                                if (score > bestScore) {
+                                    bestScore = score
                                     matchingSource = s
-                                    break
                                 }
                             }
 
-                            if (matchingSource == null) {
-                                matchingSource = sources.getJSONObject(0)
-                            }
+                            if (matchingSource != null) {
+                                val sourceDataStr = matchingSource.optString("source_data", "{}")
+                                val rawData = JSONObject(sourceDataStr)
+                                val py = getPythonInstance()
+                                val scraper = py.getModule("main")
+                                val resolveResult = scraper.callAttr("resolve", sourceDataStr).toString()
+                                val json = JSONObject(resolveResult)
 
-                            val sourceDataStr = matchingSource.optString("source_data", "{}")
-                            val rawData = JSONObject(sourceDataStr)
-                            val resolveResult = scraper.callAttr("resolve", sourceDataStr).toString()
-                            val json = JSONObject(resolveResult)
-
-                            if (!json.has("error")) {
-                                val streamUrl = json.optString("url")
-                                if (streamUrl.isNotEmpty() && (streamUrl.startsWith("http") || streamUrl.startsWith("file://"))) {
-                                    val parsedHeaders = mutableMapOf<String, String>()
-                                    json.optJSONObject("headers")?.let { h ->
-                                        h.keys().forEach { k -> parsedHeaders[k] = h.getString(k) }
-                                    }
-                                    val headersMap = mutableMapOf<String, String>()
-                                    rawData.optJSONObject("headers")?.let { h ->
-                                        h.keys().forEach { k -> headersMap[k] = h.getString(k) }
-                                    }
-                                    headersMap.putAll(parsedHeaders)
-
-                                    if (checkUrlValidity(streamUrl, headersMap)) {
-                                        resolvedSuccess = true
-                                        withContext(Dispatchers.Main) {
-                                            _isSilentFavoriteScrape.value = false
-                                            _silentFavoriteStatusMsg.value = context.getString(R.string.status_playing_fav_source, fav.name)
-                                            playStream(streamUrl, json.optBoolean("is_video", false), sourceDataStr, parsedHeaders)
+                                if (!json.has("error")) {
+                                    val streamUrl = json.optString("url")
+                                    if (streamUrl.isNotEmpty() && (streamUrl.startsWith("http") || streamUrl.startsWith("file://"))) {
+                                        val parsedHeaders = mutableMapOf<String, String>()
+                                        json.optJSONObject("headers")?.let { h ->
+                                            h.keys().forEach { k -> parsedHeaders[k] = h.getString(k) }
                                         }
-                                        break
+                                        val headersMap = mutableMapOf<String, String>()
+                                        rawData.optJSONObject("headers")?.let { h ->
+                                            h.keys().forEach { k -> headersMap[k] = h.getString(k) }
+                                        }
+                                        headersMap.putAll(parsedHeaders)
+
+                                        if (checkUrlValidity(streamUrl, headersMap)) {
+                                            resolvedSuccess = true
+                                            withContext(Dispatchers.Main) {
+                                                _isSilentFavoriteScrape.value = false
+                                                _silentFavoriteStatusMsg.value = context.getString(R.string.status_playing_fav_source, fav.name)
+                                                playStream(streamUrl, json.optBoolean("is_video", false), sourceDataStr, parsedHeaders)
+                                            }
+                                            break
+                                        }
                                     }
                                 }
                             }

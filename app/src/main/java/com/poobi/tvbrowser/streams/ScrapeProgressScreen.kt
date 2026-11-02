@@ -203,6 +203,7 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
     val lazyListState = rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIdx)
 
     LaunchedEffect(Unit) {
+        viewModel.loadFavoriteSources()
         viewModel.resumeScrape()
     }
 
@@ -594,9 +595,22 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                             isFirstItem
                         }
 
-                        val isFav = favoriteSources.any {
-                            it.source.trim().lowercase() == sourceName.trim().lowercase() &&
-                            it.provider.trim().lowercase() == providerName.trim().lowercase()
+                        val audioDisplay = rawData.optString("audio", "").ifEmpty {
+                            rawData.optString("languages_display", "")
+                        }
+                        val hdrDisplay = rawData.optString("hdr", "")
+                        val codecDisplay = rawData.optString("codec", "")
+
+                        val isFav = favoriteSources.any { fav ->
+                            viewModel.matchesFavorite(
+                                fav = fav,
+                                source = sourceName,
+                                provider = providerName,
+                                quality = quality,
+                                audio = audioDisplay,
+                                hdr = hdrDisplay,
+                                codec = codecDisplay
+                            )
                         }
 
                         val playInteractionSource = remember { MutableInteractionSource() }
@@ -874,21 +888,38 @@ fun ScrapeProgressScreen(viewModel: StreamsViewModel, streamsContentTabFocusRequ
                                         interactionSource = heartInteractionSource,
                                         indication = null,
                                         onClick = {
-                                            val displayTitle = if (selectedTab == "Torrents") {
-                                                rawData.optString("torrent_name", sourceName)
-                                            } else {
-                                                if (rawTitle.isNotEmpty() && !rawTitle.equals(sourceName, ignoreCase = true)) {
-                                                    "$sourceName ($providerName)"
-                                                } else {
-                                                    sourceName
-                                                }
+                                            val displayDetails = listOfNotNull(
+                                                quality.takeIf { it.isNotEmpty() && it != "SD" },
+                                                hdrDisplay.takeIf { it.isNotEmpty() },
+                                                codecDisplay.takeIf { it.isNotEmpty() },
+                                                audioDisplay.takeIf { it.isNotEmpty() }
+                                            ).joinToString(" • ")
+
+                                            val displayTitle = when {
+                                                selectedTab == "Torrents" -> rawData.optString("torrent_name", sourceName)
+                                                displayDetails.isNotEmpty() -> "$sourceName ($displayDetails)"
+                                                rawTitle.isNotEmpty() && !rawTitle.equals(sourceName, ignoreCase = true) -> "$sourceName ($rawTitle)"
+                                                providerName.isNotEmpty() && providerName != sourceName -> "$sourceName ($providerName)"
+                                                else -> sourceName
                                             }
+
+                                            val rawUrl = rawData.optString("url", "")
+                                            val targetHost = if (rawUrl.contains("//")) {
+                                                rawUrl.split("//")[1].split("/")[0]
+                                            } else ""
+
                                             viewModel.toggleFavoriteSource(
                                                 source = sourceName,
                                                 provider = providerName,
                                                 displayName = displayTitle,
                                                 isTorrent = (selectedTab == "Torrents"),
-                                                providerKey = rawData.optString("provider_key", "")
+                                                providerKey = rawData.optString("provider_key", ""),
+                                                quality = quality,
+                                                audio = audioDisplay,
+                                                hdr = hdrDisplay,
+                                                codec = codecDisplay,
+                                                targetHost = targetHost,
+                                                info = rawData.optString("info", "")
                                             )
                                         }
                                     )

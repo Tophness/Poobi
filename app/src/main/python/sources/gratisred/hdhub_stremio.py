@@ -79,15 +79,16 @@ class source:
                 size_str = m.group(1).strip()
 
         haystack = (name + ' ' + desc).upper()
+        clean_haystack = re.sub(r'4K\s*HD\s*HUB(?:\.COM)?', '', haystack)
         quality = 'SD'
         quality_rank = 3
-        if '4K' in haystack or '2160P' in haystack or 'UHD' in haystack:
+        if re.search(r'\b(?:4K|2160P|UHD)\b', clean_haystack):
             quality = '4K'
             quality_rank = 0
-        elif '1080P' in haystack:
+        elif re.search(r'\b(?:1080P|FHD)\b', clean_haystack):
             quality = '1080p'
             quality_rank = 1
-        elif '720P' in haystack:
+        elif re.search(r'\b(?:720P|HD)\b', clean_haystack):
             quality = '720p'
             quality_rank = 2
 
@@ -267,6 +268,9 @@ class source:
                     'is_video': True,
                     'audio': primary['audio'],
                     'languages_display': primary['audio'],
+                    'codec': primary.get('codec', ''),
+                    'hdr': primary.get('hdr', ''),
+                    'rtype': primary.get('rtype', ''),
                     'size': primary['size_str'],
                     'size_str': primary['size_str'],
                     'alternative_urls': all_alt_urls if len(all_alt_urls) > 1 else [],
@@ -279,6 +283,8 @@ class source:
             self.results = unfiltered_items
             return self.results
         except Exception:
+            import traceback
+            traceback.print_exc()
             return self.results
 
     def resolve(self, url):

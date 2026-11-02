@@ -1564,10 +1564,11 @@ fun FavoriteSourcesManagementContent(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
-                                    val subtitleText = if (fav.isTorrent) {
-                                        androidx.compose.ui.res.stringResource(R.string.fav_sources_torrent_source)
-                                    } else {
-                                        androidx.compose.ui.res.stringResource(R.string.fav_sources_provider_prefix, fav.provider.ifEmpty { "Web" })
+                                    val subtitleText = when {
+                                        fav.isTorrent -> androidx.compose.ui.res.stringResource(R.string.fav_sources_torrent_source)
+                                        fav.quality.isNotEmpty() && fav.audio.isNotEmpty() -> "${fav.source} • ${fav.quality} • ${fav.audio}"
+                                        fav.quality.isNotEmpty() -> "${fav.source} • ${fav.quality}"
+                                        else -> androidx.compose.ui.res.stringResource(R.string.fav_sources_provider_prefix, fav.provider.ifEmpty { "Web" })
                                     }
                                     Text(
                                         text = subtitleText,

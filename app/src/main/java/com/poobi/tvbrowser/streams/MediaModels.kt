@@ -12,7 +12,13 @@ data class FavoriteSource(
     val provider: String,
     val name: String,
     val isTorrent: Boolean = false,
-    val providerKey: String = ""
+    val providerKey: String = "",
+    val quality: String = "",
+    val audio: String = "",
+    val hdr: String = "",
+    val codec: String = "",
+    val targetHost: String = "",
+    val info: String = ""
 )
 
 @Immutable
