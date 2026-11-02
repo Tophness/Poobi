@@ -3729,6 +3729,22 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _selectedItem.value = item
         lastScrapedSeason = season
         lastScrapedEpisode = episode
+        interceptedSubtitleUrls.clear()
+        lastSubtitledItemKey = null
+        _subStatusMsg.value = ""
+
+        val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, season, episode)
+        if (itemKey.isNotEmpty()) {
+            val cached = com.poobi.tvbrowser.shared.SubtitleCacheManager.loadSubtitles(context, itemKey)
+            cached.forEach { sub ->
+                interceptedSubtitleUrls[sub.url] = mapOf("label" to sub.label, "lang" to sub.lang)
+            }
+        }
+
+        val autoSubPref = prefs.getInt("auto_sub_pref", 0)
+        if (autoSubPref == 1) {
+            performAutoSubtitleSearch(item, season, episode)
+        }
 
         silentFavoriteJob = viewModelScope.launch(Dispatchers.IO) {
             var resolvedSuccess = false
@@ -3916,7 +3932,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                                             withContext(Dispatchers.Main) {
                                                 _isSilentFavoriteScrape.value = false
                                                 _silentFavoriteStatusMsg.value = context.getString(R.string.status_playing_fav_source, fav.name)
-                                                playStream(streamUrl, json.optBoolean("is_video", false), sourceDataStr, parsedHeaders)
+                                                resolveAndPlay(sourceDataStr, matchingSource)
                                             }
                                             break
                                         }

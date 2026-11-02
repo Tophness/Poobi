@@ -1425,6 +1425,11 @@ fun MainApp(
         }
 
         if (isSilentFavoriteScrape) {
+            val isDownloadingSubs by streamsViewModel.isDownloadingSubs.collectAsState()
+            val subStatus by streamsViewModel.subStatusMsg.collectAsState()
+            val subProgress by streamsViewModel.subProgress.collectAsState()
+            val showSubProgressBar by streamsViewModel.showSubProgressBar.collectAsState()
+
             AlertDialog(
                 onDismissRequest = { streamsViewModel.cancelSilentFavoriteScrape() },
                 title = {
@@ -1442,7 +1447,7 @@ fun MainApp(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         CircularProgressIndicator(
                             color = Color(0xFF00BCD4),
@@ -1454,21 +1459,77 @@ fun MainApp(
                             color = Color.LightGray,
                             fontSize = 14.sp
                         )
+
+                        if (isDownloadingSubs && subStatus.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = subStatus,
+                                color = Color(0xFFFFC107),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            if (showSubProgressBar) {
+                                LinearProgressIndicator(
+                                    progress = { subProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp),
+                                    color = Color(0xFFFFC107),
+                                    trackColor = Color(0xFF333338)
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    Text(
+                                        text = "${(subProgress * 100).toInt()}%",
+                                        color = Color(0xFFFFC107),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                     }
                 },
                 confirmButton = {
-                    TvFocusableBox(
-                        modifier = Modifier.height(40.dp),
-                        defaultColor = Color(0xFF333338),
-                        shape = RoundedCornerShape(20.dp),
-                        onClick = { streamsViewModel.cancelSilentFavoriteScrape() }
-                    ) { isFocused ->
-                        Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = androidx.compose.ui.res.stringResource(R.string.btn_view_all_sources),
-                                color = if (isFocused) Color.Black else Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isDownloadingSubs) {
+                            TvFocusableBox(
+                                modifier = Modifier.height(40.dp),
+                                defaultColor = Color(0xFF333338),
+                                shape = RoundedCornerShape(20.dp),
+                                onClick = {
+                                    streamsViewModel.cancelSubtitleDownloads()
+                                }
+                            ) { isFocused ->
+                                Box(Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = androidx.compose.ui.res.stringResource(R.string.btn_skip_play),
+                                        color = if (isFocused) Color.Black else Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+
+                        TvFocusableBox(
+                            modifier = Modifier.height(40.dp),
+                            defaultColor = Color(0xFF333338),
+                            shape = RoundedCornerShape(20.dp),
+                            onClick = { streamsViewModel.cancelSilentFavoriteScrape() }
+                        ) { isFocused ->
+                            Box(Modifier.fillMaxHeight().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(R.string.btn_view_all_sources),
+                                    color = if (isFocused) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 },
