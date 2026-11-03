@@ -70,17 +70,24 @@ class source:
             #log_utils.log('r5: '+repr(r))
             # goojara tv show year are incorrect, sometimes.
             # this will match ALIAS and YEAR
-            try:
-                result_url = next(i[0] for i in r if cleantitle.match_alias(i[1], aliases) and cleantitle.match_year(i[2], year, data['year']))
-                #log_utils.log('result_url1: '+repr(result_url))
-            except StopIteration:
-                try:
-                    year2 = data.get('year')
-                    result_url = next(i[0] for i in r if cleantitle.match_alias(i[1], aliases) and cleantitle.match_year(i[2], year2))
-                    #log_utils.log('result_url2: '+repr(result_url))
-                except StopIteration:
-                    result_url = next(i[0] for i in r if cleantitle.match_alias(i[1], aliases))
-                    #log_utils.log('result_url3: '+repr(result_url))
+            target_clean = cleantitle.get(title)
+            target_aliases = [cleantitle.get(a) for a in aliases if a]
+
+            def _clean(t):
+                return cleantitle.get(t)
+
+            exact_matches = [i[0] for i in r if _clean(i[1]) == target_clean and str(i[2]).strip() == str(year).strip()]
+
+            if not exact_matches:
+                exact_matches = [i[0] for i in r if _clean(i[1]) == target_clean and cleantitle.match_year(i[2], year, data.get('year', ''))]
+
+            if not exact_matches and target_aliases:
+                exact_matches = [i[0] for i in r if _clean(i[1]) in target_aliases and str(i[2]).strip() == str(year).strip()]
+
+            if not exact_matches and target_aliases:
+                exact_matches = [i[0] for i in r if _clean(i[1]) in target_aliases and cleantitle.match_year(i[2], year, data.get('year', ''))]
+
+            result_url = exact_matches[0] if exact_matches else None
             if not result_url:
                 return
             if not result_url.startswith(self.base_link):

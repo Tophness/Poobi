@@ -95,21 +95,20 @@ class source:
 
             r = [( i[0], re.sub(pattern, '', i[1], flags=re.IGNORECASE).strip(), i[2]) for i in r]
            
+            clean_title_only = cleantitle.get(title)
             if 'tvshowtitle' in data:
-                result_url = [i[0] for i in r if check_title in cleantitle.get(i[1])]
+                result_url = [i[0] for i in r if cleantitle.get(i[1]) == check_title]
                 result_url = result_url[0] if result_url else None
                 if result_url is None:
-                    # try again; Site sucks for TV titles. Names/seasons are wrong, and/or missing info
-                    check_title2 = cleantitle.get(title)
-                    result_url = [i[0] for i in r if check_title2 in cleantitle.get(i[1])]
+                    result_url = [i[0] for i in r if cleantitle.get(i[1]) == clean_title_only]
                     result_url = result_url[0] if result_url else None
             else:
-                result_urls = [i[0] for i in r if check_title in cleantitle.get(i[1]) 
+                result_urls = [i[0] for i in r if cleantitle.get(i[1]) == check_title 
                               and 'movie' in i[1].lower()
                               and cleantitle.match_year(i[0], year)]
                 result_url = result_urls[0] if result_urls else None
                 if not result_url:
-                    result_urls = [i[0] for i in r if check_title in cleantitle.get(i[1])
+                    result_urls = [i[0] for i in r if cleantitle.get(i[1]) == check_title
                                   and cleantitle.match_year(i[0], year)]
                     result_url = result_urls[0] if result_urls else None
             if result_url is None:

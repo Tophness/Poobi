@@ -23,6 +23,7 @@ import time
 from six.moves import urllib_parse
 from resolveurl.lib import helpers
 from resolveurl import common
+from resolveurl.common import log_utils
 from resolveurl.resolver import ResolveUrl, ResolverError
 
 

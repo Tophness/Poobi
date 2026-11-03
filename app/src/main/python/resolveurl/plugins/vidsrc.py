@@ -46,9 +46,9 @@ class VidSrcResolver(ResolveUrl):
         'vidsrc.me', 'vidsrc.in', 'vidsrc.to', 'vidsrc.net',
         'vidsrc.xyz', 'vidsrcme.ru', 'vidsrc.stream', 'vidsrc.icu',
         'cloudorchestranova.com', 'vidsrc.mov', 'vsembed.ru', 'vidsrc.pm',
-        'vidsrc.fyi', 'vidsrc.buzz'
+        'vidsrc.fyi', 'vidsrc.buzz', 'vidsrc.sh', 'vidsrc2.to'
     ]
-    pattern = r'(?://|\.)((?:vidsrc\.(?:me|in|to|net|xyz|stream|icu|mov|pm|fyi|buzz)|vidsrcme\.ru|vsembed\.ru|cloudorchestranova\.com))/(?:embed/)?((?:(?:movie|tv)/)?[0-9a-zA-Z-/]+(?:\?[^"\'>\s]+)?)'
+    pattern = r'(?://|\.)((?:vidsrc\.(?:me|in|to|net|xyz|stream|icu|mov|pm|fyi|buzz|sh)|vidsrc2\.to|vidsrcme\.ru|vsembed\.ru|cloudorchestranova\.com))/(?:embed/)?((?:(?:movie|tv)/)?[0-9a-zA-Z-/]+(?:\?[^"\'>\s]+)?)'
 
     def get_media_url(self, host, media_id, subs=False):
         global _CACHED_STREAM_TOKEN, _CACHED_TOKEN_EXPIRY
@@ -88,13 +88,36 @@ class VidSrcResolver(ResolveUrl):
                     'X-Requested-With': 'XMLHttpRequest'
                 }
 
-                race_resp = s.get(race_url, headers=api_headers, timeout=10, verify=False)
-                cands = race_resp.json().get('cands', [])
-                if not cands or not cands[0].get('url'):
-                    raise ResolverError('VidSrc (vidsrc.buzz): Race API returned no candidates')
+                stream_url = None
+                try:
+                    race_resp = s.get(race_url, headers=api_headers, timeout=8, verify=False)
+                    if race_resp.status_code == 200:
+                        cands = race_resp.json().get('cands', [])
+                        if cands and cands[0].get('url'):
+                            raw_url = cands[0].get('url')
+                            stream_url = urljoin('https://vidsrc.buzz/', raw_url) if raw_url.startswith('/') else raw_url
+                except Exception:
+                    stream_url = None
 
-                raw_url = cands[0].get('url')
-                stream_url = urljoin('https://vidsrc.buzz/', raw_url) if raw_url.startswith('/') else raw_url
+                if not stream_url:
+                    q_token = q_data.get('t', '')
+                    for srv in servers:
+                        s_ref = srv.get('ref')
+                        if not s_ref: continue
+                        play_url = f"https://vidsrc.buzz/pl/api.php?a=play&ref={quote_plus(s_ref)}&t={quote_plus(q_token)}"
+                        try:
+                            p_resp = s.get(play_url, headers=api_headers, timeout=8, verify=False)
+                            p_data = p_resp.json()
+                            raw_url = p_data.get('url')
+                            if raw_url:
+                                stream_url = urljoin('https://vidsrc.buzz/', raw_url) if raw_url.startswith('/') else raw_url
+                                break
+                        except Exception:
+                            continue
+
+                if not stream_url:
+                    raise ResolverError('VidSrc (vidsrc.buzz): Failed to resolve stream from race or fallback mirrors')
+
                 delim = "&" if "?" in stream_url else "?"
                 final_stream_url = f"{stream_url}{delim}bypass_localize=true"
 
@@ -429,8 +452,11 @@ class VidSrcResolver(ResolveUrl):
             raise ResolverError(f'VidSrc: {str(e)}')
 
     def get_url(self, host, media_id):
-        if not host or not host.startswith('http'):
+        if not host:
             host = 'vidsrc.me'
+        elif host.startswith('http://') or host.startswith('https://'):
+            host = host.split('://')[1].split('/')[0]
+
         if not media_id.startswith('movie/') and not media_id.startswith('tv/') and not media_id.startswith('tt'):
             parts = [p for p in media_id.split('/') if p]
             if len(parts) >= 2:

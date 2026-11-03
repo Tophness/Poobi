@@ -1095,11 +1095,19 @@ class UniversalScraper:
                                         pass
                                     print(msg, flush=True)
 
-                                se_url_match = re.search(r'/(?:tv|embed|e|series)/[^/?#]+/(\d+)[/-](\d+)', raw_url)
-                                if se_url_match:
+                                se_url_match = re.search(r'/(?:tv|series|show|embed(?:/tv)?|e(?:/tv)?)/[^/?#]+/(\d{1,3})[/-](\d{1,3})(?:[/?#]|$)', raw_url)
+                                if not se_url_match:
+                                    s_param = re.search(r'[?&](?:s|season)=(\d+)', raw_url, re.I)
+                                    e_param = re.search(r'[?&](?:e|episode)=(\d+)', raw_url, re.I)
+                                    if s_param and e_param:
+                                        s_found, e_found = int(s_param.group(1)), int(e_param.group(1))
+                                        if s_found != s_req or e_found != e_req:
+                                            log_rejection("Wrong Season/Episode in URL query", f"Found: S{s_found}E{e_found}")
+                                            continue
+                                else:
                                     s_found, e_found = int(se_url_match.group(1)), int(se_url_match.group(2))
                                     if s_found != s_req or e_found != e_req:
-                                        log_rejection("Wrong Season/Episode in URL", f"Found: S{s_found}E{e_found}")
+                                        log_rejection("Wrong Season/Episode in URL path", f"Found: S{s_found}E{e_found}")
                                         continue
 
                                 res_title = res.get('title') or ''
@@ -1174,7 +1182,16 @@ class UniversalScraper:
             try:
                 if resolveurl.HostedMediaFile(url):
                     resolved = resolveurl.resolve(url)
-                    if resolved:
+                    if isinstance(resolved, dict):
+                        primary_url = resolved.get('url')
+                        if primary_url:
+                            localized_primary = localize_hls_stream(primary_url)
+                            source_data['url'] = localized_primary
+                            if resolved.get('alternative_urls'):
+                                source_data['alternative_urls'] = resolved['alternative_urls']
+                                source_data['alternative_names'] = resolved.get('alternative_names', [])
+                            return localized_primary, True
+                    elif resolved:
                         resolved = localize_hls_stream(resolved)
                         return resolved, True
             except Exception: pass
@@ -1594,10 +1611,11 @@ def scrape_single_provider(provider_key_or_name, item_json, season=None, episode
         scraper = UniversalScraper([target_pack] if target_pack else [])
         content = 'movie' if media_type == 'movie' else 'episode'
 
+        release_date = item.get('first_air_date') or item.get('release_date') or f"{year}-01-01"
         args = (
             target_provider, content, title, title, "[]", year, imdb_id, tmdb_id, 
             '0' if content == 'movie' else None, 
-            season, episode, '0', target_name, target_pack
+            season, episode, release_date, target_name, target_pack
         )
         scraper.worker(*args)
 
@@ -1646,6 +1664,8 @@ def scrape(item_json, season=None, episode=None):
         title = re.sub(r'\s\(\d{4}\)$', '', title).strip()
         year = item.get('year') or (item.get('release_date') or item.get('first_air_date') or '0000')[:4]
         
+        release_date = item.get('first_air_date') or item.get('release_date') or f"{year}-01-01"
+
         sources = active_scraper.getSources(
             title=title, 
             year=year, 
@@ -1653,7 +1673,8 @@ def scrape(item_json, season=None, episode=None):
             tmdb=tmdb_id,
             tvshowtitle=title if is_tv else None,
             season=season,
-            episode=episode
+            episode=episode,
+            premiered=release_date
         )
 
         display_sources = []
