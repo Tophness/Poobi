@@ -1180,8 +1180,9 @@ class UniversalScraper:
 
         if resolveurl and hasattr(resolveurl, 'HostedMediaFile'):
             try:
-                if resolveurl.HostedMediaFile(url):
-                    resolved = resolveurl.resolve(url)
+                hmf_obj = resolveurl.HostedMediaFile(url)
+                if hmf_obj:
+                    resolved = hmf_obj.resolve()
                     if isinstance(resolved, dict):
                         primary_url = resolved.get('url')
                         if primary_url:
@@ -1191,9 +1192,14 @@ class UniversalScraper:
                                 source_data['alternative_urls'] = resolved['alternative_urls']
                                 source_data['alternative_names'] = resolved.get('alternative_names', [])
                             return localized_primary, True
-                    elif resolved:
-                        resolved = localize_hls_stream(resolved)
-                        return resolved, True
+                    elif isinstance(resolved, str) and resolved:
+                        localized_primary = localize_hls_stream(resolved)
+                        source_data['url'] = localized_primary
+                        resolver_inst = getattr(hmf_obj, 'resolver', None)
+                        if resolver_inst and getattr(resolver_inst, 'alternative_urls', None):
+                            source_data['alternative_urls'] = resolver_inst.alternative_urls
+                            source_data['alternative_names'] = getattr(resolver_inst, 'alternative_names', [])
+                        return localized_primary, True
             except Exception: pass
 
         video_extensions = ('.m3u8', '.mp4', '.mkv', '.ts', '.webm', '.mpd', '.avi', '.flv', '.mov')

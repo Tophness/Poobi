@@ -123,6 +123,8 @@ class source:
                     clean_link = client_utils.replaceHTMLCodes(link).replace('&amp;', '&')
                     if clean_link.startswith('/vsp2/'):
                         continue
+                    if 'multiembed' in clean_link and 'directstream.php' in clean_link:
+                        clean_link = clean_link.replace('/directstream.php?', '/?').replace('/directstream.php', '/?')
                     for source in scrape_sources.process(hostDict, clean_link):
                         if scrape_sources.check_host_limit(source['source'], self.results):
                             continue
