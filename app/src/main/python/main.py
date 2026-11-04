@@ -1182,16 +1182,7 @@ class UniversalScraper:
             try:
                 if resolveurl.HostedMediaFile(url):
                     resolved = resolveurl.resolve(url)
-                    if isinstance(resolved, dict):
-                        primary_url = resolved.get('url')
-                        if primary_url:
-                            localized_primary = localize_hls_stream(primary_url)
-                            source_data['url'] = localized_primary
-                            if resolved.get('alternative_urls'):
-                                source_data['alternative_urls'] = resolved['alternative_urls']
-                                source_data['alternative_names'] = resolved.get('alternative_names', [])
-                            return localized_primary, True
-                    elif resolved:
+                    if resolved:
                         resolved = localize_hls_stream(resolved)
                         return resolved, True
             except Exception: pass
