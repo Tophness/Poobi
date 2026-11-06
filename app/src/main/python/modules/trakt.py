@@ -26,6 +26,16 @@ REDIRECT_URI = 'urn:ietf:wg:oauth:2.0:oob'
 V2_API_KEY = 'ef0b7f6f8b8806a5df10e37bae8d5487b9cbec20e424a6527c1f3020cfa363a7'
 CLIENT_SECRET = 'ad86f5aef36c5a08039a6f4c8f24ca018ffd7d45fb867cd9bf8c2bd675d3de79'
 
+def get_trakt_user_agent():
+    try:
+        from com.chaquo.python import Python
+        ctx = Python.getPlatform().getApplication()
+        pkg_info = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0)
+        ver = pkg_info.versionName or "1.0"
+        return f"Poobi/{ver}"
+    except Exception:
+        return "Poobi/1.0"
+
 
 def getTraktCredentialsInfo():
     user = control.setting('trakt.user').strip()
@@ -40,7 +50,12 @@ def __getTraktALT(url, post=None):
     try:
         url = urllib_parse.urljoin(BASE_URL, url) if not url.startswith(BASE_URL) else url
         post = json.dumps(post) if post else None
-        headers = {'Content-Type': 'application/json', 'trakt-api-key': V2_API_KEY, 'trakt-api-version': '2'}
+        headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': get_trakt_user_agent(),
+            'trakt-api-key': V2_API_KEY,
+            'trakt-api-version': '2'
+        }
         if getTraktCredentialsInfo():
             headers.update({'Authorization': 'Bearer %s' % control.setting('trakt.token')})
         result = client.request(url, post=post, headers=headers, output='extended', error=True)
@@ -50,11 +65,9 @@ def __getTraktALT(url, post=None):
         result = result[0]
         if resp_code in ['423', '500', '502', '503', '504', '520', '521', '522', '524']:
             log_utils.log('Trakt Error: %s' % str(resp_code))
-            control.infoDialog('Trakt Error: ' + str(resp_code), sound=True)
             return
         elif resp_code in ['429']:
             log_utils.log('Trakt Rate Limit Reached: %s' % str(resp_code))
-            control.infoDialog('Trakt Rate Limit Reached: ' + str(resp_code), sound=True)
             return
         elif resp_code in ['404']:
             log_utils.log('Trakt Object Not Found : %s' % str(resp_code))
@@ -80,7 +93,12 @@ def __getTrakt(url, post=None):
     try:
         url = urllib_parse.urljoin(BASE_URL, url) if not url.startswith(BASE_URL) else url
         post = json.dumps(post) if post else None
-        headers = {'Content-Type': 'application/json', 'trakt-api-key': V2_API_KEY, 'trakt-api-version': '2'}
+        headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': get_trakt_user_agent(),
+            'trakt-api-key': V2_API_KEY,
+            'trakt-api-version': '2'
+        }
         if getTraktCredentialsInfo():
             headers.update({'Authorization': 'Bearer %s' % control.setting('trakt.token')})
         if not post:
@@ -93,11 +111,9 @@ def __getTrakt(url, post=None):
         result = r.text
         if resp_code in ['423', '500', '502', '503', '504', '520', '521', '522', '524']:
             log_utils.log('Trakt Error: %s' % str(resp_code))
-            control.infoDialog('Trakt Error: ' + str(resp_code), sound=True)
             return
         elif resp_code in ['429']:
             log_utils.log('Trakt Rate Limit Reached: %s' % str(resp_code))
-            control.infoDialog('Trakt Rate Limit Reached: ' + str(resp_code), sound=True)
             return
         elif resp_code in ['404']:
             log_utils.log('Trakt Object Not Found : %s' % str(resp_code))
@@ -350,7 +366,7 @@ def syncMovies(user):
         pass
 
 
-def cachesyncMovies(timeout=0):
+def cachesyncMovies(timeout=1):
     indicators = cache.get(syncMovies, timeout, control.setting('trakt.user').strip())
     return indicators
 
@@ -372,7 +388,7 @@ def syncTVShows(user):
         pass
 
 
-def cachesyncTVShows(timeout=0):
+def cachesyncTVShows(timeout=1):
     indicators = cache.get(syncTVShows, timeout, control.setting('trakt.user').strip())
     return indicators
 

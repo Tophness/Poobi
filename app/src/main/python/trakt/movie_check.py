@@ -1,7 +1,7 @@
 import requests
 import json
 from modules import control
-from trakt.trakt_auth import BASE_URL, CLIENT_ID
+from trakt.trakt_auth import BASE_URL, CLIENT_ID, get_trakt_user_agent
 
 def is_movie_watched(item_json):
     token = control.setting('trakt.token')
@@ -15,6 +15,7 @@ def is_movie_watched(item_json):
 
     headers = {
         'Content-Type': 'application/json',
+        'User-Agent': get_trakt_user_agent(),
         'trakt-api-key': CLIENT_ID,
         'trakt-api-version': '2',
         'Authorization': f'Bearer {token}'
@@ -26,7 +27,7 @@ def is_movie_watched(item_json):
     if not ids.get('tmdb') and item.get('id'): ids['tmdb'] = item['id']
     
     try:
-        response = requests.get(f"{BASE_URL}/sync/watched/movies", headers=headers)
+        response = requests.get(f"{BASE_URL}/sync/watched/movies", headers=headers, timeout=10)
         if response.status_code == 200:
             watched_movies = response.json()
             for m in watched_movies:

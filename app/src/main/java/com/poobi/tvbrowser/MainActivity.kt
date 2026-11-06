@@ -806,7 +806,9 @@ class MainActivity : AppCompatActivity() {
                 control.callAttr("set_dialog_listener", object : PythonDialogListener {
                     override fun infoDialog(message: String, heading: String, sound: Boolean, icon: String) {
                         runOnUiThread {
-                            Toast.makeText(this@MainActivity, "${heading.cleanKodiText()}: ${message.cleanKodiText()}", Toast.LENGTH_LONG).show()
+                            if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                Toast.makeText(this@MainActivity, "${heading.cleanKodiText()}: ${message.cleanKodiText()}", Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
 

@@ -1310,6 +1310,11 @@ def get_trakt_feed(feed_type):
         if token and token != '0' and control.setting('trakt.authed') == 'yes':
             headers['Authorization'] = f'Bearer {token}'
 
+        try:
+            from trakt.trakt_auth import get_trakt_user_agent
+            headers['User-Agent'] = get_trakt_user_agent()
+        except Exception:
+            headers['User-Agent'] = 'Poobi/1.0'
         url_map = {
             'anticipated': f"{base_url}/movies/anticipated?limit=20",
             'anticipated_shows': f"{base_url}/shows/anticipated?limit=20",

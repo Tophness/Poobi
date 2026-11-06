@@ -1,5 +1,6 @@
 import requests
 from modules import control
+from trakt.trakt_auth import get_trakt_user_agent
 
 BASE_URL = 'https://api.trakt.tv'
 CLIENT_ID = 'ef0b7f6f8b8806a5df10e37bae8d5487b9cbec20e424a6527c1f3020cfa363a7'
@@ -14,6 +15,7 @@ def scrobble(item_json, season=None, episode=None, progress=100.0):
     
     headers = {
         'Content-Type': 'application/json',
+        'User-Agent': get_trakt_user_agent(),
         'trakt-api-key': CLIENT_ID,
         'trakt-api-version': '2',
         'Authorization': f'Bearer {token}'
@@ -35,13 +37,13 @@ def scrobble(item_json, season=None, episode=None, progress=100.0):
     if season is not None and episode is not None:
         payload["show"] = {"ids": ids}
         payload["episode"] = {"number": episode, "season": season}
-        url = f"{BASE_URL}/scrobble/stop" # Mark as finished
+        url = f"{BASE_URL}/scrobble/stop"
     else:
         payload["movie"] = {"ids": ids}
         url = f"{BASE_URL}/scrobble/stop"
         
     try:
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
         return response.status_code in [201, 204, 200]
     except:
         return False
@@ -55,6 +57,7 @@ def add_to_history(item_json, season=None, episode=None):
     item = json.loads(item_json)
     headers = {
         'Content-Type': 'application/json',
+        'User-Agent': get_trakt_user_agent(),
         'trakt-api-key': CLIENT_ID,
         'trakt-api-version': '2',
         'Authorization': f'Bearer {token}'
@@ -78,7 +81,7 @@ def add_to_history(item_json, season=None, episode=None):
         data["movies"] = [{"ids": ids}]
         
     try:
-        response = requests.post(f"{BASE_URL}/sync/history", json=data, headers=headers)
+        response = requests.post(f"{BASE_URL}/sync/history", json=data, headers=headers, timeout=10)
         return response.status_code == 201
     except:
         return False
@@ -92,6 +95,7 @@ def remove_from_history(item_json, season=None, episode=None):
     item = json.loads(item_json)
     headers = {
         'Content-Type': 'application/json',
+        'User-Agent': get_trakt_user_agent(),
         'trakt-api-key': CLIENT_ID,
         'trakt-api-version': '2',
         'Authorization': f'Bearer {token}'
@@ -115,7 +119,7 @@ def remove_from_history(item_json, season=None, episode=None):
         data["movies"] = [{"ids": ids}]
         
     try:
-        response = requests.post(f"{BASE_URL}/sync/history/remove", json=data, headers=headers)
+        response = requests.post(f"{BASE_URL}/sync/history/remove", json=data, headers=headers, timeout=10)
         return response.status_code in [200, 201]
     except:
         return False

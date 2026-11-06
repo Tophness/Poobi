@@ -308,7 +308,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private fun enqueueTraktSyncWorker() {
         try {
             val workRequest = androidx.work.PeriodicWorkRequestBuilder<com.poobi.tvbrowser.shared.TraktSyncWorker>(
-                15, java.util.concurrent.TimeUnit.MINUTES
+                1, java.util.concurrent.TimeUnit.HOURS
             ).setConstraints(
                 androidx.work.Constraints.Builder()
                     .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
@@ -317,7 +317,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
             androidx.work.WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 "TraktEpisodeCheck",
-                androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+                androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
                 workRequest
             )
         } catch (e: Exception) {
@@ -5082,64 +5082,6 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
-
-	private fun startBackgroundTraktCheck() {
-		viewModelScope.launch(Dispatchers.IO) {
-			delay(6000)
-			while (isActive) {
-				try {
-					val favsJson = prefs.getString("streams_favorites", "[]") ?: "[]"
-					if (favsJson != "[]") {
-						val cacheFile = File(context.cacheDir, "last_episode_check.json")
-						val lastCheckJson = if (cacheFile.exists()) cacheFile.readText() else "{}"
-						val py = getPythonInstance()
-						val checker = py.getModule("trakt.episode_check")
-						val resultsStr = checker.callAttr("check_new_episodes", favsJson, lastCheckJson).toString()
-						val resultObj = JSONObject(resultsStr)
-						val newEpisodes = resultObj.getJSONArray("new_episodes")
-						val updatedLastCheck = resultObj.getJSONObject("last_check")
-
-						cacheFile.writeText(updatedLastCheck.toString())
-
-						if (newEpisodes.length() > 0) {
-							val enrichedList = mutableListOf<JSONObject>()
-							for (i in 0 until newEpisodes.length()) {
-								val ep = newEpisodes.getJSONObject(i)
-								val showId = ep.optString("show_id", "")
-								if (showId.isNotEmpty()) {
-									try {
-										py.getModule("trakt.episode_check").callAttr("invalidate_show_progress_cache", showId)
-									} catch (e: Exception) {}
-								}
-								val enriched = enrichNotificationWithTmdb(ep)
-								enrichedList.add(enriched)
-							}
-							
-							withContext(Dispatchers.Main) {
-								refreshFavoritesSet()
-								loadProgressCounts()
-								
-								val currentList = _activeNotifications.value.toMutableList()
-								currentList.addAll(enrichedList)
-								_activeNotifications.value = currentList
-								saveNotifications(currentList)
-								TvHomeSyncManager.syncNewEpisodesChannel(context, currentList)
-							}
-						} else {
-							withContext(Dispatchers.Main) {
-								refreshFavoritesSet()
-								loadProgressCounts()
-							}
-						}
-					}
-				} catch (e: Exception) {
-					if (e is CancellationException) throw e
-					Log.e("TVBrowser", "Trakt episode sync task error: ${e.message}")
-				}
-				delay(900000)
-			}
-		}
-	}
 
     private fun getSubtitleCacheFile(): File = com.poobi.tvbrowser.shared.SubtitleCacheManager.getCacheFile(context)
 

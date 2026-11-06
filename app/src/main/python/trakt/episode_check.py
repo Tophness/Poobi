@@ -5,7 +5,7 @@ import requests
 import time
 from datetime import datetime, timedelta
 from modules import control
-from trakt.trakt_auth import CLIENT_ID, BASE_URL
+from trakt.trakt_auth import CLIENT_ID, BASE_URL, get_trakt_user_agent
 
 try:
     from com.chaquo.python import Python
@@ -18,9 +18,19 @@ except:
 
 PROGRESS_CACHE_FILE = os.path.realpath(os.path.join(CACHE_DIR, 'trakt_progress_cache.json'))
 
+_TRAKT_RATE_LIMIT_UNTIL = 0
+
 def check_new_episodes(favorites_json, last_check_json):
+    global _TRAKT_RATE_LIMIT_UNTIL
     favorites = json.loads(favorites_json)
     last_check = json.loads(last_check_json)
+
+    if time.time() < _TRAKT_RATE_LIMIT_UNTIL:
+        print("[DEBUG] check_new_episodes: In rate limit cooldown, skipping.")
+        return json.dumps({
+            "new_episodes": [],
+            "last_check": last_check
+        })
 
     new_episodes = []
     updated_last_check = last_check.copy()
@@ -31,6 +41,7 @@ def check_new_episodes(favorites_json, last_check_json):
     token = control.setting('trakt.token')
     headers = {
         'Content-Type': 'application/json',
+        'User-Agent': get_trakt_user_agent(),
         'trakt-api-version': '2',
         'trakt-api-key': CLIENT_ID
     }
@@ -46,7 +57,7 @@ def check_new_episodes(favorites_json, last_check_json):
     if is_authed:
         try:
             from modules import trakt
-            watched_shows = trakt.cachesyncTVShows() or []
+            watched_shows = trakt.cachesyncTVShows(timeout=1) or []
             for s in watched_shows:
                 watched_map[str(s[0])] = s[2]
         except Exception as e:
@@ -56,6 +67,19 @@ def check_new_episodes(favorites_json, last_check_json):
 
     try:
         response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 429 or "rate limited" in response.text.lower():
+            retry_after = 300
+            try:
+                retry_after = int(response.headers.get('Retry-After', 300))
+            except:
+                pass
+            _TRAKT_RATE_LIMIT_UNTIL = time.time() + max(60, retry_after)
+            print(f"[DEBUG] check_new_episodes: Rate limited ({response.status_code}). Backing off for {retry_after}s.")
+            return json.dumps({
+                "new_episodes": [],
+                "last_check": last_check
+            })
+
         if response.status_code == 200:
             calendar_items = response.json()
             fav_map = {str(item.get('id')): item for item in favorites if item.get('media_type') == 'tv'}
@@ -132,7 +156,7 @@ def check_new_episodes(favorites_json, last_check_json):
                         except Exception as ex:
                             print(f"[DEBUG] check_new_episodes: Date parse error: {ex}")
         else:
-            print(f"[DEBUG] check_new_episodes: Error reading Trakt Calendar response: {response.text}")
+            print(f"[DEBUG] check_new_episodes: Status {response.status_code}")
     except Exception as e:
         print(f"[DEBUG] check_new_episodes exception occurred: {e}")
 
@@ -150,6 +174,7 @@ def check_new_episodes(favorites_json, last_check_json):
     })
 
 def get_all_shows_progress(favorites_json):
+    global _TRAKT_RATE_LIMIT_UNTIL
     favorites = json.loads(favorites_json)
     
     token = control.setting('trakt.token')
@@ -158,6 +183,7 @@ def get_all_shows_progress(favorites_json):
         
     headers = {
         'Content-Type': 'application/json',
+        'User-Agent': get_trakt_user_agent(),
         'trakt-api-version': '2',
         'trakt-api-key': CLIENT_ID,
         'Authorization': f'Bearer {token}'
@@ -172,7 +198,8 @@ def get_all_shows_progress(favorites_json):
             pass
 
     current_time = time.time()
-    CACHE_EXPIRY = 900
+    CACHE_EXPIRY = 1800
+    is_rate_limited = (current_time < _TRAKT_RATE_LIMIT_UNTIL)
     
     updated_cache = {}
     results = {}
@@ -183,7 +210,6 @@ def get_all_shows_progress(favorites_json):
             continue
             
         tmdb_id = str(item.get('id'))
-        show_title = item.get('title') or item.get('name') or "Unknown Show"
         fav_ids.add(tmdb_id)
 
         imdb_id = item.get('imdb') or item.get('imdb_id')
@@ -193,17 +219,38 @@ def get_all_shows_progress(favorites_json):
             continue
 
         cached_entry = cache.get(tmdb_id)
-        if cached_entry and (current_time - cached_entry.get('timestamp', 0) < CACHE_EXPIRY):
+        if cached_entry and (current_time - cached_entry.get('timestamp', 0) < CACHE_EXPIRY or is_rate_limited):
             results[tmdb_id] = {
                 "unwatched_total": cached_entry.get('unwatched_total', 0),
                 "newer_unwatched": cached_entry.get('newer_unwatched', 0)
             }
             updated_cache[tmdb_id] = cached_entry
+        elif is_rate_limited:
+            results[tmdb_id] = {"unwatched_total": 0, "newer_unwatched": 0}
         else:
             try:
                 url = f"{BASE_URL}/shows/{imdb_id}/progress/watched"
                 response = requests.get(url, headers=headers, timeout=8)
                 
+                if response.status_code == 429 or "rate limited" in response.text.lower():
+                    retry_after = 300
+                    try:
+                        retry_after = int(response.headers.get('Retry-After', 300))
+                    except:
+                        pass
+                    _TRAKT_RATE_LIMIT_UNTIL = time.time() + max(60, retry_after)
+                    print(f"[DEBUG] Trakt progress rate limited (429). Cooldown: {retry_after}s.")
+                    is_rate_limited = True
+                    if cached_entry:
+                        results[tmdb_id] = {
+                            "unwatched_total": cached_entry.get('unwatched_total', 0),
+                            "newer_unwatched": cached_entry.get('newer_unwatched', 0)
+                        }
+                        updated_cache[tmdb_id] = cached_entry
+                    else:
+                        results[tmdb_id] = {"unwatched_total": 0, "newer_unwatched": 0}
+                    continue
+
                 if response.status_code == 200:
                     progress_data = response.json()                    
                     aired = progress_data.get('aired', 0)
@@ -257,6 +304,8 @@ def get_all_shows_progress(favorites_json):
                     updated_cache[tmdb_id] = cached_entry
                 else:
                     results[tmdb_id] = {"unwatched_total": 0, "newer_unwatched": 0}
+
+            time.sleep(0.35)
 
     cleaned_cache = {k: v for k, v in updated_cache.items() if k in fav_ids}
     
