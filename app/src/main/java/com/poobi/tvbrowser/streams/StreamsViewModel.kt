@@ -2318,7 +2318,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             entry.optJSONObject("headers")?.let { headers ->
                 headers.keys().forEach { headersMap[it] = headers.getString(it) }
             }
-            
+
             interceptedSubtitleUrls.clear()
             val itemKey = com.poobi.tvbrowser.shared.SubtitleCacheManager.getItemKey(item, season, episode)
             val subtitleUrls = mutableMapOf<String, Map<String, String>>()
@@ -2335,6 +2335,78 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             val nextEp = if (season != null && episode != null) {
                 findNextEpisode(item, season, episode)
             } else null
+
+            val isTorrentUrl = videoUrl.contains("localhost:11470") || videoUrl.contains("127.0.0.1:11470")
+            if (isTorrentUrl) {
+                val uri = android.net.Uri.parse(videoUrl)
+                val pathSegments = uri.pathSegments ?: emptyList()
+                val infoHash = if (pathSegments.isNotEmpty()) pathSegments[0] else ""
+                val fileIdx = if (pathSegments.size > 1) pathSegments[1].toIntOrNull() ?: 0 else 0
+
+                val server = TorrentStreamServer.getInstance(context)
+                val prebufferPieces = prefs.getInt("torrent_prebuffer_pieces", 1)
+
+                if (server.isTorrentReady(infoHash, fileIdx, prebufferPieces)) {
+                    server.resumeTorrent(infoHash)
+                    _events.value = StreamsEvent.PlayVideo(
+                        url = videoUrl,
+                        title = title,
+                        headers = headersMap,
+                        subtitles = subtitleUrls.toMap(),
+                        item = item,
+                        season = season,
+                        episode = episode,
+                        nextEpisode = nextEp
+                    )
+                    return
+                }
+
+                // If not ready yet in memory, prebuffer and then start playback directly
+                _isBufferingTorrent.value = true
+                _torrentBufferProgress.value = 0f
+                _torrentBufferStatus.value = "Resuming torrent..."
+                _torrentBufferSeeders.value = 0
+
+                val latch = java.util.concurrent.CountDownLatch(1)
+                torrentCancelLatch = latch
+
+                viewModelScope.launch(Dispatchers.IO) {
+                    server.prepareTorrent(
+                        infoHash = infoHash,
+                        fileIdx = fileIdx,
+                        prebufferPiecesLimit = prebufferPieces,
+                        onStatusUpdate = { status, progress, seeders ->
+                            _torrentBufferStatus.value = status
+                            _torrentBufferProgress.value = progress
+                            _torrentBufferSeeders.value = seeders
+                        },
+                        onReady = {
+                            viewModelScope.launch(Dispatchers.Main) {
+                                _isBufferingTorrent.value = false
+                                _events.value = StreamsEvent.PlayVideo(
+                                    url = videoUrl,
+                                    title = title,
+                                    headers = headersMap,
+                                    subtitles = subtitleUrls.toMap(),
+                                    item = item,
+                                    season = season,
+                                    episode = episode,
+                                    nextEpisode = nextEp
+                                )
+                            }
+                        },
+                        onError = { error ->
+                            viewModelScope.launch(Dispatchers.Main) {
+                                _isBufferingTorrent.value = false
+                                _events.value = StreamsEvent.ShowToast("Resume failed: $error")
+                                performScrape(item, season, episode)
+                            }
+                        },
+                        cancellationToken = latch
+                    )
+                }
+                return
+            }
 
             _events.value = StreamsEvent.PlayVideo(
                 url = videoUrl,

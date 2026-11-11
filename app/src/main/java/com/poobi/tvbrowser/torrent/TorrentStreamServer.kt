@@ -131,14 +131,74 @@ class TorrentStreamServer private constructor(
             activeTorrentHandle?.let { handle ->
                 try {
                     if (handle.isValid) {
-                        sessionManager.remove(handle)
+                        handle.pause()
+                        saveTorrentMetadataAndResume(handle)
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Exception removing active handle", e)
+                    Log.w(TAG, "Exception pausing active handle", e)
                 }
             }
-            activeTorrentHandle = null
         }
+    }
+
+    fun isTorrentReady(infoHash: String, fileIdx: Int, prebufferPiecesLimit: Int): Boolean {
+        val cleanHash = infoHash.lowercase().trim()
+        val handle = synchronized(torrentLock) {
+            if (activeTorrentHandle?.infoHash()?.toString()?.lowercase() == cleanHash && activeTorrentHandle?.isValid == true) {
+                activeTorrentHandle
+            } else {
+                sessionManager.find(Sha1Hash(cleanHash))
+            }
+        } ?: return false
+
+        if (!handle.isValid) return false
+        val tInfo = handle.torrentFile() ?: return false
+        if (fileIdx >= tInfo.files().numFiles()) return false
+
+        val fileOffset = tInfo.files().fileOffset(fileIdx)
+        val fileSize = tInfo.files().fileSize(fileIdx)
+        val pieceLength = tInfo.pieceLength()
+        if (pieceLength <= 0) return false
+
+        val startPiece = (fileOffset / pieceLength).toInt()
+        val endPiece = ((fileOffset + fileSize - 1) / pieceLength).toInt().coerceAtLeast(startPiece)
+
+        val minPiecesFor2Mb = (2L * 1024L * 1024L / pieceLength.coerceAtLeast(1)).toInt().coerceAtLeast(1)
+        val prebufferCount = maxOf(prebufferPiecesLimit, minPiecesFor2Mb).coerceIn(1, 8)
+        val startPiecesToBuffer = (startPiece..minOf(startPiece + (prebufferCount - 1), endPiece)).toList()
+        val requiredPieces = (startPiecesToBuffer + if (endPiece > startPiecesToBuffer.last()) listOf(endPiece) else emptyList()).distinct()
+
+        return requiredPieces.all { handle.havePiece(it) }
+    }
+
+    fun resumeTorrent(infoHash: String) {
+        val cleanHash = infoHash.lowercase().trim()
+        synchronized(torrentLock) {
+            val handle = if (activeTorrentHandle?.infoHash()?.toString()?.lowercase() == cleanHash && activeTorrentHandle?.isValid == true) {
+                activeTorrentHandle
+            } else {
+                sessionManager.find(Sha1Hash(cleanHash))
+            }
+            if (handle != null && handle.isValid) {
+                try {
+                    handle.resume()
+                } catch (_: Exception) {}
+                activeTorrentHandle = handle
+            }
+        }
+    }
+
+    private fun saveTorrentMetadataAndResume(handle: TorrentHandle) {
+        try {
+            val tFile = handle.torrentFile()
+            val hash = handle.infoHash()?.toString()?.lowercase() ?: return
+            if (tFile != null) {
+                val metaFile = File(torrentStorageDir, "$hash.torrent")
+                if (!metaFile.exists()) {
+                    metaFile.writeBytes(tFile.bencode())
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     fun getCacheSize(): Long {
@@ -166,7 +226,16 @@ class TorrentStreamServer private constructor(
     }
 
     fun clearAllCache() {
-        stopActiveStreams()
+        synchronized(torrentLock) {
+            activeTorrentHandle?.let { handle ->
+                try {
+                    if (handle.isValid) {
+                        sessionManager.remove(handle)
+                    }
+                } catch (_: Exception) {}
+            }
+            activeTorrentHandle = null
+        }
         if (torrentStorageDir.exists()) {
             torrentStorageDir.deleteRecursively()
             torrentStorageDir.mkdirs()
@@ -277,6 +346,15 @@ class TorrentStreamServer private constructor(
                 Log.w(TAG, "Failed setting sequential download flag", e)
             }
 
+            var checkWaitCount = 0
+            while (handle.isValid && handle.status()?.state() == com.frostwire.jlibtorrent.TorrentStatus.State.CHECKING_FILES && checkWaitCount < 1200) {
+                if (cancellationToken.count == 0L || forcePlayTriggered) break
+                val progress = handle.status()?.progress() ?: 0f
+                onStatusUpdate("Checking existing downloaded files (%.0f%%)...".format(progress * 100f), progress, handle.status()?.numSeeds() ?: 0)
+                Thread.sleep(100)
+                checkWaitCount++
+            }
+
             val startPiece = (fileOffset / pieceLength).toInt()
             val endPiece = ((fileOffset + fileSize - 1) / pieceLength).toInt().coerceAtLeast(startPiece)
 
@@ -287,6 +365,12 @@ class TorrentStreamServer private constructor(
             val requiredPieces = (startPiecesToBuffer + if (endPiece > startPiecesToBuffer.last()) listOf(endPiece) else emptyList()).distinct()
             val totalRequiredPieces = requiredPieces.size
             val targetBytes = totalRequiredPieces * pieceLength.toLong()
+
+            // If already downloaded, launch immediately with no buffering wait
+            if (requiredPieces.all { handle.havePiece(it) }) {
+                onReady()
+                return
+            }
 
             for ((idx, piece) in startPiecesToBuffer.withIndex()) {
                 if (handle.isValid) {
@@ -329,15 +413,13 @@ class TorrentStreamServer private constructor(
                     isFinished = true
                     onStatusUpdate("Buffering complete! Starting playback...", 1.0f, numSeeds)
                 } else {
+                    val pieceRatio = if (totalRequiredPieces > 0) completedRequiredCount.toFloat() / totalRequiredPieces.toFloat() else 0f
                     val currentPayload = status?.totalPayloadDownload() ?: initialPayload
                     val downloadedBytes = (currentPayload - initialPayload).coerceAtLeast(0L)
+                    val payloadRatio = if (targetBytes > 0) (downloadedBytes.toFloat() / targetBytes.toFloat()).coerceIn(0f, 0.99f) else 0f
+                    val byteProgress = maxOf(pieceRatio, payloadRatio).coerceIn(0f, 0.99f)
 
-                    val displayDownloadedBytes = if (allRequiredDone) targetBytes else minOf(downloadedBytes, (targetBytes * 0.95).toLong())
-                    val byteProgress = if (targetBytes > 0) {
-                        (displayDownloadedBytes.toFloat() / targetBytes.toFloat()).coerceIn(0f, 0.99f)
-                    } else 0f
-
-                    val downloadedMb = displayDownloadedBytes / (1024f * 1024f)
+                    val downloadedMb = (byteProgress * targetBytes) / (1024f * 1024f)
                     val targetMb = targetBytes / (1024f * 1024f)
 
                     val statusMsg = if (numSeeds > 0 || downloadSpeed > 0f) {
@@ -361,6 +443,8 @@ class TorrentStreamServer private constructor(
 
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri ?: ""
+        val rangeHeader = session.headers["range"]
+
         val parts = uri.split("/").filter { it.isNotEmpty() }
         if (parts.size < 2) {
             return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Invalid Path")
@@ -420,7 +504,6 @@ class TorrentStreamServer private constructor(
             return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "File allocation on-disk failed")
         }
 
-        val rangeHeader = session.headers["range"]
         var rangeStart = 0L
         var rangeEnd = fileSize - 1
 
@@ -494,9 +577,13 @@ class TorrentStreamServer private constructor(
             activeTorrentHandle?.let {
                 val existingHash = it.infoHash()?.toString()?.lowercase()
                 if (existingHash == cleanHash && it.isValid) {
+                    try {
+                        it.resume()
+                    } catch (_: Exception) {}
                     return it
                 }
                 try {
+                    saveTorrentMetadataAndResume(it)
                     sessionManager.remove(it)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed removing previous handle", e)
@@ -506,8 +593,28 @@ class TorrentStreamServer private constructor(
             val sha1 = Sha1Hash(cleanHash)
             var handle = sessionManager.find(sha1)
             if (handle != null && handle.isValid && handle.torrentFile() != null) {
+                try {
+                    handle.resume()
+                } catch (_: Exception) {}
                 activeTorrentHandle = handle
                 return handle
+            }
+
+            val savedMeta = File(torrentStorageDir, "$cleanHash.torrent")
+            if (savedMeta.exists() && savedMeta.length() > 0) {
+                try {
+                    val tInfo = com.frostwire.jlibtorrent.TorrentInfo(savedMeta)
+                    sessionManager.download(tInfo, torrentStorageDir)
+                    for (attempt in 0..10) {
+                        handle = sessionManager.find(sha1)
+                        if (handle != null && handle.isValid) break
+                        try { Thread.sleep(50) } catch (_: Exception) {}
+                    }
+                    if (handle != null && handle.isValid) {
+                        activeTorrentHandle = handle
+                        return handle
+                    }
+                } catch (_: Exception) {}
             }
 
             val allTrackers = (customTrackers + DEFAULT_TRACKERS).distinct()
@@ -556,6 +663,7 @@ class TorrentStreamServer private constructor(
             }
 
             sessionManager.removeListener(listener)
+            handle?.let { saveTorrentMetadataAndResume(it) }
             return handle
         }
     }
@@ -564,6 +672,14 @@ class TorrentStreamServer private constructor(
         if (!handle.isValid) return false
         val startPiece = (absoluteOffset / pieceSize).toInt()
         val endPiece = ((absoluteOffset + length - 1) / pieceSize).toInt().coerceAtLeast(startPiece)
+
+        var checkingIterations = 0
+        while (handle.isValid && handle.status()?.state() == com.frostwire.jlibtorrent.TorrentStatus.State.CHECKING_FILES && checkingIterations < 1200) {
+            Thread.sleep(50)
+            checkingIterations++
+        }
+
+        if (!handle.isValid) return false
 
         try {
             for (piece in startPiece..endPiece) {
@@ -587,7 +703,7 @@ class TorrentStreamServer private constructor(
         }
 
         var iterations = 0
-        val maxIterations = 500
+        val maxIterations = 1600
         while (iterations < maxIterations) {
             if (!handle.isValid) return false
 
