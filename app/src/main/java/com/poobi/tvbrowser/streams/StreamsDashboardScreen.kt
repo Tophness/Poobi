@@ -755,7 +755,7 @@ fun StreamsDashboardScreen(
                         list
                     }
 
-                    val recentPlayedJson = remember(activeCategoryIndex, feedSortVersion) {
+                    val recentPlayedJson = remember(activeCategoryIndex, feedSortVersion, libraryItems) {
                         viewModel.prefs.getString("streams_recently_played", "[]") ?: "[]"
                     }
 

@@ -454,8 +454,11 @@ fun UpNextOverlay(
 
                 val epName = nextEpisodeJson.optString("name") ?: "Next Episode"
                 val epNum = nextEpisodeJson.optInt("episode_number")
+                val epSeason = nextEpisodeJson.optInt("season_number").takeIf { it > 0 }
+                    ?: nextEpisodeJson.optInt("season", 0)
+                val epLabel = if (epSeason > 0) "S${epSeason}E$epNum: $epName" else "E$epNum: $epName"
                 Text(
-                    text = "E$epNum: $epName",
+                    text = epLabel,
                     color = if (isFocused) Color.Black else Color.White,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,

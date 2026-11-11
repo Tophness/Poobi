@@ -326,6 +326,7 @@ class MainActivity : AppCompatActivity() {
             onPlayerReleased = {
                 browserViewModel.hideCustomViewInternal()
                 streamsViewModel.resumeScrape()
+                streamsViewModel.refreshRecentlyPlayedIfActive()
                 try {
                     val server = TorrentStreamServer.getInstance(applicationContext)
                     server.stopActiveStreams()
@@ -338,6 +339,9 @@ class MainActivity : AppCompatActivity() {
             },
             onVideoWatched = { season, episode ->
                 streamsViewModel.markEpisodeAsWatchedLocal(season, episode)
+            },
+            onPlaybackProgressSaved = { showId, season, episode, isCompleted ->
+                streamsViewModel.updatePlaybackState(showId, season, episode, isCompleted)
             }
         )
 
@@ -462,6 +466,7 @@ class MainActivity : AppCompatActivity() {
                         val season = streamsViewModel.lastScrapedSeason
                         val episode = streamsViewModel.lastScrapedEpisode
                         if (season != null && episode != null) {
+                            var foundNext = false
                             for (i in 0 until episodes.length()) {
                                 val ep = episodes.getJSONObject(i)
                                 if (ep.optInt("episode_number") == episode + 1) {
@@ -471,7 +476,13 @@ class MainActivity : AppCompatActivity() {
                                     } else {
                                         playerEngine.setNextEpisode(null)
                                     }
+                                    foundNext = true
                                     break
+                                }
+                            }
+                            if (!foundNext) {
+                                streamsViewModel.checkAndSetNextSeasonEpisode(season, episode) { nextSeasonEp ->
+                                    playerEngine.setNextEpisode(nextSeasonEp)
                                 }
                             }
                         }

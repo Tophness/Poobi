@@ -136,6 +136,7 @@ private fun MediaItemDetailsContent(
     val localEpisodes = episodes
     val coroutineScope = rememberCoroutineScope()
     val lastWatchedEpisode by viewModel.lastWatchedEpisode.collectAsState()
+    val lastPlaybackState by viewModel.lastPlaybackState.collectAsState()
     var autoFocusCancelled by remember(item) { mutableStateOf(false) }
     val targetEpisodeFocusRequester = remember { FocusRequester() }
     val lastEpisodeFocusRequester = remember { FocusRequester() }
@@ -184,7 +185,40 @@ private fun MediaItemDetailsContent(
     val genresArr = item.optJSONArray("genre_ids") ?: details?.optJSONArray("genres")
     val genresStr = remember(genresArr) { TmdbGenres.formatGenres(genresArr) }
 
-    var selectedSeasonIndex by remember(seasons) { mutableStateOf(0) }
+    var selectedSeasonIndex by remember(seasons) {
+        val curSeasons = seasons
+        val showId = item.optString("id").ifEmpty { item.optString("imdb") }
+        val state = viewModel.lastPlaybackState.value
+        val targetSeasonNum = if (state != null && state.showId == showId) {
+            if (state.isCompleted) {
+                val eps = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, showId, state.season)
+                val maxEp = eps?.let {
+                    var m = 0
+                    for (i in 0 until it.length()) {
+                        val num = it.optJSONObject(i)?.optInt("episode_number") ?: 0
+                        if (num > m) m = num
+                    }
+                    m
+                } ?: 0
+                if (maxEp > 0 && state.episode >= maxEp) state.season + 1 else state.season
+            } else {
+                state.season
+            }
+        } else {
+            viewModel.lastScrapedSeason
+        }
+
+        var foundIdx = 0
+        if (targetSeasonNum != null && curSeasons != null) {
+            for (i in 0 until curSeasons.length()) {
+                if (curSeasons.optJSONObject(i)?.optInt("season_number") == targetSeasonNum) {
+                    foundIdx = i
+                    break
+                }
+            }
+        }
+        mutableStateOf(foundIdx)
+    }
     var spinnerExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(localEpisodes, seasons) {
         val curSeasons = seasons
@@ -197,6 +231,43 @@ private fun MediaItemDetailsContent(
                     break
                 }
             }
+        }
+    }
+
+    LaunchedEffect(lastPlaybackState, seasons) {
+        val state = lastPlaybackState ?: return@LaunchedEffect
+        val curSeasons = seasons ?: return@LaunchedEffect
+        val showId = item.optString("id").ifEmpty { item.optString("imdb") }
+        if (state.showId != showId) return@LaunchedEffect
+
+        autoFocusCancelled = false
+
+        val targetSeasonNum = if (state.isCompleted) {
+            val eps = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, showId, state.season)
+            val maxEp = eps?.let {
+                var m = 0
+                for (i in 0 until it.length()) {
+                    val num = it.optJSONObject(i)?.optInt("episode_number") ?: 0
+                    if (num > m) m = num
+                }
+                m
+            } ?: 0
+            if (maxEp > 0 && state.episode >= maxEp) state.season + 1 else state.season
+        } else {
+            state.season
+        }
+
+        var targetSeasonIdx = -1
+        for (i in 0 until curSeasons.length()) {
+            if (curSeasons.optJSONObject(i)?.optInt("season_number") == targetSeasonNum) {
+                targetSeasonIdx = i
+                break
+            }
+        }
+
+        if (targetSeasonIdx != -1 && selectedSeasonIndex != targetSeasonIdx) {
+            selectedSeasonIndex = targetSeasonIdx
+            viewModel.loadEpisodes(item, targetSeasonNum)
         }
     }
     val leftColumnScrollState = rememberScrollState()
@@ -282,24 +353,51 @@ private fun MediaItemDetailsContent(
         }
     }
 
-    val targetEpisodeToFocus = remember(localEpisodes, lastWatchedEpisode, viewModel.lastScrapedSeason, viewModel.lastScrapedEpisode) {
+    val targetEpisodeToFocus = remember(localEpisodes, lastWatchedEpisode, viewModel.lastScrapedSeason, viewModel.lastScrapedEpisode, lastPlaybackState) {
         val curEps = localEpisodes
         if (curEps != null && curEps.length() > 0) {
             val activeSeasonNum = seasons?.optJSONObject(selectedSeasonIndex)?.optInt("season_number")
+            val showId = item.optString("id").ifEmpty { item.optString("imdb") }
+
+            val state = lastPlaybackState
+            if (state != null && state.showId == showId) {
+                if (state.isCompleted) {
+                    if (state.season == activeSeasonNum) {
+                        val nextEpNum = state.episode + 1
+                        var existsInCurrent = false
+                        for (i in 0 until curEps.length()) {
+                            if (curEps.optJSONObject(i)?.optInt("episode_number") == nextEpNum) {
+                                existsInCurrent = true
+                                break
+                            }
+                        }
+                        if (existsInCurrent) {
+                            return@remember nextEpNum
+                        }
+                    } else if (state.season + 1 == activeSeasonNum) {
+                        return@remember 1
+                    }
+                } else {
+                    if (state.season == activeSeasonNum) {
+                        return@remember state.episode
+                    }
+                }
+            }
 
             if (viewModel.lastScrapedSeason != null && viewModel.lastScrapedEpisode != null && activeSeasonNum == viewModel.lastScrapedSeason) {
                 val showTitle = details?.optString("title")?.takeIf { it.isNotBlank() } 
                     ?: item.optString("title").takeIf { it.isNotBlank() } 
                     ?: details?.optString("name")?.takeIf { it.isNotBlank() } 
                     ?: item.optString("name", "")
-                val displayTitle = "$showTitle S${viewModel.lastScrapedSeason}E${viewModel.lastScrapedEpisode}"
+                val cleanShowTitle = showTitle.replace(Regex("\\s\\(\\d{4}\\)$"), "").trim()
+                val displayTitle = "$cleanShowTitle S${viewModel.lastScrapedSeason}E${viewModel.lastScrapedEpisode}"
                 val savedPos = StreamResumeManager.getPosition(viewModel.prefs, displayTitle)
                 if (savedPos > 0L) {
                     return@remember viewModel.lastScrapedEpisode
                 }
             }
 
-            if (lastWatchedEpisode != null) {
+            if (lastPlaybackState == null && lastWatchedEpisode != null) {
                 return@remember lastWatchedEpisode
             }
 

@@ -79,6 +79,33 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     private val _lastWatchedEpisode = MutableStateFlow<Int?>(null)
     val lastWatchedEpisode: StateFlow<Int?> = _lastWatchedEpisode.asStateFlow()
 
+    data class PlaybackCompletionState(
+        val showId: String,
+        val season: Int,
+        val episode: Int,
+        val isCompleted: Boolean,
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    private val _lastPlaybackState = MutableStateFlow<PlaybackCompletionState?>(null)
+    val lastPlaybackState: StateFlow<PlaybackCompletionState?> = _lastPlaybackState.asStateFlow()
+
+    fun updatePlaybackState(showId: String, season: Int, episode: Int, isCompleted: Boolean) {
+        _lastPlaybackState.value = PlaybackCompletionState(showId, season, episode, isCompleted)
+    }
+
+    fun clearPlaybackState() {
+        _lastPlaybackState.value = null
+    }
+
+    fun refreshRecentlyPlayedIfActive() {
+        val isRecentlyPlayedActive = _activeCategoryIndex.value == 1 &&
+            (forYouPillTitle.value == "recents" || forYouPillTitle.value == "Recently Watched")
+        if (isRecentlyPlayedActive) {
+            loadRecentlyPlayed()
+        }
+    }
+
     private val _itemSeasons = MutableStateFlow<JSONArray?>(null)
     val itemSeasons: StateFlow<JSONArray?> = _itemSeasons.asStateFlow()
 
@@ -652,6 +679,7 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun clearSelectedMedia() {
+        clearPlaybackState()
         mediaNavigationStack.clear()
         pendingNavSource = null
         _pendingNavFocus.value = null
@@ -1997,6 +2025,11 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
+        val sId = item.optString("id").ifEmpty { item.optString("imdb") }
+        if (sId.isNotEmpty() && season != null && episode != null) {
+            updatePlaybackState(sId, season, episode, isCompleted = false)
+        }
+
         addToRecentlyPlayed(displayTitle, item, season, episode, url, headers, sourceData = lastSelectedSource?.toString())
 
         val autoSubMode = prefs.getInt("auto_sub_pref", 0)
@@ -2166,6 +2199,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
             prefs.edit().putString("streams_recently_played", newList.toString()).apply()
             TvHomeSyncManager.syncWatchNext(context)
+            withContext(Dispatchers.Main) {
+                refreshRecentlyPlayedIfActive()
+            }
         }
     }
 
@@ -2296,22 +2332,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
             isPlayingFromSavedLink = true
 
-            var nextEp: JSONObject? = null
-            if (season != null && episode != null) {
-                val episodes = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, item.optInt("id").toString(), season)
-                if (episodes != null) {
-                    for (i in 0 until episodes.length()) {
-                        val ep = episodes.getJSONObject(i)
-                        if (ep.optInt("episode_number") == episode + 1) {
-                            val airDate = ep.optString("air_date", "")
-                            if (airDate.isNotEmpty() && !com.poobi.tvbrowser.shared.isFutureDate(airDate)) {
-                                nextEp = ep
-                            }
-                            break
-                        }
-                    }
-                }
-            }
+            val nextEp = if (season != null && episode != null) {
+                findNextEpisode(item, season, episode)
+            } else null
 
             _events.value = StreamsEvent.PlayVideo(
                 url = videoUrl,
@@ -3425,26 +3448,9 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
 
         headersMap.putAll(extraHeaders)
 
-        var nextEp: JSONObject? = null
-        if (lastScrapedSeason != null && lastScrapedEpisode != null) {
-            val currentEp = lastScrapedEpisode!!
-            val item = _selectedItem.value
-            if (item != null) {
-                val episodes = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, item.optInt("id").toString(), lastScrapedSeason!!)
-                if (episodes != null) {
-                    for (i in 0 until episodes.length()) {
-                        val ep = episodes.getJSONObject(i)
-                        if (ep.optInt("episode_number") == currentEp + 1) {
-                            val airDate = ep.optString("air_date", "")
-                            if (airDate.isNotEmpty() && !com.poobi.tvbrowser.shared.isFutureDate(airDate)) {
-                                nextEp = ep
-                            }
-                            break
-                        }
-                    }
-                }
-            }
-        }
+        val nextEp = if (lastScrapedSeason != null && lastScrapedEpisode != null && _selectedItem.value != null) {
+            findNextEpisode(_selectedItem.value!!, lastScrapedSeason!!, lastScrapedEpisode!!)
+        } else null
 
         val altUrls = mutableListOf<String>()
         val altNames = mutableListOf<String>()
@@ -4298,6 +4304,89 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
         _subProgress.value = 0f
         pendingPlayVideoSourceData = null
         _showSubtitleWaitDialog.value = null
+    }
+
+    fun findNextEpisode(item: JSONObject, season: Int, episode: Int): JSONObject? {
+        val showId = item.optInt("id").toString()
+        if (showId == "0" || showId.isEmpty()) return null
+
+        val curSeasonEps = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, showId, season)
+        if (curSeasonEps != null) {
+            for (i in 0 until curSeasonEps.length()) {
+                val ep = curSeasonEps.getJSONObject(i)
+                if (ep.optInt("episode_number") == episode + 1) {
+                    val airDate = ep.optString("air_date", "")
+                    return if (airDate.isNotEmpty() && !com.poobi.tvbrowser.shared.isFutureDate(airDate)) ep else null
+                }
+            }
+        }
+
+        val seasons = _itemSeasons.value ?: com.poobi.tvbrowser.shared.AppCacheManager.getDetails(context, "tv", showId)?.optJSONArray("seasons")
+        if (seasons != null) {
+            var hasNextSeason = false
+            for (i in 0 until seasons.length()) {
+                if (seasons.getJSONObject(i).optInt("season_number") == season + 1) {
+                    hasNextSeason = true
+                    break
+                }
+            }
+            if (hasNextSeason) {
+                val nextSeasonEps = com.poobi.tvbrowser.shared.AppCacheManager.getEpisodes(context, showId, season + 1)
+                if (nextSeasonEps != null) {
+                    for (i in 0 until nextSeasonEps.length()) {
+                        val ep = nextSeasonEps.getJSONObject(i)
+                        if (ep.optInt("episode_number") == 1) {
+                            val airDate = ep.optString("air_date", "")
+                            return if (airDate.isNotEmpty() && !com.poobi.tvbrowser.shared.isFutureDate(airDate)) ep else null
+                        }
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    fun checkAndSetNextSeasonEpisode(season: Int, episode: Int, onResult: (JSONObject?) -> Unit) {
+        val item = _selectedItem.value ?: return onResult(null)
+        val showId = item.optInt("id").toString()
+        if (showId == "0" || showId.isEmpty()) return onResult(null)
+
+        val nextEp = findNextEpisode(item, season, episode)
+        if (nextEp != null) {
+            onResult(nextEp)
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val seasons = _itemSeasons.value ?: com.poobi.tvbrowser.shared.AppCacheManager.getDetails(context, "tv", showId)?.optJSONArray("seasons")
+                var hasNextSeason = false
+                if (seasons != null) {
+                    for (i in 0 until seasons.length()) {
+                        if (seasons.getJSONObject(i).optInt("season_number") == season + 1) {
+                            hasNextSeason = true
+                            break
+                        }
+                    }
+                }
+                if (hasNextSeason) {
+                    val nextEps = com.poobi.tvbrowser.shared.TmdbClient.getTvEpisodes(context, showId, season + 1)
+                    if (nextEps.length() > 0) {
+                        com.poobi.tvbrowser.shared.AppCacheManager.saveEpisodes(context, showId, season + 1, nextEps)
+                        for (i in 0 until nextEps.length()) {
+                            val ep = nextEps.getJSONObject(i)
+                            if (ep.optInt("episode_number") == 1) {
+                                val airDate = ep.optString("air_date", "")
+                                val validEp = if (airDate.isNotEmpty() && !com.poobi.tvbrowser.shared.isFutureDate(airDate)) ep else null
+                                withContext(Dispatchers.Main) { onResult(validEp) }
+                                return@launch
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+            withContext(Dispatchers.Main) { onResult(null) }
+        }
     }
 
     private fun getCurrentEpisodeTitle(season: Int?, episode: Int?): String {

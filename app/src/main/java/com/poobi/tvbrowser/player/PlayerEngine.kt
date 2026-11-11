@@ -97,7 +97,8 @@ class PlayerEngine(
     private val onUpNextTriggered: () -> Unit,
     private val onVideoEnded: () -> Unit,
     private val onPlayerReleased: () -> Unit = {},
-    private val onVideoWatched: (Int, Int) -> Unit = { _, _ -> }
+    private val onVideoWatched: (Int, Int) -> Unit = { _, _ -> },
+    private val onPlaybackProgressSaved: (String, Int, Int, Boolean) -> Unit = { _, _, _, _ -> }
 ) {
     private var isReleasing = false
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -1840,6 +1841,11 @@ class PlayerEngine(
 
                 if (dur > 0) {
                     StreamResumeManager.savePosition(prefs, title, pos, isCompleted)
+
+                    val currentShowId = lastScrapedItem?.optString("id")?.ifEmpty { lastScrapedItem?.optString("imdb") } ?: ""
+                    if (currentShowId.isNotEmpty() && lastScrapedSeason != null && lastScrapedEpisode != null) {
+                        onPlaybackProgressSaved(currentShowId, lastScrapedSeason!!, lastScrapedEpisode!!, isCompleted)
+                    }
 
                     try {
                         val recentArray = org.json.JSONArray(prefs.getString("streams_recently_played", "[]") ?: "[]")
