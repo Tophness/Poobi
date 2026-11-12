@@ -104,10 +104,32 @@ class TorrentStreamServer private constructor(
             sp.connectionsLimit(250)
             sp.activeDownloads(30)
             sp.activeLimit(50)
+            sp.setInteger(settings_pack.int_types.checking_mem_usage.swigValue(), 1024)
 
             val params = SessionParams(sp)
             sessionManager.start(params)
             sessionManager.startDht()
+
+            sessionManager.addListener(object : AlertListener {
+                override fun types(): IntArray? = intArrayOf(
+                    AlertType.SAVE_RESUME_DATA.swig()
+                )
+                override fun alert(alert: Alert<*>?) {
+                    if (alert?.type() == AlertType.SAVE_RESUME_DATA) {
+                        try {
+                            val sAlert = alert as? com.frostwire.jlibtorrent.alerts.SaveResumeDataAlert
+                            val p = sAlert?.params()
+                            val h = sAlert?.handle()
+                            val hash = h?.infoHash()?.toString()?.lowercase() ?: return
+                            if (p != null) {
+                                val entry = com.frostwire.jlibtorrent.AddTorrentParams.writeResumeData(p)
+                                val resumeFile = File(torrentStorageDir, "$hash.resume")
+                                resumeFile.writeBytes(entry.bencode())
+                            }
+                        } catch (_: Throwable) {}
+                    }
+                }
+            })
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing SessionManager settings", e)
             try {
@@ -131,8 +153,8 @@ class TorrentStreamServer private constructor(
             activeTorrentHandle?.let { handle ->
                 try {
                     if (handle.isValid) {
-                        handle.pause()
                         saveTorrentMetadataAndResume(handle)
+                        handle.pause()
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Exception pausing active handle", e)
@@ -147,7 +169,7 @@ class TorrentStreamServer private constructor(
             if (activeTorrentHandle?.infoHash()?.toString()?.lowercase() == cleanHash && activeTorrentHandle?.isValid == true) {
                 activeTorrentHandle
             } else {
-                sessionManager.find(Sha1Hash(cleanHash))
+                sessionManager.find(Sha1Hash(cleanHash)) ?: getOrAddTorrent(cleanHash)
             }
         } ?: return false
 
@@ -177,7 +199,7 @@ class TorrentStreamServer private constructor(
             val handle = if (activeTorrentHandle?.infoHash()?.toString()?.lowercase() == cleanHash && activeTorrentHandle?.isValid == true) {
                 activeTorrentHandle
             } else {
-                sessionManager.find(Sha1Hash(cleanHash))
+                sessionManager.find(Sha1Hash(cleanHash)) ?: getOrAddTorrent(cleanHash)
             }
             if (handle != null && handle.isValid) {
                 try {
@@ -190,14 +212,17 @@ class TorrentStreamServer private constructor(
 
     private fun saveTorrentMetadataAndResume(handle: TorrentHandle) {
         try {
-            val tFile = handle.torrentFile()
             val hash = handle.infoHash()?.toString()?.lowercase() ?: return
+            val tFile = handle.torrentFile()
             if (tFile != null) {
                 val metaFile = File(torrentStorageDir, "$hash.torrent")
                 if (!metaFile.exists()) {
                     metaFile.writeBytes(tFile.bencode())
                 }
             }
+            try {
+                handle.saveResumeData()
+            } catch (_: Throwable) {}
         } catch (_: Exception) {}
     }
 
@@ -222,6 +247,58 @@ class TorrentStreamServer private constructor(
         val file = File(path)
         if (file.exists()) {
             file.deleteRecursively()
+        }
+    }
+
+    fun deleteTorrent(infoHash: String) {
+        val cleanHash = infoHash.lowercase().trim()
+        synchronized(torrentLock) {
+            var handleToRemove: TorrentHandle? = null
+            if (activeTorrentHandle?.infoHash()?.toString()?.lowercase() == cleanHash) {
+                handleToRemove = activeTorrentHandle
+                activeTorrentHandle = null
+            } else {
+                handleToRemove = sessionManager.find(Sha1Hash(cleanHash))
+            }
+
+            var filesToDelete = listOf<String>()
+            if (handleToRemove != null && handleToRemove.isValid) {
+                try {
+                    val tFile = handleToRemove.torrentFile()
+                    if (tFile != null) {
+                        val numFiles = tFile.files().numFiles()
+                        filesToDelete = (0 until numFiles).map { tFile.files().filePath(it) }
+                    }
+                    sessionManager.remove(handleToRemove)
+                } catch (_: Exception) {}
+            }
+
+            val metaFile = File(torrentStorageDir, "$cleanHash.torrent")
+            if (filesToDelete.isEmpty() && metaFile.exists()) {
+                try {
+                    val tInfo = com.frostwire.jlibtorrent.TorrentInfo(metaFile)
+                    val numFiles = tInfo.files().numFiles()
+                    filesToDelete = (0 until numFiles).map { tInfo.files().filePath(it) }
+                } catch (_: Exception) {}
+            }
+
+            for (relPath in filesToDelete) {
+                try {
+                    val f = File(torrentStorageDir, relPath)
+                    if (f.exists()) {
+                        f.delete()
+                        f.parentFile?.let { parent ->
+                            if (parent != torrentStorageDir && parent.listFiles()?.isEmpty() == true) {
+                                parent.delete()
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+
+            File(torrentStorageDir, "$cleanHash.torrent").delete()
+            File(torrentStorageDir, "$cleanHash.resume").delete()
+            File(torrentStorageDir, ".$cleanHash.parts").delete()
         }
     }
 
@@ -298,8 +375,14 @@ class TorrentStreamServer private constructor(
 
             val prefs = context.getSharedPreferences("BrowserSettings", Context.MODE_PRIVATE)
             val cleanMode = prefs.getInt("torrent_cache_clean_mode", 0)
+            val cleanHash = infoHash.lowercase().trim()
+
             if (cleanMode == 1) {
-                clearAllCache()
+                val isSameTorrent = File(torrentStorageDir, "$cleanHash.torrent").exists() ||
+                        File(torrentStorageDir, "$cleanHash.resume").exists()
+                if (!isSameTorrent) {
+                    clearAllCache()
+                }
             } else if (cleanMode == 3) {
                 checkAndCleanPeriodicCache(context)
             }
@@ -366,7 +449,6 @@ class TorrentStreamServer private constructor(
             val totalRequiredPieces = requiredPieces.size
             val targetBytes = totalRequiredPieces * pieceLength.toLong()
 
-            // If already downloaded, launch immediately with no buffering wait
             if (requiredPieces.all { handle.havePiece(it) }) {
                 onReady()
                 return
@@ -601,10 +683,16 @@ class TorrentStreamServer private constructor(
             }
 
             val savedMeta = File(torrentStorageDir, "$cleanHash.torrent")
+            val savedResume = File(torrentStorageDir, "$cleanHash.resume")
+
             if (savedMeta.exists() && savedMeta.length() > 0) {
                 try {
                     val tInfo = com.frostwire.jlibtorrent.TorrentInfo(savedMeta)
-                    sessionManager.download(tInfo, torrentStorageDir)
+                    if (savedResume.exists() && savedResume.length() > 0) {
+                        sessionManager.download(tInfo, torrentStorageDir, savedResume, null, null, TorrentFlags.AUTO_MANAGED)
+                    } else {
+                        sessionManager.download(tInfo, torrentStorageDir)
+                    }
                     for (attempt in 0..10) {
                         handle = sessionManager.find(sha1)
                         if (handle != null && handle.isValid) break
@@ -614,7 +702,7 @@ class TorrentStreamServer private constructor(
                         activeTorrentHandle = handle
                         return handle
                     }
-                } catch (_: Exception) {}
+                } catch (_: Throwable) {}
             }
 
             val allTrackers = (customTrackers + DEFAULT_TRACKERS).distinct()

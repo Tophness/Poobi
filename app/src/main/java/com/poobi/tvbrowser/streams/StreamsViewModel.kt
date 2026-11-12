@@ -1961,7 +1961,19 @@ class StreamsViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 val savedVideoUrl = entry.optString("video_url")
-                if (savedVideoUrl.startsWith("file://")) {
+                if (savedVideoUrl.contains("localhost:11470") || savedVideoUrl.contains("127.0.0.1:11470")) {
+                    try {
+                        val uri = android.net.Uri.parse(savedVideoUrl)
+                        val segments = uri.pathSegments ?: emptyList()
+                        if (segments.isNotEmpty()) {
+                            val hash = segments[0]
+                            val server = com.poobi.tvbrowser.torrent.TorrentStreamServer.getInstance(context)
+                            server.deleteTorrent(hash)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("StreamsViewModel", "Failed to delete torrent files on entry removal", e)
+                    }
+                } else if (savedVideoUrl.startsWith("file://")) {
                     try {
                         val path = android.net.Uri.parse(savedVideoUrl).path
                         if (path != null) {
